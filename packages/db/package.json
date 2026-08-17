@@ -1,0 +1,14 @@
+{
+  "name": "@axion/db",
+  "private": true,
+  "version": "0.0.0",
+  "exports": {
+    "./browser": "./src/client-browser.ts",
+    "./server": "./src/client-server.ts",
+    "./admin": "./src/client-admin.ts"
+  },
+  "dependencies": {
+    "@supabase/ssr": "0.12.4",
+    "@supabase/supabase-js": "2.111.0"
+  }
+}
