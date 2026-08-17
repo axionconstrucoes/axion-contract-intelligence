@@ -1,8 +1,14 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+
+  const cookiesToApply = new Map<
+    string,
+    { name: string; value: string; options: CookieOptions }
+  >();
+  const headersToApply = new Map<string, string>();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -19,21 +25,41 @@ export async function proxy(request: NextRequest) {
 
           supabaseResponse = NextResponse.next({ request });
 
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
+          cookiesToSet.forEach(({ name, value, options }) => {
+            supabaseResponse.cookies.set(name, value, options);
+            cookiesToApply.set(name, { name, value, options });
+          });
 
-          Object.entries(headers).forEach(([key, value]) =>
-            supabaseResponse.headers.set(key, value)
-          );
+          Object.entries(headers).forEach(([key, value]) => {
+            supabaseResponse.headers.set(key, value);
+            headersToApply.set(key.toLowerCase(), value);
+          });
         },
       },
     }
   );
 
-  // Renova/valida a sessão. O resultado ainda não é usado para nenhuma
-  // decisão de acesso — isso fica para um passo futuro.
-  await supabase.auth.getClaims();
+  const { data } = await supabase.auth.getClaims();
+
+  const isPublicRoute = request.nextUrl.pathname === "/login";
+
+  if (!isPublicRoute && !data?.claims) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.search = "";
+
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+
+    cookiesToApply.forEach(({ name, value, options }) => {
+      redirectResponse.cookies.set(name, value, options);
+    });
+
+    headersToApply.forEach((value, key) => {
+      redirectResponse.headers.set(key, value);
+    });
+
+    return redirectResponse;
+  }
 
   return supabaseResponse;
 }
