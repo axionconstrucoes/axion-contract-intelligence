@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@axion/db": "*",
     "@axion/mock-data": "*",
     "@axion/types": "*",
     "class-variance-authority": "^0.7.1",
