@@ -1,4 +1,5 @@
 import { Avatar } from "@/components/ui/avatar";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { getProjects } from "@/lib/data";
 import { ProjectSwitcher } from "./project-switcher";
 
@@ -14,6 +15,7 @@ export function TopBar({ projectId }: { projectId: string }) {
           <span className="text-xs text-muted-foreground">Contrato {currentProject.contractNumber}</span>
         )}
         <Avatar>AS</Avatar>
+        <LogoutButton />
       </div>
     </header>
   );
