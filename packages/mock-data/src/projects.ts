@@ -1,8 +1,9 @@
 import type { Project } from "@axion/types";
+import { DEV_PROJECT_ID } from "./constants";
 
 export const projects: Project[] = [
   {
-    id: "prj-arena",
+    id: DEV_PROJECT_ID,
     name: "Arena Multiuso Zona Norte",
     client: "Prefeitura Municipal de Itaguaí",
     status: "ATIVO",

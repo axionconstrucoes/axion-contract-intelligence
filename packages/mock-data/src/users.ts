@@ -1,4 +1,5 @@
 import type { ProjectMembership, User } from "@axion/types";
+import { DEV_PROJECT_ID } from "./constants";
 
 export const users: User[] = [
   { id: "usr-ana", name: "Ana Beatriz Souza", email: "ana.souza@axion.com.br", origin: "AXION_INTERNO", title: "Gerente de Projetos", avatarInitials: "AS" },
@@ -9,10 +10,10 @@ export const users: User[] = [
 ];
 
 export const projectMemberships: ProjectMembership[] = [
-  { userId: "usr-ana", projectId: "prj-arena", permission: "ADMIN" },
-  { userId: "usr-fernanda", projectId: "prj-arena", permission: "EDITOR" },
-  { userId: "usr-joao", projectId: "prj-arena", permission: "EDITOR" },
-  { userId: "usr-roberto", projectId: "prj-arena", permission: "VIEWER" },
+  { userId: "usr-ana", projectId: DEV_PROJECT_ID, permission: "ADMIN" },
+  { userId: "usr-fernanda", projectId: DEV_PROJECT_ID, permission: "EDITOR" },
+  { userId: "usr-joao", projectId: DEV_PROJECT_ID, permission: "EDITOR" },
+  { userId: "usr-roberto", projectId: DEV_PROJECT_ID, permission: "VIEWER" },
 
   { userId: "usr-ana", projectId: "prj-industrial", permission: "ADMIN" },
   { userId: "usr-fernanda", projectId: "prj-industrial", permission: "EDITOR" },

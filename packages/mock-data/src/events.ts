@@ -1,10 +1,11 @@
 import type { ContractEvent } from "@axion/types";
+import { DEV_PROJECT_ID } from "./constants";
 
 export const events: ContractEvent[] = [
   // ---- Arena Multiuso Zona Norte ----
   {
     id: "evt-arena-01",
-    projectId: "prj-arena",
+    projectId: DEV_PROJECT_ID,
     timestamp: "2025-06-25T08:30:00-03:00",
     title: "Notificação formal do cliente sobre atraso no cronograma",
     description: "Prefeitura de Itaguaí notifica atraso e cobra plano de recuperação, citando possível multa contratual.",
@@ -21,7 +22,7 @@ export const events: ContractEvent[] = [
   },
   {
     id: "evt-arena-02",
-    projectId: "prj-arena",
+    projectId: DEV_PROJECT_ID,
     timestamp: "2025-04-18T11:00:00-03:00",
     title: "RFI-01 recebida: especificação de estrutura metálica da cobertura",
     description: "Cliente formaliza RFI-01 questionando especificação técnica da estrutura metálica de cobertura.",
@@ -38,7 +39,7 @@ export const events: ContractEvent[] = [
   },
   {
     id: "evt-arena-03",
-    projectId: "prj-arena",
+    projectId: DEV_PROJECT_ID,
     timestamp: "2025-12-15T16:00:00-03:00",
     title: "Cliente cobra aplicação de multa por atraso",
     description: "E-mail formal cobra aplicação de multa contratual por atraso, referenciando notificação anterior.",
@@ -55,7 +56,7 @@ export const events: ContractEvent[] = [
   },
   {
     id: "evt-arena-04",
-    projectId: "prj-arena",
+    projectId: DEV_PROJECT_ID,
     timestamp: "2026-01-20T08:45:00-03:00",
     title: "Paralisação por falta de liberação de área pelo cliente",
     description: "Diário de Obra registra paralisação de 5 dias na frente de paisagismo por falta de liberação de área pelo cliente.",
@@ -71,7 +72,7 @@ export const events: ContractEvent[] = [
   },
   {
     id: "evt-arena-05",
-    projectId: "prj-arena",
+    projectId: DEV_PROJECT_ID,
     timestamp: "2025-02-10T09:00:00-03:00",
     title: "Cronograma baseline aprovado",
     description: "Cronograma físico-financeiro baseline aprovado formalmente no início do contrato.",
