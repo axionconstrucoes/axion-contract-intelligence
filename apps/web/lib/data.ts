@@ -22,6 +22,7 @@ import {
   type DocumentVersionRow,
 } from "./document-mapper";
 import { mapProjectRow, type ProjectRow } from "./project-mapper";
+import { mapScheduleActivityRow, type ScheduleActivityRow } from "./schedule-mapper";
 import {
   mapMembershipRow,
   mapUserRow,
@@ -40,6 +41,9 @@ const DOCUMENT_VERSION_COLUMNS =
   "id, document_id, version_label, version_index, document_date, source_type, author, summary, file_path, uploaded_by, uploaded_at, notes";
 
 const CLAUSE_COLUMNS = "id, document_version_id, clause_number, title, text, created_at";
+
+const SCHEDULE_ACTIVITY_COLUMNS =
+  "id, schedule_version_id, name, baseline_start, baseline_end, planned_start, planned_end, status, created_at";
 
 export async function getProjects() {
   const supabase = await createSupabaseServerClient();
@@ -312,12 +316,173 @@ export function getMockClause(clauseId: string) {
   return clauses.find((c) => c.id === clauseId) ?? null;
 }
 
-export function getScheduleActivities(projectId: string) {
-  return scheduleActivities.filter((s) => s.projectId === projectId);
+export async function getScheduleActivities(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: documentRows, error: documentsError } = await supabase
+    .from("documents")
+    .select("id, project_id")
+    .eq("project_id", projectId);
+
+  if (documentsError) {
+    if (documentsError.code === "22P02") {
+      return [];
+    }
+    throw documentsError;
+  }
+
+  const docs = documentRows as { id: string; project_id: string }[];
+  if (docs.length === 0) {
+    return [];
+  }
+
+  const { data: versionRows, error: versionsError } = await supabase
+    .from("document_versions")
+    .select("id, document_id")
+    .in(
+      "document_id",
+      docs.map((d) => d.id)
+    );
+
+  if (versionsError) {
+    throw versionsError;
+  }
+
+  const versions = versionRows as { id: string; document_id: string }[];
+  if (versions.length === 0) {
+    return [];
+  }
+
+  const { data: scheduleVersionRows, error: scheduleVersionsError } = await supabase
+    .from("schedule_versions")
+    .select("id, document_version_id")
+    .in(
+      "document_version_id",
+      versions.map((v) => v.id)
+    );
+
+  if (scheduleVersionsError) {
+    throw scheduleVersionsError;
+  }
+
+  const scheduleVersionsForProject = scheduleVersionRows as { id: string; document_version_id: string }[];
+  if (scheduleVersionsForProject.length === 0) {
+    return [];
+  }
+
+  // Nenhuma regra humana aprovada define qual ScheduleVersion é "vigente"
+  // quando há mais de uma visível (não usar max(created_at), APPROVED,
+  // ISSUED ou BASELINE silenciosamente — ver decisão 2.5G3D). Enquanto
+  // isso não existir, mais de uma versão visível é inconsistência a ser
+  // resolvida por decisão humana, não escolhida automaticamente aqui.
+  if (scheduleVersionsForProject.length > 1) {
+    throw new Error(
+      `Seleção de ScheduleVersion vigente não definida: projeto (id=${projectId}) possui ${scheduleVersionsForProject.length} ScheduleVersions visíveis e ainda não existe regra humana aprovada para escolher qual exibir.`
+    );
+  }
+
+  const scheduleVersion = scheduleVersionsForProject[0];
+
+  const { data: activityRows, error: activitiesError } = await supabase
+    .from("schedule_activities")
+    .select(SCHEDULE_ACTIVITY_COLUMNS)
+    .eq("schedule_version_id", scheduleVersion.id);
+
+  if (activitiesError) {
+    throw activitiesError;
+  }
+
+  return (activityRows as ScheduleActivityRow[]).map((row) =>
+    mapScheduleActivityRow(row, { projectId })
+  );
 }
 
-export function getScheduleActivity(id: string) {
-  return scheduleActivities.find((s) => s.id === id) ?? null;
+export async function getScheduleActivity(activityId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: activityRow, error: activityError } = await supabase
+    .from("schedule_activities")
+    .select(SCHEDULE_ACTIVITY_COLUMNS)
+    .eq("id", activityId)
+    .maybeSingle();
+
+  if (activityError) {
+    if (activityError.code === "22P02") {
+      return null;
+    }
+    throw activityError;
+  }
+
+  if (!activityRow) {
+    return null;
+  }
+
+  const row = activityRow as ScheduleActivityRow;
+
+  const { data: scheduleVersionRow, error: scheduleVersionError } = await supabase
+    .from("schedule_versions")
+    .select("id, document_version_id")
+    .eq("id", row.schedule_version_id)
+    .maybeSingle();
+
+  if (scheduleVersionError) {
+    throw scheduleVersionError;
+  }
+
+  if (!scheduleVersionRow) {
+    throw new Error(
+      `Inconsistência estrutural: schedule_activity (id=${activityId}) referencia schedule_version_id=${row.schedule_version_id} não encontrado.`
+    );
+  }
+
+  const scheduleVersion = scheduleVersionRow as { id: string; document_version_id: string };
+
+  const { data: documentVersionRow, error: documentVersionError } = await supabase
+    .from("document_versions")
+    .select("id, document_id")
+    .eq("id", scheduleVersion.document_version_id)
+    .maybeSingle();
+
+  if (documentVersionError) {
+    throw documentVersionError;
+  }
+
+  if (!documentVersionRow) {
+    throw new Error(
+      `Inconsistência estrutural: schedule_activity (id=${activityId}) → schedule_version (id=${scheduleVersion.id}) → document_version (id=${scheduleVersion.document_version_id}) não encontrado.`
+    );
+  }
+
+  const documentVersion = documentVersionRow as { id: string; document_id: string };
+
+  const { data: documentRow, error: documentError } = await supabase
+    .from("documents")
+    .select("id, project_id")
+    .eq("id", documentVersion.document_id)
+    .maybeSingle();
+
+  if (documentError) {
+    throw documentError;
+  }
+
+  if (!documentRow) {
+    throw new Error(
+      `Inconsistência estrutural: schedule_activity (id=${activityId}) → document_version (id=${documentVersion.id}) → document (id=${documentVersion.document_id}) não encontrado.`
+    );
+  }
+
+  const document = documentRow as { id: string; project_id: string };
+
+  return mapScheduleActivityRow(row, { projectId: document.project_id });
+}
+
+// TEMPORARY MOCK SEAM: remove when Event Ledger / CrossReference migrate to
+// real schedule activity UUIDs. CrossReference (refType "SCHEDULE_ACTIVITY")
+// ainda referencia IDs mock (ex.: "sch-arena-01"), que não correspondem às
+// UUIDs reais de `schedule_activities` no Supabase — não fazer tradução
+// runtime entre os dois.
+export function getMockScheduleActivity(activityId: string) {
+  return scheduleActivities.find((s) => s.id === activityId) ?? null;
 }
 
 export function getEmails(projectId: string) {
@@ -406,7 +571,9 @@ export function resolveCrossReferenceLabel(refType: string, refId: string): stri
       return clause ? `Cláusula ${clause.clauseNumber} — ${clause.title}` : refId;
     }
     case "SCHEDULE_ACTIVITY":
-      return getScheduleActivity(refId)?.name ?? refId;
+      // Event Ledger/CrossReference ainda são mock (IDs tipo "sch-arena-01"),
+      // por isso usa a seam mock, não o getScheduleActivity real (ver getMockScheduleActivity acima).
+      return getMockScheduleActivity(refId)?.name ?? refId;
     case "EMAIL":
       return getEmail(refId)?.subject ?? refId;
     default:

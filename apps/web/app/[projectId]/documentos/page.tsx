@@ -10,7 +10,7 @@ export default async function DocumentosPage({ params }: { params: Promise<{ pro
   const { projectId } = await params;
   const documents = await getDocuments(projectId);
   const clauses = await getClauses(projectId);
-  const scheduleActivities = getScheduleActivities(projectId);
+  const scheduleActivities = await getScheduleActivities(projectId);
 
   return (
     <div className="flex flex-col gap-6">
