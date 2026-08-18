@@ -3,37 +3,43 @@ import { Card, CardContent } from "@/components/ui/card";
 import { getEmail, getMockDocument } from "@/lib/data";
 import { sourceTypeShortLabels } from "@/lib/labels";
 
-export function EvidenceViewer({ evidence }: { evidence: EvidenceRef }) {
-  const email = evidence.emailId ? getEmail(evidence.emailId) : null;
-  // EvidenceRef ainda é mock (IDs tipo "doc-arena-contrato"), por isso usa a
-  // seam mock, não o getDocument real — ver TEMPORARY MOCK SEAM em lib/data.ts.
-  const document = evidence.documentId ? getMockDocument(evidence.documentId) : null;
-
+export function EvidenceViewer({ evidences }: { evidences: EvidenceRef[] }) {
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-2 p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium uppercase text-muted-foreground">
-            Evidência original — {sourceTypeShortLabels[evidence.sourceType]}
-          </span>
-        </div>
-        <p className="text-sm font-medium">{evidence.label}</p>
-        <p className="font-mono text-xs text-muted-foreground">{evidence.locator}</p>
-        {email && (
-          <div className="mt-1 rounded-md border border-border bg-muted/40 p-3 text-sm">
-            <p><span className="text-muted-foreground">De:</span> {email.from}</p>
-            <p><span className="text-muted-foreground">Para:</span> {email.to}</p>
-            <p><span className="text-muted-foreground">Assunto:</span> {email.subject}</p>
-            <p className="mt-2 text-muted-foreground">{email.snippet}</p>
-          </div>
-        )}
-        {document && (
-          <div className="mt-1 rounded-md border border-border bg-muted/40 p-3 text-sm">
-            <p className="font-medium">{document.title}</p>
-            <p className="text-muted-foreground">{document.summary}</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-2">
+      {evidences.map((evidence, index) => {
+        const email = evidence.emailId ? getEmail(evidence.emailId) : null;
+        // EvidenceRef ainda é mock (IDs tipo "doc-arena-contrato"), por isso usa a
+        // seam mock, não o getDocument real — ver TEMPORARY MOCK SEAM em lib/data.ts.
+        const document = evidence.documentId ? getMockDocument(evidence.documentId) : null;
+
+        return (
+          <Card key={evidence.id ?? `${index}-${evidence.locator}`}>
+            <CardContent className="flex flex-col gap-2 p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium uppercase text-muted-foreground">
+                  Evidência original — {sourceTypeShortLabels[evidence.sourceType]}
+                </span>
+              </div>
+              <p className="text-sm font-medium">{evidence.label}</p>
+              <p className="font-mono text-xs text-muted-foreground">{evidence.locator}</p>
+              {email && (
+                <div className="mt-1 rounded-md border border-border bg-muted/40 p-3 text-sm">
+                  <p><span className="text-muted-foreground">De:</span> {email.from}</p>
+                  <p><span className="text-muted-foreground">Para:</span> {email.to}</p>
+                  <p><span className="text-muted-foreground">Assunto:</span> {email.subject}</p>
+                  <p className="mt-2 text-muted-foreground">{email.snippet}</p>
+                </div>
+              )}
+              {document && (
+                <div className="mt-1 rounded-md border border-border bg-muted/40 p-3 text-sm">
+                  <p className="font-medium">{document.title}</p>
+                  <p className="text-muted-foreground">{document.summary}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
   );
 }

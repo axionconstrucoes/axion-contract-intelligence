@@ -110,10 +110,12 @@ export interface DocumentVersion {
 
 /** Referência à evidência original de um evento (preserva rastreabilidade até a fonte). */
 export interface EvidenceRef {
+  id?: string;
   sourceType: SourceType;
   label: string;
   locator: string; // ex: "Gmail > Assunto: ..." ou "Diário de Obra #123" ou "Construmanager > Revisão R04"
   documentId?: string;
+  documentVersionId?: string;
   emailId?: string;
 }
 
@@ -200,12 +202,13 @@ export interface ContractEvent {
   title: string;
   description: string;
   sourceType: SourceType;
-  evidence: EvidenceRef;
+  evidence: EvidenceRef[];
   categories: ImplicationCategory[];
   status: EventStatus;
   crossReferences: CrossReference[];
   aiAssessment: AiAssessment | null;
-  createdBy: string; // userId ou "sistema"
+  createdBy: string; // userId, "sistema" ou label de autoria histórica (LEGACY)
+  createdByType?: "SYSTEM" | "USER" | "LEGACY";
 }
 
 export interface Alert {

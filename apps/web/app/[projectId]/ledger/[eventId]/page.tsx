@@ -56,7 +56,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ pr
 
       <div>
         <h2 className="mb-2 text-sm font-semibold">Evidência original</h2>
-        <EvidenceViewer evidence={event.evidence} />
+        <EvidenceViewer evidences={event.evidence} />
       </div>
 
       <div>
