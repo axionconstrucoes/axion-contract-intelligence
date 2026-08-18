@@ -41,7 +41,7 @@ export interface Project {
   client: string;
   status: ProjectStatus;
   location: string;
-  contractNumber: string;
+  contractNumber: string | null;
   startDate: string; // ISO date
   baselineEndDate: string; // ISO date
 }

@@ -5,8 +5,8 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { getProjects } from "@/lib/data";
 import { formatDate } from "@/lib/labels";
 
-export default function ProjetosPage() {
-  const projects = getProjects();
+export default async function ProjetosPage() {
+  const projects = await getProjects();
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-6 p-8">
@@ -31,7 +31,8 @@ export default function ProjetosPage() {
                 <Badge variant="outline">{project.status}</Badge>
               </CardHeader>
               <CardContent className="pt-0 text-xs text-muted-foreground">
-                Contrato {project.contractNumber} · Início {formatDate(project.startDate)} · Prazo baseline {formatDate(project.baselineEndDate)}
+                {project.contractNumber && <>Contrato {project.contractNumber} · </>}
+                Início {formatDate(project.startDate)} · Prazo baseline {formatDate(project.baselineEndDate)}
               </CardContent>
             </Card>
           </Link>

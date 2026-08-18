@@ -1,5 +1,6 @@
-// Ponto único de acesso a dados. Nesta fase lê de @axion/mock-data;
-// na fase 2 estas funções passam a consultar API/banco reais.
+// Ponto único de acesso a dados. getProjects()/getProject() já consultam
+// o Supabase real; as demais funções ainda lêem de @axion/mock-data
+// enquanto seus módulos correspondentes não são migrados.
 import {
   alerts,
   auditLog,
@@ -9,18 +10,46 @@ import {
   events,
   integrationConfigs,
   projectMemberships,
-  projects,
   scheduleActivities,
   sourceDefinitions,
   users,
 } from "@axion/mock-data";
+import { createSupabaseServerClient } from "@axion/db/server";
+import { mapProjectRow, type ProjectRow } from "./project-mapper";
 
-export function getProjects() {
-  return projects;
+const PROJECT_COLUMNS =
+  "id, code, name, client, status, location, contract_number, start_date, baseline_end_date";
+
+export async function getProjects() {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select(PROJECT_COLUMNS)
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as ProjectRow[]).map(mapProjectRow);
 }
 
-export function getProject(projectId: string) {
-  return projects.find((p) => p.id === projectId) ?? null;
+export async function getProject(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select(PROJECT_COLUMNS)
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "22P02") {
+      return null;
+    }
+    throw error;
+  }
+
+  return data ? mapProjectRow(data as ProjectRow) : null;
 }
 
 export function getEvents(projectId: string) {
