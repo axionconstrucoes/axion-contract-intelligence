@@ -6,6 +6,15 @@ import { formatDateTime } from "@/lib/labels";
 export default async function AuditoriaPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const log = getAuditLog(projectId);
+  const entries = await Promise.all(
+    log.map(async (entry) => {
+      if (entry.actor === "sistema") {
+        return { ...entry, actorLabel: "Sistema" };
+      }
+      const user = await getUser(entry.actor);
+      return { ...entry, actorLabel: user ? user.name : "Usuário não disponível" };
+    })
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -13,7 +22,7 @@ export default async function AuditoriaPage({ params }: { params: Promise<{ proj
         <h1 className="text-lg font-semibold">Auditoria</h1>
         <p className="text-sm text-muted-foreground">Trilha cronológica de ações realizadas na plataforma.</p>
       </div>
-      {log.length === 0 ? (
+      {entries.length === 0 ? (
         <EmptyState message="Nenhum registro de auditoria." />
       ) : (
         <Table>
@@ -27,18 +36,15 @@ export default async function AuditoriaPage({ params }: { params: Promise<{ proj
             </TableRow>
           </TableHeader>
           <TableBody>
-            {log.map((entry) => {
-              const actor = entry.actor === "sistema" ? "Sistema" : getUser(entry.actor)?.name ?? entry.actor;
-              return (
-                <TableRow key={entry.id}>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(entry.timestamp)}</TableCell>
-                  <TableCell>{actor}</TableCell>
-                  <TableCell>{entry.action}</TableCell>
-                  <TableCell className="text-muted-foreground">{entry.entityType} · {entry.entityId}</TableCell>
-                  <TableCell className="text-muted-foreground">{entry.detail}</TableCell>
-                </TableRow>
-              );
-            })}
+            {entries.map((entry) => (
+              <TableRow key={entry.id}>
+                <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(entry.timestamp)}</TableCell>
+                <TableCell>{entry.actorLabel}</TableCell>
+                <TableCell>{entry.action}</TableCell>
+                <TableCell className="text-muted-foreground">{entry.entityType} · {entry.entityId}</TableCell>
+                <TableCell className="text-muted-foreground">{entry.detail}</TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
       )}

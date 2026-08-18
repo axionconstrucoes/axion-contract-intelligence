@@ -7,7 +7,7 @@ import { originLabels, permissionLabels } from "@/lib/labels";
 
 export default async function UsuariosPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  const members = getProjectMembers(projectId);
+  const members = await getProjectMembers(projectId);
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,17 +32,17 @@ export default async function UsuariosPage({ params }: { params: Promise<{ proje
               <TableRow key={m.userId}>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    <Avatar>{m.user!.avatarInitials}</Avatar>
+                    <Avatar>{m.user.avatarInitials}</Avatar>
                     <div>
-                      <p className="font-medium">{m.user!.name}</p>
-                      <p className="text-xs text-muted-foreground">{m.user!.email}</p>
+                      <p className="font-medium">{m.user.name}</p>
+                      <p className="text-xs text-muted-foreground">{m.user.email}</p>
                     </div>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="outline">{originLabels[m.user!.origin]}</Badge>
+                  <Badge variant="outline">{originLabels[m.user.origin]}</Badge>
                 </TableCell>
-                <TableCell className="text-muted-foreground">{m.user!.title}</TableCell>
+                <TableCell className="text-muted-foreground">{m.user.title}</TableCell>
                 <TableCell>
                   <Badge>{permissionLabels[m.permission]}</Badge>
                 </TableCell>

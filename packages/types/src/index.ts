@@ -53,7 +53,7 @@ export interface User {
   name: string;
   email: string;
   origin: UserOrigin;
-  title: string;
+  title: string | null;
   avatarInitials: string;
 }
 

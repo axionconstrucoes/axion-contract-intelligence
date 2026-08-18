@@ -1,6 +1,7 @@
-// Ponto único de acesso a dados. getProjects()/getProject() já consultam
-// o Supabase real; as demais funções ainda lêem de @axion/mock-data
-// enquanto seus módulos correspondentes não são migrados.
+// Ponto único de acesso a dados. getProjects()/getProject()/getUsers()/
+// getUser()/getProjectMembers() já consultam o Supabase real; as demais
+// funções ainda lêem de @axion/mock-data enquanto seus módulos
+// correspondentes não são migrados.
 import {
   alerts,
   auditLog,
@@ -9,16 +10,22 @@ import {
   emails,
   events,
   integrationConfigs,
-  projectMemberships,
   scheduleActivities,
   sourceDefinitions,
-  users,
 } from "@axion/mock-data";
 import { createSupabaseServerClient } from "@axion/db/server";
 import { mapProjectRow, type ProjectRow } from "./project-mapper";
+import {
+  mapMembershipRow,
+  mapUserRow,
+  type MembershipWithProfileRow,
+  type UserRow,
+} from "./user-mapper";
 
 const PROJECT_COLUMNS =
   "id, code, name, client, status, location, contract_number, start_date, baseline_end_date";
+
+const PROFILE_COLUMNS = "id, name, email, origin, title, avatar_initials";
 
 export async function getProjects() {
   const supabase = await createSupabaseServerClient();
@@ -100,19 +107,54 @@ export function getEmail(emailId: string) {
   return emails.find((e) => e.id === emailId) ?? null;
 }
 
-export function getUsers() {
-  return users;
+// Retorna somente os profiles visíveis sob RLS ao usuário autenticado
+// (ele mesmo + colegas de projeto) — NÃO representa "todos os usuários
+// da AXION". Um diretório corporativo global exigiria desenho próprio
+// de autorização/RLS, não este caminho.
+export async function getUsers() {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(PROFILE_COLUMNS)
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as UserRow[]).map(mapUserRow);
 }
 
-export function getUser(userId: string) {
-  return users.find((u) => u.id === userId) ?? null;
+export async function getUser(userId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(PROFILE_COLUMNS)
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "22P02") {
+      return null;
+    }
+    throw error;
+  }
+
+  return data ? mapUserRow(data as UserRow) : null;
 }
 
-export function getProjectMembers(projectId: string) {
-  return projectMemberships
-    .filter((m) => m.projectId === projectId)
-    .map((m) => ({ ...m, user: getUser(m.userId) }))
-    .filter((m) => m.user !== null);
+export async function getProjectMembers(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("project_memberships")
+    .select(`project_id, user_id, permission, profiles(${PROFILE_COLUMNS})`)
+    .eq("project_id", projectId);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data as MembershipWithProfileRow[]).map(mapMembershipRow);
 }
 
 export function getAuditLog(projectId: string) {

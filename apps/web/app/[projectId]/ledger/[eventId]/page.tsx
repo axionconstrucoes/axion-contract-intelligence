@@ -12,7 +12,11 @@ export default async function EventDetailPage({ params }: { params: Promise<{ pr
   const event = getEvent(eventId);
   if (!event) notFound();
 
-  const creator = event.createdBy === "sistema" ? null : getUser(event.createdBy);
+  const creator = event.createdBy === "sistema" ? null : await getUser(event.createdBy);
+  const creatorLabel =
+    event.createdBy === "sistema"
+      ? "sistema (ingestão automática)"
+      : (creator?.name ?? "Usuário não disponível");
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
@@ -22,7 +26,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ pr
           <span>·</span>
           <span>{sourceTypeShortLabels[event.sourceType]}</span>
           <span>·</span>
-          <span>Registrado por {creator ? creator.name : "sistema (ingestão automática)"}</span>
+          <span>Registrado por {creatorLabel}</span>
         </div>
         <h1 className="mt-1 text-lg font-semibold">{event.title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{event.description}</p>
