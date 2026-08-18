@@ -242,4 +242,180 @@ begin
     subject = excluded.subject,
     sent_at = excluded.sent_at,
     snippet = excluded.snippet;
+
+  -- ---------- Event Ledger DEV (PASSO 2.5G4F) ----------
+  -- Espelha, com UUID determinístico, os 5 eventos mock do projeto DEV em
+  -- packages/mock-data/src/events.ts (evt-ind-01..05, do projeto mock
+  -- "prj-industrial", ficam de fora, mesma decisão já tomada nos lotes
+  -- anteriores). Autoria: evt-arena-01..04 = SYSTEM; evt-arena-05 = LEGACY
+  -- com created_by_label = "João Pedro Alves" (createdBy mock "usr-joao"
+  -- não corresponde a nenhum profile real — decisão 2.5G4E/2.5G4F, nunca
+  -- inventar/substituir usuário real).
+  --
+  -- DEV FIXTURES ONLY. As linhas de event_ai_assessments abaixo espelham
+  -- dados mock de UI e NÃO são evidência de execução real de IA.
+  --
+  -- Mapeamento mock id -> UUID:
+  --   evt-arena-01 -> 00000000-0000-4000-8000-000000000701
+  --   evt-arena-02 -> 00000000-0000-4000-8000-000000000702
+  --   evt-arena-03 -> 00000000-0000-4000-8000-000000000703
+  --   evt-arena-04 -> 00000000-0000-4000-8000-000000000704
+  --   evt-arena-05 -> 00000000-0000-4000-8000-000000000705
+
+  insert into public.contract_events (
+    id, project_id, occurred_at, title, description, source_type, status,
+    created_by_type, created_by_user_id, created_by_label
+  )
+  values
+    ('00000000-0000-4000-8000-000000000701', dev_project_id,
+     '2025-06-25T08:30:00-03:00',
+     'Notificação formal do cliente sobre atraso no cronograma',
+     'Prefeitura de Itaguaí notifica atraso e cobra plano de recuperação, citando possível multa contratual.',
+     'EMAIL', 'EM_ANALISE', 'SYSTEM', null, null),
+    ('00000000-0000-4000-8000-000000000702', dev_project_id,
+     '2025-04-18T11:00:00-03:00',
+     'RFI-01 recebida: especificação de estrutura metálica da cobertura',
+     'Cliente formaliza RFI-01 questionando especificação técnica da estrutura metálica de cobertura.',
+     'EDITAL_RFI_RFP', 'CONFRONTADO', 'SYSTEM', null, null),
+    ('00000000-0000-4000-8000-000000000703', dev_project_id,
+     '2025-12-15T16:00:00-03:00',
+     'Cliente cobra aplicação de multa por atraso',
+     'E-mail formal cobra aplicação de multa contratual por atraso, referenciando notificação anterior.',
+     'EMAIL', 'EM_ANALISE', 'SYSTEM', null, null),
+    ('00000000-0000-4000-8000-000000000704', dev_project_id,
+     '2026-01-20T08:45:00-03:00',
+     'Paralisação por falta de liberação de área pelo cliente',
+     'Diário de Obra registra paralisação de 5 dias na frente de paisagismo por falta de liberação de área pelo cliente.',
+     'DIARIO_OBRA', 'EM_ANALISE', 'SYSTEM', null, null),
+    ('00000000-0000-4000-8000-000000000705', dev_project_id,
+     '2025-02-10T09:00:00-03:00',
+     'Cronograma baseline aprovado',
+     'Cronograma físico-financeiro baseline aprovado formalmente no início do contrato.',
+     'CRONOGRAMA', 'RESOLVIDO', 'LEGACY', null, 'João Pedro Alves')
+  on conflict (id) do update set
+    project_id = excluded.project_id,
+    occurred_at = excluded.occurred_at,
+    title = excluded.title,
+    description = excluded.description,
+    source_type = excluded.source_type,
+    status = excluded.status,
+    created_by_type = excluded.created_by_type,
+    created_by_user_id = excluded.created_by_user_id,
+    created_by_label = excluded.created_by_label;
+
+  insert into public.event_categories (event_id, category)
+  values
+    ('00000000-0000-4000-8000-000000000701', 'NOTIFICACOES'),
+    ('00000000-0000-4000-8000-000000000701', 'PRAZO'),
+    ('00000000-0000-4000-8000-000000000701', 'MULTAS'),
+    ('00000000-0000-4000-8000-000000000702', 'ESCOPO'),
+    ('00000000-0000-4000-8000-000000000702', 'ALTERACOES_PROJETO'),
+    ('00000000-0000-4000-8000-000000000703', 'MULTAS'),
+    ('00000000-0000-4000-8000-000000000703', 'PENALIDADES'),
+    ('00000000-0000-4000-8000-000000000703', 'NOTIFICACOES'),
+    ('00000000-0000-4000-8000-000000000704', 'PRAZO'),
+    ('00000000-0000-4000-8000-000000000704', 'RESPONSABILIDADES'),
+    ('00000000-0000-4000-8000-000000000705', 'PRAZO')
+  on conflict (event_id, category) do nothing;
+
+  -- Evidence: doc-arena-rfi-01/doc-arena-cronograma-baseline apontam para a
+  -- document_version real (não document_id), conforme decisão 2.5G4D.
+  -- evt-arena-04 é locator-only (DIARIO_OBRA não tem entidade real hoje).
+  insert into public.event_evidence (
+    id, event_id, source_type, label, locator, document_version_id, email_id
+  )
+  values
+    ('00000000-0000-4000-8000-000000000801', '00000000-0000-4000-8000-000000000701',
+     'EMAIL', 'Gmail — Notificação de Atraso Contratual',
+     'gmail://axion.com.br/inbox/msg-2025-0625-1', null,
+     '00000000-0000-4000-8000-000000000601'),
+    ('00000000-0000-4000-8000-000000000802', '00000000-0000-4000-8000-000000000702',
+     'EDITAL_RFI_RFP', 'RFI-01 — Estrutura Metálica da Cobertura',
+     'recebidos-cliente://prj-arena/RFI/RFI-01.pdf',
+     '00000000-0000-4000-8000-000000000203', null),
+    ('00000000-0000-4000-8000-000000000803', '00000000-0000-4000-8000-000000000703',
+     'EMAIL', 'Gmail — Aplicação de Multa Contratual',
+     'gmail://axion.com.br/inbox/msg-2025-1215-1', null,
+     '00000000-0000-4000-8000-000000000602'),
+    ('00000000-0000-4000-8000-000000000804', '00000000-0000-4000-8000-000000000704',
+     'DIARIO_OBRA', 'Diário de Obra — Registro 2026-01-20',
+     'diario-obra://prj-arena/registro/1298', null, null),
+    ('00000000-0000-4000-8000-000000000805', '00000000-0000-4000-8000-000000000705',
+     'CRONOGRAMA', 'Cronograma Baseline',
+     'drive://prj-arena/cronograma/baseline.pdf',
+     '00000000-0000-4000-8000-000000000202', null)
+  on conflict (id) do update set
+    event_id = excluded.event_id,
+    source_type = excluded.source_type,
+    label = excluded.label,
+    locator = excluded.locator,
+    document_version_id = excluded.document_version_id,
+    email_id = excluded.email_id;
+
+  insert into public.event_ai_assessments (
+    id, event_id, finding_type, severity, summary, confidence, requires_human_review
+  )
+  values
+    ('00000000-0000-4000-8000-000000000901', '00000000-0000-4000-8000-000000000701',
+     'IMPACTO_POTENCIAL', 'ALTA',
+     'Notificação inicia prazo de defesa; recomenda-se resposta baseada em evento de força maior já registrado.',
+     0.88, true),
+    ('00000000-0000-4000-8000-000000000902', '00000000-0000-4000-8000-000000000702',
+     'CONFLITO', 'MEDIA',
+     'Especificação questionada diverge do memorial descritivo da proposta vigente.',
+     0.81, true),
+    ('00000000-0000-4000-8000-000000000903', '00000000-0000-4000-8000-000000000703',
+     'IMPACTO_POTENCIAL', 'CRITICA',
+     'Cobrança formal exige resposta fundamentada nos eventos de força maior já documentados.',
+     0.9, true),
+    ('00000000-0000-4000-8000-000000000904', '00000000-0000-4000-8000-000000000704',
+     'IMPACTO_POTENCIAL', 'ALTA',
+     'Atraso decorre de responsabilidade do cliente e fundamenta extensão de prazo sem ônus à Axion.',
+     0.82, true)
+  on conflict (id) do update set
+    event_id = excluded.event_id,
+    finding_type = excluded.finding_type,
+    severity = excluded.severity,
+    summary = excluded.summary,
+    confidence = excluded.confidence,
+    requires_human_review = excluded.requires_human_review;
+  -- evt-arena-05 não tem linha aqui: aiAssessment é null no mock (Cronograma
+  -- baseline aprovado sem achado de IA) — nunca inventar avaliação ausente.
+
+  insert into public.event_cross_references (
+    id, event_id, kind, document_id, clause_id, schedule_activity_id, email_id, note
+  )
+  values
+    ('00000000-0000-4000-8000-000000001001', '00000000-0000-4000-8000-000000000701',
+     'CONTRATO_ADITIVO', null, '00000000-0000-4000-8000-000000000302', null, null,
+     'Cláusula de multa por atraso.'),
+    ('00000000-0000-4000-8000-000000001002', '00000000-0000-4000-8000-000000000701',
+     'CRONOGRAMA', null, null, '00000000-0000-4000-8000-000000000502', null,
+     'Atividade em atraso.'),
+    ('00000000-0000-4000-8000-000000001003', '00000000-0000-4000-8000-000000000702',
+     'EDITAL_RFI_RFP', '00000000-0000-4000-8000-000000000103', null, null, null,
+     'RFI original do cliente.'),
+    ('00000000-0000-4000-8000-000000001004', '00000000-0000-4000-8000-000000000702',
+     'CONTRATO_ADITIVO', null, '00000000-0000-4000-8000-000000000303', null, null,
+     'Prazo contratual de resposta a RFIs.'),
+    ('00000000-0000-4000-8000-000000001005', '00000000-0000-4000-8000-000000000703',
+     'CONTRATO_ADITIVO', null, '00000000-0000-4000-8000-000000000302', null, null,
+     'Cláusula de multa por atraso.'),
+    ('00000000-0000-4000-8000-000000001006', '00000000-0000-4000-8000-000000000703',
+     'COMUNICACAO', null, null, null, '00000000-0000-4000-8000-000000000601',
+     'Notificação formal anterior.'),
+    ('00000000-0000-4000-8000-000000001007', '00000000-0000-4000-8000-000000000704',
+     'CRONOGRAMA', null, null, '00000000-0000-4000-8000-000000000503', null,
+     'Impacto direto na atividade de paisagismo.'),
+    ('00000000-0000-4000-8000-000000001008', '00000000-0000-4000-8000-000000000705',
+     'CRONOGRAMA', '00000000-0000-4000-8000-000000000102', null, null, null,
+     'Cronograma aprovado.')
+  on conflict (id) do update set
+    event_id = excluded.event_id,
+    kind = excluded.kind,
+    document_id = excluded.document_id,
+    clause_id = excluded.clause_id,
+    schedule_activity_id = excluded.schedule_activity_id,
+    email_id = excluded.email_id,
+    note = excluded.note;
 end $$;
