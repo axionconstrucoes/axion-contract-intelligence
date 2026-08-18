@@ -14,6 +14,7 @@ import {
   sourceDefinitions,
 } from "@axion/mock-data";
 import { createSupabaseServerClient } from "@axion/db/server";
+import { mapClauseRow, type ClauseRow, type ClauseVersionParent } from "./clause-mapper";
 import {
   mapDocumentWithVersion,
   pickCurrentVersion,
@@ -37,6 +38,8 @@ const DOCUMENT_COLUMNS = "id, project_id, kind, title, created_at";
 
 const DOCUMENT_VERSION_COLUMNS =
   "id, document_id, version_label, version_index, document_date, source_type, author, summary, file_path, uploaded_by, uploaded_at, notes";
+
+const CLAUSE_COLUMNS = "id, document_version_id, clause_number, title, text, created_at";
 
 export async function getProjects() {
   const supabase = await createSupabaseServerClient();
@@ -171,11 +174,141 @@ export function getMockDocument(documentId: string) {
   return documents.find((d) => d.id === documentId) ?? null;
 }
 
-export function getClauses(projectId: string) {
-  return clauses.filter((c) => c.projectId === projectId);
+export async function getClauses(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: documentRows, error: documentsError } = await supabase
+    .from("documents")
+    .select("id, project_id")
+    .eq("project_id", projectId);
+
+  if (documentsError) {
+    if (documentsError.code === "22P02") {
+      return [];
+    }
+    throw documentsError;
+  }
+
+  const docs = documentRows as { id: string; project_id: string }[];
+  if (docs.length === 0) {
+    return [];
+  }
+
+  const { data: versionRows, error: versionsError } = await supabase
+    .from("document_versions")
+    .select("id, document_id")
+    .in(
+      "document_id",
+      docs.map((d) => d.id)
+    );
+
+  if (versionsError) {
+    throw versionsError;
+  }
+
+  const versions = versionRows as { id: string; document_id: string }[];
+  if (versions.length === 0) {
+    return [];
+  }
+
+  const { data: clauseRows, error: clausesError } = await supabase
+    .from("clauses")
+    .select(CLAUSE_COLUMNS)
+    .in(
+      "document_version_id",
+      versions.map((v) => v.id)
+    );
+
+  if (clausesError) {
+    throw clausesError;
+  }
+
+  const projectIdByDocumentId = new Map(docs.map((d) => [d.id, d.project_id]));
+  const parentByVersionId = new Map<string, ClauseVersionParent>();
+  for (const version of versions) {
+    const parentProjectId = projectIdByDocumentId.get(version.document_id);
+    if (parentProjectId) {
+      parentByVersionId.set(version.id, {
+        documentId: version.document_id,
+        projectId: parentProjectId,
+      });
+    }
+  }
+
+  return (clauseRows as ClauseRow[]).map((row) =>
+    mapClauseRow(row, parentByVersionId.get(row.document_version_id))
+  );
 }
 
-export function getClause(clauseId: string) {
+export async function getClause(clauseId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: clauseRow, error: clauseError } = await supabase
+    .from("clauses")
+    .select(CLAUSE_COLUMNS)
+    .eq("id", clauseId)
+    .maybeSingle();
+
+  if (clauseError) {
+    if (clauseError.code === "22P02") {
+      return null;
+    }
+    throw clauseError;
+  }
+
+  if (!clauseRow) {
+    return null;
+  }
+
+  const row = clauseRow as ClauseRow;
+
+  const { data: versionRow, error: versionError } = await supabase
+    .from("document_versions")
+    .select("id, document_id")
+    .eq("id", row.document_version_id)
+    .maybeSingle();
+
+  if (versionError) {
+    throw versionError;
+  }
+
+  if (!versionRow) {
+    throw new Error(
+      `Inconsistência estrutural: clause (id=${clauseId}) referencia document_version_id=${row.document_version_id} não encontrado.`
+    );
+  }
+
+  const version = versionRow as { id: string; document_id: string };
+
+  const { data: documentRow, error: documentError } = await supabase
+    .from("documents")
+    .select("id, project_id")
+    .eq("id", version.document_id)
+    .maybeSingle();
+
+  if (documentError) {
+    throw documentError;
+  }
+
+  if (!documentRow) {
+    throw new Error(
+      `Inconsistência estrutural: clause (id=${clauseId}) → document_version (id=${version.id}) → document (id=${version.document_id}) não encontrado.`
+    );
+  }
+
+  const document = documentRow as { id: string; project_id: string };
+
+  return mapClauseRow(row, {
+    documentId: version.document_id,
+    projectId: document.project_id,
+  });
+}
+
+// TEMPORARY MOCK SEAM: remove when Event Ledger / CrossReference migrate to
+// real clause UUIDs. CrossReference (refType "CLAUSE") ainda referencia IDs
+// mock (ex.: "cls-arena-01"), que não correspondem às UUIDs reais de
+// `clauses` no Supabase — não fazer tradução runtime entre os dois.
+export function getMockClause(clauseId: string) {
   return clauses.find((c) => c.id === clauseId) ?? null;
 }
 
@@ -267,7 +400,9 @@ export function resolveCrossReferenceLabel(refType: string, refId: string): stri
       // por isso usa a seam mock, não o getDocument real (ver getMockDocument acima).
       return getMockDocument(refId)?.title ?? refId;
     case "CLAUSE": {
-      const clause = getClause(refId);
+      // Event Ledger/CrossReference ainda são mock (IDs tipo "cls-arena-01"),
+      // por isso usa a seam mock, não o getClause real (ver getMockClause acima).
+      const clause = getMockClause(refId);
       return clause ? `Cláusula ${clause.clauseNumber} — ${clause.title}` : refId;
     }
     case "SCHEDULE_ACTIVITY":

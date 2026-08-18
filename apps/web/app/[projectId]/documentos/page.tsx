@@ -9,7 +9,7 @@ import { formatDate } from "@/lib/labels";
 export default async function DocumentosPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const documents = await getDocuments(projectId);
-  const clauses = getClauses(projectId);
+  const clauses = await getClauses(projectId);
   const scheduleActivities = getScheduleActivities(projectId);
 
   return (
