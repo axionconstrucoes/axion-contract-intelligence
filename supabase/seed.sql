@@ -127,4 +127,33 @@ begin
     source_type = excluded.source_type,
     author = excluded.author,
     summary = excluded.summary;
+
+  -- ---------- Clauses DEV (PASSO 2.5G2B) ----------
+  -- Espelha, com UUID determinístico, as cláusulas mock do contrato DEV em
+  -- packages/mock-data/src/clauses.ts (somente as 3 ligadas ao contrato
+  -- DEV — cls-ind-01/02, do projeto mock "prj-industrial", ficam de fora,
+  -- mesma decisão já tomada para Project Documents). Todas apontam para a
+  -- document_version REAL já seedada acima (contrato DEV, rev. 1.0):
+  --   00000000-0000-4000-8000-000000000201
+  -- Mapeamento mock id -> UUID:
+  --   cls-arena-01 -> 00000000-0000-4000-8000-000000000301
+  --   cls-arena-02 -> 00000000-0000-4000-8000-000000000302
+  --   cls-arena-03 -> 00000000-0000-4000-8000-000000000303
+
+  insert into public.clauses (id, document_version_id, clause_number, title, text)
+  values
+    ('00000000-0000-4000-8000-000000000301', '00000000-0000-4000-8000-000000000201',
+     '12.1', 'Prazo de execução e força maior',
+     'O prazo de execução poderá ser prorrogado mediante comprovação de eventos de força maior, incluindo condições climáticas excepcionais.'),
+    ('00000000-0000-4000-8000-000000000302', '00000000-0000-4000-8000-000000000201',
+     '15.3', 'Multa por atraso injustificado',
+     'Atraso injustificado na entrega sujeita a contratada a multa de 0,1% do valor contratual por dia, limitada a 10%.'),
+    ('00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000201',
+     '9.2', 'Prazo de resposta a RFIs',
+     'A contratada tem prazo de 10 dias úteis para responder formalmente a solicitações de informação (RFIs) do contratante.')
+  on conflict (id) do update set
+    document_version_id = excluded.document_version_id,
+    clause_number = excluded.clause_number,
+    title = excluded.title,
+    text = excluded.text;
 end $$;
