@@ -79,4 +79,52 @@ begin
   values (dev_project_id, dev_user_id, 'ADMIN')
   on conflict (project_id, user_id) do update set
     permission = excluded.permission;
+
+  -- ---------- Project Documents DEV (PASSO 2.5G1A) ----------
+  -- Espelha, com UUID determinístico, os documentos mock do projeto DEV
+  -- em packages/mock-data/src/documents.ts (somente os ligados a
+  -- dev_project_id — documentos mock do projeto "prj-industrial" ficam
+  -- de fora deste lote, que não cria projeto industrial real).
+  -- Mapeamento mock id -> UUID:
+  --   doc-arena-contrato             -> 00000000-0000-4000-8000-000000000101
+  --   doc-arena-cronograma-baseline  -> 00000000-0000-4000-8000-000000000102
+  --   doc-arena-rfi-01               -> 00000000-0000-4000-8000-000000000103
+
+  insert into public.documents (id, project_id, kind, title)
+  values
+    ('00000000-0000-4000-8000-000000000101', dev_project_id, 'CONTRATO_BASE',
+     'Contrato de Empreitada CT-2025-0142'),
+    ('00000000-0000-4000-8000-000000000102', dev_project_id, 'CRONOGRAMA_BASELINE',
+     'Cronograma Baseline — Arena Multiuso Zona Norte'),
+    ('00000000-0000-4000-8000-000000000103', dev_project_id, 'RFI',
+     'RFI-01 — Especificação de Estrutura Metálica da Cobertura')
+  on conflict (id) do update set
+    project_id = excluded.project_id,
+    kind = excluded.kind,
+    title = excluded.title;
+
+  -- Versão inicial (version_index = 1) de cada documento acima, espelhando
+  -- os campos version/date/sourceType/author/summary do mock equivalente.
+  insert into public.document_versions (
+    id, document_id, version_label, version_index, document_date,
+    source_type, author, summary
+  )
+  values
+    ('00000000-0000-4000-8000-000000000201', '00000000-0000-4000-8000-000000000101',
+     '1.0', 1, '2025-02-05', 'CONTRATO', 'Fernanda Ribeiro',
+     'Contrato de empreitada global para construção da Arena Multiuso Zona Norte.'),
+    ('00000000-0000-4000-8000-000000000202', '00000000-0000-4000-8000-000000000102',
+     'Baseline', 1, '2025-02-10', 'CRONOGRAMA', 'Carlos Eduardo Lima',
+     'Cronograma físico-financeiro baseline aprovado no início do contrato.'),
+    ('00000000-0000-4000-8000-000000000203', '00000000-0000-4000-8000-000000000103',
+     '1.0', 1, '2025-04-18', 'EDITAL_RFI_RFP', 'Roberto Nunes',
+     'Cliente solicita esclarecimento sobre especificação técnica da estrutura metálica de cobertura.')
+  on conflict (id) do update set
+    document_id = excluded.document_id,
+    version_label = excluded.version_label,
+    version_index = excluded.version_index,
+    document_date = excluded.document_date,
+    source_type = excluded.source_type,
+    author = excluded.author,
+    summary = excluded.summary;
 end $$;
