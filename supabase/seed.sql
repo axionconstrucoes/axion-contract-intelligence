@@ -156,4 +156,55 @@ begin
     clause_number = excluded.clause_number,
     title = excluded.title,
     text = excluded.text;
+
+  -- ---------- Schedule DEV (PASSO 2.5G3B) ----------
+  -- Espelha, com UUID determinístico, o cronograma mock DEV em
+  -- packages/mock-data/src/schedule.ts (somente as 3 atividades ligadas ao
+  -- projeto DEV — sch-ind-01/02, do projeto mock "prj-industrial", ficam de
+  -- fora, mesma decisão já tomada para Documents/Clauses). A ScheduleVersion
+  -- aponta para a document_version REAL já seedada acima (documento
+  -- CRONOGRAMA_BASELINE, rev. "Baseline"): 00000000-0000-4000-8000-000000000202.
+  -- version_type = BASELINE / lifecycle_status = ISSUED / client_formalization_status
+  -- = UNCLEAR (deliberado: o domínio mock atual não contém evidência suficiente
+  -- para afirmar se houve formalização específica do cliente para este
+  -- cronograma — não usar NOT_SUBMITTED apenas por ser o default).
+  -- Mapeamento mock -> UUID:
+  --   (ScheduleVersion única)         -> 00000000-0000-4000-8000-000000000401
+  --   sch-arena-01 (Fundações)        -> 00000000-0000-4000-8000-000000000501
+  --   sch-arena-02 (Estrutura/Cobert.) -> 00000000-0000-4000-8000-000000000502
+  --   sch-arena-03 (Paisagismo)       -> 00000000-0000-4000-8000-000000000503
+  -- Mapeamento de campos: mock baselineStart/baselineEnd -> baseline_start/end;
+  -- mock currentStart/currentEnd -> planned_start/end (programação vigente,
+  -- nunca execução real — ver decisão 2.5G3A.3); mock status -> status.
+
+  insert into public.schedule_versions (
+    id, document_version_id, version_type, lifecycle_status, client_formalization_status
+  )
+  values
+    ('00000000-0000-4000-8000-000000000401', '00000000-0000-4000-8000-000000000202',
+     'BASELINE', 'ISSUED', 'UNCLEAR')
+  on conflict (id) do update set
+    document_version_id = excluded.document_version_id,
+    version_type = excluded.version_type,
+    lifecycle_status = excluded.lifecycle_status,
+    client_formalization_status = excluded.client_formalization_status;
+
+  insert into public.schedule_activities (
+    id, schedule_version_id, name, baseline_start, baseline_end, planned_start, planned_end, status
+  )
+  values
+    ('00000000-0000-4000-8000-000000000501', '00000000-0000-4000-8000-000000000401',
+     'Fundações', '2025-02-10', '2025-04-30', '2025-02-10', '2025-05-08', 'CONCLUIDA'),
+    ('00000000-0000-4000-8000-000000000502', '00000000-0000-4000-8000-000000000401',
+     'Estrutura e Cobertura', '2025-05-01', '2025-09-30', '2025-05-01', '2025-10-20', 'ATRASADA'),
+    ('00000000-0000-4000-8000-000000000503', '00000000-0000-4000-8000-000000000401',
+     'Paisagismo', '2025-10-01', '2025-12-15', '2026-01-15', '2026-03-01', 'ATRASADA')
+  on conflict (id) do update set
+    schedule_version_id = excluded.schedule_version_id,
+    name = excluded.name,
+    baseline_start = excluded.baseline_start,
+    baseline_end = excluded.baseline_end,
+    planned_start = excluded.planned_start,
+    planned_end = excluded.planned_end,
+    status = excluded.status;
 end $$;
