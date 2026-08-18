@@ -207,4 +207,39 @@ begin
     planned_start = excluded.planned_start,
     planned_end = excluded.planned_end,
     status = excluded.status;
+
+  -- ---------- Email DEV (PASSO 2.5G4B) ----------
+  -- Espelha, com UUID determinístico, os 3 e-mails mock do projeto DEV em
+  -- packages/mock-data/src/emails.ts (em-ind-01/02, do projeto mock
+  -- "prj-industrial", ficam de fora, mesma decisão já tomada para
+  -- Documents/Clauses/Schedule). project_id direto (email não deriva de
+  -- document/document_version).
+  -- Mapeamento mock id -> UUID:
+  --   em-arena-01 -> 00000000-0000-4000-8000-000000000601
+  --   em-arena-02 -> 00000000-0000-4000-8000-000000000602
+  --   em-arena-03 -> 00000000-0000-4000-8000-000000000603
+
+  insert into public.emails (
+    id, project_id, from_address, to_address, subject, sent_at, snippet
+  )
+  values
+    ('00000000-0000-4000-8000-000000000601', dev_project_id,
+     'roberto.nunes@itaguai.rj.gov.br', 'ana.souza@axion.com.br',
+     'Notificação de Atraso Contratual', '2025-06-25T08:30:00-03:00',
+     'Notificamos formalmente o atraso identificado no cronograma e solicitamos plano de recuperação em até 5 dias úteis.'),
+    ('00000000-0000-4000-8000-000000000602', dev_project_id,
+     'roberto.nunes@itaguai.rj.gov.br', 'fernanda.ribeiro@axion.com.br',
+     'Aplicação de Multa Contratual', '2025-12-15T16:00:00-03:00',
+     'Em referência à notificação anterior, comunicamos a aplicação da multa prevista na cláusula 15.3 do contrato.'),
+    ('00000000-0000-4000-8000-000000000603', dev_project_id,
+     'ana.souza@axion.com.br', 'roberto.nunes@itaguai.rj.gov.br',
+     'RE: Notificação de Atraso Contratual', '2025-07-02T11:00:00-03:00',
+     'Em resposta, informamos que o atraso decorre de evento climático excepcional registrado em Diário de Obra, conforme cláusula 12.1.')
+  on conflict (id) do update set
+    project_id = excluded.project_id,
+    from_address = excluded.from_address,
+    to_address = excluded.to_address,
+    subject = excluded.subject,
+    sent_at = excluded.sent_at,
+    snippet = excluded.snippet;
 end $$;
