@@ -1,11 +1,13 @@
 import type { EvidenceRef } from "@axion/types";
 import { Card, CardContent } from "@/components/ui/card";
-import { getDocument, getEmail } from "@/lib/data";
+import { getEmail, getMockDocument } from "@/lib/data";
 import { sourceTypeShortLabels } from "@/lib/labels";
 
 export function EvidenceViewer({ evidence }: { evidence: EvidenceRef }) {
   const email = evidence.emailId ? getEmail(evidence.emailId) : null;
-  const document = evidence.documentId ? getDocument(evidence.documentId) : null;
+  // EvidenceRef ainda é mock (IDs tipo "doc-arena-contrato"), por isso usa a
+  // seam mock, não o getDocument real — ver TEMPORARY MOCK SEAM em lib/data.ts.
+  const document = evidence.documentId ? getMockDocument(evidence.documentId) : null;
 
   return (
     <Card>

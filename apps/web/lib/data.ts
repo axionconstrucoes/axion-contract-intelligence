@@ -1,7 +1,7 @@
 // Ponto único de acesso a dados. getProjects()/getProject()/getUsers()/
-// getUser()/getProjectMembers() já consultam o Supabase real; as demais
-// funções ainda lêem de @axion/mock-data enquanto seus módulos
-// correspondentes não são migrados.
+// getUser()/getProjectMembers()/getDocuments()/getDocument() já consultam
+// o Supabase real; as demais funções ainda lêem de @axion/mock-data
+// enquanto seus módulos correspondentes não são migrados.
 import {
   alerts,
   auditLog,
@@ -14,6 +14,12 @@ import {
   sourceDefinitions,
 } from "@axion/mock-data";
 import { createSupabaseServerClient } from "@axion/db/server";
+import {
+  mapDocumentWithVersion,
+  pickCurrentVersion,
+  type DocumentRow,
+  type DocumentVersionRow,
+} from "./document-mapper";
 import { mapProjectRow, type ProjectRow } from "./project-mapper";
 import {
   mapMembershipRow,
@@ -26,6 +32,11 @@ const PROJECT_COLUMNS =
   "id, code, name, client, status, location, contract_number, start_date, baseline_end_date";
 
 const PROFILE_COLUMNS = "id, name, email, origin, title, avatar_initials";
+
+const DOCUMENT_COLUMNS = "id, project_id, kind, title, created_at";
+
+const DOCUMENT_VERSION_COLUMNS =
+  "id, document_id, version_label, version_index, document_date, source_type, author, summary, file_path, uploaded_by, uploaded_at, notes";
 
 export async function getProjects() {
   const supabase = await createSupabaseServerClient();
@@ -75,11 +86,88 @@ export function getAlerts(projectId: string) {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
-export function getDocuments(projectId: string) {
-  return documents.filter((d) => d.projectId === projectId);
+export async function getDocuments(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data: documentRows, error: documentsError } = await supabase
+    .from("documents")
+    .select(DOCUMENT_COLUMNS)
+    .eq("project_id", projectId);
+
+  if (documentsError) {
+    if (documentsError.code === "22P02") {
+      return [];
+    }
+    throw documentsError;
+  }
+
+  const rows = documentRows as DocumentRow[];
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const { data: versionRows, error: versionsError } = await supabase
+    .from("document_versions")
+    .select(DOCUMENT_VERSION_COLUMNS)
+    .in(
+      "document_id",
+      rows.map((row) => row.id)
+    );
+
+  if (versionsError) {
+    throw versionsError;
+  }
+
+  const versionsByDocumentId = new Map<string, DocumentVersionRow[]>();
+  for (const version of versionRows as DocumentVersionRow[]) {
+    const list = versionsByDocumentId.get(version.document_id) ?? [];
+    list.push(version);
+    versionsByDocumentId.set(version.document_id, list);
+  }
+
+  return rows.map((row) =>
+    mapDocumentWithVersion(row, pickCurrentVersion(versionsByDocumentId.get(row.id) ?? []))
+  );
 }
 
-export function getDocument(documentId: string) {
+export async function getDocument(documentId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data: documentRow, error: documentError } = await supabase
+    .from("documents")
+    .select(DOCUMENT_COLUMNS)
+    .eq("id", documentId)
+    .maybeSingle();
+
+  if (documentError) {
+    if (documentError.code === "22P02") {
+      return null;
+    }
+    throw documentError;
+  }
+
+  if (!documentRow) {
+    return null;
+  }
+
+  const { data: versionRows, error: versionsError } = await supabase
+    .from("document_versions")
+    .select(DOCUMENT_VERSION_COLUMNS)
+    .eq("document_id", (documentRow as DocumentRow).id);
+
+  if (versionsError) {
+    throw versionsError;
+  }
+
+  return mapDocumentWithVersion(
+    documentRow as DocumentRow,
+    pickCurrentVersion(versionRows as DocumentVersionRow[])
+  );
+}
+
+// TEMPORARY MOCK SEAM: remove when Event Ledger / EvidenceRef migrate to
+// real document UUIDs. EvidenceRef/ContractEvent hoje referenciam IDs mock
+// (ex.: "doc-arena-contrato"), que não correspondem aos UUIDs reais de
+// `documents` no Supabase — não fazer tradução runtime entre os dois.
+export function getMockDocument(documentId: string) {
   return documents.find((d) => d.id === documentId) ?? null;
 }
 
@@ -175,7 +263,9 @@ export function getIntegrationConfigs() {
 export function resolveCrossReferenceLabel(refType: string, refId: string): string {
   switch (refType) {
     case "DOCUMENT":
-      return getDocument(refId)?.title ?? refId;
+      // Event Ledger/CrossReference ainda são mock (IDs tipo "doc-arena-contrato"),
+      // por isso usa a seam mock, não o getDocument real (ver getMockDocument acima).
+      return getMockDocument(refId)?.title ?? refId;
     case "CLAUSE": {
       const clause = getClause(refId);
       return clause ? `Cláusula ${clause.clauseNumber} — ${clause.title}` : refId;

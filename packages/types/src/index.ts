@@ -92,6 +92,22 @@ export interface Document {
   summary: string;
 }
 
+/** Revisão de um Project Document. Um Document sempre tem >= 1 versão. */
+export interface DocumentVersion {
+  id: string;
+  documentId: string;
+  versionLabel: string;
+  versionIndex: number;
+  documentDate: string; // ISO date
+  sourceType: SourceType;
+  author: string;
+  summary: string;
+  filePath: string | null;
+  uploadedBy: string | null;
+  uploadedAt: string; // ISO datetime
+  notes: string | null;
+}
+
 /** Referência à evidência original de um evento (preserva rastreabilidade até a fonte). */
 export interface EvidenceRef {
   sourceType: SourceType;
