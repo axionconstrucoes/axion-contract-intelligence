@@ -355,7 +355,7 @@ export async function getScheduleActivities(projectId: string) {
 
   const { data: scheduleVersionRows, error: scheduleVersionsError } = await supabase
     .from("schedule_versions")
-    .select("id, document_version_id")
+    .select("id, document_version_id, lifecycle_status")
     .in(
       "document_version_id",
       versions.map((v) => v.id)
@@ -365,23 +365,26 @@ export async function getScheduleActivities(projectId: string) {
     throw scheduleVersionsError;
   }
 
-  const scheduleVersionsForProject = scheduleVersionRows as { id: string; document_version_id: string }[];
-  if (scheduleVersionsForProject.length === 0) {
+  // Versão operacional = lifecycle_status 'ISSUED', exclusivamente (decisão
+  // 2.5G3G). DRAFT/SUPERSEDED/ARCHIVED nunca contam como cronograma
+  // operacional. Nunca escolher por max(created_at), version_type ou
+  // client_formalization_status — ISSUED é um status técnico de
+  // Planejamento, distinto de formalização do cliente/aditivo/entitlement.
+  const issuedScheduleVersions = (
+    scheduleVersionRows as { id: string; document_version_id: string; lifecycle_status: string }[]
+  ).filter((sv) => sv.lifecycle_status === "ISSUED");
+
+  if (issuedScheduleVersions.length === 0) {
     return [];
   }
 
-  // Nenhuma regra humana aprovada define qual ScheduleVersion é "vigente"
-  // quando há mais de uma visível (não usar max(created_at), APPROVED,
-  // ISSUED ou BASELINE silenciosamente — ver decisão 2.5G3D). Enquanto
-  // isso não existir, mais de uma versão visível é inconsistência a ser
-  // resolvida por decisão humana, não escolhida automaticamente aqui.
-  if (scheduleVersionsForProject.length > 1) {
+  if (issuedScheduleVersions.length > 1) {
     throw new Error(
-      `Seleção de ScheduleVersion vigente não definida: projeto (id=${projectId}) possui ${scheduleVersionsForProject.length} ScheduleVersions visíveis e ainda não existe regra humana aprovada para escolher qual exibir.`
+      `Inconsistência estrutural: projeto (id=${projectId}) possui ${issuedScheduleVersions.length} ScheduleVersions com lifecycle_status='ISSUED'; deveria haver no máximo 1 versão operacional vigente por projeto.`
     );
   }
 
-  const scheduleVersion = scheduleVersionsForProject[0];
+  const scheduleVersion = issuedScheduleVersions[0];
 
   const { data: activityRows, error: activitiesError } = await supabase
     .from("schedule_activities")
