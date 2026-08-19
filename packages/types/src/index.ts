@@ -285,3 +285,58 @@ export interface ContractChange {
   technicalAdditionalDays: number | null;
   createdAt: string; // ISO datetime
 }
+
+export type ActionRequestStatus = "OPEN" | "CLOSED" | "CANCELLED";
+
+/**
+ * Solicitação rastreável para uma ou mais pessoas analisarem, responderem,
+ * decidirem ou executarem algo — distinta de Alert (notificação passiva),
+ * Email (canal), ContractEvent (fato já ocorrido) e ContractChange (a
+ * alteração em si). "Resposta recebida" não fecha a solicitação
+ * automaticamente — isso é derivável de ActionRequestResponse, nunca um
+ * status próprio. Assignees e responses não entram embutidos aqui; serão
+ * carregados separadamente quando houver consumidor real.
+ */
+export interface ActionRequest {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  status: ActionRequestStatus;
+  requestedAt: string; // ISO datetime
+  dueAt: string | null; // ISO datetime
+  closedAt: string | null; // ISO datetime
+  createdByType: "SYSTEM" | "USER" | "LEGACY";
+  createdByUserId: string | null;
+  createdByLabel: string | null;
+  createdAt: string; // ISO datetime
+}
+
+/** Vínculo entre um ActionRequest e um profile responsável — membro real do mesmo projeto. */
+export interface ActionRequestAssignee {
+  actionRequestId: string;
+  projectId: string;
+  userId: string;
+  createdAt: string; // ISO datetime
+}
+
+export type ActionRequestResponseChannel = "APP" | "EMAIL";
+
+/**
+ * Resposta a um ActionRequest, fato separado e independente — nunca coluna
+ * única no ActionRequest, suportando múltiplas respostas de pessoas
+ * diferentes. Conteúdo original (content) nunca é interpretação de IA. O
+ * corpo de uma resposta por email permanece em Email; aqui há apenas a
+ * referência (emailId), nunca cópia.
+ */
+export interface ActionRequestResponse {
+  id: string;
+  actionRequestId: string;
+  projectId: string;
+  channel: ActionRequestResponseChannel;
+  responderUserId: string | null;
+  emailId: string | null;
+  content: string | null;
+  respondedAt: string; // ISO datetime
+  createdAt: string; // ISO datetime
+}

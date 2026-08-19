@@ -15,6 +15,14 @@ import {
   sourceDefinitions,
 } from "@axion/mock-data";
 import { createSupabaseServerClient } from "@axion/db/server";
+import {
+  mapActionRequestAssigneeRow,
+  mapActionRequestResponseRow,
+  mapActionRequestRow,
+  type ActionRequestAssigneeRow,
+  type ActionRequestResponseRow,
+  type ActionRequestRow,
+} from "./action-request-mapper";
 import { mapClauseRow, type ClauseRow, type ClauseVersionParent } from "./clause-mapper";
 import { mapContractChangeRow, type ContractChangeRow } from "./contract-change-mapper";
 import {
@@ -74,6 +82,14 @@ const EVENT_CROSS_REFERENCE_COLUMNS =
 
 const CONTRACT_CHANGE_COLUMNS =
   "id, project_id, code, title, description, status, identified_at, created_by_type, created_by_user_id, created_by_label, client_formalization_status, schedule_impact_status, technical_additional_days, created_at";
+
+const ACTION_REQUEST_COLUMNS =
+  "id, project_id, title, description, status, requested_at, due_at, closed_at, created_by_type, created_by_user_id, created_by_label, created_at";
+
+const ACTION_REQUEST_ASSIGNEE_COLUMNS = "action_request_id, project_id, user_id, created_at";
+
+const ACTION_REQUEST_RESPONSE_COLUMNS =
+  "id, action_request_id, project_id, channel, responder_user_id, email_id, content, responded_at, created_at";
 
 type EmailRow = {
   id: string;
@@ -816,6 +832,81 @@ export async function getContractChange(contractChangeId: string) {
   }
 
   return data ? mapContractChangeRow(data as ContractChangeRow) : null;
+}
+
+export async function getActionRequests(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("action_requests")
+    .select(ACTION_REQUEST_COLUMNS)
+    .eq("project_id", projectId)
+    .order("requested_at", { ascending: false })
+    .order("id", { ascending: true });
+
+  if (error) {
+    if (error.code === "22P02") {
+      return [];
+    }
+    throw error;
+  }
+
+  return (data as ActionRequestRow[]).map(mapActionRequestRow);
+}
+
+export async function getActionRequest(actionRequestId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("action_requests")
+    .select(ACTION_REQUEST_COLUMNS)
+    .eq("id", actionRequestId)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "22P02") {
+      return null;
+    }
+    throw error;
+  }
+
+  return data ? mapActionRequestRow(data as ActionRequestRow) : null;
+}
+
+export async function getActionRequestAssignees(actionRequestId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("action_request_assignees")
+    .select(ACTION_REQUEST_ASSIGNEE_COLUMNS)
+    .eq("action_request_id", actionRequestId)
+    .order("created_at", { ascending: true })
+    .order("user_id", { ascending: true });
+
+  if (error) {
+    if (error.code === "22P02") {
+      return [];
+    }
+    throw error;
+  }
+
+  return (data as ActionRequestAssigneeRow[]).map(mapActionRequestAssigneeRow);
+}
+
+export async function getActionRequestResponses(actionRequestId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("action_request_responses")
+    .select(ACTION_REQUEST_RESPONSE_COLUMNS)
+    .eq("action_request_id", actionRequestId)
+    .order("responded_at", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (error) {
+    if (error.code === "22P02") {
+      return [];
+    }
+    throw error;
+  }
+
+  return (data as ActionRequestResponseRow[]).map(mapActionRequestResponseRow);
 }
 
 export function getSourceDefinitions() {
