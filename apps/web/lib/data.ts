@@ -1,14 +1,15 @@
 // Ponto único de acesso a dados. getProjects()/getProject()/getUsers()/
-// getUser()/getProjectMembers()/getDocuments()/getDocument() já consultam
-// o Supabase real; as demais funções ainda lêem de @axion/mock-data
-// enquanto seus módulos correspondentes não são migrados.
+// getUser()/getProjectMembers()/getDocuments()/getDocument()/getClauses()/
+// getClause()/getScheduleActivities()/getScheduleActivity()/getEmails()/
+// getEmail()/getEvents()/getEvent() já consultam o Supabase real; as demais
+// funções ainda lêem de @axion/mock-data enquanto seus módulos
+// correspondentes não são migrados.
 import {
   alerts,
   auditLog,
   clauses,
   documents,
   emails,
-  events,
   integrationConfigs,
   scheduleActivities,
   sourceDefinitions,
@@ -16,11 +17,20 @@ import {
 import { createSupabaseServerClient } from "@axion/db/server";
 import { mapClauseRow, type ClauseRow, type ClauseVersionParent } from "./clause-mapper";
 import {
+  mapDocumentVersionRow,
   mapDocumentWithVersion,
   pickCurrentVersion,
   type DocumentRow,
   type DocumentVersionRow,
 } from "./document-mapper";
+import {
+  mapContractEventRow,
+  type ContractEventRow,
+  type EventAiAssessmentRow,
+  type EventCategoryRow,
+  type EventCrossReferenceRow,
+  type EventEvidenceRow,
+} from "./event-mapper";
 import { mapProjectRow, type ProjectRow } from "./project-mapper";
 import { mapScheduleActivityRow, type ScheduleActivityRow } from "./schedule-mapper";
 import {
@@ -44,6 +54,44 @@ const CLAUSE_COLUMNS = "id, document_version_id, clause_number, title, text, cre
 
 const SCHEDULE_ACTIVITY_COLUMNS =
   "id, schedule_version_id, name, baseline_start, baseline_end, planned_start, planned_end, status, created_at";
+
+const EMAIL_COLUMNS = "id, project_id, from_address, to_address, subject, sent_at, snippet";
+
+const CONTRACT_EVENT_COLUMNS =
+  "id, project_id, occurred_at, title, description, source_type, status, created_by_type, created_by_user_id, created_by_label, created_at";
+
+const EVENT_CATEGORY_COLUMNS = "event_id, category";
+
+const EVENT_EVIDENCE_COLUMNS =
+  "id, event_id, source_type, label, locator, document_version_id, email_id, created_at";
+
+const EVENT_AI_ASSESSMENT_COLUMNS =
+  "id, event_id, finding_type, severity, summary, confidence, requires_human_review, created_at";
+
+const EVENT_CROSS_REFERENCE_COLUMNS =
+  "id, event_id, kind, document_id, clause_id, schedule_activity_id, email_id, note, created_at";
+
+type EmailRow = {
+  id: string;
+  project_id: string;
+  from_address: string;
+  to_address: string;
+  subject: string;
+  sent_at: string;
+  snippet: string;
+};
+
+function mapEmailRow(row: EmailRow) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    from: row.from_address,
+    to: row.to_address,
+    subject: row.subject,
+    date: row.sent_at,
+    snippet: row.snippet,
+  };
+}
 
 export async function getProjects() {
   const supabase = await createSupabaseServerClient();
@@ -77,14 +125,137 @@ export async function getProject(projectId: string) {
   return data ? mapProjectRow(data as ProjectRow) : null;
 }
 
-export function getEvents(projectId: string) {
-  return events
-    .filter((e) => e.projectId === projectId)
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+export async function getEvents(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: eventRows, error: eventsError } = await supabase
+    .from("contract_events")
+    .select(CONTRACT_EVENT_COLUMNS)
+    .eq("project_id", projectId)
+    .order("occurred_at", { ascending: false });
+
+  if (eventsError) {
+    if (eventsError.code === "22P02") {
+      return [];
+    }
+    throw eventsError;
+  }
+
+  const rows = eventRows as ContractEventRow[];
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const eventIds = rows.map((row) => row.id);
+
+  const [categoriesResult, evidenceResult, aiAssessmentsResult, crossReferencesResult] = await Promise.all([
+    supabase.from("event_categories").select(EVENT_CATEGORY_COLUMNS).in("event_id", eventIds),
+    supabase.from("event_evidence").select(EVENT_EVIDENCE_COLUMNS).in("event_id", eventIds),
+    supabase.from("event_ai_assessments").select(EVENT_AI_ASSESSMENT_COLUMNS).in("event_id", eventIds),
+    supabase.from("event_cross_references").select(EVENT_CROSS_REFERENCE_COLUMNS).in("event_id", eventIds),
+  ]);
+
+  if (categoriesResult.error) {
+    throw categoriesResult.error;
+  }
+  if (evidenceResult.error) {
+    throw evidenceResult.error;
+  }
+  if (aiAssessmentsResult.error) {
+    throw aiAssessmentsResult.error;
+  }
+  if (crossReferencesResult.error) {
+    throw crossReferencesResult.error;
+  }
+
+  const categoriesByEventId = new Map<string, EventCategoryRow[]>();
+  for (const category of categoriesResult.data as EventCategoryRow[]) {
+    const list = categoriesByEventId.get(category.event_id) ?? [];
+    list.push(category);
+    categoriesByEventId.set(category.event_id, list);
+  }
+
+  const evidenceByEventId = new Map<string, EventEvidenceRow[]>();
+  for (const evidence of evidenceResult.data as EventEvidenceRow[]) {
+    const list = evidenceByEventId.get(evidence.event_id) ?? [];
+    list.push(evidence);
+    evidenceByEventId.set(evidence.event_id, list);
+  }
+
+  const aiAssessmentsByEventId = new Map<string, EventAiAssessmentRow[]>();
+  for (const assessment of aiAssessmentsResult.data as EventAiAssessmentRow[]) {
+    const list = aiAssessmentsByEventId.get(assessment.event_id) ?? [];
+    list.push(assessment);
+    aiAssessmentsByEventId.set(assessment.event_id, list);
+  }
+
+  const crossReferencesByEventId = new Map<string, EventCrossReferenceRow[]>();
+  for (const crossReference of crossReferencesResult.data as EventCrossReferenceRow[]) {
+    const list = crossReferencesByEventId.get(crossReference.event_id) ?? [];
+    list.push(crossReference);
+    crossReferencesByEventId.set(crossReference.event_id, list);
+  }
+
+  return rows.map((row) =>
+    mapContractEventRow(
+      row,
+      categoriesByEventId.get(row.id) ?? [],
+      evidenceByEventId.get(row.id) ?? [],
+      aiAssessmentsByEventId.get(row.id) ?? [],
+      crossReferencesByEventId.get(row.id) ?? []
+    )
+  );
 }
 
-export function getEvent(eventId: string) {
-  return events.find((e) => e.id === eventId) ?? null;
+export async function getEvent(eventId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: eventRow, error: eventError } = await supabase
+    .from("contract_events")
+    .select(CONTRACT_EVENT_COLUMNS)
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (eventError) {
+    if (eventError.code === "22P02") {
+      return null;
+    }
+    throw eventError;
+  }
+
+  if (!eventRow) {
+    return null;
+  }
+
+  const row = eventRow as ContractEventRow;
+
+  const [categoriesResult, evidenceResult, aiAssessmentsResult, crossReferencesResult] = await Promise.all([
+    supabase.from("event_categories").select(EVENT_CATEGORY_COLUMNS).eq("event_id", row.id),
+    supabase.from("event_evidence").select(EVENT_EVIDENCE_COLUMNS).eq("event_id", row.id),
+    supabase.from("event_ai_assessments").select(EVENT_AI_ASSESSMENT_COLUMNS).eq("event_id", row.id),
+    supabase.from("event_cross_references").select(EVENT_CROSS_REFERENCE_COLUMNS).eq("event_id", row.id),
+  ]);
+
+  if (categoriesResult.error) {
+    throw categoriesResult.error;
+  }
+  if (evidenceResult.error) {
+    throw evidenceResult.error;
+  }
+  if (aiAssessmentsResult.error) {
+    throw aiAssessmentsResult.error;
+  }
+  if (crossReferencesResult.error) {
+    throw crossReferencesResult.error;
+  }
+
+  return mapContractEventRow(
+    row,
+    categoriesResult.data as EventCategoryRow[],
+    evidenceResult.data as EventEvidenceRow[],
+    aiAssessmentsResult.data as EventAiAssessmentRow[],
+    crossReferencesResult.data as EventCrossReferenceRow[]
+  );
 }
 
 export function getAlerts(projectId: string) {
@@ -170,10 +341,28 @@ export async function getDocument(documentId: string) {
   );
 }
 
-// TEMPORARY MOCK SEAM: remove when Event Ledger / EvidenceRef migrate to
-// real document UUIDs. EvidenceRef/ContractEvent hoje referenciam IDs mock
-// (ex.: "doc-arena-contrato"), que não correspondem aos UUIDs reais de
-// `documents` no Supabase — não fazer tradução runtime entre os dois.
+export async function getDocumentVersion(documentVersionId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data: versionRow, error: versionError } = await supabase
+    .from("document_versions")
+    .select(DOCUMENT_VERSION_COLUMNS)
+    .eq("id", documentVersionId)
+    .maybeSingle();
+
+  if (versionError) {
+    if (versionError.code === "22P02") {
+      return null;
+    }
+    throw versionError;
+  }
+
+  return versionRow ? mapDocumentVersionRow(versionRow as DocumentVersionRow) : null;
+}
+
+// TEMPORARY MOCK SEAM: usada apenas por resolveCrossReferenceLabel, que ficou
+// órfã de consumidores reais depois que Event Ledger/CrossReferenceList
+// passaram a resolver DOCUMENT via getDocument real. Mantida só para não
+// quebrar a compilação enquanto resolveCrossReferenceLabel não é removida.
 export function getMockDocument(documentId: string) {
   return documents.find((d) => d.id === documentId) ?? null;
 }
@@ -308,10 +497,10 @@ export async function getClause(clauseId: string) {
   });
 }
 
-// TEMPORARY MOCK SEAM: remove when Event Ledger / CrossReference migrate to
-// real clause UUIDs. CrossReference (refType "CLAUSE") ainda referencia IDs
-// mock (ex.: "cls-arena-01"), que não correspondem às UUIDs reais de
-// `clauses` no Supabase — não fazer tradução runtime entre os dois.
+// TEMPORARY MOCK SEAM: usada apenas por resolveCrossReferenceLabel, que ficou
+// órfã de consumidores reais depois que Event Ledger/CrossReferenceList
+// passaram a resolver CLAUSE via getClause real. Mantida só para não quebrar
+// a compilação enquanto resolveCrossReferenceLabel não é removida.
 export function getMockClause(clauseId: string) {
   return clauses.find((c) => c.id === clauseId) ?? null;
 }
@@ -479,20 +668,56 @@ export async function getScheduleActivity(activityId: string) {
   return mapScheduleActivityRow(row, { projectId: document.project_id });
 }
 
-// TEMPORARY MOCK SEAM: remove when Event Ledger / CrossReference migrate to
-// real schedule activity UUIDs. CrossReference (refType "SCHEDULE_ACTIVITY")
-// ainda referencia IDs mock (ex.: "sch-arena-01"), que não correspondem às
-// UUIDs reais de `schedule_activities` no Supabase — não fazer tradução
-// runtime entre os dois.
+// TEMPORARY MOCK SEAM: usada apenas por resolveCrossReferenceLabel, que ficou
+// órfã de consumidores reais depois que Event Ledger/CrossReferenceList
+// passaram a resolver SCHEDULE_ACTIVITY via getScheduleActivity real. Mantida
+// só para não quebrar a compilação enquanto resolveCrossReferenceLabel não é
+// removida.
 export function getMockScheduleActivity(activityId: string) {
   return scheduleActivities.find((s) => s.id === activityId) ?? null;
 }
 
-export function getEmails(projectId: string) {
-  return emails.filter((e) => e.projectId === projectId);
+export async function getEmails(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("emails")
+    .select(EMAIL_COLUMNS)
+    .eq("project_id", projectId)
+    .order("sent_at", { ascending: false });
+
+  if (error) {
+    if (error.code === "22P02") {
+      return [];
+    }
+    throw error;
+  }
+
+  return (data as EmailRow[]).map(mapEmailRow);
 }
 
-export function getEmail(emailId: string) {
+export async function getEmail(emailId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("emails")
+    .select(EMAIL_COLUMNS)
+    .eq("id", emailId)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "22P02") {
+      return null;
+    }
+    throw error;
+  }
+
+  return data ? mapEmailRow(data as EmailRow) : null;
+}
+
+// TEMPORARY MOCK SEAM: usada apenas por resolveCrossReferenceLabel, que ficou
+// órfã de consumidores reais depois que Event Ledger/CrossReferenceList
+// passaram a resolver EMAIL via getEmail real. Mantida só para não quebrar a
+// compilação enquanto resolveCrossReferenceLabel não é removida.
+export function getMockEmail(emailId: string) {
   return emails.find((e) => e.id === emailId) ?? null;
 }
 
@@ -560,25 +785,29 @@ export function getIntegrationConfigs() {
   return integrationConfigs;
 }
 
-/** Resolve uma referência cruzada de evento para um rótulo legível e uma rota, quando aplicável. */
+/**
+ * Resolve uma referência cruzada de evento para um rótulo legível e uma rota,
+ * quando aplicável. LEGADO: órfã desde que Event Ledger/CrossReferenceList
+ * passaram a resolver referências reais de forma assíncrona (getDocument/
+ * getClause/getScheduleActivity/getEmail). Nenhum consumidor real deveria
+ * chamar esta função — mantida apenas por não haver decisão de remoção ainda.
+ */
 export function resolveCrossReferenceLabel(refType: string, refId: string): string {
   switch (refType) {
     case "DOCUMENT":
-      // Event Ledger/CrossReference ainda são mock (IDs tipo "doc-arena-contrato"),
-      // por isso usa a seam mock, não o getDocument real (ver getMockDocument acima).
+      // getDocument agora é real/async; esta função legada usa a seam mock.
       return getMockDocument(refId)?.title ?? refId;
     case "CLAUSE": {
-      // Event Ledger/CrossReference ainda são mock (IDs tipo "cls-arena-01"),
-      // por isso usa a seam mock, não o getClause real (ver getMockClause acima).
+      // getClause agora é real/async; esta função legada usa a seam mock.
       const clause = getMockClause(refId);
       return clause ? `Cláusula ${clause.clauseNumber} — ${clause.title}` : refId;
     }
     case "SCHEDULE_ACTIVITY":
-      // Event Ledger/CrossReference ainda são mock (IDs tipo "sch-arena-01"),
-      // por isso usa a seam mock, não o getScheduleActivity real (ver getMockScheduleActivity acima).
+      // getScheduleActivity agora é real/async; esta função legada usa a seam mock.
       return getMockScheduleActivity(refId)?.name ?? refId;
     case "EMAIL":
-      return getEmail(refId)?.subject ?? refId;
+      // getEmail agora é real/async; esta função legada usa a seam mock.
+      return getMockEmail(refId)?.subject ?? refId;
     default:
       return refId;
   }

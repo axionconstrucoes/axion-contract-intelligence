@@ -6,7 +6,7 @@ import { getAlerts, getEvents } from "@/lib/data";
 export default async function DashboardPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const alerts = getAlerts(projectId);
-  const events = getEvents(projectId);
+  const events = await getEvents(projectId);
   const unresolved = events.filter((e) => e.status !== "RESOLVIDO").length;
 
   return (

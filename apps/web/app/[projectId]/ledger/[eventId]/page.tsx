@@ -9,14 +9,27 @@ import { findingTypeLabels, formatDateTime, sourceTypeShortLabels } from "@/lib/
 
 export default async function EventDetailPage({ params }: { params: Promise<{ projectId: string; eventId: string }> }) {
   const { eventId } = await params;
-  const event = getEvent(eventId);
+  const event = await getEvent(eventId);
   if (!event) notFound();
 
-  const creator = event.createdBy === "sistema" ? null : await getUser(event.createdBy);
-  const creatorLabel =
-    event.createdBy === "sistema"
-      ? "sistema (ingestão automática)"
-      : (creator?.name ?? "Usuário não disponível");
+  let creatorLabel: string;
+  if (event.createdByType === "LEGACY") {
+    // LEGACY: autoria histórica conhecida sem identidade atual na plataforma
+    // — nunca chamar getUser, só exibir o registro preservado.
+    creatorLabel = `${event.createdBy} (registro histórico)`;
+  } else if (event.createdByType === "SYSTEM") {
+    creatorLabel = "sistema (ingestão automática)";
+  } else if (event.createdByType === "USER") {
+    const creator = await getUser(event.createdBy);
+    creatorLabel = creator?.name ?? "Usuário não disponível";
+  } else {
+    // Compatibilidade transitória: createdByType ausente (mocks antigos).
+    const creator = event.createdBy === "sistema" ? null : await getUser(event.createdBy);
+    creatorLabel =
+      event.createdBy === "sistema"
+        ? "sistema (ingestão automática)"
+        : (creator?.name ?? "Usuário não disponível");
+  }
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">

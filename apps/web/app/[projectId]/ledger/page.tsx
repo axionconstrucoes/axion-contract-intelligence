@@ -4,7 +4,7 @@ import { getEvents } from "@/lib/data";
 
 export default async function LedgerPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  const events = getEvents(projectId);
+  const events = await getEvents(projectId);
 
   return (
     <div className="flex flex-col gap-6">
