@@ -1,7 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { login } from "./actions";
+import { GoogleSignInButton } from "./google-signin-button";
+
+const oauthErrorMessages: Record<string, string> = {
+  oauth_missing_code: "Não foi possível concluir o login com Google. Tente novamente.",
+  oauth_exchange_failed: "Não foi possível concluir o login com Google. Tente novamente.",
+  domain_not_allowed: "Acesso restrito a contas do domínio @axion.com.br.",
+};
 
 export default async function LoginPage({
   searchParams,
@@ -9,6 +17,7 @@ export default async function LoginPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { error } = await searchParams;
+  const oauthError = error ? oauthErrorMessages[error] : undefined;
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-muted p-4">
@@ -17,7 +26,18 @@ export default async function LoginPage({
           <CardTitle className="text-base">AXION Contract Intelligence</CardTitle>
           <CardDescription>Acesso restrito a usuários autorizados por projeto.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <GoogleSignInButton />
+            {oauthError && <p className="text-xs text-destructive">{oauthError}</p>}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Separator className="flex-1" />
+            <span className="text-xs text-muted-foreground">ou</span>
+            <Separator className="flex-1" />
+          </div>
+
           <form action={login} className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="email">
@@ -48,8 +68,8 @@ export default async function LoginPage({
             {error === "invalid_credentials" && (
               <p className="text-xs text-destructive">E-mail ou senha inválidos.</p>
             )}
-            <Button type="submit" className="mt-2">
-              Entrar
+            <Button type="submit" variant="outline" className="mt-2">
+              Entrar com email e senha
             </Button>
           </form>
         </CardContent>
