@@ -340,3 +340,82 @@ export interface ActionRequestResponse {
   respondedAt: string; // ISO datetime
   createdAt: string; // ISO datetime
 }
+
+export type NotificationKind = "INITIAL" | "REMINDER" | "ESCALATION";
+
+export type NotificationStatus = "PENDING" | "SENT" | "CANCELLED";
+
+/**
+ * Registro de como o sistema comunica um ActionRequest (inicial, lembrete,
+ * escalonamento) — distinto do próprio ActionRequest (o que precisa ser
+ * feito) e de Email (a mensagem efetivamente enviada/recebida). Um lembrete
+ * nunca cria um novo ActionRequest. Falha de entrega pertence ao delivery
+ * (NotificationEmailDelivery), nunca a esta entidade abstrata.
+ */
+export interface Notification {
+  id: string;
+  projectId: string;
+  actionRequestId: string;
+  kind: NotificationKind;
+  status: NotificationStatus;
+  subject: string;
+  body: string;
+  createdByType: "SYSTEM" | "USER" | "LEGACY";
+  createdByUserId: string | null;
+  createdByLabel: string | null;
+  createdAt: string; // ISO datetime
+  sentAt: string | null; // ISO datetime
+}
+
+export type NotificationRecipientType = "USER" | "EMAIL";
+
+/**
+ * Destinatário de uma Notification. Quando recipientType é EMAIL,
+ * recipientEmail é somente um endereço de destino — nunca cadastro de
+ * contato externo, nunca concede acesso ao projeto.
+ */
+export interface NotificationRecipient {
+  notificationId: string;
+  projectId: string;
+  recipientType: NotificationRecipientType;
+  recipientUserId: string | null;
+  recipientEmail: string | null;
+  createdAt: string; // ISO datetime
+}
+
+export type EmailDeliveryDirection = "OUTBOUND" | "INBOUND";
+
+export type EmailDeliveryStatus =
+  | "PENDING"
+  | "SENT"
+  | "DELIVERED"
+  | "RECEIVED"
+  | "FAILED"
+  | "BOUNCED"
+  | "IGNORED";
+
+/**
+ * Infraestrutura de mensagem — único lugar onde metadata de provider
+ * (Gmail/etc.) pode viver futuramente. Nunca duplica o corpo do email
+ * (isso permanece em Email via emailId). correlationId é identificador
+ * interno estável para correlação futura de reply — nunca prova de
+ * identidade/autoridade por si só.
+ */
+export interface NotificationEmailDelivery {
+  id: string;
+  notificationId: string;
+  projectId: string;
+  recipientEmail: string;
+  direction: EmailDeliveryDirection;
+  status: EmailDeliveryStatus;
+  emailId: string | null;
+  correlationId: string;
+  provider: string | null;
+  providerMessageId: string | null;
+  providerThreadId: string | null;
+  messageIdHeader: string | null;
+  replyToDeliveryId: string | null;
+  sentAt: string | null; // ISO datetime
+  receivedAt: string | null; // ISO datetime
+  createdAt: string; // ISO datetime
+}

@@ -26,6 +26,14 @@ import {
 import { mapClauseRow, type ClauseRow, type ClauseVersionParent } from "./clause-mapper";
 import { mapContractChangeRow, type ContractChangeRow } from "./contract-change-mapper";
 import {
+  mapNotificationEmailDeliveryRow,
+  mapNotificationRecipientRow,
+  mapNotificationRow,
+  type NotificationEmailDeliveryRow,
+  type NotificationRecipientRow,
+  type NotificationRow,
+} from "./notification-mapper";
+import {
   mapDocumentVersionRow,
   mapDocumentWithVersion,
   pickCurrentVersion,
@@ -90,6 +98,15 @@ const ACTION_REQUEST_ASSIGNEE_COLUMNS = "action_request_id, project_id, user_id,
 
 const ACTION_REQUEST_RESPONSE_COLUMNS =
   "id, action_request_id, project_id, channel, responder_user_id, email_id, content, responded_at, created_at";
+
+const NOTIFICATION_COLUMNS =
+  "id, project_id, action_request_id, kind, status, subject, body, created_by_type, created_by_user_id, created_by_label, created_at, sent_at";
+
+const NOTIFICATION_RECIPIENT_COLUMNS =
+  "notification_id, project_id, recipient_type, recipient_user_id, recipient_email, created_at";
+
+const NOTIFICATION_EMAIL_DELIVERY_COLUMNS =
+  "id, notification_id, project_id, recipient_email, direction, status, email_id, correlation_id, provider, provider_message_id, provider_thread_id, message_id_header, reply_to_delivery_id, sent_at, received_at, created_at";
 
 type EmailRow = {
   id: string;
@@ -907,6 +924,80 @@ export async function getActionRequestResponses(actionRequestId: string) {
   }
 
   return (data as ActionRequestResponseRow[]).map(mapActionRequestResponseRow);
+}
+
+export async function getNotifications(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select(NOTIFICATION_COLUMNS)
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true });
+
+  if (error) {
+    if (error.code === "22P02") {
+      return [];
+    }
+    throw error;
+  }
+
+  return (data as NotificationRow[]).map(mapNotificationRow);
+}
+
+export async function getNotification(notificationId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select(NOTIFICATION_COLUMNS)
+    .eq("id", notificationId)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "22P02") {
+      return null;
+    }
+    throw error;
+  }
+
+  return data ? mapNotificationRow(data as NotificationRow) : null;
+}
+
+export async function getNotificationRecipients(notificationId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notification_recipients")
+    .select(NOTIFICATION_RECIPIENT_COLUMNS)
+    .eq("notification_id", notificationId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    if (error.code === "22P02") {
+      return [];
+    }
+    throw error;
+  }
+
+  return (data as NotificationRecipientRow[]).map(mapNotificationRecipientRow);
+}
+
+export async function getNotificationEmailDeliveries(notificationId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notification_email_deliveries")
+    .select(NOTIFICATION_EMAIL_DELIVERY_COLUMNS)
+    .eq("notification_id", notificationId)
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true });
+
+  if (error) {
+    if (error.code === "22P02") {
+      return [];
+    }
+    throw error;
+  }
+
+  return (data as NotificationEmailDeliveryRow[]).map(mapNotificationEmailDeliveryRow);
 }
 
 export function getSourceDefinitions() {
