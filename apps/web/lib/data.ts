@@ -1,4 +1,4 @@
-// Ponto único de acesso a dados. getProjects()/getProject()/getUsers()/
+﻿// Ponto único de acesso a dados. getProjects()/getProject()/getUsers()/
 // getUser()/getProjectMembers()/getDocuments()/getDocument()/getClauses()/
 // getClause()/getScheduleActivities()/getScheduleActivity()/getEmails()/
 // getEmail()/getEvents()/getEvent()/getContractChanges()/getContractChange()
@@ -6,7 +6,6 @@
 // @axion/mock-data enquanto seus módulos correspondentes não são migrados.
 import {
   alerts,
-  auditLog,
   clauses,
   documents,
   emails,
@@ -808,10 +807,44 @@ export async function getProjectMembers(projectId: string) {
   return (data as MembershipWithProfileRow[]).map(mapMembershipRow);
 }
 
-export function getAuditLog(projectId: string) {
-  return auditLog
-    .filter((a) => a.projectId === projectId)
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+export async function getAuditLog(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from("audit_log_entries")
+    .select(
+      "id, project_id, occurred_at, actor_type, actor_user_id, actor_label, action, entity_type, entity_id, detail"
+    )
+    .eq("project_id", projectId)
+    .order("occurred_at", { ascending: false })
+    .order("id", { ascending: true });
+
+  if (error) {
+    if (error.code === "22P02") {
+      return [];
+    }
+
+    throw error;
+  }
+
+  return data.map((row) => ({
+    id: row.id,
+    projectId: row.project_id,
+    timestamp: row.occurred_at,
+
+    actor:
+      row.actor_type === "SYSTEM"
+        ? "sistema"
+        : row.actor_user_id ?? row.actor_label ?? "desconhecido",
+
+    actorType: row.actor_type,
+    actorLabel: row.actor_label,
+
+    action: row.action,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    detail: row.detail,
+  }));
 }
 
 export async function getContractChanges(projectId: string) {
@@ -1035,3 +1068,4 @@ export function resolveCrossReferenceLabel(refType: string, refId: string): stri
       return refId;
   }
 }
+
