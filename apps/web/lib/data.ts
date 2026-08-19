@@ -9,7 +9,6 @@ import {
   clauses,
   documents,
   emails,
-  integrationConfigs,
   scheduleActivities,
   sourceDefinitions,
 } from "@axion/mock-data";
@@ -1037,8 +1036,29 @@ export function getSourceDefinitions() {
   return sourceDefinitions;
 }
 
-export function getIntegrationConfigs() {
-  return integrationConfigs;
+export async function getIntegrationConfigs(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from("project_integrations")
+    .select("source_type, status, last_sync_at, detail")
+    .eq("project_id", projectId)
+    .order("source_type", { ascending: true });
+
+  if (error) {
+    if (error.code === "22P02") {
+      return [];
+    }
+
+    throw error;
+  }
+
+  return data.map((row) => ({
+    sourceType: row.source_type,
+    status: row.status,
+    lastSyncAt: row.last_sync_at,
+    detail: row.detail,
+  }));
 }
 
 /**
@@ -1068,4 +1088,3 @@ export function resolveCrossReferenceLabel(refType: string, refId: string): stri
       return refId;
   }
 }
-
