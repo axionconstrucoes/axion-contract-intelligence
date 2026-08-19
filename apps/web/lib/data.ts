@@ -1,9 +1,9 @@
 // Ponto único de acesso a dados. getProjects()/getProject()/getUsers()/
 // getUser()/getProjectMembers()/getDocuments()/getDocument()/getClauses()/
 // getClause()/getScheduleActivities()/getScheduleActivity()/getEmails()/
-// getEmail()/getEvents()/getEvent() já consultam o Supabase real; as demais
-// funções ainda lêem de @axion/mock-data enquanto seus módulos
-// correspondentes não são migrados.
+// getEmail()/getEvents()/getEvent()/getContractChanges()/getContractChange()
+// já consultam o Supabase real; as demais funções ainda lêem de
+// @axion/mock-data enquanto seus módulos correspondentes não são migrados.
 import {
   alerts,
   auditLog,
@@ -16,6 +16,7 @@ import {
 } from "@axion/mock-data";
 import { createSupabaseServerClient } from "@axion/db/server";
 import { mapClauseRow, type ClauseRow, type ClauseVersionParent } from "./clause-mapper";
+import { mapContractChangeRow, type ContractChangeRow } from "./contract-change-mapper";
 import {
   mapDocumentVersionRow,
   mapDocumentWithVersion,
@@ -70,6 +71,9 @@ const EVENT_AI_ASSESSMENT_COLUMNS =
 
 const EVENT_CROSS_REFERENCE_COLUMNS =
   "id, event_id, kind, document_id, clause_id, schedule_activity_id, email_id, note, created_at";
+
+const CONTRACT_CHANGE_COLUMNS =
+  "id, project_id, code, title, description, status, identified_at, created_by_type, created_by_user_id, created_by_label, client_formalization_status, schedule_impact_status, technical_additional_days, created_at";
 
 type EmailRow = {
   id: string;
@@ -775,6 +779,43 @@ export function getAuditLog(projectId: string) {
   return auditLog
     .filter((a) => a.projectId === projectId)
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+}
+
+export async function getContractChanges(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("contract_changes")
+    .select(CONTRACT_CHANGE_COLUMNS)
+    .eq("project_id", projectId)
+    .order("identified_at", { ascending: false })
+    .order("id", { ascending: true });
+
+  if (error) {
+    if (error.code === "22P02") {
+      return [];
+    }
+    throw error;
+  }
+
+  return (data as ContractChangeRow[]).map(mapContractChangeRow);
+}
+
+export async function getContractChange(contractChangeId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("contract_changes")
+    .select(CONTRACT_CHANGE_COLUMNS)
+    .eq("id", contractChangeId)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "22P02") {
+      return null;
+    }
+    throw error;
+  }
+
+  return data ? mapContractChangeRow(data as ContractChangeRow) : null;
 }
 
 export function getSourceDefinitions() {

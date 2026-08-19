@@ -242,3 +242,46 @@ export interface AuditLogEntry {
   entityId: string;
   detail: string;
 }
+
+export type ContractChangeStatus = "OPEN" | "CLOSED" | "CANCELLED";
+
+/** Estado de formalização da alteração perante o cliente — mesmo conjunto usado em ScheduleVersion, nunca um sexto estado. */
+export type ClientFormalizationStatus =
+  | "NOT_SUBMITTED"
+  | "PENDING"
+  | "FORMALIZED"
+  | "REJECTED"
+  | "UNCLEAR";
+
+/** Impacto técnico de prazo, distinto de entitlement contratual à extensão (não modelado ainda). */
+export type ScheduleImpactStatus =
+  | "PENDING_ASSESSMENT"
+  | "NO_IMPACT"
+  | "ABSORBABLE_WITHIN_CONTRACT_TERM"
+  | "EXTENSION_REQUIRED";
+
+export type ContractChangeCreatedByType = "SYSTEM" | "USER" | "LEGACY";
+
+/**
+ * Alteração contratual identificada, entidade própria — distinta de
+ * aprovação do cliente, aditivo formal, entitlement e claim (ver
+ * docs/ai/specialist-framework.md). Relações N:N com ContractEvent e
+ * EventEvidence não entram embutidas aqui; serão carregadas separadamente
+ * quando houver consumidor real.
+ */
+export interface ContractChange {
+  id: string;
+  projectId: string;
+  code: string;
+  title: string;
+  description: string;
+  status: ContractChangeStatus;
+  identifiedAt: string; // ISO datetime
+  createdByType: ContractChangeCreatedByType;
+  createdByUserId: string | null;
+  createdByLabel: string | null;
+  clientFormalizationStatus: ClientFormalizationStatus;
+  scheduleImpactStatus: ScheduleImpactStatus;
+  technicalAdditionalDays: number | null;
+  createdAt: string; // ISO datetime
+}
