@@ -1,5 +1,5 @@
 ﻿const ANALYZER = "event-clause-lexical";
-const ANALYZER_VERSION = "1";
+const ANALYZER_VERSION = "2";
 
 const STOP_WORDS = new Set([
   "a","ao","aos","as","com","como","da","das","de","do","dos","e","em","entre",
@@ -8,11 +8,24 @@ const STOP_WORDS = new Set([
   "seus","um","uma"
 ]);
 
+const GENERIC_DOMAIN_WORDS = new Set([
+  "contrato",
+  "contratual",
+  "contratos",
+  "projeto",
+  "projetos",
+  "obra",
+  "obras",
+  "documento",
+  "documentos",
+  "acompanhamento"
+]);
+
 const CATEGORY_LEXICONS = {
   PRAZO: ["prazo","atraso","cronograma","dias","data","entrega","prorrogacao","prorrogar","extensao","vigencia"],
   MULTA_PENALIDADE: ["multa","penalidade","penalidades","sancao","sancoes","mora","inadimplemento","atraso"],
   PAGAMENTO_MEDICAO: ["pagamento","medicao","medicoes","fatura","faturamento","preco","valor","retencao","financeiro"],
-  ESCOPO_ALTERACAO: ["escopo","alteracao","alteracoes","aditivo","adicional","servico","servicos","quantidade","projeto","mudanca","modificacao"],
+  ESCOPO_ALTERACAO: ["escopo","alteracao","alteracoes","aditivo","adicional","quantidade","mudanca","modificacao"],
   GARANTIA: ["garantia","garantias","defeito","defeitos","correcao","reparo","assistencia","responsabilidade"],
   RESCISAO: ["rescisao","rescindir","terminacao","encerramento","cancelamento","inadimplemento"],
   SEGURO_RESPONSABILIDADE: ["seguro","indenizacao","indenizar","responsabilidade","danos","sinistro"],
@@ -32,7 +45,12 @@ function normalizeText(value) {
 function tokenize(value) {
   return normalizeText(value)
     .split(" ")
-    .filter((token) => token.length >= 3 && !STOP_WORDS.has(token));
+    .filter(
+      (token) =>
+        token.length >= 3 &&
+        !STOP_WORDS.has(token) &&
+        !GENERIC_DOMAIN_WORDS.has(token)
+    );
 }
 
 function unique(values) {
@@ -69,13 +87,52 @@ function overlapTerms(a, b) {
 }
 
 function categoryIntersection(a, b) {
-  const right = new Set(
-    b.map((item) => item.category)
-  );
+  const rightByCategory =
+    new Map(
+      b.map(
+        (item) => [
+          item.category,
+          item.matches
+        ]
+      )
+    );
 
-  return a
-    .map((item) => item.category)
-    .filter((category) => right.has(category));
+  const categories = [];
+
+  for (const left of a) {
+    const rightMatches =
+      rightByCategory.get(
+        left.category
+      );
+
+    if (!rightMatches) {
+      continue;
+    }
+
+    const rightSet =
+      new Set(rightMatches);
+
+    const exactTermOverlap =
+      left.matches.some(
+        (term) =>
+          rightSet.has(term)
+      );
+
+    const strongSemanticSignal =
+      left.matches.length >= 2 &&
+      rightMatches.length >= 2;
+
+    if (
+      exactTermOverlap ||
+      strongSemanticSignal
+    ) {
+      categories.push(
+        left.category
+      );
+    }
+  }
+
+  return unique(categories);
 }
 
 function inferSeverity(categories, score) {
@@ -169,7 +226,7 @@ export function analyzeEventAgainstClauses({ event, clauses }) {
     );
 
     if (
-      score < 0.18 ||
+      score < 0.24 ||
       (
         sharedTerms.length === 0 &&
         sharedCategories.length === 0
@@ -185,9 +242,17 @@ export function analyzeEventAgainstClauses({ event, clauses }) {
 
     const evidenceTerms = unique([
       ...sharedTerms,
-      ...eventCategories.flatMap(
-        (item) => item.matches
-      )
+      ...eventCategories
+        .filter(
+          (item) =>
+            sharedCategories.includes(
+              item.category
+            )
+        )
+        .flatMap(
+          (item) =>
+            item.matches
+        )
     ]).slice(0, 12);
 
     results.push({
