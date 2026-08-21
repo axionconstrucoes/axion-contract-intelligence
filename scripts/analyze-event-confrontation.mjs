@@ -65,7 +65,7 @@ const {
 } = await supabase
   .from("contract_events")
   .select(
-    "id,project_id,title,description,occurred_at,status"
+    "id,project_id,title,description,occurred_at,status,source_type"
   )
   .eq(
     "id",
@@ -280,6 +280,95 @@ if (!clauses.length) {
 
 
 // ============================================================
+// 5B. EVIDENCIA DO EMAIL DE ORIGEM
+// ============================================================
+
+let eventEvidenceText = "";
+
+if (event.source_type === "EMAIL") {
+  const {
+    data: sourceCandidates,
+    error: sourceCandidateError,
+  } = await supabase
+    .from("email_thread_event_candidates")
+    .select("id")
+    .eq("event_id", eventId)
+    .limit(1);
+
+  if (sourceCandidateError) {
+    throw sourceCandidateError;
+  }
+
+  const sourceCandidate =
+    sourceCandidates?.[0];
+
+  if (sourceCandidate) {
+    const {
+      data: emailLinks,
+      error: emailLinkError,
+    } = await supabase
+      .from("email_thread_event_candidate_emails")
+      .select("email_id")
+      .eq(
+        "candidate_id",
+        sourceCandidate.id
+      );
+
+    if (emailLinkError) {
+      throw emailLinkError;
+    }
+
+    const emailIds =
+      (emailLinks ?? [])
+        .map(
+          row => row.email_id
+        )
+        .filter(Boolean);
+
+    if (emailIds.length) {
+      const {
+        data: sourceEmails,
+        error: sourceEmailError,
+      } = await supabase
+        .from("emails")
+        .select(
+          "subject,snippet,sent_at"
+        )
+        .in(
+          "id",
+          emailIds
+        )
+        .order(
+          "sent_at",
+          { ascending: true }
+        );
+
+      if (sourceEmailError) {
+        throw sourceEmailError;
+      }
+
+      eventEvidenceText =
+        (sourceEmails ?? [])
+          .map(
+            email =>
+              [
+                email.subject ?? "",
+                email.snippet ?? "",
+              ]
+                .filter(Boolean)
+                .join("\n")
+          )
+          .join("\n\n");
+
+      console.log(
+        "Evidencias de email incorporadas:",
+        sourceEmails?.length ?? 0
+      );
+    }
+  }
+}
+
+// ============================================================
 // 6. ANALISE DETERMINISTICA
 // ============================================================
 
@@ -293,7 +382,12 @@ const candidates =
         event.title,
 
       description:
-        event.description,
+        [
+          event.description,
+          eventEvidenceText
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
     },
 
     clauses,
