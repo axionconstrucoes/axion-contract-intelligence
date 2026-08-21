@@ -1,4 +1,5 @@
 import type {
+  ActionRequestStatus,
   AiFindingType,
   AlertSeverity,
   EventStatus,
@@ -80,6 +81,12 @@ export const scheduleStatusLabels: Record<ScheduleActivityStatus, string> = {
   NO_PRAZO: "No Prazo",
   ATRASADA: "Atrasada",
   CONCLUIDA: "Concluída",
+};
+
+export const actionRequestStatusLabels: Record<ActionRequestStatus, string> = {
+  OPEN: "Aberta",
+  CLOSED: "Encerrada",
+  CANCELLED: "Cancelada",
 };
 
 export function formatDate(iso: string): string {

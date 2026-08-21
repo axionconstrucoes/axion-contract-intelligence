@@ -1,6 +1,12 @@
-import type { AlertSeverity, EventStatus, ImplicationCategory, IntegrationStatus } from "@axion/types";
+import type { ActionRequestStatus, AlertSeverity, EventStatus, ImplicationCategory, IntegrationStatus } from "@axion/types";
 import { Badge } from "@/components/ui/badge";
-import { categoryLabels, eventStatusLabels, integrationStatusLabels, severityLabels } from "@/lib/labels";
+import {
+  actionRequestStatusLabels,
+  categoryLabels,
+  eventStatusLabels,
+  integrationStatusLabels,
+  severityLabels,
+} from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
 const severityClasses: Record<AlertSeverity, string> = {
@@ -37,4 +43,14 @@ const integrationClasses: Record<IntegrationStatus, string> = {
 
 export function IntegrationStatusBadge({ status }: { status: IntegrationStatus }) {
   return <Badge className={cn(integrationClasses[status])}>{integrationStatusLabels[status]}</Badge>;
+}
+
+const actionRequestStatusClasses: Record<ActionRequestStatus, string> = {
+  OPEN: "border-transparent bg-accent text-accent-foreground",
+  CLOSED: "border-transparent bg-severity-baixa/15 text-severity-baixa",
+  CANCELLED: "border-transparent bg-muted text-muted-foreground",
+};
+
+export function ActionRequestStatusBadge({ status }: { status: ActionRequestStatus }) {
+  return <Badge className={cn(actionRequestStatusClasses[status])}>{actionRequestStatusLabels[status]}</Badge>;
 }

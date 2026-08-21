@@ -8,6 +8,7 @@ import {
   FileStack,
   History,
   LayoutDashboard,
+  ListChecks,
   Plug,
   Users as UsersIcon,
 } from "lucide-react";
@@ -17,6 +18,7 @@ const navItems = [
   { href: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "timeline", label: "Timeline", icon: History },
   { href: "ledger", label: "Event Ledger", icon: BookText },
+  { href: "action-requests", label: "Solicitações", icon: ListChecks },
   { href: "revisao-contratual", label: "Revisão Contratual", icon: BookText },
   { href: "revisao-clausulas", label: "Revisão de Cláusulas", icon: BookText },
   { href: "documentos", label: "Documentos", icon: FileStack },

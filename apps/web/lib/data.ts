@@ -979,6 +979,25 @@ export async function getActionRequestResponses(actionRequestId: string) {
   return (data as ActionRequestResponseRow[]).map(mapActionRequestResponseRow);
 }
 
+export async function getNotificationsForActionRequest(actionRequestId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("notifications")
+    .select(NOTIFICATION_COLUMNS)
+    .eq("action_request_id", actionRequestId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true });
+
+  if (error) {
+    if (error.code === "22P02") {
+      return [];
+    }
+    throw error;
+  }
+
+  return (data as NotificationRow[]).map(mapNotificationRow);
+}
+
 export async function getNotifications(projectId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
