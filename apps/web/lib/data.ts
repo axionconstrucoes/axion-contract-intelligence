@@ -5,13 +5,13 @@
 // já consultam o Supabase real; as demais funções ainda lêem de
 // @axion/mock-data enquanto seus módulos correspondentes não são migrados.
 import {
-  alerts,
   clauses,
   documents,
   emails,
   scheduleActivities,
   sourceDefinitions,
 } from "@axion/mock-data";
+import type { Alert } from "@axion/types";
 import { createSupabaseServerClient } from "@axion/db/server";
 import {
   mapActionRequestAssigneeRow,
@@ -293,10 +293,12 @@ export async function getEvent(eventId: string) {
   );
 }
 
-export function getAlerts(projectId: string) {
-  return alerts
-    .filter((a) => a.projectId === projectId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+// Ainda não existe tabela real de Alert no banco — retorna vazio em vez de
+// dado fictício (o dashboard já trata lista vazia como estado real via
+// EmptyState). Substituir por consulta Supabase quando Alert for modelado.
+export function getAlerts(projectId: string): Alert[] {
+  void projectId;
+  return [];
 }
 
 export async function getDocuments(projectId: string) {
