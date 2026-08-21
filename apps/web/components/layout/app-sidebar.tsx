@@ -17,6 +17,7 @@ const navItems = [
   { href: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "timeline", label: "Timeline", icon: History },
   { href: "ledger", label: "Event Ledger", icon: BookText },
+  { href: "revisao-contratual", label: "Revisão Contratual", icon: BookText },
   { href: "documentos", label: "Documentos", icon: FileStack },
   { href: "integracoes", label: "Integrações", icon: Plug },
   { href: "usuarios", label: "Usuários", icon: UsersIcon },
