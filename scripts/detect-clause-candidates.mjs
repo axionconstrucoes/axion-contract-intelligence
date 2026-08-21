@@ -283,7 +283,7 @@ const {
   )
   .eq(
     "detector_version",
-    "1"
+    "2"
   )
   .order(
     "created_at",

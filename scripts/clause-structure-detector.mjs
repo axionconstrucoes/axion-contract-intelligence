@@ -1,11 +1,5 @@
 ﻿const DETECTOR = "clause-structure";
-const DETECTOR_VERSION = "1";
-
-const NUMBERED_HEADING =
-  /^\s*((?:\d+\.)*\d+)\s*(?:[.)\-–—:]\s*|\s+)(.+?)\s*$/u;
-
-const CLAUSE_WORD_HEADING =
-  /^\s*CL[ÁA]USULA\s+(.+?)(?:\s*[-–—:]\s*|\s+)(.+?)\s*$/iu;
+const DETECTOR_VERSION = "2";
 
 const ORDINAL_WORDS = new Map([
   ["PRIMEIRA", "1"],
@@ -40,18 +34,30 @@ const ORDINAL_WORDS = new Map([
   ["DECIMA NONA", "19"],
   ["VIGÉSIMA", "20"],
   ["VIGESIMA", "20"],
+  ["VIGÉSIMA PRIMEIRA", "21"],
+  ["VIGESIMA PRIMEIRA", "21"],
+  ["VIGÉSIMA SEGUNDA", "22"],
+  ["VIGESIMA SEGUNDA", "22"],
+  ["VIGÉSIMA TERCEIRA", "23"],
+  ["VIGESIMA TERCEIRA", "23"],
+  ["VIGÉSIMA QUARTA", "24"],
+  ["VIGESIMA QUARTA", "24"],
+  ["VIGÉSIMA QUINTA", "25"],
+  ["VIGESIMA QUINTA", "25"],
+  ["TRIGÉSIMA", "30"],
+  ["TRIGESIMA", "30"],
 ]);
 
-function normalizeWhitespace(value) {
+function normalize(value) {
   return String(value ?? "")
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
-    .replace(/[ \t]+/g, " ")
+    .replace(/\s+/gu, " ")
     .trim();
 }
 
 function normalizeTitle(value) {
-  return normalizeWhitespace(value)
+  return normalize(value)
     .replace(/^[\-–—:.\s]+/u, "")
     .replace(/[\-–—:.\s]+$/u, "")
     .trim();
@@ -59,7 +65,7 @@ function normalizeTitle(value) {
 
 function numericOrdinal(value) {
   const normalized =
-    normalizeWhitespace(value)
+    normalize(value)
       .toUpperCase()
       .replace(/\.$/u, "");
 
@@ -67,262 +73,365 @@ function numericOrdinal(value) {
     return ORDINAL_WORDS.get(normalized);
   }
 
-  const numeric =
-    normalized.match(/^(\d+)\s*[ªº°]?$/u);
+  const match =
+    normalized.match(
+      /^(\d+)\s*[ªº°]?$/u
+    );
 
-  return numeric
-    ? numeric[1]
+  return match
+    ? match[1]
     : null;
 }
 
-function headingFromLine(line) {
+const CLAUSE_MARKER =
+  /C\s*L[ÁA]USULA\s+([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ0-9ªº° ]{1,50}?)\s*[-–—:]\s*/giu;
+
+function splitTitleAndBody(value) {
   const text =
-    normalizeWhitespace(line);
+    normalize(value);
 
   if (!text) {
-    return null;
-  }
-
-  const clauseMatch =
-    text.match(CLAUSE_WORD_HEADING);
-
-  if (clauseMatch) {
-    const number =
-      numericOrdinal(clauseMatch[1]);
-
-    if (!number) {
-      return null;
-    }
-
-    const title =
-      normalizeTitle(clauseMatch[2]);
-
-    if (!title) {
-      return null;
-    }
-
     return {
-      clauseNumber: number,
-      title,
-      heading: text,
-      confidence: 0.98,
-      pattern: "CLAUSE_WORD",
+      title: "Cláusula",
+      body: "",
+      confidence: 0.85,
     };
   }
 
-  const numberedMatch =
-    text.match(NUMBERED_HEADING);
+  const numberedBody =
+    text.match(
+      /\s+(?=\d+(?:\.\d+)+(?:[.)])?\s)/u
+    );
 
-  if (numberedMatch) {
-    const title =
-      normalizeTitle(numberedMatch[2]);
-
-    if (
-      !title ||
-      title.length > 180
-    ) {
-      return null;
-    }
-
+  if (
+    numberedBody?.index != null
+  ) {
     return {
-      clauseNumber:
-        numberedMatch[1],
-      title,
-      heading: text,
+      title:
+        normalizeTitle(
+          text.slice(
+            0,
+            numberedBody.index
+          )
+        ),
+
+      body:
+        normalize(
+          text.slice(
+            numberedBody.index
+          )
+        ),
+
       confidence:
-        /^[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ0-9 /()\-–—]+$/u.test(
-          title
-        )
-          ? 0.96
-          : 0.9,
-      pattern:
-        "NUMBERED",
+        0.99,
     };
   }
 
-  return null;
+  const proseBoundary =
+    text.match(
+      /\s+(?=(?:A|O|AS|OS|UM|UMA|ESTE|ESTA|ESSA|ESSE|CABERÁ|FICA|SERÁ|SÃO)\s+)/iu
+    );
+
+  if (
+    proseBoundary?.index != null
+  ) {
+    return {
+      title:
+        normalizeTitle(
+          text.slice(
+            0,
+            proseBoundary.index
+          )
+        ),
+
+      body:
+        normalize(
+          text.slice(
+            proseBoundary.index
+          )
+        ),
+
+      confidence:
+        0.97,
+    };
+  }
+
+  const words =
+    text.split(" ");
+
+  const headingWords = [];
+
+  for (const word of words) {
+    if (
+      headingWords.length >= 12 ||
+      /[a-záàâãéêíóôõúç]/u.test(word)
+    ) {
+      break;
+    }
+
+    headingWords.push(word);
+  }
+
+  if (headingWords.length) {
+    const rawTitle =
+      headingWords.join(" ");
+
+    return {
+      title:
+        normalizeTitle(rawTitle),
+
+      body:
+        normalize(
+          text.slice(
+            rawTitle.length
+          )
+        ),
+
+      confidence:
+        0.92,
+    };
+  }
+
+  return {
+    title: "Cláusula",
+    body: text,
+    confidence: 0.85,
+  };
 }
 
-function candidateKey({
-  clauseNumber,
-  firstSegmentIndex,
-  lineIndex,
-}) {
-  return [
-    clauseNumber,
-    firstSegmentIndex,
-    lineIndex,
-  ].join(":");
+function getContentBetween(
+  segments,
+  current,
+  next
+) {
+  if (!next) {
+    const parts = [
+      segments[
+        current.segmentIndex
+      ].text.slice(
+        current.end
+      ),
+    ];
+
+    for (
+      let index =
+        current.segmentIndex + 1;
+      index < segments.length;
+      index += 1
+    ) {
+      parts.push(
+        segments[index].text
+      );
+    }
+
+    return normalize(
+      parts.join(" ")
+    );
+  }
+
+  if (
+    current.segmentIndex ===
+    next.segmentIndex
+  ) {
+    return normalize(
+      segments[
+        current.segmentIndex
+      ].text.slice(
+        current.end,
+        next.start
+      )
+    );
+  }
+
+  const parts = [
+    segments[
+      current.segmentIndex
+    ].text.slice(
+      current.end
+    ),
+  ];
+
+  for (
+    let index =
+      current.segmentIndex + 1;
+    index < next.segmentIndex;
+    index += 1
+  ) {
+    parts.push(
+      segments[index].text
+    );
+  }
+
+  parts.push(
+    segments[
+      next.segmentIndex
+    ].text.slice(
+      0,
+      next.start
+    )
+  );
+
+  return normalize(
+    parts.join(" ")
+  );
 }
 
 export function detectClauseCandidates(
   segments
 ) {
-  const lines = [];
+  const normalizedSegments =
+    segments.map(
+      (segment, segmentIndex) => ({
+        segmentIndex,
+
+        text:
+          normalize(
+            segment.textContent ??
+              segment.text ??
+              ""
+          ),
+
+        id:
+          segment.id ?? null,
+
+        pageNumber:
+          segment.pageNumber ?? null,
+
+        locator:
+          segment.locator ?? null,
+      })
+    );
+
+  const markers = [];
 
   for (
-    let segmentIndex = 0;
-    segmentIndex < segments.length;
-    segmentIndex += 1
+    const segment of
+      normalizedSegments
   ) {
-    const segment =
-      segments[segmentIndex];
+    CLAUSE_MARKER.lastIndex = 0;
 
-    const segmentLines =
-      String(
-        segment.textContent ??
-          segment.text ??
-          ""
-      ).split(/\r?\n/u);
+    let match;
 
-    for (
-      let lineIndex = 0;
-      lineIndex < segmentLines.length;
-      lineIndex += 1
+    while (
+      (
+        match =
+          CLAUSE_MARKER.exec(
+            segment.text
+          )
+      ) !== null
     ) {
-      const text =
-        normalizeWhitespace(
-          segmentLines[lineIndex]
+      const clauseNumber =
+        numericOrdinal(
+          match[1]
         );
 
-      if (!text) {
+      if (!clauseNumber) {
         continue;
       }
 
-      lines.push({
-        text,
-        segmentIndex,
-        lineIndex,
+      markers.push({
+        clauseNumber,
+
+        ordinal:
+          normalize(
+            match[1]
+          ),
+
+        segmentIndex:
+          segment.segmentIndex,
+
+        start:
+          match.index,
+
+        end:
+          CLAUSE_MARKER.lastIndex,
+
         sourceSegmentId:
-          segment.id ?? null,
+          segment.id,
+
         pageNumber:
-          segment.pageNumber ?? null,
+          segment.pageNumber,
+
         locator:
-          segment.locator ?? null,
+          segment.locator,
       });
     }
   }
 
-  const headings = [];
-
-  for (
-    let index = 0;
-    index < lines.length;
-    index += 1
-  ) {
-    const heading =
-      headingFromLine(
-        lines[index].text
-      );
-
-    if (!heading) {
-      continue;
-    }
-
-    headings.push({
-      ...heading,
-      linePosition: index,
-      source:
-        lines[index],
-    });
+  if (!markers.length) {
+    return [];
   }
 
-  const candidates = [];
+  return markers.map(
+    (current, index) => {
+      const next =
+        markers[
+          index + 1
+        ];
 
-  for (
-    let index = 0;
-    index < headings.length;
-    index += 1
-  ) {
-    const heading =
-      headings[index];
+      const content =
+        getContentBetween(
+          normalizedSegments,
+          current,
+          next
+        );
 
-    const next =
-      headings[index + 1];
+      const {
+        title,
+        body,
+        confidence,
+      } =
+        splitTitleAndBody(
+          content
+        );
 
-    const start =
-      heading.linePosition;
+      const safeTitle =
+        title ||
+        `Cláusula ${current.clauseNumber}`;
 
-    const end =
-      next
-        ? next.linePosition
-        : lines.length;
+      return {
+        detector:
+          DETECTOR,
 
-    const bodyLines =
-      lines
-        .slice(start + 1, end)
-        .map((item) => item.text)
-        .filter(Boolean);
+        detectorVersion:
+          DETECTOR_VERSION,
 
-    const proposedText =
-      [
-        heading.heading,
-        ...bodyLines,
-      ]
-        .join("\n")
-        .trim();
+        candidateKey:
+          [
+            current.clauseNumber,
+            current.segmentIndex,
+            current.start,
+          ].join(":"),
 
-    if (!proposedText) {
-      continue;
+        confidence,
+
+        proposedClauseNumber:
+          current.clauseNumber,
+
+        proposedTitle:
+          safeTitle,
+
+        proposedText:
+          [
+            `CLÁUSULA ${current.ordinal} - ${safeTitle}`,
+            body,
+          ]
+            .filter(Boolean)
+            .join("\n")
+            .trim(),
+
+        sourceSegmentId:
+          current.sourceSegmentId,
+
+        pageNumber:
+          current.pageNumber,
+
+        locator:
+          current.locator,
+
+        pattern:
+          "CLAUSE_WORD",
+      };
     }
-
-    const lastSource =
-      lines[
-        Math.max(
-          start,
-          end - 1
-        )
-      ];
-
-    const locatorParts = [
-      heading.source.locator,
-    ];
-
-    if (
-      lastSource?.locator &&
-      lastSource.locator !==
-        heading.source.locator
-    ) {
-      locatorParts.push(
-        lastSource.locator
-      );
-    }
-
-    candidates.push({
-      detector: DETECTOR,
-      detectorVersion:
-        DETECTOR_VERSION,
-      candidateKey:
-        candidateKey({
-          clauseNumber:
-            heading.clauseNumber,
-          firstSegmentIndex:
-            heading.source.segmentIndex,
-          lineIndex:
-            heading.source.lineIndex,
-        }),
-      confidence:
-        heading.confidence,
-      proposedClauseNumber:
-        heading.clauseNumber,
-      proposedTitle:
-        heading.title,
-      proposedText,
-      sourceSegmentId:
-        heading.source
-          .sourceSegmentId,
-      pageNumber:
-        heading.source
-          .pageNumber,
-      locator:
-        locatorParts
-          .filter(Boolean)
-          .join(" → ") ||
-        null,
-      pattern:
-        heading.pattern,
-    });
-  }
-
-  return candidates;
+  );
 }

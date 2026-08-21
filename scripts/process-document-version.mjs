@@ -64,7 +64,7 @@ async function writeAudit({
       actor_type: "SYSTEM",
       actor_user_id: null,
       actor_label:
-        "Document Processing Worker",
+        null,
       action,
       entity_type:
         "DOCUMENT_VERSION",

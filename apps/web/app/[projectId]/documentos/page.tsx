@@ -150,7 +150,15 @@ export default async function DocumentosPage({
                   (current?.versionIndex ?? 0) + 1;
 
                 return (
-                  <Card key={document.id}>
+                  <Card
+                    key={document.id}
+                    className={
+                      document.kind === "CONTRATO_BASE" ||
+                      document.kind.includes("ADITIVO")
+                        ? "border-green-500/50 bg-green-50 dark:bg-green-950/30"
+                        : undefined
+                    }
+                  >
                     <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
                       <div>
                         <CardTitle>
