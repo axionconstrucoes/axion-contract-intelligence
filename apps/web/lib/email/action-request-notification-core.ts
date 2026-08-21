@@ -61,11 +61,18 @@ export interface ResolvedActionRequest {
  * intermediária deixe um estado auditável/recuperável (nunca um envio
  * real "esquecido" como PENDING para sempre sem rastro).
  *
- * Idempotência: mitigada por um check-then-insert (recusa se já existir
- * Notification INITIAL PENDING/SENT para o mesmo ActionRequest). Isso NÃO
- * é uma garantia atômica — uma condição de corrida entre duas chamadas
- * simultâneas ainda é teoricamente possível sem uma constraint de banco
- * dedicada, que exigiria migration (fora de escopo deste lote).
+ * Idempotência: autoridade final é o índice UNIQUE parcial
+ * notifications_one_initial_per_action_request_idx (UNIQUE(action_request_id)
+ * WHERE kind = 'INITIAL', migration 20260821132647). O check-then-insert
+ * abaixo é só uma mensagem amigável para o caso comum (evita round-trip até
+ * o provider quando já é óbvio que existe uma INITIAL) — quem realmente
+ * decide o vencedor entre duas chamadas concorrentes é o insert em
+ * "notifications": a perdedora recebe unique_violation (23505), nunca chega
+ * a criar recipient/delivery nem a chamar o EmailProvider.
+ *
+ * Retry futuro (REMINDER/ESCALATION continuam sem limite) deve reutilizar a
+ * Notification INITIAL já existente e criar um novo delivery — nunca uma
+ * segunda INITIAL.
  */
 export async function performActionRequestNotification(
   resolved: ResolvedActionRequest,
@@ -109,6 +116,14 @@ export async function performActionRequestNotification(
     .single();
 
   if (notificationInsertError) {
+    // 23505 = unique_violation: notifications_one_initial_per_action_request_idx
+    // é a autoridade final de idempotência, não o precheck acima. A perdedora
+    // de uma corrida cai aqui, antes de qualquer recipient/delivery/provider.
+    if (notificationInsertError.code === "23505") {
+      throw new DuplicateNotificationError(
+        `Já existe uma Notification INITIAL para o ActionRequest ${resolved.id} (constraint de banco).`
+      );
+    }
     throw notificationInsertError;
   }
 
