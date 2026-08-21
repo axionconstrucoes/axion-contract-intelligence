@@ -46,6 +46,20 @@ export interface Project {
   baselineEndDate: string; // ISO date
 }
 
+// package_type e texto livre — a taxonomia real de tipos de pacote ainda
+// nao foi definida, entao nao fixamos um union aqui (mesma decisao da
+// migration 20260821142906).
+export interface ProjectPackage {
+  id: string;
+  projectId: string;
+  code: string;
+  title: string;
+  description: string | null;
+  packageType: string;
+  status: ProjectStatus;
+  createdAt: string; // ISO datetime
+}
+
 export type UserOrigin = "AXION_INTERNO" | "TERCEIRO";
 
 export interface User {

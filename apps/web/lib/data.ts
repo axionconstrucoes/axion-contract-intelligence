@@ -47,6 +47,7 @@ import {
   type EventEvidenceRow,
 } from "./event-mapper";
 import { mapProjectRow, type ProjectRow } from "./project-mapper";
+import { mapProjectPackageRow, type ProjectPackageRow } from "./project-package-mapper";
 import { mapScheduleActivityRow, type ScheduleActivityRow } from "./schedule-mapper";
 import {
   mapMembershipRow,
@@ -299,6 +300,24 @@ export async function getEvent(eventId: string) {
 export function getAlerts(projectId: string): Alert[] {
   void projectId;
   return [];
+}
+
+export async function getProjectPackages(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data: packageRows, error: packagesError } = await supabase
+    .from("project_packages")
+    .select("id, project_id, code, title, description, package_type, status, created_at")
+    .eq("project_id", projectId)
+    .order("code", { ascending: true });
+
+  if (packagesError) {
+    if (packagesError.code === "22P02") {
+      return [];
+    }
+    throw packagesError;
+  }
+
+  return (packageRows as ProjectPackageRow[]).map(mapProjectPackageRow);
 }
 
 export async function getDocuments(projectId: string) {
