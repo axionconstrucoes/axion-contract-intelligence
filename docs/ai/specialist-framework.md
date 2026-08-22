@@ -1,12 +1,21 @@
 # Framework Comum dos Especialistas AXION
 
 Este documento define as regras compartilhadas por todas as skills de análise
-especializada do AXION Contract Intelligence (`axion-commercial-contract-specialist`,
+especializada do AXION Acompanhamento de Contratos — ACC (`axion-commercial-contract-specialist`,
 `axion-esg-ssma-specialist`, `axion-executive-strategy-advisor`, e futuras
-especialidades como o Conselheiro Jurídico).
+especialidades).
 
 Cada skill deve ler este documento antes de produzir qualquer análise material.
 As regras aqui não são repetidas nos arquivos `SKILL.md` — apenas referenciadas.
+
+**Nota:** além destas skills interativas do Claude Code, o ACC também tem
+uma fundação própria de **AI Experts do produto** — código em
+`apps/web/lib/ai/`, distinto deste framework de skills. O primeiro Expert
+oficial implementado é o **Diretor Comercial IA** (`commercial-director`).
+Ver `docs/ai/experts.md` para a arquitetura de código, schema de saída,
+provider abstraction e limites de autoridade — as regras comuns deste
+documento (decisão humana, anti-alucinação, farol, etc.) valem
+integralmente para os AI Experts também.
 
 ## 3.1 Decisão final é humana
 
