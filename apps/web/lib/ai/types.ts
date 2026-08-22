@@ -11,7 +11,7 @@
  * Experts oficiais ainda não implementados (ver docs/ai/experts.md) não
  * entram nesta união.
  */
-export type ExpertId = "commercial-director";
+export type ExpertId = "commercial-director" | "esg-director";
 
 export type ExpertSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 

@@ -10,8 +10,12 @@ import { confrontationSeverityToAlertSeverity } from "@/lib/labels";
 import {
   askCommercialDirectorAction,
   initialAskCommercialDirectorState,
+  type AskCommercialDirectorState,
 } from "@/lib/ai/expert-query-action";
 import type { ExpertQueryScope } from "@/lib/ai/query/types";
+
+type AskExpertState = AskCommercialDirectorState;
+type AskExpertAction = (state: AskExpertState, formData: FormData) => Promise<AskExpertState>;
 
 const REQUIREMENT_KIND_LABELS: Record<string, string> = {
   LEGAL_REQUIREMENT: "Exigência legal",
@@ -44,19 +48,27 @@ export function ExpertQueryPanel({
   projectId,
   eventId,
   scope,
+  title = "Diretor Comercial IA",
+  action = askCommercialDirectorAction,
+  initialState = initialAskCommercialDirectorState,
 }: {
   projectId: string;
   eventId?: string;
   scope: ExpertQueryScope;
+  /** Nome exibido do Expert — permite reaproveitar este painel para qualquer Expert Query já implementado. */
+  title?: string;
+  /** Server Action deste Expert (ver askCommercialDirectorAction/askEsgDirectorAction) — mesmo contrato de estado. */
+  action?: AskExpertAction;
+  initialState?: AskExpertState;
 }) {
-  const [state, formAction, pending] = useActionState(askCommercialDirectorAction, initialAskCommercialDirectorState);
+  const [state, formAction, pending] = useActionState(action, initialState);
   const { response, error } = state;
 
   return (
     <Card className="border-primary/30">
       <CardHeader className="gap-2">
         <div className="flex items-center gap-2">
-          <CardTitle>Diretor Comercial IA</CardTitle>
+          <CardTitle>{title}</CardTitle>
         </div>
         <div className="flex items-start gap-2 rounded-md border border-severity-alta/40 bg-severity-alta/10 p-2.5 text-xs text-severity-alta">
           <FlaskConical className="mt-0.5 size-3.5 shrink-0" />

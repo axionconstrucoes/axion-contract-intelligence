@@ -126,6 +126,93 @@ export const eventNoteCategoryLabels: Record<EventNoteCategory, string> = {
   OUTROS: "Outros",
 };
 
+export type EsgObligationCategory =
+  | "DDS"
+  | "INTEGRACAO_SEGURANCA"
+  | "TREINAMENTO"
+  | "INSPECAO"
+  | "RELATORIO"
+  | "DOCUMENTACAO_TERCEIROS"
+  | "REGISTRO_ACIDENTE_INCIDENTE"
+  | "DESTINACAO_RESIDUOS"
+  | "COMPROVANTE_AMBIENTAL"
+  | "LICENCA"
+  | "CERTIFICADO"
+  | "PERMISSAO"
+  | "ENTREGA_EPI"
+  | "DOCUMENTO_CLIENTE"
+  | "FOTO_CAMPO"
+  | "OUTRO";
+
+export const esgObligationCategoryLabels: Record<EsgObligationCategory, string> = {
+  DDS: "DDS",
+  INTEGRACAO_SEGURANCA: "Integração de Segurança",
+  TREINAMENTO: "Treinamento",
+  INSPECAO: "Inspeção",
+  RELATORIO: "Relatório",
+  DOCUMENTACAO_TERCEIROS: "Documentação de Terceiros",
+  REGISTRO_ACIDENTE_INCIDENTE: "Registro de Acidente/Incidente",
+  DESTINACAO_RESIDUOS: "Destinação de Resíduos",
+  COMPROVANTE_AMBIENTAL: "Comprovante Ambiental",
+  LICENCA: "Licença",
+  CERTIFICADO: "Certificado",
+  PERMISSAO: "Permissão",
+  ENTREGA_EPI: "Entrega de EPI",
+  DOCUMENTO_CLIENTE: "Documento Exigido pelo Cliente",
+  FOTO_CAMPO: "Foto de Campo",
+  OUTRO: "Outro",
+};
+
+export type EsgObligationPeriodicity =
+  | "UNICA"
+  | "DIARIA"
+  | "SEMANAL"
+  | "QUINZENAL"
+  | "MENSAL"
+  | "POR_EVENTO"
+  | "POR_MARCO"
+  | "PERSONALIZADA";
+
+export const esgObligationPeriodicityLabels: Record<EsgObligationPeriodicity, string> = {
+  UNICA: "Única",
+  DIARIA: "Diária",
+  SEMANAL: "Semanal",
+  QUINZENAL: "Quinzenal",
+  MENSAL: "Mensal",
+  POR_EVENTO: "Por evento",
+  POR_MARCO: "Por marco",
+  PERSONALIZADA: "Personalizada",
+};
+
+export type EsgObligationStatus =
+  | "CUMPRIDO"
+  | "CUMPRIDO_PARCIALMENTE"
+  | "PENDENTE"
+  | "NAO_CUMPRIDO"
+  | "NAO_APLICAVEL"
+  | "DISPENSADO";
+
+export const esgObligationStatusLabels: Record<EsgObligationStatus, string> = {
+  CUMPRIDO: "Cumprido",
+  CUMPRIDO_PARCIALMENTE: "Cumprido parcialmente",
+  PENDENTE: "Pendente",
+  NAO_CUMPRIDO: "Não cumprido",
+  NAO_APLICAVEL: "Não aplicável",
+  DISPENSADO: "Dispensado",
+};
+
+export type EsgEvidenceKind = "FOTO" | "DOCUMENTO" | "PLANILHA" | "LISTA_PRESENCA" | "OUTRO";
+
+export const esgEvidenceKindLabels: Record<EsgEvidenceKind, string> = {
+  FOTO: "Foto",
+  DOCUMENTO: "Documento",
+  PLANILHA: "Planilha",
+  LISTA_PRESENCA: "Lista de presença",
+  OUTRO: "Outro",
+};
+
+export type EsgRiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
 export function formatDate(iso: string): string {
   const date = new Date(iso);
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });

@@ -89,6 +89,28 @@ export interface ProjectContextEventSummary {
 }
 
 /**
+ * Resumo de uma obrigação ESG/SSMA contratual dentro do contexto de
+ * projeto, para o Diretor de ESG IA (e qualquer outro Expert que precise
+ * dela). Reflete apenas o registro mais recente de cada obrigação — nunca
+ * o histórico completo (mesmo princípio de "não despejar tudo no
+ * modelo" de ProjectContextEventSummary). `riskLevel` vem sempre do
+ * cálculo determinístico (apps/web/lib/esg/compute-obligation-risk.ts),
+ * nunca de uma estimativa da IA.
+ */
+export interface ContextEsgObligationSummary {
+  id: string;
+  title: string;
+  category: string;
+  periodicity: string;
+  requiredEvidenceDescription: string | null;
+  penaltyDescription: string | null;
+  latestSubmissionStatus: string | null;
+  latestSubmissionDueDate: string | null;
+  latestSubmissionRiskLevel: string | null;
+  latestSubmissionEvidenceCount: number;
+}
+
+/**
  * Contexto pronto para um AI Expert responder uma pergunta de escopo
  * PROJECT. Somente leitura. Metadata de seleção (`eventsTotalCount` vs
  * `events.length`) existe para uma futura estratégia de
@@ -106,6 +128,8 @@ export interface ProjectAnalysisContext {
   };
   events: ProjectContextEventSummary[];
   eventsTotalCount: number;
+  esgObligations: ContextEsgObligationSummary[];
+  esgObligationsTotalCount: number;
 }
 
 /**

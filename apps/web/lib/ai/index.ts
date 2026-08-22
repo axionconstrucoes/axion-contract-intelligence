@@ -24,6 +24,7 @@ export type {
   ContextClause,
   ContextConfrontationCandidate,
   ContextEmail,
+  ContextEsgObligationSummary,
   ContextEvent,
   ContextEventNote,
   ContextEvidence,
@@ -79,3 +80,12 @@ export type {
 } from "./experts/commercial-director/types";
 export { answerCommercialDirectorQuery } from "./experts/commercial-director/query";
 export type { CommercialDirectorQueryResult } from "./experts/commercial-director/query";
+
+export {
+  ESG_DIRECTOR_EXPERT_ID,
+  ESG_DIRECTOR_INSTRUCTIONS,
+  ESG_DIRECTOR_NAME,
+  ESG_DIRECTOR_VERSION,
+  answerEsgDirectorQuery,
+} from "./experts/esg-director";
+export type { EsgDirectorQueryResult } from "./experts/esg-director";
