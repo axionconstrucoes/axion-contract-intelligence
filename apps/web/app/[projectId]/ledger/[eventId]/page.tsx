@@ -2,17 +2,15 @@ import { notFound } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { CategoryBadge, ConfrontationCandidateStatusBadge, SeverityBadge, StatusBadge } from "@/components/shared/badges";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ConfrontationReviewForms } from "@/components/ledger/confrontation-review-forms";
 import { CrossReferenceList } from "@/components/ledger/cross-reference-list";
 import { EvidenceViewer } from "@/components/ledger/evidence-viewer";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getEvent, getUser } from "@/lib/data";
 import { getEventClauseConfrontationCandidates } from "@/lib/event-clause-confrontation-review";
 import { confrontationSeverityToAlertSeverity, findingTypeLabels, formatDateTime, sourceTypeShortLabels } from "@/lib/labels";
-import { reviewEventClauseConfrontationCandidateAction } from "./actions";
 
 export default async function EventDetailPage({
   params,
@@ -155,57 +153,11 @@ export default async function EventDetailPage({
                       {candidate.reviewNote ? <p className="mt-1">Observação: {candidate.reviewNote}</p> : null}
                     </div>
                   ) : canReview ? (
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      <form
-                        action={reviewEventClauseConfrontationCandidateAction}
-                        className="flex flex-col gap-3 rounded-md border p-4"
-                      >
-                        <input type="hidden" name="projectId" value={projectId} />
-                        <input type="hidden" name="eventId" value={event.id} />
-                        <input type="hidden" name="candidateId" value={candidate.id} />
-                        <input type="hidden" name="reviewAction" value="APPROVE" />
-
-                        <label className="flex flex-col gap-1.5 text-sm font-medium">
-                          Observação da revisão
-                          <span className="text-xs font-normal text-muted-foreground">Opcional para aprovação.</span>
-                          <Textarea
-                            name="reviewNote"
-                            rows={2}
-                            placeholder="Ex.: confronto confirmado após validação da cláusula."
-                          />
-                        </label>
-
-                        <Button type="submit">Aprovar relação</Button>
-                      </form>
-
-                      <form
-                        action={reviewEventClauseConfrontationCandidateAction}
-                        className="flex flex-col gap-3 rounded-md border border-destructive/30 p-4"
-                      >
-                        <input type="hidden" name="projectId" value={projectId} />
-                        <input type="hidden" name="eventId" value={event.id} />
-                        <input type="hidden" name="candidateId" value={candidate.id} />
-                        <input type="hidden" name="reviewAction" value="REJECT" />
-
-                        <label className="flex flex-col gap-1.5 text-sm font-medium">
-                          Justificativa da rejeição
-                          <Textarea
-                            name="reviewNote"
-                            required
-                            rows={2}
-                            placeholder="Explique por que este confronto não deve ser aprovado."
-                          />
-                        </label>
-
-                        <Button
-                          type="submit"
-                          variant="outline"
-                          className="border-destructive text-destructive hover:bg-destructive/10"
-                        >
-                          Rejeitar
-                        </Button>
-                      </form>
-                    </div>
+                    <ConfrontationReviewForms
+                      projectId={projectId}
+                      eventId={event.id}
+                      candidateId={candidate.id}
+                    />
                   ) : (
                     <p className="rounded-md border bg-muted p-3 text-sm text-muted-foreground">
                       Você possui acesso de leitura. Aprovação ou rejeição exige permissão EDITOR ou ADMIN.

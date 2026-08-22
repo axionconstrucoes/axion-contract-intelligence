@@ -3,31 +3,46 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
 
-function requiredField(formData: FormData, name: string) {
+export type ReviewEventClauseConfrontationCandidateState = {
+  error: string | null;
+};
+
+export const initialReviewEventClauseConfrontationCandidateState: ReviewEventClauseConfrontationCandidateState = {
+  error: null,
+};
+
+function optionalField(formData: FormData, name: string): string | null {
   const value = String(formData.get(name) ?? "").trim();
-
-  if (!value) {
-    throw new Error(`Campo obrigatório ausente: ${name}`);
-  }
-
-  return value;
+  return value || null;
 }
 
-export async function reviewEventClauseConfrontationCandidateAction(formData: FormData) {
-  const projectId = requiredField(formData, "projectId");
-  const eventId = requiredField(formData, "eventId");
-  const candidateId = requiredField(formData, "candidateId");
+// Usa useActionState no cliente: qualquer falha (campo ausente, permissão,
+// candidato já revisado, erro da RPC) retorna como estado exibível na UI,
+// em vez de um throw que ou é bloqueado silenciosamente pelo navegador
+// (campo required vazio nunca chega a gerar requisição) ou vira uma página
+// de erro genérica sem nenhuma explicação para o usuário.
+export async function reviewEventClauseConfrontationCandidateAction(
+  _prevState: ReviewEventClauseConfrontationCandidateState,
+  formData: FormData
+): Promise<ReviewEventClauseConfrontationCandidateState> {
+  const projectId = optionalField(formData, "projectId");
+  const eventId = optionalField(formData, "eventId");
+  const candidateId = optionalField(formData, "candidateId");
 
-  const action = requiredField(formData, "reviewAction").toUpperCase();
+  if (!projectId || !eventId || !candidateId) {
+    return { error: "Dados do candidato ausentes. Recarregue a página e tente novamente." };
+  }
+
+  const action = optionalField(formData, "reviewAction")?.toUpperCase() ?? null;
 
   if (action !== "APPROVE" && action !== "REJECT") {
-    throw new Error("Ação de revisão inválida.");
+    return { error: "Ação de revisão inválida." };
   }
 
   const reviewNote = String(formData.get("reviewNote") ?? "").trim();
 
   if (action === "REJECT" && !reviewNote) {
-    throw new Error("Informe a justificativa da rejeição.");
+    return { error: "Informe a justificativa da rejeição." };
   }
 
   const supabase = await createSupabaseServerClient();
@@ -42,10 +57,12 @@ export async function reviewEventClauseConfrontationCandidateAction(formData: Fo
   });
 
   if (error) {
-    throw new Error(error.message);
+    return { error: error.message };
   }
 
   revalidatePath(`/${projectId}/ledger/${eventId}`);
   revalidatePath(`/${projectId}/ledger`);
   revalidatePath(`/${projectId}/auditoria`);
+
+  return { error: null };
 }
