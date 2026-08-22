@@ -10,6 +10,14 @@ import type {
   SourceType,
   UserOrigin,
 } from "@axion/types";
+import type {
+  SlaArea,
+  SlaActionOrigin,
+  SlaActionStatus,
+  SlaEscalationLevel,
+  SlaEscalationReason,
+  SlaTimeUnit,
+} from "@/lib/sla/types";
 
 export const categoryLabels: Record<ImplicationCategory, string> = {
   PRAZO: "Prazo",
@@ -212,6 +220,60 @@ export const esgEvidenceKindLabels: Record<EsgEvidenceKind, string> = {
 };
 
 export type EsgRiskLevel = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+export const slaAreaLabels: Record<SlaArea, string> = {
+  DIRETORIA: "Diretoria",
+  ADMINISTRATIVO: "Administrativo",
+  COMERCIAL: "Comercial",
+  FINANCEIRO: "Financeiro",
+  ENGENHARIA: "Engenharia",
+  ORCAMENTO: "Orçamento",
+  JURIDICO: "Jurídico",
+  PLANEJAMENTO: "Planejamento",
+  ESG_SSMA: "ESG/SSMA",
+};
+
+export const slaActionStatusLabels: Record<SlaActionStatus, string> = {
+  PENDING: "Pendente",
+  ACKNOWLEDGED: "Assumida",
+  IN_PROGRESS: "Em andamento",
+  COMPLETED: "Concluída",
+  OVERDUE: "Vencida",
+  ESCALATED: "Escalada",
+  CANCELLED: "Cancelada",
+};
+
+export const slaEscalationLevelLabels: Record<SlaEscalationLevel, string> = {
+  RESPONSAVEL: "Responsável",
+  ESCALAO_1: "1º Escalão",
+  ESCALAO_2: "2º Escalão",
+  DIRETORIA: "Diretoria",
+};
+
+export const slaTimeUnitLabels: Record<SlaTimeUnit, string> = {
+  BUSINESS_HOURS: "Horas úteis",
+  CLOCK_HOURS: "Horas corridas",
+  BUSINESS_DAYS: "Dias úteis",
+  CALENDAR_DAYS: "Dias corridos",
+};
+
+export const slaActionOriginLabels: Record<SlaActionOrigin, string> = {
+  MANUAL: "Manual",
+  EXPERT_RECOMMENDATION: "Recomendação de um Expert",
+  ESG_OBLIGATION: "Obrigação ESG/SSMA",
+  EVENT: "Evento do Ledger",
+  ACTION_REQUEST: "Solicitação (ActionRequest)",
+  OTHER: "Outra",
+};
+
+export const slaEscalationReasonLabels: Record<SlaEscalationReason, string> = {
+  NO_ACKNOWLEDGMENT: "Não assumida no prazo",
+  NOT_RESPONDED: "Não respondida no prazo",
+  NOT_COMPLETED: "Não concluída no prazo",
+  CONTRACTUAL_DEADLINE_NEAR: "Prazo contratual próximo",
+  CONTRACTUAL_DEADLINE_MISSED: "Prazo contratual perdido",
+  NEW_EVIDENCE_INCREASED_RISK: "Nova evidência aumentou o risco",
+};
 
 export function formatDate(iso: string): string {
   const date = new Date(iso);

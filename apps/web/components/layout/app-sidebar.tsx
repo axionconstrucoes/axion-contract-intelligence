@@ -11,6 +11,7 @@ import {
   Leaf,
   ListChecks,
   Plug,
+  TimerReset,
   Users as UsersIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ const navItems = [
   { href: "timeline", label: "Timeline", icon: History },
   { href: "ledger", label: "Event Ledger", icon: BookText },
   { href: "action-requests", label: "Solicitações", icon: ListChecks },
+  { href: "acoes", label: "Ações e Escalonamentos", icon: TimerReset },
   { href: "revisao-contratual", label: "Revisão Contratual", icon: BookText },
   { href: "revisao-clausulas", label: "Revisão de Cláusulas", icon: BookText },
   { href: "documentos", label: "Documentos", icon: FileStack },
