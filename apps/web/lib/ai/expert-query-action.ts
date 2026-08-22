@@ -8,22 +8,14 @@
 
 import { createSupabaseServerClient } from "@axion/db/server";
 import { answerCommercialDirectorQuery } from "./experts/commercial-director/query";
-import type { ExpertQueryResponse, ExpertQueryScope } from "./query/types";
+import type { AskCommercialDirectorState } from "./expert-query-state";
+import { buildAiProviderUiMetadata } from "./provider-ui-metadata";
+import type { ExpertQueryScope } from "./query/types";
 
-export type AskExpertQueryMeta = { providerId: string; model: string | null };
-
-export type AskCommercialDirectorState = {
-  response: ExpertQueryResponse | null;
-  error: string | null;
-  /** Provider/modelo real usado nesta resposta — exibido na UI para nunca confundir fake com IA real. */
-  meta: AskExpertQueryMeta | null;
-};
-
-export const initialAskCommercialDirectorState: AskCommercialDirectorState = {
-  response: null,
-  error: null,
-  meta: null,
-};
+// Este módulo é "use server" — só pode exportar funções async (Server
+// Actions). Tipos e o estado inicial vivem em ./expert-query-state.ts
+// (nunca aqui), justamente para nunca reintroduzir "A 'use server' file
+// can only export async functions, found object."
 
 function optionalField(formData: FormData, name: string): string | null {
   const value = String(formData.get(name) ?? "").trim();
@@ -70,7 +62,7 @@ export async function askCommercialDirectorAction(
     return {
       response: result.response,
       error: null,
-      meta: { providerId: result.audit.providerId, model: result.audit.model },
+      meta: buildAiProviderUiMetadata(result.audit.providerId, result.audit.model),
     };
   } catch (error) {
     return {

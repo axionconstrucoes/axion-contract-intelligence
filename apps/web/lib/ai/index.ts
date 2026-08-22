@@ -37,6 +37,8 @@ export type { AiProvider, AiProviderQueryRequest, AiProviderRequest, AiProviderR
 export { createFakeAiProvider } from "./providers/fake-provider";
 export { getAiProvider } from "./providers/get-ai-provider";
 export { EXPERT_PROVIDER_ENV_VAR, resolveAiProviderForExpert, resolveAiProviderNameForExpert } from "./providers/resolve-provider-for-expert";
+export type { AiProviderUiMetadata } from "./provider-ui-metadata";
+export { buildAiProviderUiMetadata, normalizeProviderMeta } from "./provider-ui-metadata";
 export type { AnthropicProviderConfig } from "./providers/anthropic-config";
 export { loadAnthropicConfig } from "./providers/anthropic-config";
 export type { AnthropicAiProviderOverrides, AnthropicMessagesClient } from "./providers/anthropic-provider";

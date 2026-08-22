@@ -7,12 +7,14 @@
 
 import { createSupabaseServerClient } from "@axion/db/server";
 import { answerEsgDirectorQuery } from "./experts/esg-director/query";
+import { buildAiProviderUiMetadata, type AiProviderUiMetadata } from "./provider-ui-metadata";
 import type { ExpertQueryResponse, ExpertQueryScope } from "./query/types";
 
 export type AskEsgDirectorState = {
   response: ExpertQueryResponse | null;
   error: string | null;
-  meta: { providerId: string; model: string | null } | null;
+  /** Ver AskCommercialDirectorState.meta (expert-query-state.ts) — mesmo motivo para tolerar `undefined` no tipo. */
+  meta: AiProviderUiMetadata | null | undefined;
 };
 
 function optionalField(formData: FormData, name: string): string | null {
@@ -60,7 +62,7 @@ export async function askEsgDirectorAction(
     return {
       response: result.response,
       error: null,
-      meta: { providerId: result.audit.providerId, model: result.audit.model },
+      meta: buildAiProviderUiMetadata(result.audit.providerId, result.audit.model),
     };
   } catch (error) {
     return {

@@ -7,11 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { confrontationSeverityToAlertSeverity } from "@/lib/labels";
-import {
-  askCommercialDirectorAction,
-  initialAskCommercialDirectorState,
-  type AskCommercialDirectorState,
-} from "@/lib/ai/expert-query-action";
+import { askCommercialDirectorAction } from "@/lib/ai/expert-query-action";
+import { initialAskCommercialDirectorState, type AskCommercialDirectorState } from "@/lib/ai/expert-query-state";
+import { normalizeProviderMeta } from "@/lib/ai/provider-ui-metadata";
 import type { ExpertQueryScope } from "@/lib/ai/query/types";
 
 type AskExpertState = AskCommercialDirectorState;
@@ -146,8 +144,13 @@ export function ExpertQueryPanel({
   initialState?: AskExpertState;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
-  const { response, error, meta } = state;
-  const isRealProvider = meta?.providerId === "anthropic";
+  const { response, error } = state;
+  // Normaliza null E undefined em um único ponto (normalizeProviderMeta)
+  // — nenhum acesso a `meta.*` acontece antes desta linha, e nunca via
+  // non-null assertion. Ver expert-query-action.ts
+  // (AskCommercialDirectorState.meta) para o motivo do tipo tolerar
+  // `undefined` além de `null`.
+  const meta = normalizeProviderMeta(state.meta);
 
   return (
     <Card className="border-primary/30">
@@ -155,20 +158,26 @@ export function ExpertQueryPanel({
         <div className="flex items-center gap-2">
           <CardTitle>{title}</CardTitle>
         </div>
-        {isRealProvider ? (
+        {meta === null ? (
+          <div className="flex items-start gap-2 rounded-md border p-2.5 text-xs text-muted-foreground">
+            <FlaskConical className="mt-0.5 size-3.5 shrink-0" />
+            <p>O provider será exibido aqui após a primeira consulta.</p>
+          </div>
+        ) : meta.isRealProvider ? (
           <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
             <FlaskConical className="mt-0.5 size-3.5 shrink-0" />
             <p>
-              <strong>Provider: Anthropic</strong> · Model: {meta.model ?? "desconhecido"}. Resposta gerada por
-              IA real — ainda assim, sempre sujeita a revisão humana obrigatória antes de qualquer ação.
+              <strong>Provider: {meta.providerLabel}</strong>
+              {meta.model ? <> · Modelo: {meta.model}</> : null}. Resposta gerada por IA. Toda sugestão exige
+              revisão humana antes de qualquer ação.
             </p>
           </div>
         ) : (
           <div className="flex items-start gap-2 rounded-md border border-severity-alta/40 bg-severity-alta/10 p-2.5 text-xs text-severity-alta">
             <FlaskConical className="mt-0.5 size-3.5 shrink-0" />
             <p>
-              <strong>Provider: Fake/Teste.</strong> Esta resposta é gerada por um provider determinístico
-              (fake) — não é IA real. Nada aqui deve ser tratado como análise inteligente de fato.
+              <strong>Provider: {meta.providerLabel}.</strong> Esta resposta é gerada por um provider
+              determinístico (fake) — não é IA real. Nada aqui deve ser tratado como análise inteligente de fato.
             </p>
           </div>
         )}

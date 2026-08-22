@@ -312,12 +312,31 @@ prompt completo ou resposta completa em console/auditoria.
 
 ## 17. UI (`ExpertQueryPanel`)
 
-Quando a resposta vem do provider real, o painel mostra "Provider:
-Anthropic · Model: `<configurado>`" (nunca a chave). Quando vem do fake
-provider (default), mostra "Provider: Fake/Teste". Ambos os casos
-sempre reforçam "revisão humana obrigatória". Ver
-`AskCommercialDirectorState.meta`/`AskEsgDirectorState.meta`
-(`expert-query-action.ts`/`esg-query-action.ts`).
+A metadata exibida (`providerId`, `providerLabel`, `model`,
+`isRealProvider`) vem de uma única função,
+`buildAiProviderUiMetadata()` (`apps/web/lib/ai/provider-ui-metadata.ts`),
+usada por `expert-query-action.ts` e `esg-query-action.ts` — nunca
+recalculada de forma diferente por Expert, e nunca lida de
+`AXION_AI_PROVIDER`/`process.env` diretamente pelo componente
+(client-side). Sempre derivada do `providerId`/`model` já retornados
+pelo `audit` de `answerCommercialDirectorQuery`/`answerEsgDirectorQuery`
+— por sua vez resolvidos via `resolveAiProviderForExpert` (nunca
+`getAiProvider()` global).
+
+Estados do banner: antes da primeira consulta (`meta === null`) mostra
+um aviso neutro ("o provider será exibido após a primeira consulta") —
+nunca assume "Fake/Teste" antes de qualquer resposta real ter chegado.
+Depois de uma consulta: `meta.isRealProvider` decide entre "Provider:
+Anthropic · Modelo: `<configurado>`" (nunca a chave) ou "Provider:
+Fake/Teste". Ambos os casos sempre reforçam a revisão humana
+obrigatória.
+
+**Nota operacional:** o Next.js (`next dev`) só lê `.env.local` na
+inicialização do processo — alterar `AXION_AI_PROVIDER_COMMERCIAL_DIRECTOR`/
+`ANTHROPIC_API_KEY`/`ANTHROPIC_MODEL` com o servidor de desenvolvimento
+já rodando exige reiniciar o `next dev` para o novo valor ser
+efetivamente lido; isso não é um bug de código, é comportamento padrão
+do Next.js.
 
 ## 18. Escopos PROJECT/EVENT
 
