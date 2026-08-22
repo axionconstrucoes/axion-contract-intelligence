@@ -576,6 +576,6 @@ console.log(
 );
 
 console.log(
-  "Registrados nesta execucao:",
+  "Processados nesta execucao:",
   registered
 );

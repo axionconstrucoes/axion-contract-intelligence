@@ -3,9 +3,11 @@ import { Badge } from "@/components/ui/badge";
 import {
   actionRequestStatusLabels,
   categoryLabels,
+  confrontationCandidateStatusLabels,
   eventStatusLabels,
   integrationStatusLabels,
   severityLabels,
+  type ConfrontationCandidateStatus,
 } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 
@@ -53,4 +55,18 @@ const actionRequestStatusClasses: Record<ActionRequestStatus, string> = {
 
 export function ActionRequestStatusBadge({ status }: { status: ActionRequestStatus }) {
   return <Badge className={cn(actionRequestStatusClasses[status])}>{actionRequestStatusLabels[status]}</Badge>;
+}
+
+const confrontationCandidateStatusClasses: Record<ConfrontationCandidateStatus, string> = {
+  PENDING_REVIEW: "border-transparent bg-severity-media/15 text-severity-media",
+  APPROVED: "border-transparent bg-severity-baixa/15 text-severity-baixa",
+  REJECTED: "border-transparent bg-severity-critica/15 text-severity-critica",
+};
+
+export function ConfrontationCandidateStatusBadge({ status }: { status: ConfrontationCandidateStatus }) {
+  return (
+    <Badge className={cn(confrontationCandidateStatusClasses[status])}>
+      {confrontationCandidateStatusLabels[status]}
+    </Badge>
+  );
 }

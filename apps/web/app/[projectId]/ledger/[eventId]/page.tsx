@@ -1,16 +1,35 @@
 import { notFound } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
-import { CategoryBadge, SeverityBadge, StatusBadge } from "@/components/shared/badges";
+import { CategoryBadge, ConfrontationCandidateStatusBadge, SeverityBadge, StatusBadge } from "@/components/shared/badges";
+import { EmptyState } from "@/components/shared/empty-state";
 import { CrossReferenceList } from "@/components/ledger/cross-reference-list";
 import { EvidenceViewer } from "@/components/ledger/evidence-viewer";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getEvent, getUser } from "@/lib/data";
-import { findingTypeLabels, formatDateTime, sourceTypeShortLabels } from "@/lib/labels";
+import { getEventClauseConfrontationCandidates } from "@/lib/event-clause-confrontation-review";
+import { confrontationSeverityToAlertSeverity, findingTypeLabels, formatDateTime, sourceTypeShortLabels } from "@/lib/labels";
+import { reviewEventClauseConfrontationCandidateAction } from "./actions";
 
-export default async function EventDetailPage({ params }: { params: Promise<{ projectId: string; eventId: string }> }) {
-  const { eventId } = await params;
-  const event = await getEvent(eventId);
+export default async function EventDetailPage({
+  params,
+}: {
+  params: Promise<{ projectId: string; eventId: string }>;
+}) {
+  const { projectId, eventId } = await params;
+
+  const [event, confrontationCandidates, permission] = await Promise.all([
+    getEvent(eventId),
+    getEventClauseConfrontationCandidates(eventId),
+    getCurrentProjectPermission(projectId),
+  ]);
+
   if (!event) notFound();
+
+  const canReview = permission === "EDITOR" || permission === "ADMIN";
 
   let creatorLabel: string;
   if (event.createdByType === "LEGACY") {
@@ -75,6 +94,128 @@ export default async function EventDetailPage({ params }: { params: Promise<{ pr
       <div>
         <h2 className="mb-2 text-sm font-semibold">Confronto com outras fontes</h2>
         <CrossReferenceList crossReferences={event.crossReferences} />
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-sm font-semibold">Confrontação contratual — Revisão humana</h2>
+
+        {confrontationCandidates.length === 0 ? (
+          <EmptyState message="Nenhum candidato de confronto Evento x Cláusula para este evento." />
+        ) : (
+          <div className="flex flex-col gap-4">
+            {confrontationCandidates.map((candidate) => (
+              <Card key={candidate.id}>
+                <CardHeader className="gap-2">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium uppercase text-muted-foreground">
+                        Cláusula {candidate.clauseNumber}
+                      </p>
+                      <CardTitle className="text-base">{candidate.clauseTitle}</CardTitle>
+                    </div>
+
+                    <div className="rounded-full border px-3 py-1 text-xs font-medium">
+                      Confiança {Math.round(candidate.confidence * 100)}%
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <ConfrontationCandidateStatusBadge status={candidate.status} />
+                    <Badge variant="outline">{findingTypeLabels[candidate.findingType]}</Badge>
+                    <SeverityBadge severity={confrontationSeverityToAlertSeverity[candidate.severity]} />
+                  </div>
+                </CardHeader>
+
+                <CardContent className="flex flex-col gap-4">
+                  <p className="text-sm">{candidate.summary}</p>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                      <p className="text-xs font-medium uppercase text-muted-foreground">Fundamento do evento</p>
+                      <p className="mt-1 text-muted-foreground">{candidate.eventBasis}</p>
+                    </div>
+
+                    <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
+                      <p className="text-xs font-medium uppercase text-muted-foreground">Fundamento da cláusula</p>
+                      <p className="mt-1 text-muted-foreground">{candidate.clauseBasis}</p>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Produzido por análise automatizada ({candidate.analyzer} v{candidate.analyzerVersion}) — exige
+                    revisão humana antes de gerar confronto definitivo.
+                  </p>
+
+                  {candidate.status !== "PENDING_REVIEW" ? (
+                    <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+                      <p>
+                        {candidate.status === "APPROVED" ? "Aprovado" : "Rejeitado"} em{" "}
+                        {candidate.reviewedAt ? formatDateTime(candidate.reviewedAt) : "data não disponível"}.
+                      </p>
+                      {candidate.reviewNote ? <p className="mt-1">Observação: {candidate.reviewNote}</p> : null}
+                    </div>
+                  ) : canReview ? (
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <form
+                        action={reviewEventClauseConfrontationCandidateAction}
+                        className="flex flex-col gap-3 rounded-md border p-4"
+                      >
+                        <input type="hidden" name="projectId" value={projectId} />
+                        <input type="hidden" name="eventId" value={event.id} />
+                        <input type="hidden" name="candidateId" value={candidate.id} />
+                        <input type="hidden" name="reviewAction" value="APPROVE" />
+
+                        <label className="flex flex-col gap-1.5 text-sm font-medium">
+                          Observação da revisão
+                          <span className="text-xs font-normal text-muted-foreground">Opcional para aprovação.</span>
+                          <Textarea
+                            name="reviewNote"
+                            rows={2}
+                            placeholder="Ex.: confronto confirmado após validação da cláusula."
+                          />
+                        </label>
+
+                        <Button type="submit">Aprovar relação</Button>
+                      </form>
+
+                      <form
+                        action={reviewEventClauseConfrontationCandidateAction}
+                        className="flex flex-col gap-3 rounded-md border border-destructive/30 p-4"
+                      >
+                        <input type="hidden" name="projectId" value={projectId} />
+                        <input type="hidden" name="eventId" value={event.id} />
+                        <input type="hidden" name="candidateId" value={candidate.id} />
+                        <input type="hidden" name="reviewAction" value="REJECT" />
+
+                        <label className="flex flex-col gap-1.5 text-sm font-medium">
+                          Justificativa da rejeição
+                          <Textarea
+                            name="reviewNote"
+                            required
+                            rows={2}
+                            placeholder="Explique por que este confronto não deve ser aprovado."
+                          />
+                        </label>
+
+                        <Button
+                          type="submit"
+                          variant="outline"
+                          className="border-destructive text-destructive hover:bg-destructive/10"
+                        >
+                          Rejeitar
+                        </Button>
+                      </form>
+                    </div>
+                  ) : (
+                    <p className="rounded-md border bg-muted p-3 text-sm text-muted-foreground">
+                      Você possui acesso de leitura. Aprovação ou rejeição exige permissão EDITOR ou ADMIN.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

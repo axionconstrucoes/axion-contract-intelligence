@@ -89,6 +89,26 @@ export const actionRequestStatusLabels: Record<ActionRequestStatus, string> = {
   CANCELLED: "Cancelada",
 };
 
+export type ConfrontationCandidateSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+
+// event_clause_confrontation_candidates.severity usa termos em inglês
+// (constraint do banco), distintos de AlertSeverity (PT-BR). Este mapa
+// traduz para reutilizar SeverityBadge sem duplicar a paleta visual.
+export const confrontationSeverityToAlertSeverity: Record<ConfrontationCandidateSeverity, AlertSeverity> = {
+  LOW: "BAIXA",
+  MEDIUM: "MEDIA",
+  HIGH: "ALTA",
+  CRITICAL: "CRITICA",
+};
+
+export type ConfrontationCandidateStatus = "PENDING_REVIEW" | "APPROVED" | "REJECTED";
+
+export const confrontationCandidateStatusLabels: Record<ConfrontationCandidateStatus, string> = {
+  PENDING_REVIEW: "Pendente de revisão",
+  APPROVED: "Aprovado",
+  REJECTED: "Rejeitado",
+};
+
 export function formatDate(iso: string): string {
   const date = new Date(iso);
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
