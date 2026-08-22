@@ -1,4 +1,4 @@
-﻿import { DocumentDownloadButton } from "@/components/documents/document-download-button";
+import { DocumentDownloadButton } from "@/components/documents/document-download-button";
 import { DocumentUploadForm } from "@/components/documents/document-upload-form";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,19 @@ const PROCESSING_LABELS: Record<string, string> = {
   PROCESSING: "Processando",
   PROCESSED: "Processado",
   FAILED: "Falha no processamento",
+};
+
+// Rótulos de exibição — não são uma lista exaustiva de idiomas
+// suportados, só os mais comuns em contratos de engenharia/construção
+// deste projeto. Um código sem rótulo aqui mostra o próprio código
+// (nunca omitido, nunca traduzido silenciosamente para "Português").
+const SOURCE_LANGUAGE_LABELS: Record<string, string> = {
+  pt: "Português",
+  en: "Inglês",
+  es: "Espanhol",
+  fr: "Francês",
+  de: "Alemão",
+  it: "Italiano",
 };
 
 function formatBytes(bytes: number | null) {
@@ -202,6 +215,15 @@ export default async function DocumentosPage({
                                     ] ??
                                       version.processingStatus}
                                   </Badge>
+
+                                  {version.sourceLanguage ? (
+                                    <Badge variant="outline">
+                                      Idioma:{" "}
+                                      {SOURCE_LANGUAGE_LABELS[
+                                        version.sourceLanguage
+                                      ] ?? version.sourceLanguage}
+                                    </Badge>
+                                  ) : null}
                                 </div>
 
                                 <span className="text-muted-foreground">

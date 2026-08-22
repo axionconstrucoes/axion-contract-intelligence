@@ -7,19 +7,31 @@ import { ConfrontationReviewForms } from "@/components/ledger/confrontation-revi
 import { CrossReferenceList } from "@/components/ledger/cross-reference-list";
 import { EventNotesSection } from "@/components/ledger/event-notes-section";
 import { EvidenceViewer } from "@/components/ledger/evidence-viewer";
+import { SendContractAlertForm } from "@/components/ledger/send-contract-alert-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getEvent, getUser } from "@/lib/data";
 import { getEventClauseConfrontationCandidates } from "@/lib/event-clause-confrontation-review";
-import { confrontationSeverityToAlertSeverity, findingTypeLabels, formatDateTime, sourceTypeShortLabels } from "@/lib/labels";
+import { alertRiskLevelLabels } from "@/lib/email/templates/contract-alert-template";
+import {
+  confrontationSeverityToAlertSeverity,
+  findingTypeLabels,
+  formatDateTime,
+  sourceTypeShortLabels,
+} from "@/lib/labels";
 
 export default async function EventDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string; eventId: string }>;
+  searchParams: Promise<{ respond?: string; riskLevel?: string; alertId?: string }>;
 }) {
   const { projectId, eventId } = await params;
+  const resolvedSearchParams = await searchParams;
+  const arrivedFromAlertEmail = resolvedSearchParams.respond === "acc";
+  const alertRiskLevel = resolvedSearchParams.riskLevel as keyof typeof alertRiskLevelLabels | undefined;
 
   const [event, confrontationCandidates, permission] = await Promise.all([
     getEvent(eventId),
@@ -52,6 +64,17 @@ export default async function EventDetailPage({
 
   return (
     <div className="flex max-w-3xl flex-col gap-6">
+      {arrivedFromAlertEmail && (
+        <div className="rounded-md border border-blue-500/30 bg-blue-500/5 p-3 text-sm">
+          Você chegou aqui a partir de um alerta de{" "}
+          {alertRiskLevel && alertRiskLevelLabels[alertRiskLevel]
+            ? `risco ${alertRiskLevelLabels[alertRiskLevel]}`
+            : "risco"}{" "}
+          enviado por e-mail. Sua resposta em &quot;Anotações do Evento&quot; abaixo fica registrada e vinculada a
+          este evento.
+        </div>
+      )}
+
       <div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>{formatDateTime(event.timestamp)}</span>
@@ -77,11 +100,12 @@ export default async function EventDetailPage({
             <CardTitle>Achado da IA — {findingTypeLabels[event.aiAssessment.findingType]}</CardTitle>
             <SeverityBadge severity={event.aiAssessment.severity} />
           </CardHeader>
-          <CardContent className="flex flex-col gap-1 pt-0">
+          <CardContent className="flex flex-col gap-3 pt-0">
             <p className="text-sm">{event.aiAssessment.summary}</p>
             <p className="text-xs text-muted-foreground">
               Confiança estimada: {Math.round(event.aiAssessment.confidence * 100)}% — sugestão sujeita a revisão humana, não substitui decisão da equipe.
             </p>
+            {canReview && <SendContractAlertForm projectId={projectId} eventId={event.id} />}
           </CardContent>
         </Card>
       )}
@@ -96,7 +120,9 @@ export default async function EventDetailPage({
         <CrossReferenceList crossReferences={event.crossReferences} />
       </div>
 
-      <EventNotesSection projectId={projectId} eventId={event.id} canReview={canReview} />
+      <div id="responder-ao-acc">
+        <EventNotesSection projectId={projectId} eventId={event.id} canReview={canReview} />
+      </div>
 
       <div>
         <h2 className="mb-2 text-sm font-semibold">Confrontação contratual — Revisão humana</h2>

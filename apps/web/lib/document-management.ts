@@ -1,6 +1,8 @@
-﻿import "server-only";
+import "server-only";
 
 import { createSupabaseServerClient } from "@axion/db/server";
+
+export type TranslationStatus = "NOT_TRANSLATED" | "REQUESTED" | "AVAILABLE";
 
 export type ManagedDocumentVersion = {
   id: string;
@@ -20,6 +22,16 @@ export type ManagedDocumentVersion = {
   processingError: string | null;
   uploadedAt: string;
   notes: string | null;
+  // Idioma real do texto extraído (ISO 639-1 quando mapeado), detectado
+  // pelo worker de processamento — null até ser processado/detectável.
+  sourceLanguage: string | null;
+  translationLanguage: string | null;
+  translationStatus: TranslationStatus;
+  // Invariante fixo (tipo literal, nunca uma coluna): o arquivo original
+  // é sempre a fonte autoritativa — uma tradução, quando existir, é
+  // apoio, nunca substitui o original. Mesmo padrão de
+  // AiAssessment.requiresHumanReview.
+  originalIsAuthoritative: true;
 };
 
 export type ManagedDocument = {
@@ -57,6 +69,9 @@ type VersionRow = {
   processing_error: string | null;
   uploaded_at: string;
   notes: string | null;
+  source_language: string | null;
+  translation_language: string | null;
+  translation_status: string;
 };
 
 export async function getManagedDocuments(
@@ -128,6 +143,10 @@ export async function getManagedDocuments(
       processingError: version.processing_error,
       uploadedAt: version.uploaded_at,
       notes: version.notes,
+      sourceLanguage: version.source_language,
+      translationLanguage: version.translation_language,
+      translationStatus: version.translation_status as TranslationStatus,
+      originalIsAuthoritative: true,
     });
 
     versionsByDocument.set(

@@ -8,38 +8,9 @@ import {
   type SendEmailResult,
 } from "./email-provider";
 import { loadGmailConfig, type GmailConfig } from "./gmail-auth";
+import { base64UrlEncode, buildMimeMessage } from "./mime-message";
 
-// Exportadas para verificação sem rede (harness de smoke) — funções puras,
-// sem qualquer dependência de credencial ou chamada à Gmail API.
-export function base64UrlEncode(input: string): string {
-  return Buffer.from(input, "utf-8")
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-export function buildMimeMessage(
-  input: SendEmailInput,
-  from: string,
-  messageIdHeader: string
-): string {
-  const headers = [
-    `From: ${from}`,
-    `To: ${input.to}`,
-    `Subject: ${input.subject}`,
-    `Date: ${new Date().toUTCString()}`,
-    `Message-ID: ${messageIdHeader}`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-  ];
-
-  if (input.replyTo) {
-    headers.push(`Reply-To: ${input.replyTo}`);
-  }
-
-  return `${headers.join("\r\n")}\r\n\r\n${input.text}`;
-}
+export { base64UrlEncode, buildMimeMessage };
 
 // Usa OAuth2 da mailbox técnica dedicada (scope gmail.send).
 // Não executa consent flow, não armazena refresh token em DB,

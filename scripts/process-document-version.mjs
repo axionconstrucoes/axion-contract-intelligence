@@ -1,8 +1,15 @@
-﻿import { createClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
+import { register } from "node:module";
 
 import {
   extractDocument,
 } from "./document-extractors.mjs";
+
+register("./ts-module-resolver.mjs", import.meta.url);
+
+const { detectSourceLanguage } = await import(
+  "../apps/web/lib/documents/detect-source-language"
+);
 
 const documentVersionId =
   process.argv[2];
@@ -350,6 +357,9 @@ try {
       .map((segment) => segment.text)
       .join("\n\n");
 
+  const detectedLanguage =
+    detectSourceLanguage(canonicalText);
+
   let characterCursor = 0;
 
   const segments =
@@ -472,6 +482,8 @@ try {
         "PROCESSED",
       processing_error:
         null,
+      source_language:
+        detectedLanguage.code,
     })
     .eq(
       "id",
@@ -531,6 +543,12 @@ try {
   console.log(
     "Segments:",
     segments.length
+  );
+
+  console.log(
+    "Source language:",
+    detectedLanguage.code ??
+      `indeterminado (detector: ${detectedLanguage.detectorCode})`
   );
 
   console.log(

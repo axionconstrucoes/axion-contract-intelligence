@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "exceljs": "^4.4.0",
+    "franc-min": "^6.2.0",
     "mammoth": "^1.12.1",
     "pdfjs-dist": "^6.2.108"
   }

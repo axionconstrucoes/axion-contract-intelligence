@@ -1,4 +1,6 @@
-import "server-only";
+// Determinístico, sem rede/I/O real — deliberadamente sem "server-only"
+// para ser testável tanto pelo bundler do Next.js quanto por um script
+// Node standalone (mesmo padrão de apps/web/lib/ai/providers/fake-provider.ts).
 
 import { createHash } from "node:crypto";
 import { EmailSendError, type EmailProvider, type SendEmailInput, type SendEmailResult } from "./email-provider";
