@@ -84,3 +84,52 @@ export async function getEventNotes(eventId: string): Promise<EventNote[]> {
     updatedAt: note.updated_at,
   }));
 }
+
+// Versão em lote de getEventNotes, para telas que precisam das anotações de
+// TODOS os eventos de um projeto de uma vez (ex.: exportação do Timeline)
+// sem disparar uma consulta por evento. Mesma semântica de RLS/autoria.
+export async function getEventNotesForProject(projectId: string): Promise<EventNote[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: noteData, error: noteError } = await supabase
+    .from("event_notes")
+    .select("id,event_id,category,text,author_user_id,created_at,updated_at, contract_events!inner(project_id)")
+    .eq("contract_events.project_id", projectId)
+    .order("created_at", { ascending: false });
+
+  if (noteError) {
+    if (noteError.code === "22P02") {
+      return [];
+    }
+    throw new Error(`Falha ao carregar anotações do projeto: ${noteError.message}`);
+  }
+
+  const notes = noteData as unknown as EventNoteRow[];
+  if (notes.length === 0) {
+    return [];
+  }
+
+  const authorIds = Array.from(new Set(notes.map((n) => n.author_user_id)));
+
+  const { data: profileData, error: profileError } = await supabase
+    .from("profiles")
+    .select("id,name")
+    .in("id", authorIds);
+
+  if (profileError) {
+    throw new Error(`Falha ao carregar autores das anotações: ${profileError.message}`);
+  }
+
+  const authorNameById = new Map((profileData as unknown as ProfileRow[]).map((p) => [p.id, p.name]));
+
+  return notes.map((note) => ({
+    id: note.id,
+    eventId: note.event_id,
+    category: note.category,
+    text: note.text,
+    authorUserId: note.author_user_id,
+    authorName: authorNameById.get(note.author_user_id) ?? "Usuário não disponível",
+    createdAt: note.created_at,
+    updatedAt: note.updated_at,
+  }));
+}
