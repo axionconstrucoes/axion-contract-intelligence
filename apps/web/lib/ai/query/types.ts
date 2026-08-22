@@ -7,6 +7,7 @@
 
 import type { ExpertContractualBasisRef, ExpertId, ExpertSeverity } from "../types";
 import type { LegalCitation } from "../legal/types";
+import type { ResponseGroundingSummary } from "../grounding/types";
 
 /**
  * Escopos suportados pela arquitetura. Nesta fase, somente PROJECT e
@@ -110,4 +111,6 @@ export interface ExpertQueryResponse {
   rascunhoSugerido: ExpertQueryDraft | null;
   confidence: number;
   requiresHumanReview: true;
+  /** Ver ExpertAssessment.grounding (../types.ts) — mesma extensão compatível, nunca lida do provider. */
+  grounding?: ResponseGroundingSummary | null;
 }

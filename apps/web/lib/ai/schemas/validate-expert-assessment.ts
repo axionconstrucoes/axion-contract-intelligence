@@ -190,5 +190,10 @@ export function validateExpertAssessment(candidate: unknown, expected: ExpectedE
     recommendedActions: requireStringArray(candidate.recommendedActions, "recommendedActions"),
     uncertainties: requireStringArray(candidate.uncertainties, "uncertainties"),
     requiresHumanReview: true,
+    // Nunca lido do provider (candidate.grounding é ignorado de propósito —
+    // um provider nunca pode se autodeclarar "grounded"). Sempre null aqui;
+    // o Expert específico preenche depois de rodar o guardrail determinístico
+    // (ver apps/web/lib/ai/grounding/).
+    grounding: null,
   };
 }

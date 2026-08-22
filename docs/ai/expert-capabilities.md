@@ -26,7 +26,7 @@ verdade**.
 | # | Expert | ID técnico | Status | Versão |
 | - | ------ | ----------- | ------ | ------ |
 | 1 | CEO IA | `ceo` | Planejado | v1 |
-| 2 | Diretor Comercial IA | `commercial-director` | **Implementado** | v1 |
+| 2 | Diretor Comercial IA | `commercial-director` | **Implementado** | v2 |
 | 3 | Consultor Jurídico IA | `legal-consultant` | Planejado | v1 |
 | 4 | Diretor de Planejamento IA | `planning-director` | Planejado | v1 |
 | 5 | Diretor de ESG IA | `esg-director` | **Implementado** | v1 |
@@ -67,10 +67,10 @@ ExpertDefinition {
 
 `requiresHumanReview` é `true` para os cinco Experts, sem exceção,
 nesta fase. Cada definição é versionada de forma independente — a tag
-completa é `expertId:version` (ex.: `commercial-director:v1`, via
+completa é `expertId:version` (ex.: `commercial-director:v2`, via
 `formatExpertVersionTag()`).
 
-## 3. Diretor Comercial IA (`commercial-director:v1` — implementado)
+## 3. Diretor Comercial IA (`commercial-director:v2` — implementado)
 
 **Missão:** apoiar decisões e negociações comerciais relacionadas aos
 contratos e projetos da AXION.
@@ -359,11 +359,14 @@ de `expertId`/`version`/`status` com os Experts já implementados
 ## 16. Versionamento
 
 Cada `ExpertDefinition` é versionada de forma independente
-(`expertId:version`, ex. `commercial-director:v1`,
+(`expertId:version`, ex. `commercial-director:v2`,
 `legal-consultant:v1`). Alterar substancialmente missão, capacidades,
 limites ou saídas de um Expert deve sempre vir acompanhado de um bump
 de versão, para rastreabilidade em auditoria futura — mesmo princípio
-já usado para `COMMERCIAL_DIRECTOR_VERSION`/`ESG_DIRECTOR_VERSION`.
+já usado para `COMMERCIAL_DIRECTOR_VERSION`/`ESG_DIRECTOR_VERSION`
+(commercial-director passou de v1 para v2 ao reforçar o prompt com a
+seção de fidelidade textual/grounding — ver
+docs/ai/grounding-and-citation-guardrails.md).
 
 ## 17. O que esta fase deliberadamente NÃO fez
 

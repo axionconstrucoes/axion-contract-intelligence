@@ -5,6 +5,8 @@
 // que o conteúdo é honesto/rastreável vem da validação em
 // schemas/validate-expert-assessment.ts, não deste arquivo.
 
+import type { ResponseGroundingSummary } from "./grounding/types";
+
 /**
  * Identificador técnico estável do Expert. Nunca reutilizado para outro
  * papel. Só existe aqui um id por Expert realmente implementado — nomes de
@@ -81,4 +83,12 @@ export interface ExpertAssessment {
   recommendedActions: string[];
   uncertainties: string[];
   requiresHumanReview: true;
+  /**
+   * Resumo do guardrail determinístico de grounding/citação (ver
+   * apps/web/lib/ai/grounding/), computado sempre pelo próprio Expert
+   * DEPOIS da validação de schema — nunca lido diretamente do provider.
+   * `null`/ausente quando o guardrail não foi executado (ex.: nenhum
+   * draft nesta resposta, ou Expert que ainda não integra o guardrail).
+   */
+  grounding?: ResponseGroundingSummary | null;
 }

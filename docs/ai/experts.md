@@ -18,7 +18,7 @@ não as repete, apenas descreve como elas são aplicadas em código.
 | # | Expert | ID técnico | Status |
 | - | ------ | ----------- | ------ |
 | 1 | CEO IA | `ceo` (sugerido) | Planejado — definição formal em `docs/ai/expert-capabilities.md` |
-| 2 | **Diretor Comercial IA** | `commercial-director` | **Implementado (v1)** |
+| 2 | **Diretor Comercial IA** | `commercial-director` | **Implementado (v2)** |
 | 3 | Consultor Jurídico IA | `legal-consultant` (sugerido) | Planejado — definição formal em `docs/ai/expert-capabilities.md` |
 | 4 | Diretor de Planejamento IA | `planning-director` (sugerido) | Planejado — definição formal em `docs/ai/expert-capabilities.md` |
 | 5 | **Diretor de ESG IA** | `esg-director` | **Implementado (v1)** — ver `docs/esg-obligations.md` |

@@ -237,7 +237,7 @@ check("compatibilidade com os Experts já implementados: expertId/version batem 
 });
 
 check("formatExpertVersionTag produz a tag versionada esperada", () => {
-  assert(formatExpertVersionTag(COMMERCIAL_DIRECTOR_DEFINITION) === "commercial-director:v1");
+  assert(formatExpertVersionTag(COMMERCIAL_DIRECTOR_DEFINITION) === "commercial-director:v2");
   assert(formatExpertVersionTag(CEO_DEFINITION) === "ceo:v1");
 });
 

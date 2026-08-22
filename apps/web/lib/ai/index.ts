@@ -96,6 +96,25 @@ export {
 export type { EsgDirectorQueryResult } from "./experts/esg-director";
 
 export type {
+  ClaimCategory,
+  ClaimSupportStatus,
+  GroundedClaim,
+  GroundingSource,
+  GroundingValidationResult,
+  ResponseGroundingSummary,
+} from "./grounding/types";
+export type { BuildGroundingSourceInput } from "./grounding/build-grounding-source";
+export { buildGroundingSource } from "./grounding/build-grounding-source";
+export { validateDraftGrounding } from "./grounding/validate-draft-grounding";
+export { buildResponseGroundingSummary, NOT_PERFORMED_GROUNDING_SUMMARY } from "./grounding/build-response-grounding-summary";
+export type { SafeCorrectionResult } from "./grounding/apply-safe-correction";
+export { applySafeGroundingCorrection } from "./grounding/apply-safe-correction";
+export type { GroundingConfidenceContext } from "./grounding/adjust-confidence";
+export { adjustConfidenceForGrounding } from "./grounding/adjust-confidence";
+export { evaluateClaimGrounding } from "./grounding/evaluate-claim";
+export { splitIntoSentences, classifyPrimaryCategory } from "./grounding/extract-claims";
+
+export type {
   AuthorizedSourceRef,
   ExpertCollaborationRule,
   ExpertConfidenceRule,

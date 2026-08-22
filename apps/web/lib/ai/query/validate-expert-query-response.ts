@@ -222,5 +222,9 @@ export function validateExpertQueryResponse(
     rascunhoSugerido: validateRascunhoSugerido(candidate.rascunhoSugerido),
     confidence: requireConfidence(candidate.confidence),
     requiresHumanReview: requireHumanReviewTrue(candidate.requiresHumanReview),
+    // Nunca lido do provider (candidate.grounding é ignorado de propósito).
+    // Sempre null aqui; o Expert específico preenche depois de rodar o
+    // guardrail determinístico (ver apps/web/lib/ai/grounding/).
+    grounding: null,
   };
 }

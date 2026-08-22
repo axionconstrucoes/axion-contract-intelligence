@@ -44,6 +44,90 @@ function BulletList({ items }: { items: string[] }) {
   );
 }
 
+const GROUNDING_STATUS_LABELS: Record<string, string> = {
+  SUPPORTED: "Fato documentado",
+  INFERENCE: "Interpretação da IA",
+  UNSUPPORTED: "Informação não comprovada",
+  HUMAN_INPUT_REQUIRED: "Depende de definição humana",
+};
+
+const GROUNDING_STATUS_STYLES: Record<string, string> = {
+  SUPPORTED: "border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400",
+  INFERENCE: "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400",
+  UNSUPPORTED: "border-destructive/30 bg-destructive/5 text-destructive",
+  HUMAN_INPUT_REQUIRED: "border-muted-foreground/30 bg-muted/40 text-muted-foreground",
+};
+
+interface GroundingClaimLike {
+  text: string;
+  reasoningNote: string;
+}
+
+/**
+ * Resumo do guardrail de grounding (apps/web/lib/ai/grounding/) —
+ * mostrado apenas quando `grounding.performed` (só ocorre para
+ * respostas do provider Anthropic com um rascunho checado). Nunca um
+ * redesign geral do painel — só esta seção adicional.
+ */
+function GroundingSummary({
+  grounding,
+}: {
+  grounding: {
+    valid: boolean;
+    correctionApplied: boolean;
+    draftSuppressed: boolean;
+    supported: GroundingClaimLike[];
+    inferred: GroundingClaimLike[];
+    unsupported: GroundingClaimLike[];
+    missingSupport: GroundingClaimLike[];
+    warnings: string[];
+  };
+}) {
+  const groups: Array<{ status: keyof typeof GROUNDING_STATUS_LABELS; claims: GroundingClaimLike[] }> = [
+    { status: "UNSUPPORTED", claims: grounding.unsupported },
+    { status: "HUMAN_INPUT_REQUIRED", claims: grounding.missingSupport },
+    { status: "INFERENCE", claims: grounding.inferred },
+    { status: "SUPPORTED", claims: grounding.supported },
+  ];
+
+  return (
+    <Section title="Checagem de fidelidade (grounding) do rascunho">
+      {grounding.draftSuppressed && (
+        <p className="text-sm text-destructive">
+          O rascunho original foi removido: continha afirmação sem suporte no contexto que não pôde ser corrigida
+          automaticamente com segurança.
+        </p>
+      )}
+      {grounding.correctionApplied && (
+        <p className="text-sm text-severity-alta">
+          Trecho(s) do rascunho foram substituídos por{" "}
+          <span className="font-mono text-xs">[CONFIRMAR INTERNAMENTE…]</span> — exigem confirmação humana antes do
+          envio.
+        </p>
+      )}
+      <div className="flex flex-col gap-2">
+        {groups
+          .filter((group) => group.claims.length > 0)
+          .map((group) => (
+            <div key={group.status} className="flex flex-col gap-1">
+              <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {GROUNDING_STATUS_LABELS[group.status]} ({group.claims.length})
+              </span>
+              <ul className="flex flex-col gap-1">
+                {group.claims.map((claim, i) => (
+                  <li key={i} className={`rounded-md border p-2 text-xs ${GROUNDING_STATUS_STYLES[group.status]}`}>
+                    <p>{claim.text}</p>
+                    <p className="mt-0.5 opacity-80">{claim.reasoningNote}</p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+      </div>
+    </Section>
+  );
+}
+
 export function ExpertQueryPanel({
   projectId,
   eventId,
@@ -214,6 +298,8 @@ export function ExpertQueryPanel({
                 </p>
               </Section>
             )}
+
+            {response.grounding?.performed && <GroundingSummary grounding={response.grounding} />}
 
             <p className="text-xs font-medium text-muted-foreground">Revisão humana obrigatória.</p>
           </div>

@@ -3,8 +3,11 @@
 Primeiro provider real de IA do AXION Acompanhamento de Contratos
 (ACC), conectado **somente ao Diretor Comercial IA** (`commercial-director`)
 nesta fase. Complementa `docs/ai/experts.md` (arquitetura geral dos AI
-Experts) e `docs/ai/expert-capabilities.md` (catálogo formal dos cinco
-Experts oficiais) — não os substitui.
+Experts), `docs/ai/expert-capabilities.md` (catálogo formal dos cinco
+Experts oficiais) e `docs/ai/grounding-and-citation-guardrails.md`
+(camada determinística que valida rascunhos/análises reais contra o
+contexto antes de serem considerados prontos para revisão) — não os
+substitui.
 
 ## 1. SDK
 

@@ -21,6 +21,7 @@ const { COMMERCIAL_DIRECTOR_ASSESSMENT_JSON_SCHEMA } = await import(
 const { EXPERT_QUERY_RESPONSE_JSON_SCHEMA } = await import("../apps/web/lib/ai/query/json-schema");
 const { runCommercialDirectorExpert } = await import("../apps/web/lib/ai/experts/commercial-director/index");
 const { validateCommercialDirectorAssessment } = await import("../apps/web/lib/ai/experts/commercial-director/schema");
+const { COMMERCIAL_DIRECTOR_VERSION } = await import("../apps/web/lib/ai/experts/commercial-director/identity");
 
 let passed = 0;
 let failed = 0;
@@ -264,7 +265,7 @@ function validAssessmentOutput() {
   return {
     expertId: "commercial-director",
     expertName: "Diretor Comercial IA",
-    expertVersion: "v1",
+    expertVersion: COMMERCIAL_DIRECTOR_VERSION,
     analysisType: "COMMERCIAL_NEGOTIATION_STRATEGY",
     finding: { facts: ["Fato de teste."], interpretation: "Interpretação de teste." },
     severity: "LOW",
@@ -756,7 +757,7 @@ check("validateCommercialDirectorAssessment rejeita requiresHumanReview=false me
   invalid.requiresHumanReview = false;
   let threw = false;
   try {
-    validateCommercialDirectorAssessment(invalid, { expertId: "commercial-director", expertName: "Diretor Comercial IA", expertVersion: "v1" });
+    validateCommercialDirectorAssessment(invalid, { expertId: "commercial-director", expertName: "Diretor Comercial IA", expertVersion: COMMERCIAL_DIRECTOR_VERSION });
   } catch {
     threw = true;
   }
