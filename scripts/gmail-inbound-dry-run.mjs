@@ -225,10 +225,10 @@ console.log("AXION Gmail Inbound - FULL DRY RUN");
 console.log("==================================");
 console.log("Projeto:", PROJECT_ID);
 console.log("Mailbox:", mailbox);
-console.log("DomÃ­nios:", Array.from(allowedDomains).join(", "));
-console.log("InÃ­cio:", startAt.toISOString());
+console.log("Domínios:", Array.from(allowedDomains).join(", "));
+console.log("Início:", startAt.toISOString());
 console.log("Fim efetivo:", effectiveEndAt.toISOString());
-console.log("IngestÃ£o ativa:", config.enabled);
+console.log("Ingestão ativa:", config.enabled);
 console.log("");
 
 let pageToken;
@@ -336,7 +336,7 @@ for (let index = 0; index < messageIds.length; index += 20) {
     }
   }
 
-  // MantÃ©m o consumo abaixo da quota Gmail por usuÃ¡rio.
+  // Mantém o consumo abaixo da quota Gmail por usuário.
   await new Promise((resolve) => setTimeout(resolve, 800));
 
   if (
@@ -370,16 +370,16 @@ console.table([
 ]);
 
 console.log(
-  "Primeira elegÃ­vel:",
+  "Primeira elegível:",
   firstEligibleAt?.toISOString() ?? "-"
 );
 
 console.log(
-  "Ãšltima elegÃ­vel:",
+  "Última elegível:",
   lastEligibleAt?.toISOString() ?? "-"
 );
 
 console.log("");
 console.log(
-  "FULL DRY RUN concluÃ­do: nenhuma mensagem foi gravada no Supabase."
+  "FULL DRY RUN concluído: nenhuma mensagem foi gravada no Supabase."
 );

@@ -1,4 +1,4 @@
-﻿import {
+import {
   Table,
   TableBody,
   TableCell,
@@ -9,6 +9,7 @@
 import { EmptyState } from "@/components/shared/empty-state";
 import { getAuditLog, getUser } from "@/lib/data";
 import { formatDateTime } from "@/lib/labels";
+import { normalizeLegacyMojibake } from "@/lib/normalize-legacy-mojibake";
 
 export default async function AuditoriaPage({
   params,
@@ -76,14 +77,14 @@ export default async function AuditoriaPage({
 
                 <TableCell>{entry.actorLabel}</TableCell>
 
-                <TableCell>{entry.action}</TableCell>
+                <TableCell>{normalizeLegacyMojibake(entry.action)}</TableCell>
 
                 <TableCell className="text-muted-foreground">
                   {entry.entityType} · {entry.entityId}
                 </TableCell>
 
                 <TableCell className="text-muted-foreground">
-                  {entry.detail}
+                  {normalizeLegacyMojibake(entry.detail)}
                 </TableCell>
               </TableRow>
             ))}

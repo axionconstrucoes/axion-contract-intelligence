@@ -6,7 +6,7 @@ const PROJECT_ID =
   "00000000-0000-4000-8000-000000000001";
 
 if (!process.argv.includes("--apply")) {
-  console.error("ERRO: use --apply para autorizar gravaÃ§Ã£o real.");
+  console.error("ERRO: use --apply para autorizar gravação real.");
   process.exit(1);
 }
 
@@ -199,7 +199,7 @@ if (
   )
 ) {
   throw new Error(
-    `Mailbox ${mailbox} nÃ£o autorizada para o projeto.`
+    `Mailbox ${mailbox} não autorizada para o projeto.`
   );
 }
 
@@ -289,11 +289,11 @@ console.log("===================================");
 console.log("Projeto:", PROJECT_ID);
 console.log("Mailbox:", mailbox);
 console.log(
-  "DomÃ­nios:",
+  "Domínios:",
   Array.from(allowedDomains).join(", ")
 );
 console.log(
-  "Monitoramento contÃ­nuo:",
+  "Monitoramento contínuo:",
   config.enabled
 );
 console.log("");
@@ -364,7 +364,7 @@ while (true) {
 }
 
 console.log(
-  "Mensagens Gmail jÃ¡ existentes:",
+  "Mensagens Gmail já existentes:",
   existingIds.size
 );
 
@@ -537,9 +537,9 @@ for (
     /*
      * Se algum outro processo inseriu
      * uma mensagem entre a leitura e
-     * este INSERT, cai para inserÃ§Ã£o
-     * individual protegida pelo Ã­ndice
-     * Ãºnico do Gmail Message ID.
+     * este INSERT, cai para inserção
+     * individual protegida pelo índice
+     * único do Gmail Message ID.
      */
     for (const row of batch) {
       const result =
@@ -592,9 +592,9 @@ const {
     status: "PENDENTE",
     last_sync_at: completedAt,
     detail:
-      `Backfill Gmail DEV concluÃ­do. ` +
+      `Backfill Gmail DEV concluído. ` +
       `${inserted} mensagens gravadas. ` +
-      `Monitoramento contÃ­nuo ainda nÃ£o ativado.`,
+      `Monitoramento contínuo ainda não ativado.`,
     updated_at: completedAt,
   })
   .eq("project_id", PROJECT_ID)
@@ -673,5 +673,5 @@ console.table([
 
 console.log("");
 console.log(
-  "BACKFILL concluÃ­do com sucesso."
+  "BACKFILL concluído com sucesso."
 );

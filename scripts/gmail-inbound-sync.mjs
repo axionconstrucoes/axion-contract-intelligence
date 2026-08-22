@@ -8,7 +8,7 @@ const PROJECT_ID =
   "00000000-0000-4000-8000-000000000001";
 
 if (!args.includes("--apply")) {
-  console.error("ERRO: use --apply para autorizar gravaÃ§Ã£o.");
+  console.error("ERRO: use --apply para autorizar gravação.");
   process.exit(1);
 }
 
@@ -118,7 +118,7 @@ async function getMessage(gmail, id) {
         Math.min(60000, 2000 * (2 ** attempt));
 
       console.log(
-        `Gmail API temporariamente indisponÃ­vel/quota. Retry em ${wait / 1000}s...`
+        `Gmail API temporariamente indisponível/quota. Retry em ${wait / 1000}s...`
       );
 
       await sleep(wait);
@@ -146,7 +146,7 @@ const { data: config, error: configError } = await supabase
 if (configError || !config) {
   throw new Error(
     configError?.message ??
-    "ConfiguraÃ§Ã£o de ingestÃ£o nÃ£o encontrada."
+    "Configuração de ingestão não encontrada."
   );
 }
 
@@ -196,7 +196,7 @@ if (
   )
 ) {
   throw new Error(
-    `Mailbox ${mailbox} nÃ£o autorizada para o projeto.`
+    `Mailbox ${mailbox} não autorizada para o projeto.`
   );
 }
 
@@ -209,11 +209,11 @@ const allowedDomains =
 
 /*
  * Overlap de 10 minutos.
- * Mesmo que uma mensagem apareÃ§a atrasada no Gmail,
- * a janela se sobrepÃµe Ã  sincronizaÃ§Ã£o anterior.
+ * Mesmo que uma mensagem apareça atrasada no Gmail,
+ * a janela se sobrepõe à sincronização anterior.
  *
- * O Ã­ndice Ãºnico de provider_message_id protege
- * contra duplicaÃ§Ã£o.
+ * O índice único de provider_message_id protege
+ * contra duplicação.
  */
 const lastSyncAt =
   new Date(config.last_sync_at);
@@ -277,19 +277,19 @@ if (
   profile.data.emailAddress?.toLowerCase() !== mailbox
 ) {
   throw new Error(
-    "A mailbox autenticada no Gmail nÃ£o coincide com a mailbox configurada."
+    "A mailbox autenticada no Gmail não coincide com a mailbox configurada."
   );
 }
 
 console.log("");
 console.log(
-  "AXION Gmail - SINCRONIZAÃ‡ÃƒO INCREMENTAL"
+  "AXION Gmail - SINCRONIZAÇÃO INCREMENTAL"
 );
 console.log(
   "======================================="
 );
 console.log(
-  "Ãšltimo sync:",
+  "Último sync:",
   lastSyncAt.toISOString()
 );
 console.log(
@@ -487,7 +487,7 @@ for (
 
   /*
    * 10 requests/segundo aproximadamente.
-   * MantÃ©m margem abaixo da quota Gmail.
+   * Mantém margem abaixo da quota Gmail.
    */
   await sleep(1000);
 }
@@ -518,7 +518,7 @@ for (
   }
 
   /*
-   * Fallback individual para corrida de concorrÃªncia.
+   * Fallback individual para corrida de concorrência.
    */
   for (const row of batch) {
     const result =

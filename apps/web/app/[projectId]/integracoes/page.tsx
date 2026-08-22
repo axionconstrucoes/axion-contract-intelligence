@@ -1,7 +1,8 @@
-﻿import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { IntegrationStatusBadge } from "@/components/shared/badges";
 import { getIntegrationConfigs, getSourceDefinitions } from "@/lib/data";
 import { formatDateTime } from "@/lib/labels";
+import { normalizeLegacyMojibake } from "@/lib/normalize-legacy-mojibake";
 
 export default async function IntegracoesPage({
   params,
@@ -46,7 +47,7 @@ export default async function IntegracoesPage({
 
                 {config ? (
                   <p className="text-xs">
-                    {config.detail || "Integração configurada."}
+                    {normalizeLegacyMojibake(config.detail) || "Integração configurada."}
 
                     {config.lastSyncAt && (
                       <>
