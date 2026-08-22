@@ -109,6 +109,23 @@ export const confrontationCandidateStatusLabels: Record<ConfrontationCandidateSt
   REJECTED: "Rejeitado",
 };
 
+export type EventNoteCategory =
+  | "CONTEXTO_OPERACIONAL"
+  | "INFORMACAO_COMERCIAL"
+  | "OBSERVACAO_JURIDICA"
+  | "PLANEJAMENTO"
+  | "FINANCEIRO"
+  | "OUTROS";
+
+export const eventNoteCategoryLabels: Record<EventNoteCategory, string> = {
+  CONTEXTO_OPERACIONAL: "Contexto Operacional",
+  INFORMACAO_COMERCIAL: "Informação Comercial",
+  OBSERVACAO_JURIDICA: "Observação Jurídica",
+  PLANEJAMENTO: "Planejamento",
+  FINANCEIRO: "Financeiro",
+  OUTROS: "Outros",
+};
+
 export function formatDate(iso: string): string {
   const date = new Date(iso);
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });

@@ -236,6 +236,7 @@ const fixtureContext = {
   ],
   relatedEmails: [],
   confrontationCandidates: [],
+  eventNotes: [],
 };
 
 await checkAsync("fake provider é genérico — nunca hardcoda identidade de um Expert específico", async () => {

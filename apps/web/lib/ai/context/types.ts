@@ -2,7 +2,7 @@
 // alimentar um AI Expert. Nunca contém conhecimento geral do modelo —
 // apenas dados recuperados das fontes autorizadas (contract_events,
 // event_evidence, clauses, documents, event_clause_confrontation_candidates,
-// emails). Ver build-event-context.ts.
+// emails, event_notes). Ver build-event-context.ts.
 
 export interface ContextEvent {
   id: string;
@@ -57,6 +57,58 @@ export interface ContextConfrontationCandidate {
 }
 
 /**
+ * Anotação declarada manualmente por um usuário sobre o evento (tabela
+ * event_notes). NUNCA é fato documental/evidência — é informação
+ * declarada internamente, sem confirmação documental. Todo Expert que
+ * usa isto deve dizer explicitamente que a conclusão depende de contexto
+ * declarado, não confirmado (ver evidentialStatus).
+ */
+export interface ContextEventNote {
+  id: string;
+  category: string;
+  text: string;
+  author: string;
+  createdAt: string;
+  sourceType: "USER_NOTE";
+  evidentialStatus: "DECLARED_CONTEXT";
+}
+
+/**
+ * Resumo de um evento dentro do contexto de projeto (escopo PROJECT).
+ * Propositalmente leve — nunca inclui evidências/cláusulas/e-mails do
+ * evento (isso é escopo EVENT, ver EventAnalysisContext) para não
+ * "despejar todo o projeto no modelo" ao responder uma pergunta de nível
+ * de projeto.
+ */
+export interface ProjectContextEventSummary {
+  id: string;
+  title: string;
+  status: string;
+  occurredAt: string;
+  categories: string[];
+}
+
+/**
+ * Contexto pronto para um AI Expert responder uma pergunta de escopo
+ * PROJECT. Somente leitura. Metadata de seleção (`eventsTotalCount` vs
+ * `events.length`) existe para uma futura estratégia de
+ * retrieval/ranking — nesta fase a seleção é só "N eventos mais
+ * recentes", sem ranking por relevância.
+ */
+export interface ProjectAnalysisContext {
+  projectId: string;
+  project: {
+    id: string;
+    name: string;
+    client: string;
+    status: string;
+    contractNumber: string | null;
+  };
+  events: ProjectContextEventSummary[];
+  eventsTotalCount: number;
+}
+
+/**
  * Contexto pronto para um AI Expert analisar um evento. Somente leitura —
  * montá-lo nunca cria, altera ou apaga nada no projeto.
  */
@@ -70,4 +122,5 @@ export interface EventAnalysisContext {
   relatedClauses: ContextClause[];
   relatedEmails: ContextEmail[];
   confrontationCandidates: ContextConfrontationCandidate[];
+  eventNotes: ContextEventNote[];
 }

@@ -16,6 +16,7 @@ import type {
   ContextClause,
   ContextConfrontationCandidate,
   ContextEmail,
+  ContextEventNote,
   ContextEvidence,
   EventAnalysisContext,
 } from "./types";
@@ -84,6 +85,19 @@ type EmailRow = {
   sent_at: string;
   from_address: string;
   to_address: string;
+};
+
+type EventNoteRow = {
+  id: string;
+  category: string;
+  text: string;
+  author_user_id: string;
+  created_at: string;
+};
+
+type ProfileRow = {
+  id: string;
+  name: string;
 };
 
 async function resolveClauses(
@@ -174,6 +188,49 @@ async function resolveEmails(supabase: SupabaseClient, emailIds: string[]): Prom
     sentAt: row.sent_at,
     fromAddress: row.from_address,
     toAddress: row.to_address,
+  }));
+}
+
+async function resolveEventNotes(supabase: SupabaseClient, eventId: string): Promise<ContextEventNote[]> {
+  const { data: noteData, error: noteError } = await supabase
+    .from("event_notes")
+    .select("id,category,text,author_user_id,created_at")
+    .eq("event_id", eventId)
+    .order("created_at", { ascending: true });
+
+  if (noteError) {
+    throw new Error(`Falha ao carregar anotações do evento no contexto: ${noteError.message}`);
+  }
+
+  const notes = noteData as unknown as EventNoteRow[];
+  if (notes.length === 0) {
+    return [];
+  }
+
+  const authorIds = Array.from(new Set(notes.map((n) => n.author_user_id)));
+
+  const { data: profileData, error: profileError } = await supabase
+    .from("profiles")
+    .select("id,name")
+    .in("id", authorIds);
+
+  if (profileError) {
+    throw new Error(`Falha ao carregar autores das anotações do contexto: ${profileError.message}`);
+  }
+
+  const authorNameById = new Map((profileData as unknown as ProfileRow[]).map((p) => [p.id, p.name]));
+
+  // Nunca representa fato documental: sourceType/evidentialStatus fixos
+  // avisam qualquer consumidor (Expert ou UI) de que isto é informação
+  // declarada internamente, não evidência confirmada.
+  return notes.map((note) => ({
+    id: note.id,
+    category: note.category,
+    text: note.text,
+    author: authorNameById.get(note.author_user_id) ?? "Usuário não disponível",
+    createdAt: note.created_at,
+    sourceType: "USER_NOTE",
+    evidentialStatus: "DECLARED_CONTEXT",
   }));
 }
 
@@ -326,6 +383,10 @@ export async function buildEventAnalysisContext(
   const emailIds = Array.from(new Set([...emailIdsFromEvidence, ...crossReferenceEmailIds]));
   const relatedEmails = await resolveEmails(supabase, emailIds);
 
+  // Anotações do evento — sempre incluídas (informação declarada, nunca
+  // fato documental; ver ContextEventNote).
+  const eventNotes = await resolveEventNotes(supabase, eventId);
+
   return {
     projectId,
     eventId,
@@ -343,5 +404,6 @@ export async function buildEventAnalysisContext(
     relatedClauses,
     relatedEmails,
     confrontationCandidates,
+    eventNotes,
   };
 }

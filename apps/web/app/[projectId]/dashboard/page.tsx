@@ -1,3 +1,4 @@
+import { ExpertQueryPanel } from "@/components/ai/expert-query-panel";
 import { AlertCard } from "@/components/dashboard/alert-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
@@ -46,6 +47,8 @@ export default async function DashboardPage({ params }: { params: Promise<{ proj
           alerts.map((alert) => <AlertCard key={alert.id} alert={alert} projectId={projectId} />)
         )}
       </div>
+
+      <ExpertQueryPanel projectId={projectId} scope="PROJECT" />
     </div>
   );
 }

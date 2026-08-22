@@ -47,30 +47,49 @@ toda instrução versionada vive em
 apps/web/lib/ai/
 ├── types.ts                      # ExpertAssessment e tipos genéricos da saída estruturada
 ├── index.ts                      # ponto único de import (barrel)
+├── expert-query-action.ts        # Server Action "use server" da consulta conversacional (askCommercialDirectorAction)
 ├── context/
-│   ├── types.ts                  # EventAnalysisContext e tipos relacionados
-│   └── build-event-context.ts    # context builder somente-leitura (genérico, reutilizável por qualquer Expert)
+│   ├── types.ts                  # EventAnalysisContext, ProjectAnalysisContext e tipos relacionados
+│   ├── build-event-context.ts    # context builder somente-leitura, escopo EVENT (genérico, reutilizável)
+│   └── build-project-context.ts  # context builder somente-leitura, escopo PROJECT (genérico, reutilizável)
 ├── providers/
-│   ├── types.ts                  # interface AiProvider (genérica)
+│   ├── types.ts                  # interface AiProvider (genérica) — generateAssessment + answerQuery
 │   ├── fake-provider.ts          # provider determinístico genérico (default desta fase)
 │   └── get-ai-provider.ts        # seleção fail-closed via AXION_AI_PROVIDER
 ├── schemas/
-│   └── validate-expert-assessment.ts  # validação/normalização da parte genérica da saída
+│   ├── primitives.ts             # primitivas de validação reutilizadas por todo validador
+│   └── validate-expert-assessment.ts  # validação/normalização da parte genérica da saída (análise em lote)
+├── query/
+│   ├── types.ts                  # ExpertQueryScope/Request/Response (consulta conversacional)
+│   └── validate-expert-query-response.ts  # validação da resposta de consulta
+├── legal/
+│   └── types.ts                  # LegalSource/LegalCitation — preparação, sem corpus real (ver seção 16)
 └── experts/
     └── commercial-director/
-        ├── identity.ts            # nome, id, versão, instruções versionadas
-        ├── types.ts                # CommercialDirectorAssessment (schema específico)
-        ├── schema.ts               # validação da parte específica (negotiation)
-        ├── fake-negotiation-analysis.ts  # derivação determinística de `negotiation` p/ o fake provider
-        └── index.ts                # runCommercialDirectorExpert()
+        ├── identity.ts                    # nome, id, versão, instruções versionadas
+        ├── types.ts                       # CommercialDirectorAssessment (schema específico da análise em lote)
+        ├── schema.ts                      # validação da parte específica (negotiation)
+        ├── fake-negotiation-analysis.ts   # derivação determinística de `negotiation` p/ o fake provider
+        ├── fake-query-enrichment.ts       # derivação determinística de draft/práticas p/ resposta de consulta
+        ├── query.ts                       # answerCommercialDirectorQuery() — consulta conversacional
+        └── index.ts                       # runCommercialDirectorExpert() — análise em lote
+
+apps/web/lib/event-notes.ts         # data layer de "Anotações do Evento" (getEventNotes)
+apps/web/components/ai/expert-query-panel.tsx      # UI "Perguntar ao Diretor Comercial IA"
+apps/web/components/ledger/event-notes-section.tsx # UI "Anotações do Evento"
+apps/web/components/ledger/event-note-form.tsx     # formulário de nova anotação
+apps/web/app/[projectId]/ledger/[eventId]/event-notes-actions.ts  # Server Action de criação de anotação
 ```
 
 Harnesses de linha de comando (somente leitura):
-`scripts/analyze-event-with-commercial-director.mjs`.
+`scripts/analyze-event-with-commercial-director.mjs` (análise em lote) e
+`scripts/query-commercial-director.mjs` (consulta conversacional, escopo
+PROJECT ou EVENT).
 
-Testes: `scripts/test-ai-foundation.mjs` (fundação genérica) e
-`scripts/test-commercial-director-expert.mjs` (específico deste Expert)
-— ver seção 10.
+Testes: `scripts/test-ai-foundation.mjs` (fundação genérica),
+`scripts/test-commercial-director-expert.mjs` (análise em lote),
+`scripts/test-expert-query.mjs` (consulta conversacional) e
+`scripts/test-event-notes.mjs` (Anotações do Evento) — ver seção 15.
 
 ### Genérico vs específico — onde cada coisa vive
 
@@ -270,8 +289,29 @@ esse único candidato e sua cláusula (controle de token/custo).
   ser trocada; `draftCommunication` só aceita `DRAFT_PENDING_REVIEW`;
   execução real contra o evento de referência não altera candidatos nem
   envia nada.
+- `scripts/test-expert-query.mjs` — consulta conversacional: schema de
+  `ExpertQueryResponse`; `requiresHumanReview`/`confidence` inválidos
+  falham; `contextoInternoDeclarado` só aceita `DECLARED_CONTEXT`;
+  `praticasNegociais` só aceita os 4 `RequirementSourceKind`;
+  `rascunhoSugerido` só aceita `DRAFT_PENDING_REVIEW`; `baseLegal` vazio
+  é válido e origem legal desconhecida falha (nunca inventa fonte
+  normativa); fake provider (`answerQuery`) determinístico; escopos
+  DOCUMENT/EMAIL/MULTI_EXPERT falham fechado; pergunta vazia falha;
+  consultas PROJECT e EVENT reais não alteram candidatos; pergunta
+  "redija um e-mail" produz `rascunhoSugerido` `DRAFT_PENDING_REVIEW`.
+- `scripts/test-event-notes.mjs` — Anotações do Evento: INSERT
+  autenticado com EDITOR/autoria própria é aceito; tentativa de se
+  passar por outro autor é bloqueada pela RLS; leitura retorna a
+  anotação com autor correto; `EVENT_NOTE_CREATED` é registrado em
+  `audit_log_entries`; anotação nunca aparece em `event_evidence`;
+  context builder inclui a anotação como `USER_NOTE`/`DECLARED_CONTEXT`;
+  candidatos de confrontação permanecem inalterados; a anotação de teste
+  é removida ao final (limpeza via service role — o registro de
+  auditoria permanece, correto e legítimo).
 
-Nenhum teste executa write em dado produtivo.
+Nenhum teste executa write em dado produtivo além da única anotação de
+teste (criada e removida dentro do próprio `test-event-notes.mjs`, sem
+tocar nos 3 candidatos de confrontação do evento de referência).
 
 ## 11. Auditoria — desenho (não implementado nesta fase)
 
@@ -296,9 +336,10 @@ foi feita nesta fase.
 ## 12. O que falta para conectar um LLM real
 
 1. Implementar um provider real (ex.: `AnthropicAiProvider`) que
-   implemente `AiProvider`, monte o prompt a partir de
-   `instructions` + `context` e faça parsing da resposta para JSON — a
-   validação (`validateExpertAssessment` + `validateCommercialDirectorAssessment`)
+   implemente `AiProvider` (`generateAssessment` **e** `answerQuery`),
+   monte o prompt a partir de `instructions` + `context` e faça parsing
+   da resposta para JSON — a validação (`validateExpertAssessment` +
+   `validateCommercialDirectorAssessment` + `validateExpertQueryResponse`)
    continua a mesma, sem alteração.
 2. Adicionar o(s) valor(es) do provider real a
    `KNOWN_UNIMPLEMENTED_PROVIDERS`/`getAiProvider()` só quando de fato
@@ -307,9 +348,254 @@ foi feita nesta fase.
    modelo) — nunca no código, nunca no frontend.
 4. Implementar a persistência de auditoria (seção 11) via migration
    nova.
-5. Expor a análise na UI (ex.: botão "Analisar com IA" na página do
-   evento) chamando `runCommercialDirectorExpert` a partir de uma Server
-   Action — nenhuma UI foi criada nesta fase, apenas o harness CLI.
-6. Definir estratégia de custo/token para contextos maiores.
+5. ~~Expor a análise/consulta na UI~~ — feito nesta fase: `ExpertQueryPanel`
+   (`apps/web/components/ai/expert-query-panel.tsx`) está integrado à
+   página do evento (escopo EVENT) e ao dashboard do projeto (escopo
+   PROJECT). Falta apenas expor a análise em lote (`runCommercialDirectorExpert`,
+   distinta da consulta conversacional) na UI, se/quando fizer sentido.
+6. Definir estratégia de custo/token para contextos maiores (ver seção
+   14, "Seleção de contexto").
 7. Implementar os próximos Experts oficiais da tabela da seção 1
    reutilizando a mesma fundação genérica.
+8. Implementar escopos DOCUMENT, EMAIL e MULTI_EXPERT (ver seção 13) —
+   hoje falham fechado explicitamente.
+9. Ingerir um corpus normativo real (ver seção 16, "Base legal").
+
+## 13. Consulta conversacional aos Experts ("Perguntar ao Diretor Comercial IA")
+
+Arquitetura em `apps/web/lib/ai/query/` — distinta da análise em lote
+(`ExpertAssessment`, seção 6): a consulta responde a uma pergunta pontual
+do usuário, com nomes de campo em português para exibição direta na UI
+(`ExpertQueryResponse`, ver seção 14).
+
+### Escopos (`ExpertQueryScope`)
+
+| Escopo | Status nesta fase |
+| --- | --- |
+| `PROJECT` | **Implementado** — `buildProjectAnalysisContext` |
+| `EVENT` | **Implementado** — `buildEventAnalysisContext` (reutilizado, sem alteração) |
+| `DOCUMENT` | Tipado, **não implementado** — `answerCommercialDirectorQuery` falha fechado |
+| `EMAIL` | Tipado, **não implementado** — falha fechado |
+| `MULTI_EXPERT` | Tipado, **não implementado** — falha fechado (ver seção 17) |
+
+`answerCommercialDirectorQuery` (`experts/commercial-director/query.ts`)
+rejeita explicitamente qualquer escopo fora de `["PROJECT", "EVENT"]`
+antes de tocar no banco — nunca simula suporte a um escopo inexistente.
+
+### Fluxo
+
+```
+ExpertQueryRequest { scope, projectId, eventId?, question }
+  → buildEventAnalysisContext / buildProjectAnalysisContext (reutilizados)
+  → provider.answerQuery(...)                    (genérico — fake por default)
+  → deriveFakeQueryEnrichment(...)                (específico do Expert — só quando provider="fake")
+  → validateExpertQueryResponse(...)
+  → ExpertQueryResponse
+```
+
+O enriquecimento específico (`fake-query-enrichment.ts`) decide, por uma
+heurística simples de palavras-chave (verbo de redação + tipo de
+documento citado na pergunta — ex.: "redija" + "e-mail"), se a resposta
+deve incluir `rascunhoSugerido`. Não finge análise inteligente real: a
+própria heurística e o conteúdo do rascunho deixam isso explícito no
+texto gerado.
+
+## 14. Estrutura da resposta de consulta (`ExpertQueryResponse`)
+
+Definida em `apps/web/lib/ai/query/types.ts`, validada em
+`query/validate-expert-query-response.ts` (reutiliza as primitivas de
+`schemas/primitives.ts` — mesmas usadas por `validate-expert-assessment.ts`,
+sem duplicar checagem de forma/tipo):
+
+```
+expertId, expertName, expertVersion, scope, question,
+fatosDocumentados[],
+contextoInternoDeclarado[]   (DeclaredContextItem — ver seção 15),
+baseContratual[]             (ExpertContractualBasisRef, reaproveitado da fundação genérica),
+baseLegal[]                  (LegalCitation — ver seção 16),
+praticasNegociais[]          (ClassifiedStatement — ver seção 17),
+interpretacao,
+riscos[], severity,
+recomendacoes[], acoesSugeridas[],
+informacoesFaltantes[],
+rascunhoSugerido: ExpertQueryDraft | null,
+confidence, requiresHumanReview (sempre true)
+```
+
+`rascunhoSugerido.status` é travado em `"DRAFT_PENDING_REVIEW"` — o
+validador rejeita qualquer outro valor (mesmo tratamento de
+`requiresHumanReview` e de `CommercialDraftCommunication.status` na
+análise em lote). Nenhum e-mail, proposta, contraproposta, carta,
+notificação, resposta comercial, pauta, roteiro, memorando, solicitação
+de esclarecimento ou texto de aditivo é considerado enviado — edição e
+aprovação são sempre ações humanas futuras, fora deste módulo.
+
+A UI (`ExpertQueryPanel`) exibe cada seção separadamente, em
+português-BR, e traz um aviso fixo (`FlaskConical`, faixa vermelha)
+deixando explícito que a resposta vem do provider de teste — nunca IA
+real — enquanto `AXION_AI_PROVIDER` não apontar para um provider
+implementado de fato.
+
+## 15. Anotações do Evento (`event_notes`)
+
+Migration: `supabase/migrations/20260822033339_event_notes_foundation.sql`
+(nova tabela, RLS, trigger de auditoria — nenhuma migration antiga foi
+alterada).
+
+- **Tabela**: `id, event_id, author_user_id, category, text, created_at,
+  updated_at`. `category` ∈ `CONTEXTO_OPERACIONAL | INFORMACAO_COMERCIAL |
+  OBSERVACAO_JURIDICA | PLANEJAMENTO | FINANCEIRO | OUTROS`.
+- **RLS**: SELECT para membros do projeto (`is_project_member`, via join
+  em `contract_events`); INSERT exige `has_project_permission(...,
+  'EDITOR')` **e** `author_user_id = auth.uid()` — impossível se passar
+  por outro autor. Sem policy UPDATE/DELETE nesta fase (append-only;
+  nenhum DELETE silencioso).
+- **Auditoria**: trigger `AFTER INSERT` (`SECURITY DEFINER`, mesmo padrão
+  de `audit_event_clause_confrontation_candidate_created`) grava
+  `EVENT_NOTE_CREATED` em `audit_log_entries` automaticamente — nenhuma
+  Server Action duplica essa lógica.
+- **UI**: seção "Anotações do Evento" na página do evento
+  (`EventNotesSection` + `EventNoteForm`), com aviso "Informação
+  declarada internamente" e visual propositalmente distinto (âmbar,
+  borda tracejada) de evidência/documento/e-mail/cláusula.
+
+### Declared context x evidence
+
+Uma anotação **nunca** é fato documental. No context builder
+(`build-event-context.ts`), cada anotação vira um `ContextEventNote`
+com `sourceType: "USER_NOTE"` e `evidentialStatus: "DECLARED_CONTEXT"` —
+campos fixos, não inferidos, para que nenhum consumidor (Expert ou UI)
+confunda anotação com evidência. Nunca é gravada em `event_evidence`.
+
+Quando uma resposta (análise em lote ou consulta) usa uma anotação, ela
+aparece em `contextoInternoDeclarado`/como fato "declarado" — nunca
+misturada aos fatos confirmados documentalmente (`fatosDocumentados` cita
+a anotação como tal, nunca como se fosse evidência). Exemplo (ver
+`fake-provider.ts`):
+
+```
+Contexto informado internamente: [texto da anotação]
+Status: informação declarada por usuário; não confirmada
+documentalmente no contexto atualmente recuperado.
+```
+
+## 16. Base legal (preparação, sem corpus real)
+
+`apps/web/lib/ai/legal/types.ts` — `LegalSource`, `LegalCitation`,
+`LEGAL_SOURCE_UNAVAILABLE_NOTICE`. **Nenhum artigo de lei está hardcoded
+em lugar nenhum do projeto.** Fonte inicial prevista (não ingerida):
+Código Civil brasileiro.
+
+Enquanto não houver corpus normativo versionado, `baseLegal` é sempre
+`[]` e `informacoesFaltantes` sempre inclui a notice padrão — nunca
+memória geral do LLM tratada como fonte legal oficial. A estratégia de
+ingestão/versionamento/citação futura está documentada como comentário
+no próprio `legal/types.ts` (tabela dedicada, dispositivo com vigência
+explícita, retrieval com o mesmo controle de volume do context builder).
+
+## 17. Práticas negociais x obrigação jurídica
+
+`RequirementSourceKind` (`query/types.ts`): `LEGAL_REQUIREMENT |
+CONTRACTUAL_REQUIREMENT | NEGOTIATION_PRACTICE | AI_RECOMMENDATION`.
+Toda afirmação relevante do Diretor Comercial IA sobre "o que fazer" ou
+"o que é exigido" deve vir classificada em `praticasNegociais` com um
+destes quatro valores — o validador rejeita qualquer outro. Nunca
+apresentar `NEGOTIATION_PRACTICE` como se fosse `LEGAL_REQUIREMENT` ou
+`CONTRACTUAL_REQUIREMENT` (mesmo princípio da seção 3.3 de
+`docs/ai/specialist-framework.md`, aplicado em tipo/validação aqui).
+
+## 18. Contexto histórico do projeto — fontes já disponíveis vs futuras
+
+Antes de qualquer trabalho nesta fase, mapeamos o que já existe
+realmente no banco/aplicação (nunca presumido):
+
+**Já disponíveis e usadas pelo context builder:**
+`contract_events`, `event_evidence`, `event_categories`,
+`event_cross_references`, `event_clause_confrontation_candidates`,
+`clauses`, `document_versions`/`documents` (contrato, aditivo, edital,
+RFI/RFP, proposta AXION, especificação, desenho, planilha, cronograma
+baseline/revisão, relatório semanal — ver `DocumentKind` em
+`packages/types`), `emails`, `event_notes` (novo nesta fase),
+`schedule_activities`/`schedule_versions` (cronogramas — hoje só
+consumidos fora do context builder, em `apps/web/lib/data.ts`).
+
+**FUTURE_SOURCE — mencionadas no pedido, sem tabela/integração real
+hoje** (não inventadas, não simuladas):
+
+- Atas de reunião — não há tabela dedicada; hoje só existiriam como
+  `Document`/e-mail genérico, sem estrutura própria.
+- Diários de obra — `SourceType` inclui `DIARIO_OBRA`, mas não há
+  ingestão/tabela própria implementada.
+- Pedidos de adicionais / Change Orders — `ContractChange` existe
+  (`contract_changes`) mas não está conectado ao context builder ainda.
+- Notificações e respostas a notificações formais — não modeladas como
+  entidade própria (distintas de `Email`/`ActionRequest`).
+- Medições e pagamentos — não há tabela própria; mencionados em texto
+  livre de cláusulas/eventos.
+- Revisões de desenho/especificação — não modeladas além do
+  `DocumentKind` genérico (`DESENHO`, `ESPECIFICACAO`), sem histórico de
+  revisão estruturado.
+- Alterações de preço/prazo como entidade correlata (ver seção 19) —
+  hoje só inferíveis manualmente a partir de eventos/cláusulas.
+
+Nenhuma dessas fontes foi simulada ou parcialmente implementada só para
+"parecer completo" — onde não existe dado real, o context builder
+simplesmente não inclui o campo, e este documento registra a lacuna.
+
+## 19. Alterações de projeto — estrutura de correlação (preparação)
+
+Pedido: preparar a arquitetura para identificar correlações
+`ALTERAÇÃO → ORIGEM → DATA → DOCUMENTO/E-MAIL/ATA → ESCOPO → PREÇO →
+PRAZO → CLÁUSULA → EVIDÊNCIA → AÇÃO RECOMENDADA`, com atenção especial a
+adicional, redução de escopo, Change Order, perda de produtividade,
+remobilização, mudança de método, aumento de custo, atraso, impacto no
+caminho crítico, necessidade de aditivo/comunicação formal.
+
+Nesta fase, essa correlação **não ganhou tipo/tabela dedicados** — seria
+prematuro modelar em cima de fontes que ainda são `FUTURE_SOURCE` (seção
+18). O que já existe e cobre parcialmente o conceito:
+
+- `ContractChange` (`contract_changes`) já tem `scheduleImpactStatus`
+  (`PENDING_ASSESSMENT|NO_IMPACT|ABSORBABLE_WITHIN_CONTRACT_TERM|EXTENSION_REQUIRED`)
+  e `technicalAdditionalDays` — ver `packages/types`.
+- `event_clause_confrontation_candidates` já correlaciona evento →
+  cláusula → evidência (`event_basis`, `clause_basis`) com severidade e
+  confiança.
+- A separação `TECHNICAL SCHEDULE IMPACT` x `CONTRACTUAL ENTITLEMENT TO
+  TIME EXTENSION` já está normatizada em
+  `docs/ai/specialist-framework.md` seção 3.10 e se aplica também ao
+  Diretor Comercial IA (campo `negotiation.scheduleImpact`/
+  `negotiation.contractualImpact`, seção 6).
+
+Conectar isso a `ContractChange` de fato (context builder incluir
+alterações de projeto como uma nova categoria de contexto) fica para uma
+fase futura, quando `ContractChange` estiver integrado ao Event Ledger
+de forma mais rica.
+
+## 20. Preparação multi-Expert (não implementado)
+
+`ExpertQueryScope` inclui `"MULTI_EXPERT"` como contrato de tipo — o
+orquestrador falha fechado para ele nesta fase (seção 13). Nenhum Expert
+além do Diretor Comercial IA foi implementado.
+
+Fluxo futuro documentado (não codificado):
+
+```
+PERGUNTA
+  ↓
+vários Experts (CEO IA, Diretor Comercial IA, Consultor Jurídico IA,
+Diretor de Planejamento IA, Diretor de ESG IA)
+  ↓
+respostas especializadas (ExpertQueryResponse por Expert)
+  ↓
+CEO IA
+  ↓
+síntese executiva
+  ↓
+revisão humana
+```
+
+Quando implementado, a síntese do CEO IA deve reutilizar
+`ExpertQueryResponse` de cada Expert como entrada — nunca reprocessar o
+contexto do zero por Expert sem necessidade, e nunca perder a
+rastreabilidade de qual Expert disse o quê.

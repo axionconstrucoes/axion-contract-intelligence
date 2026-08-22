@@ -3,8 +3,9 @@
 // alterar nenhum Expert, e permite testar Experts inteiramente com o
 // FakeAiProvider (determinístico, sem custo, sem rede).
 
-import type { EventAnalysisContext } from "../context/types";
+import type { EventAnalysisContext, ProjectAnalysisContext } from "../context/types";
 import type { ExpertAnalysisType, ExpertId } from "../types";
+import type { ExpertQueryScope } from "../query/types";
 
 export interface AiProviderRequest {
   expertId: ExpertId;
@@ -24,20 +25,38 @@ export interface AiProviderRequest {
 }
 
 /**
- * Resultado bruto do provider — ainda NÃO validado como ExpertAssessment.
- * A validação/normalização final é sempre responsabilidade do Expert
- * (ver schemas/validate-expert-assessment.ts), nunca do provider.
+ * Requisição de consulta conversacional ("Perguntar ao Diretor Comercial
+ * IA" e futuros). Exatamente um entre eventContext/projectContext é
+ * preenchido, conforme `scope` — nunca ambos, nunca nenhum.
+ */
+export interface AiProviderQueryRequest {
+  expertId: ExpertId;
+  expertName: string;
+  expertVersion: string;
+  instructions: string;
+  scope: ExpertQueryScope;
+  question: string;
+  eventContext: EventAnalysisContext | null;
+  projectContext: ProjectAnalysisContext | null;
+}
+
+/**
+ * Resultado bruto do provider — ainda NÃO validado como ExpertAssessment
+ * nem como ExpertQueryResponse. A validação/normalização final é sempre
+ * responsabilidade do Expert (ver schemas/), nunca do provider.
  */
 export interface AiProviderResponse {
   /** Identificador do provider que gerou a resposta (ex.: "fake", "anthropic"). */
   providerId: string;
   /** Nome do modelo, quando aplicável (ex.: "claude-sonnet-5"). Nulo para o fake provider. */
   model: string | null;
-  /** Saída ainda não validada — deve ter o formato de ExpertAssessment, mas pode estar incorreta. */
+  /** Saída ainda não validada — deve ter o formato esperado pelo Expert, mas pode estar incorreta. */
   output: unknown;
 }
 
 export interface AiProvider {
   readonly id: string;
   generateAssessment(request: AiProviderRequest): Promise<AiProviderResponse>;
+  /** Responde uma consulta conversacional (escopo PROJECT/EVENT nesta fase). */
+  answerQuery(request: AiProviderQueryRequest): Promise<AiProviderResponse>;
 }

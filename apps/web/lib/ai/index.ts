@@ -17,17 +17,43 @@ export type {
 } from "./context/build-event-context";
 export { buildEventAnalysisContext } from "./context/build-event-context";
 export type {
+  BuildProjectAnalysisContextInput,
+} from "./context/build-project-context";
+export { buildProjectAnalysisContext } from "./context/build-project-context";
+export type {
   ContextClause,
   ContextConfrontationCandidate,
   ContextEmail,
   ContextEvent,
+  ContextEventNote,
   ContextEvidence,
   EventAnalysisContext,
+  ProjectAnalysisContext,
+  ProjectContextEventSummary,
 } from "./context/types";
 
-export type { AiProvider, AiProviderRequest, AiProviderResponse } from "./providers/types";
+export type { AiProvider, AiProviderQueryRequest, AiProviderRequest, AiProviderResponse } from "./providers/types";
 export { createFakeAiProvider } from "./providers/fake-provider";
 export { getAiProvider } from "./providers/get-ai-provider";
+
+export type { LegalCitation, LegalSource, LegalSourceOrigin } from "./legal/types";
+export { LEGAL_SOURCE_UNAVAILABLE_NOTICE } from "./legal/types";
+
+export type {
+  ClassifiedStatement,
+  DeclaredContextItem,
+  ExpertQueryDraft,
+  ExpertQueryDraftType,
+  ExpertQueryRequest,
+  ExpertQueryResponse,
+  ExpertQueryScope,
+  RequirementSourceKind,
+} from "./query/types";
+export {
+  ExpertQueryValidationError,
+  validateExpertQueryResponse,
+} from "./query/validate-expert-query-response";
+export type { ExpectedExpertQueryIdentity } from "./query/validate-expert-query-response";
 
 export {
   ExpertAssessmentValidationError,
@@ -51,3 +77,5 @@ export type {
   CommercialNegotiationAnalysis,
   CommercialDirectorAssessment,
 } from "./experts/commercial-director/types";
+export { answerCommercialDirectorQuery } from "./experts/commercial-director/query";
+export type { CommercialDirectorQueryResult } from "./experts/commercial-director/query";

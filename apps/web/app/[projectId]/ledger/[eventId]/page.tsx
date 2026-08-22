@@ -2,8 +2,10 @@ import { notFound } from "next/navigation";
 import { ShieldAlert } from "lucide-react";
 import { CategoryBadge, ConfrontationCandidateStatusBadge, SeverityBadge, StatusBadge } from "@/components/shared/badges";
 import { EmptyState } from "@/components/shared/empty-state";
+import { ExpertQueryPanel } from "@/components/ai/expert-query-panel";
 import { ConfrontationReviewForms } from "@/components/ledger/confrontation-review-forms";
 import { CrossReferenceList } from "@/components/ledger/cross-reference-list";
+import { EventNotesSection } from "@/components/ledger/event-notes-section";
 import { EvidenceViewer } from "@/components/ledger/evidence-viewer";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -94,6 +96,8 @@ export default async function EventDetailPage({
         <CrossReferenceList crossReferences={event.crossReferences} />
       </div>
 
+      <EventNotesSection projectId={projectId} eventId={event.id} canReview={canReview} />
+
       <div>
         <h2 className="mb-2 text-sm font-semibold">Confrontação contratual — Revisão humana</h2>
 
@@ -169,6 +173,8 @@ export default async function EventDetailPage({
           </div>
         )}
       </div>
+
+      <ExpertQueryPanel projectId={projectId} eventId={event.id} scope="EVENT" />
     </div>
   );
 }
