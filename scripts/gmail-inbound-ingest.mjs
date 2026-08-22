@@ -630,8 +630,8 @@ const {
       `Mailbox ${mailbox}. ` +
       `${inserted} mensagens inseridas; ` +
       `${duplicates} duplicadas; ` +
-      `${rejected} rejeitadas pelo perÃ­metro. ` +
-      `Monitoramento contÃ­nuo permanece desativado.`,
+      `${rejected} rejeitadas pelo perímetro. ` +
+      `Monitoramento contínuo permanece desativado.`,
   });
 
 if (auditError) {

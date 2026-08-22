@@ -571,9 +571,9 @@ const { error: integrationError } =
         completedAt,
 
       detail:
-        `SincronizaÃ§Ã£o incremental Gmail concluÃ­da: ` +
+        `Sincronização incremental Gmail concluída: ` +
         `${inserted} novas mensagens. ` +
-        `Monitoramento automÃ¡tico ainda ` +
+        `Monitoramento automático ainda ` +
         `${config.enabled ? "habilitado" : "desabilitado"}.`,
 
       updated_at:
@@ -611,7 +611,7 @@ const { error: auditError } =
         null,
 
       action:
-        "SincronizaÃ§Ã£o incremental Gmail executada",
+        "Sincronização incremental Gmail executada",
 
       entity_type:
         "EmailIngestionRun",
@@ -622,7 +622,7 @@ const { error: auditError } =
       detail:
         `${inserted} novas; ` +
         `${duplicates} duplicadas; ` +
-        `${rejected} rejeitadas pelo perÃ­metro.`,
+        `${rejected} rejeitadas pelo perímetro.`,
     });
 
 if (auditError) {
@@ -665,5 +665,5 @@ console.table([
 
 console.log("");
 console.log(
-  "SINCRONIZAÃ‡ÃƒO INCREMENTAL concluÃ­da."
+  "SINCRONIZAÇÃO INCREMENTAL concluída."
 );

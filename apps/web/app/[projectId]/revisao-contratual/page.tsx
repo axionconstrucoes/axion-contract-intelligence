@@ -61,13 +61,13 @@ export default async function ContractReviewPage({
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-lg font-semibold">
-          RevisÃ£o Contratual
+          Revisão Contratual
         </h1>
 
         <p className="text-sm text-muted-foreground">
           Candidatos detectados automaticamente a partir
-          das comunicaÃ§Ãµes do projeto. Nenhum candidato
-          entra no Event Ledger sem revisÃ£o humana.
+          das comunicações do projeto. Nenhum candidato
+          entra no Event Ledger sem revisão humana.
         </p>
       </div>
 
@@ -86,7 +86,7 @@ export default async function ContractReviewPage({
         <Card>
           <CardContent className="p-4">
             <p className="text-xs text-muted-foreground">
-              Sua permissÃ£o
+              Sua permissão
             </p>
             <p className="text-lg font-semibold">
               {permission ?? "SEM ACESSO"}
@@ -100,14 +100,14 @@ export default async function ContractReviewPage({
               Pode revisar
             </p>
             <p className="text-lg font-semibold">
-              {canReview ? "Sim" : "NÃ£o"}
+              {canReview ? "Sim" : "Não"}
             </p>
           </CardContent>
         </Card>
       </div>
 
       {candidates.length === 0 ? (
-        <EmptyState message="Nenhum candidato aguardando revisÃ£o." />
+        <EmptyState message="Nenhum candidato aguardando revisão." />
       ) : (
         <div className="flex flex-col gap-5">
           {candidates.map(
@@ -183,7 +183,7 @@ export default async function ContractReviewPage({
 
                     <div>
                       <p className="text-xs text-muted-foreground">
-                        InÃ­cio
+                        Início
                       </p>
                       <p className="font-medium">
                         {formatDateTime(
@@ -194,7 +194,7 @@ export default async function ContractReviewPage({
 
                     <div>
                       <p className="text-xs text-muted-foreground">
-                        Ãšltima mensagem
+                        Última mensagem
                       </p>
                       <p className="font-medium">
                         {formatDateTime(
@@ -206,7 +206,7 @@ export default async function ContractReviewPage({
 
                   <details className="rounded-md border">
                     <summary className="cursor-pointer p-3 text-sm font-medium">
-                      Ver evidÃªncias (
+                      Ver evidências (
                       {
                         candidate.evidence
                           .length
@@ -241,7 +241,7 @@ export default async function ContractReviewPage({
 
                               <span>
                                 {evidence.direction ??
-                                  "â€”"}
+                                  "—"}
                               </span>
                             </div>
 
@@ -253,13 +253,13 @@ export default async function ContractReviewPage({
                             <p className="mt-1 text-xs text-muted-foreground">
                               De:{" "}
                               {evidence.fromAddress ??
-                                "â€”"}
+                                "—"}
                             </p>
 
                             <p className="text-xs text-muted-foreground">
                               Para:{" "}
                               {evidence.toAddress ??
-                                "â€”"}
+                                "—"}
                             </p>
 
                             {evidence.snippet ? (
@@ -299,7 +299,7 @@ export default async function ContractReviewPage({
 
                         <div>
                           <label className="text-sm font-medium">
-                            TÃ­tulo do evento
+                            Título do evento
                           </label>
 
                           <input
@@ -314,14 +314,14 @@ export default async function ContractReviewPage({
 
                         <div>
                           <label className="text-sm font-medium">
-                            ConclusÃ£o do revisor
+                            Conclusão do revisor
                           </label>
 
                           <textarea
                             name="eventDescription"
                             required
                             rows={5}
-                            placeholder="Descreva o fato contratual confirmado, sua relevÃ¢ncia e o entendimento do revisor."
+                            placeholder="Descreva o fato contratual confirmado, sua relevância e o entendimento do revisor."
                             className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
                           />
                         </div>
@@ -355,14 +355,14 @@ export default async function ContractReviewPage({
 
                         <div>
                           <label className="text-sm font-medium">
-                            Justificativa da rejeiÃ§Ã£o
+                            Justificativa da rejeição
                           </label>
 
                           <textarea
                             name="reviewNote"
                             required
                             rows={5}
-                            placeholder="Explique por que este candidato nÃ£o deve ser tratado como evento contratual."
+                            placeholder="Explique por que este candidato não deve ser tratado como evento contratual."
                             className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
                           />
                         </div>
@@ -378,9 +378,9 @@ export default async function ContractReviewPage({
                     </div>
                   ) : (
                     <p className="rounded-md border bg-muted p-3 text-sm text-muted-foreground">
-                      VocÃª possui acesso de leitura.
-                      AprovaÃ§Ã£o ou rejeiÃ§Ã£o exige
-                      permissÃ£o EDITOR ou ADMIN.
+                      Você possui acesso de leitura.
+                      Aprovação ou rejeição exige
+                      permissão EDITOR ou ADMIN.
                     </p>
                   )}
                 </CardContent>
