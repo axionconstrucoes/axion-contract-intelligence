@@ -9,8 +9,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildEventAnalysisContext } from "../../context/build-event-context";
 import { buildProjectAnalysisContext } from "../../context/build-project-context";
-import { getAiProvider } from "../../providers/get-ai-provider";
+import { resolveAiProviderForExpert } from "../../providers/resolve-provider-for-expert";
 import type { AiProvider } from "../../providers/types";
+import { EXPERT_QUERY_RESPONSE_JSON_SCHEMA } from "../../query/json-schema";
 import { validateExpertQueryResponse } from "../../query/validate-expert-query-response";
 import type { ExpertQueryRequest, ExpertQueryResponse, ExpertQueryScope } from "../../query/types";
 import { deriveFakeQueryEnrichment } from "./fake-query-enrichment";
@@ -35,6 +36,8 @@ export interface CommercialDirectorQueryResult {
     eventId: string | null;
     question: string;
     generatedAt: string;
+    stopReason: string | null;
+    usage: { inputTokens: number | null; outputTokens: number | null } | null;
   };
 }
 
@@ -47,7 +50,7 @@ export interface CommercialDirectorQueryResult {
 export async function answerCommercialDirectorQuery(
   supabase: SupabaseClient,
   request: ExpertQueryRequest,
-  provider: AiProvider = getAiProvider()
+  provider: AiProvider = resolveAiProviderForExpert(COMMERCIAL_DIRECTOR_EXPERT_ID)
 ): Promise<CommercialDirectorQueryResult> {
   if (!IMPLEMENTED_SCOPES.includes(request.scope)) {
     throw new Error(
@@ -83,6 +86,7 @@ export async function answerCommercialDirectorQuery(
     question,
     eventContext,
     projectContext,
+    outputSchema: EXPERT_QUERY_RESPONSE_JSON_SCHEMA,
   });
 
   const rawOutput =
@@ -108,6 +112,8 @@ export async function answerCommercialDirectorQuery(
       eventId: request.eventId ?? null,
       question,
       generatedAt: new Date().toISOString(),
+      stopReason: response.stopReason ?? null,
+      usage: response.usage ?? null,
     },
   };
 }

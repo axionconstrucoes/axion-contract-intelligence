@@ -36,6 +36,11 @@ export type {
 export type { AiProvider, AiProviderQueryRequest, AiProviderRequest, AiProviderResponse } from "./providers/types";
 export { createFakeAiProvider } from "./providers/fake-provider";
 export { getAiProvider } from "./providers/get-ai-provider";
+export { EXPERT_PROVIDER_ENV_VAR, resolveAiProviderForExpert, resolveAiProviderNameForExpert } from "./providers/resolve-provider-for-expert";
+export type { AnthropicProviderConfig } from "./providers/anthropic-config";
+export { loadAnthropicConfig } from "./providers/anthropic-config";
+export type { AnthropicAiProviderOverrides, AnthropicMessagesClient } from "./providers/anthropic-provider";
+export { createAnthropicAiProvider } from "./providers/anthropic-provider";
 
 export type { LegalCitation, LegalSource, LegalSourceOrigin } from "./legal/types";
 export { LEGAL_SOURCE_UNAVAILABLE_NOTICE } from "./legal/types";

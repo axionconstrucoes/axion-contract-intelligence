@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.120.0",
     "@axion/db": "*",
     "@axion/mock-data": "*",
     "@axion/types": "*",

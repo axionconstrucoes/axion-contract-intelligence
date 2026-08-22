@@ -272,7 +272,7 @@ export default async function EsgObligationsPage({ params }: { params: Promise<{
             scope="PROJECT"
             title="Diretor de ESG IA"
             action={askEsgDirectorAction}
-            initialState={{ response: null, error: null }}
+            initialState={{ response: null, error: null, meta: null }}
           />
         </TabsContent>
       </Tabs>

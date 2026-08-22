@@ -62,7 +62,8 @@ export function ExpertQueryPanel({
   initialState?: AskExpertState;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
-  const { response, error } = state;
+  const { response, error, meta } = state;
+  const isRealProvider = meta?.providerId === "anthropic";
 
   return (
     <Card className="border-primary/30">
@@ -70,14 +71,23 @@ export function ExpertQueryPanel({
         <div className="flex items-center gap-2">
           <CardTitle>{title}</CardTitle>
         </div>
-        <div className="flex items-start gap-2 rounded-md border border-severity-alta/40 bg-severity-alta/10 p-2.5 text-xs text-severity-alta">
-          <FlaskConical className="mt-0.5 size-3.5 shrink-0" />
-          <p>
-            <strong>Ambiente de desenvolvimento/teste.</strong> Esta resposta é gerada por um provider
-            determinístico (fake) — não é IA real. Nenhum LLM foi conectado nesta fase; nada aqui deve ser
-            tratado como análise inteligente de fato.
-          </p>
-        </div>
+        {isRealProvider ? (
+          <div className="flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-muted-foreground">
+            <FlaskConical className="mt-0.5 size-3.5 shrink-0" />
+            <p>
+              <strong>Provider: Anthropic</strong> · Model: {meta.model ?? "desconhecido"}. Resposta gerada por
+              IA real — ainda assim, sempre sujeita a revisão humana obrigatória antes de qualquer ação.
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 rounded-md border border-severity-alta/40 bg-severity-alta/10 p-2.5 text-xs text-severity-alta">
+            <FlaskConical className="mt-0.5 size-3.5 shrink-0" />
+            <p>
+              <strong>Provider: Fake/Teste.</strong> Esta resposta é gerada por um provider determinístico
+              (fake) — não é IA real. Nada aqui deve ser tratado como análise inteligente de fato.
+            </p>
+          </div>
+        )}
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">

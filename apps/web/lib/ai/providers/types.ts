@@ -22,6 +22,16 @@ export interface AiProviderRequest {
    */
   analysisType: ExpertAnalysisType;
   context: EventAnalysisContext;
+  /**
+   * JSON Schema (formato "input_schema" de tool-use da Anthropic, mas
+   * generalizável) descrevendo exatamente a saída estruturada esperada
+   * (ex.: CommercialDirectorAssessment). Fornecido pelo próprio Expert
+   * (ver experts/<expert>/json-schema.ts) — o provider nunca hardcoda o
+   * formato de um Expert específico, apenas usa o schema recebido para
+   * pedir/forçar saída estruturada quando o provider real suportar isso.
+   * O FakeAiProvider ignora este campo.
+   */
+  outputSchema: Record<string, unknown>;
 }
 
 /**
@@ -38,6 +48,8 @@ export interface AiProviderQueryRequest {
   question: string;
   eventContext: EventAnalysisContext | null;
   projectContext: ProjectAnalysisContext | null;
+  /** Ver AiProviderRequest.outputSchema — mesma ideia, para ExpertQueryResponse (genérico, ver query/json-schema.ts). */
+  outputSchema: Record<string, unknown>;
 }
 
 /**
@@ -52,6 +64,10 @@ export interface AiProviderResponse {
   model: string | null;
   /** Saída ainda não validada — deve ter o formato esperado pelo Expert, mas pode estar incorreta. */
   output: unknown;
+  /** Motivo de parada da API real (ex.: "end_turn", "max_tokens", "refusal"). Ausente/null para o fake provider. */
+  stopReason?: string | null;
+  /** Uso de tokens da API real, quando disponível — nunca inventado. Ausente/null para o fake provider. */
+  usage?: { inputTokens: number | null; outputTokens: number | null } | null;
 }
 
 export interface AiProvider {

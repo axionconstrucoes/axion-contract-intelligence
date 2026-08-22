@@ -8,8 +8,9 @@
 
 import type { EventAnalysisContext } from "../../context/types";
 import type { AiProvider } from "../../providers/types";
-import { getAiProvider } from "../../providers/get-ai-provider";
+import { resolveAiProviderForExpert } from "../../providers/resolve-provider-for-expert";
 import { deriveFakeNegotiationAnalysis } from "./fake-negotiation-analysis";
+import { COMMERCIAL_DIRECTOR_ASSESSMENT_JSON_SCHEMA } from "./json-schema";
 import { validateCommercialDirectorAssessment } from "./schema";
 import type { CommercialDirectorAssessment } from "./types";
 import {
@@ -38,6 +39,10 @@ export interface CommercialDirectorRunResult {
     eventId: string;
     focusCandidateId: string | null;
     generatedAt: string;
+    /** Motivo de parada do provider real (ex.: "end_turn"). Null para o fake provider. */
+    stopReason: string | null;
+    /** Uso de tokens do provider real, quando disponível. Null para o fake provider. */
+    usage: { inputTokens: number | null; outputTokens: number | null } | null;
   };
 }
 
@@ -56,7 +61,7 @@ export interface CommercialDirectorRunResult {
  */
 export async function runCommercialDirectorExpert(
   context: EventAnalysisContext,
-  provider: AiProvider = getAiProvider()
+  provider: AiProvider = resolveAiProviderForExpert(COMMERCIAL_DIRECTOR_EXPERT_ID)
 ): Promise<CommercialDirectorRunResult> {
   const response = await provider.generateAssessment({
     expertId: COMMERCIAL_DIRECTOR_EXPERT_ID,
@@ -65,6 +70,7 @@ export async function runCommercialDirectorExpert(
     instructions: COMMERCIAL_DIRECTOR_INSTRUCTIONS,
     analysisType: "COMMERCIAL_NEGOTIATION_STRATEGY",
     context,
+    outputSchema: COMMERCIAL_DIRECTOR_ASSESSMENT_JSON_SCHEMA,
   });
 
   const rawOutput =
@@ -89,6 +95,8 @@ export async function runCommercialDirectorExpert(
       eventId: context.eventId,
       focusCandidateId: context.focusCandidateId,
       generatedAt: new Date().toISOString(),
+      stopReason: response.stopReason ?? null,
+      usage: response.usage ?? null,
     },
   };
 }

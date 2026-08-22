@@ -1,31 +1,24 @@
-// Seleção de provider de IA — fail-closed, mesmo padrão já usado por
-// AXION_EMAIL_PROVIDER (ver apps/web/lib/email/gmail-auth.ts).
+// Seleção GLOBAL de provider de IA — mantida por compatibilidade.
 //
-// Nunca escolhe silenciosamente Anthropic/OpenAI/Gemini: só existe "fake"
-// implementado nesta fase. Qualquer outro valor falha explicitamente com
-// mensagem indicando o que falta configurar.
+// IMPORTANTE: `AXION_AI_PROVIDER` é global (não sabe qual Expert está
+// chamando). Desde a correção "PROVIDER POR EXPERT", nenhum Expert deve
+// chamar esta função diretamente — cada um deve usar
+// `resolveAiProviderForExpert(expertId)` (./resolve-provider-for-expert.ts),
+// que só cai para `AXION_AI_PROVIDER` quando NÃO existir configuração
+// específica daquele Expert (ex.: `AXION_AI_PROVIDER_COMMERCIAL_DIRECTOR`).
+// Isso evita a regressão em que ativar um provider real para um Expert
+// (ex.: Anthropic para o Diretor Comercial IA) desativasse outro Expert
+// que deveria continuar no fake provider (ex.: Diretor de ESG IA).
+//
+// `getAiProvider()` continua existindo (e sendo testada em
+// scripts/test-ai-foundation.mjs) como a seleção genérica/legada — nunca
+// escolhe silenciosamente um provider: "fake" e "anthropic" estão
+// implementados nesta fase; qualquer outro valor falha explicitamente.
 
-import { createFakeAiProvider } from "./fake-provider";
+import { instantiateAiProviderByName } from "./instantiate-provider";
 import type { AiProvider } from "./types";
 
-const KNOWN_UNIMPLEMENTED_PROVIDERS = ["anthropic", "openai", "gemini"];
-
 export function getAiProvider(): AiProvider {
-  const raw = (process.env.AXION_AI_PROVIDER ?? "fake").trim().toLowerCase();
-
-  if (raw === "fake") {
-    return createFakeAiProvider();
-  }
-
-  if (KNOWN_UNIMPLEMENTED_PROVIDERS.includes(raw)) {
-    throw new Error(
-      `AXION_AI_PROVIDER="${raw}" ainda não está implementado nesta fase. ` +
-        `Nenhum provider real de IA foi conectado — configure AXION_AI_PROVIDER=fake ` +
-        `ou implemente o provider real (chave/modelo via environment variables, nunca no código) antes de usar este valor.`
-    );
-  }
-
-  throw new Error(
-    `AXION_AI_PROVIDER inválido: "${raw}". Valor permitido nesta fase: "fake".`
-  );
+  const raw = process.env.AXION_AI_PROVIDER ?? "fake";
+  return instantiateAiProviderByName(raw, "AXION_AI_PROVIDER");
 }

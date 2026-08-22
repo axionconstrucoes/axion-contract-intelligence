@@ -11,8 +11,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildEventAnalysisContext } from "../../context/build-event-context";
 import { buildProjectAnalysisContext } from "../../context/build-project-context";
-import { getAiProvider } from "../../providers/get-ai-provider";
+import { resolveAiProviderForExpert } from "../../providers/resolve-provider-for-expert";
 import type { AiProvider } from "../../providers/types";
+import { EXPERT_QUERY_RESPONSE_JSON_SCHEMA } from "../../query/json-schema";
 import { validateExpertQueryResponse } from "../../query/validate-expert-query-response";
 import type { ExpertQueryRequest, ExpertQueryResponse, ExpertQueryScope } from "../../query/types";
 import { deriveFakeEsgQueryEnrichment } from "./fake-esg-query-enrichment";
@@ -49,7 +50,7 @@ export interface EsgDirectorQueryResult {
 export async function answerEsgDirectorQuery(
   supabase: SupabaseClient,
   request: ExpertQueryRequest,
-  provider: AiProvider = getAiProvider()
+  provider: AiProvider = resolveAiProviderForExpert(ESG_DIRECTOR_EXPERT_ID)
 ): Promise<EsgDirectorQueryResult> {
   if (!IMPLEMENTED_SCOPES.includes(request.scope)) {
     throw new Error(
@@ -85,6 +86,7 @@ export async function answerEsgDirectorQuery(
     question,
     eventContext,
     projectContext,
+    outputSchema: EXPERT_QUERY_RESPONSE_JSON_SCHEMA,
   });
 
   let rawOutput: unknown = response.output;

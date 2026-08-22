@@ -254,13 +254,19 @@ pela variável de ambiente `AXION_AI_PROVIDER` (mesmo padrão de
 
 - Ausente ou `"fake"` → `FakeAiProvider` (determinístico, sem rede, sem
   custo, genérico — ver seção 3).
-- `anthropic|openai|gemini` → falha fechado explicitamente ("ainda não
+- `"anthropic"` → `AnthropicAiProvider` (primeiro provider real, ver
+  `docs/ai/anthropic-provider.md`) — **restrito ao Diretor Comercial IA
+  nesta fase**, mesmo que `AXION_AI_PROVIDER=anthropic` esteja
+  configurado globalmente (qualquer outro Expert é rejeitado em
+  runtime, fail closed).
+- `openai|gemini` → falha fechado explicitamente ("ainda não
   implementado nesta fase").
 - Qualquer outro valor → falha fechado.
 
-Nenhuma chave de API existe no código. Quando um provider real for
-implementado, sua configuração (chave, modelo) virá de environment
-variables, nunca hardcoded.
+Nenhuma chave de API existe no código. A configuração do
+`AnthropicAiProvider` (chave, modelo) vem inteiramente de environment
+variables server-side, nunca hardcoded, nunca no frontend — ver
+`docs/ai/anthropic-provider.md`.
 
 ## 9. Context builder
 
@@ -337,28 +343,33 @@ foi feita nesta fase.
 
 ## 12. O que falta para conectar um LLM real
 
-1. Implementar um provider real (ex.: `AnthropicAiProvider`) que
-   implemente `AiProvider` (`generateAssessment` **e** `answerQuery`),
-   monte o prompt a partir de `instructions` + `context` e faça parsing
-   da resposta para JSON — a validação (`validateExpertAssessment` +
-   `validateCommercialDirectorAssessment` + `validateExpertQueryResponse`)
-   continua a mesma, sem alteração.
-2. Adicionar o(s) valor(es) do provider real a
-   `KNOWN_UNIMPLEMENTED_PROVIDERS`/`getAiProvider()` só quando de fato
-   implementado.
-3. Definir e documentar as environment variables necessárias (chave,
-   modelo) — nunca no código, nunca no frontend.
+1. ~~Implementar um provider real (ex.: `AnthropicAiProvider`)~~ — feito
+   nesta fase, restrito ao Diretor Comercial IA. Ver
+   `docs/ai/anthropic-provider.md` para configuração, saída estruturada,
+   fail-closed, limites e o procedimento de live-test.
+2. ~~Adicionar o(s) valor(es) do provider real a `getAiProvider()`~~ —
+   feito (`AXION_AI_PROVIDER=anthropic`).
+3. ~~Definir e documentar as environment variables necessárias~~ — feito
+   (`ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `ANTHROPIC_MAX_TOKENS`,
+   `ANTHROPIC_TIMEOUT_MS` — ver `docs/ai/anthropic-provider.md`).
 4. Implementar a persistência de auditoria (seção 11) via migration
-   nova.
-5. ~~Expor a análise/consulta na UI~~ — feito nesta fase: `ExpertQueryPanel`
+   nova — o metadata (`stopReason`, `usage`, `providerId`, `model`) já é
+   capturado em memória (`CommercialDirectorRunResult.audit`/
+   `CommercialDirectorQueryResult.audit`), só falta persistir.
+5. ~~Expor a análise/consulta na UI~~ — feito: `ExpertQueryPanel`
    (`apps/web/components/ai/expert-query-panel.tsx`) está integrado à
    página do evento (escopo EVENT) e ao dashboard do projeto (escopo
-   PROJECT). Falta apenas expor a análise em lote (`runCommercialDirectorExpert`,
-   distinta da consulta conversacional) na UI, se/quando fizer sentido.
+   PROJECT), e agora mostra qual provider/modelo respondeu. Falta apenas
+   expor a análise em lote (`runCommercialDirectorExpert`, distinta da
+   consulta conversacional) na UI, se/quando fizer sentido.
 6. Definir estratégia de custo/token para contextos maiores (ver seção
-   14, "Seleção de contexto").
-7. Implementar os próximos Experts oficiais da tabela da seção 1
-   reutilizando a mesma fundação genérica.
+   14, "Seleção de contexto") — item 17 de `docs/ai/anthropic-provider.md`
+   documenta a metadata de tokens já capturada, sem um sistema
+   financeiro completo ainda.
+7. Conectar o `AnthropicAiProvider` aos próximos Experts oficiais
+   (Consultor Jurídico IA, Diretor de Planejamento IA, CEO IA) e ao
+   Diretor de ESG IA — hoje deliberadamente bloqueado em runtime
+   (`ANTHROPIC_ALLOWED_EXPERT_IDS`, ver `docs/ai/anthropic-provider.md`).
 8. Implementar escopos DOCUMENT, EMAIL e MULTI_EXPERT (ver seção 13) —
    hoje falham fechado explicitamente.
 9. Ingerir um corpus normativo real (ver seção 16, "Base legal").
