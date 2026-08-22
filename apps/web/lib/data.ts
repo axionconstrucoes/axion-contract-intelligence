@@ -256,7 +256,7 @@ export async function getEvent(eventId: string) {
     if (eventError.code === "22P02") {
       return null;
     }
-    throw eventError;
+    throw new Error(`Falha ao carregar evento: ${eventError.message}`);
   }
 
   if (!eventRow) {
@@ -273,16 +273,16 @@ export async function getEvent(eventId: string) {
   ]);
 
   if (categoriesResult.error) {
-    throw categoriesResult.error;
+    throw new Error(`Falha ao carregar categorias do evento: ${categoriesResult.error.message}`);
   }
   if (evidenceResult.error) {
-    throw evidenceResult.error;
+    throw new Error(`Falha ao carregar evidências do evento: ${evidenceResult.error.message}`);
   }
   if (aiAssessmentsResult.error) {
-    throw aiAssessmentsResult.error;
+    throw new Error(`Falha ao carregar achados de IA do evento: ${aiAssessmentsResult.error.message}`);
   }
   if (crossReferencesResult.error) {
-    throw crossReferencesResult.error;
+    throw new Error(`Falha ao carregar referências cruzadas do evento: ${crossReferencesResult.error.message}`);
   }
 
   return mapContractEventRow(
@@ -375,7 +375,7 @@ export async function getDocument(documentId: string) {
     if (documentError.code === "22P02") {
       return null;
     }
-    throw documentError;
+    throw new Error(`Falha ao carregar documento: ${documentError.message}`);
   }
 
   if (!documentRow) {
@@ -388,7 +388,7 @@ export async function getDocument(documentId: string) {
     .eq("document_id", (documentRow as DocumentRow).id);
 
   if (versionsError) {
-    throw versionsError;
+    throw new Error(`Falha ao carregar versões do documento: ${versionsError.message}`);
   }
 
   return mapDocumentWithVersion(
@@ -409,7 +409,7 @@ export async function getDocumentVersion(documentVersionId: string) {
     if (versionError.code === "22P02") {
       return null;
     }
-    throw versionError;
+    throw new Error(`Falha ao carregar versão do documento: ${versionError.message}`);
   }
 
   return versionRow ? mapDocumentVersionRow(versionRow as DocumentVersionRow) : null;
@@ -502,7 +502,7 @@ export async function getClause(clauseId: string) {
     if (clauseError.code === "22P02") {
       return null;
     }
-    throw clauseError;
+    throw new Error(`Falha ao carregar cláusula: ${clauseError.message}`);
   }
 
   if (!clauseRow) {
@@ -518,7 +518,7 @@ export async function getClause(clauseId: string) {
     .maybeSingle();
 
   if (versionError) {
-    throw versionError;
+    throw new Error(`Falha ao carregar versão do documento da cláusula: ${versionError.message}`);
   }
 
   if (!versionRow) {
@@ -536,7 +536,7 @@ export async function getClause(clauseId: string) {
     .maybeSingle();
 
   if (documentError) {
-    throw documentError;
+    throw new Error(`Falha ao carregar documento da cláusula: ${documentError.message}`);
   }
 
   if (!documentRow) {
@@ -658,7 +658,7 @@ export async function getScheduleActivity(activityId: string) {
     if (activityError.code === "22P02") {
       return null;
     }
-    throw activityError;
+    throw new Error(`Falha ao carregar atividade do cronograma: ${activityError.message}`);
   }
 
   if (!activityRow) {
@@ -674,7 +674,7 @@ export async function getScheduleActivity(activityId: string) {
     .maybeSingle();
 
   if (scheduleVersionError) {
-    throw scheduleVersionError;
+    throw new Error(`Falha ao carregar versão do cronograma: ${scheduleVersionError.message}`);
   }
 
   if (!scheduleVersionRow) {
@@ -692,7 +692,7 @@ export async function getScheduleActivity(activityId: string) {
     .maybeSingle();
 
   if (documentVersionError) {
-    throw documentVersionError;
+    throw new Error(`Falha ao carregar versão do documento do cronograma: ${documentVersionError.message}`);
   }
 
   if (!documentVersionRow) {
@@ -710,7 +710,7 @@ export async function getScheduleActivity(activityId: string) {
     .maybeSingle();
 
   if (documentError) {
-    throw documentError;
+    throw new Error(`Falha ao carregar documento do cronograma: ${documentError.message}`);
   }
 
   if (!documentRow) {
@@ -763,7 +763,7 @@ export async function getEmail(emailId: string) {
     if (error.code === "22P02") {
       return null;
     }
-    throw error;
+    throw new Error(`Falha ao carregar e-mail: ${error.message}`);
   }
 
   return data ? mapEmailRow(data as EmailRow) : null;
@@ -807,7 +807,7 @@ export async function getUser(userId: string) {
     if (error.code === "22P02") {
       return null;
     }
-    throw error;
+    throw new Error(`Falha ao carregar usuário: ${error.message}`);
   }
 
   return data ? mapUserRow(data as UserRow) : null;
