@@ -34,7 +34,7 @@ export function AppSidebar({ projectId }: { projectId: string }) {
     <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-card">
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
         <span className="text-sm font-semibold tracking-tight">AXION</span>
-        <span className="text-xs text-muted-foreground">Contract Intelligence</span>
+        <span className="text-xs text-muted-foreground">ACC</span>
       </div>
       <nav className="flex flex-1 flex-col gap-0.5 p-2">
         {navItems.map((item) => {

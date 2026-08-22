@@ -606,7 +606,7 @@ Respostas possíveis:
 
 ```
 Subject:
-[AXION Contract Intelligence] Avaliação de impacto de prazo — <Projeto> — <Alteração/Serviço>
+[ACC] Avaliação de impacto de prazo — <Projeto> — <Alteração/Serviço>
 
 Body:
 Foi identificado um serviço adicional ou alteração de projeto com

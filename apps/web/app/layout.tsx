@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AXION Contract Intelligence",
+  title: "AXION Acompanhamento de Contratos",
   description: "Plataforma de inteligência contratual para obras e projetos da Axion Engenharia.",
 };
 

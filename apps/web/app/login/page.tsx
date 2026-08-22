@@ -23,7 +23,7 @@ export default async function LoginPage({
     <div className="flex min-h-dvh items-center justify-center bg-muted p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-base">AXION Contract Intelligence</CardTitle>
+          <CardTitle className="text-base">AXION Acompanhamento de Contratos</CardTitle>
           <CardDescription>Acesso restrito a usuários autorizados por projeto.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
