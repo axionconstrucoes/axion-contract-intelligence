@@ -17,16 +17,18 @@ não as repete, apenas descreve como elas são aplicadas em código.
 
 | # | Expert | ID técnico | Status |
 | - | ------ | ----------- | ------ |
-| 1 | CEO IA | *(não definido)* | Planejado |
+| 1 | CEO IA | `ceo` (sugerido) | Planejado — definição formal em `docs/ai/expert-capabilities.md` |
 | 2 | **Diretor Comercial IA** | `commercial-director` | **Implementado (v1)** |
-| 3 | Consultor Jurídico IA | *(não definido)* | Planejado |
-| 4 | Diretor de Planejamento IA | *(não definido)* | Planejado |
-| 5 | Diretor de ESG IA | *(não definido)* | Planejado — fase futura |
+| 3 | Consultor Jurídico IA | `legal-consultant` (sugerido) | Planejado — definição formal em `docs/ai/expert-capabilities.md` |
+| 4 | Diretor de Planejamento IA | `planning-director` (sugerido) | Planejado — definição formal em `docs/ai/expert-capabilities.md` |
+| 5 | **Diretor de ESG IA** | `esg-director` | **Implementado (v1)** — ver `docs/esg-obligations.md` |
 
-Nenhum ID técnico é reservado antecipadamente para os Experts planejados
-— eles só entram em `ExpertId` (`apps/web/lib/ai/types.ts`) quando
-realmente implementados, para nunca sugerir que algo existe antes de
-existir.
+Um ID técnico "sugerido" existe apenas no catálogo formal
+(`apps/web/lib/ai/expert-definitions/`, tipo `OfficialExpertId`) —
+nenhum dos três Experts planejados entra em `ExpertId`
+(`apps/web/lib/ai/types.ts`, a união operacional) até ter
+`generateAssessment`/`answerQuery` realmente implementados, para nunca
+sugerir que algo existe antes de existir.
 
 > Um Expert chamado "Advogado Especialista em Contratos"
 > (`contract-lawyer`) chegou a ser implementado e foi **removido por

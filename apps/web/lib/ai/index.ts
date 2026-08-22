@@ -89,3 +89,30 @@ export {
   answerEsgDirectorQuery,
 } from "./experts/esg-director";
 export type { EsgDirectorQueryResult } from "./experts/esg-director";
+
+export type {
+  AuthorizedSourceRef,
+  ExpertCollaborationRule,
+  ExpertConfidenceRule,
+  ExpertDefinition,
+  ExpertEscalationRule,
+  ExpertImplementationStatus,
+  ExpertOutputType,
+  ExpertSourceStatus,
+  FactCategory,
+  OfficialExpertId,
+} from "./expert-definitions/types";
+export { formatExpertVersionTag } from "./expert-definitions/types";
+export {
+  ALL_OFFICIAL_EXPERT_DEFINITIONS,
+  CEO_DEFINITION,
+  COMMERCIAL_DIRECTOR_DEFINITION,
+  CORE_ESCALATION_RULES,
+  ESG_DIRECTOR_DEFINITION,
+  EXPERT_COLLABORATION_MATRIX,
+  getCollaborationRulesForExpert,
+  LEGAL_CONSULTANT_DEFINITION,
+  OFFICIAL_EXPERT_DEFINITIONS,
+  PLANNING_DIRECTOR_DEFINITION,
+  SHARED_SOURCE_CATALOG,
+} from "./expert-definitions";
