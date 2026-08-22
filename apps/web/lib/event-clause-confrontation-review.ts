@@ -77,7 +77,12 @@ export async function getEventClauseConfrontationCandidates(
     if (candidateError.code === "22P02") {
       return [];
     }
-    throw candidateError;
+    // Nunca lançar o objeto de erro do PostgREST diretamente: em um Server
+    // Component isso vira "Runtime Error [object Object]" no Next.js, sem
+    // nenhuma informação útil para diagnóstico.
+    throw new Error(
+      `Falha ao carregar candidatos de confrontação Evento x Cláusula: ${candidateError.message}`
+    );
   }
 
   const candidates = (candidateData ?? []) as unknown as CandidateRow[];
@@ -93,7 +98,7 @@ export async function getEventClauseConfrontationCandidates(
     .in("id", clauseIds);
 
   if (clauseError) {
-    throw clauseError;
+    throw new Error(`Falha ao carregar cláusulas do confronto: ${clauseError.message}`);
   }
 
   const clauseById = new Map((clauseData as unknown as ClauseRow[]).map((clause) => [clause.id, clause]));
