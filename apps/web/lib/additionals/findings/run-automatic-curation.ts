@@ -37,6 +37,14 @@ export interface RunAutomaticCurationInput {
   createdByUserId?: string;
   /** Só para testes — injeta o provider do confronto Jurídico sem depender de resolução por env var. */
   confrontationProvider?: AiProvider;
+  /**
+   * Data documental/de evento da fonte (Start-up ACC — seção 5/6 do
+   * requisito de revisão histórica). Quando informada e anterior a
+   * projects.acc_operational_start_date, o finding nasce
+   * HISTORICAL_PENDING_STARTUP_REVIEW em vez de NEW — nunca apresentado
+   * como ocorrência nova.
+   */
+  effectiveDate?: string | null;
 }
 
 export interface RunAutomaticCurationResult {
@@ -148,6 +156,22 @@ export async function runAutomaticCurationForClientSource(
       classification: confrontation.confrontation.classification,
     });
 
+    // Start-up ACC (seção 7): finding com data efetiva anterior ao início
+    // operacional nasce HISTORICAL_PENDING_STARTUP_REVIEW — nunca
+    // apresentado como ocorrência nova, nunca dispara e-mail/escalonamento
+    // normal antes da revisão humana do Start-up.
+    let initialLifecycleStatus: "NEW" | "HISTORICAL_PENDING_STARTUP_REVIEW" = "NEW";
+    if (input.effectiveDate) {
+      const { data: projectRow } = await supabase
+        .from("projects")
+        .select("acc_operational_start_date")
+        .eq("id", input.projectId)
+        .single();
+      if (projectRow?.acc_operational_start_date && input.effectiveDate < projectRow.acc_operational_start_date) {
+        initialLifecycleStatus = "HISTORICAL_PENDING_STARTUP_REVIEW";
+      }
+    }
+
     const { finding, created } = await persistFinding(supabase, {
       projectId: input.projectId,
       curationRunId: run.id,
@@ -164,6 +188,8 @@ export async function runAutomaticCurationForClientSource(
       conflictingSourceRefs,
       fingerprint,
       createdByUserId: input.createdByUserId,
+      effectiveDate: input.effectiveDate ?? null,
+      initialLifecycleStatus,
     });
 
     await completeCurationRun(supabase, run.id, routedExpertIds);

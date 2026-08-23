@@ -16,12 +16,14 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Plug,
+  Rocket,
   TimerReset,
   Users as UsersIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
+  { href: "startup", label: "Start-up ACC", icon: Rocket },
   { href: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "timeline", label: "Timeline", icon: History },
   { href: "ledger", label: "Event Ledger", icon: BookText },

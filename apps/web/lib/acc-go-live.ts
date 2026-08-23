@@ -1,8 +1,11 @@
-// Marco operacional oficial do ACC (AXION Acompanhamento de Contratos)
-// — a data de início operacional do PRODUTO, não de nenhum dado real do
-// sistema. Fonte única de verdade: reutilizar esta constante/estas
-// funções (Dashboard, relatórios, filtros, Manual, métricas "desde o
-// início operacional") em vez de hardcodar a data em vários lugares.
+// Marco operacional PADRÃO do ACC (AXION Acompanhamento de Contratos) —
+// nunca uma regra eterna hardcoded. Desde o pacote de Start-up ACC
+// (ver apps/web/lib/startup/), a data efetivamente autoritativa é
+// projects.acc_operational_start_date (configurável por projeto,
+// default '2026-08-24' — o mesmo valor de ACC_GO_LIVE_DATE abaixo).
+// Esta constante continua útil só como fallback/apresentação quando o
+// projeto ainda não foi carregado — nunca usar em vez do valor real do
+// projeto quando ele já está disponível.
 //
 // NUNCA usar para alterar/reinterpretar: created_at de registros,
 // migrations, trilha de auditoria, datas de documentos, eventos

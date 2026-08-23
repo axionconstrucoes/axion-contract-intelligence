@@ -35,7 +35,18 @@ export interface AiCurationRun {
   createdAt: string;
 }
 
-export type AiFindingLifecycleStatus = "NEW" | "PENDING_HUMAN_REVIEW" | "ACKNOWLEDGED" | "REJECTED" | "RESOLVED" | "SUPERSEDED";
+export type AiFindingLifecycleStatus =
+  | "NEW"
+  | "PENDING_HUMAN_REVIEW"
+  | "ACKNOWLEDGED"
+  | "REJECTED"
+  | "RESOLVED"
+  | "SUPERSEDED"
+  // Seção Start-up ACC — nunca usados fora do fluxo de revisão histórica de go-live.
+  | "HISTORICAL_PENDING_STARTUP_REVIEW"
+  | "DISMISSED_AT_STARTUP"
+  | "RESOLVED_BEFORE_GO_LIVE"
+  | "ACTION_CREATED";
 
 export interface AiFindingSourceRef {
   type: string;
@@ -64,6 +75,12 @@ export interface AiFinding {
   reviewerNote: string | null;
   reviewedByUserId: string | null;
   reviewedAt: string | null;
+  /** Data documental/de evento da fonte, quando disponível — nunca createdAt como única referência para decidir se é histórico. */
+  effectiveDate: string | null;
+  /** Preenchidos só quando lifecycleStatus = RESOLVED_BEFORE_GO_LIVE (Start-up ACC). */
+  resolutionDescription: string | null;
+  resolutionApproximateDate: string | null;
+  resolutionEvidenceNote: string | null;
   createdAt: string;
   updatedAt: string;
 }
