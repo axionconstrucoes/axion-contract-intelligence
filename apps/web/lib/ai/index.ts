@@ -34,7 +34,14 @@ export type {
   ProjectContextEventSummary,
 } from "./context/types";
 
-export type { AiProvider, AiProviderQueryRequest, AiProviderRequest, AiProviderResponse } from "./providers/types";
+export type {
+  AiProvider,
+  AiProviderCurationRequest,
+  AiProviderExpertPosition,
+  AiProviderQueryRequest,
+  AiProviderRequest,
+  AiProviderResponse,
+} from "./providers/types";
 export { createFakeAiProvider } from "./providers/fake-provider";
 export { getAiProvider } from "./providers/get-ai-provider";
 export { EXPERT_PROVIDER_ENV_VAR, resolveAiProviderForExpert, resolveAiProviderNameForExpert } from "./providers/resolve-provider-for-expert";
@@ -97,6 +104,44 @@ export {
   answerEsgDirectorQuery,
 } from "./experts/esg-director";
 export type { EsgDirectorQueryResult } from "./experts/esg-director";
+
+export {
+  LEGAL_CONSULTANT_EXPERT_ID,
+  LEGAL_CONSULTANT_INSTRUCTIONS,
+  LEGAL_CONSULTANT_NAME,
+  LEGAL_CONSULTANT_VERSION,
+  answerLegalConsultantQuery,
+} from "./experts/legal-consultant";
+export type { LegalConsultantQueryResult } from "./experts/legal-consultant";
+
+export {
+  PLANNING_DIRECTOR_EXPERT_ID,
+  PLANNING_DIRECTOR_INSTRUCTIONS,
+  PLANNING_DIRECTOR_NAME,
+  PLANNING_DIRECTOR_VERSION,
+  answerPlanningDirectorQuery,
+} from "./experts/planning-director";
+export type { PlanningDirectorQueryResult } from "./experts/planning-director";
+
+export {
+  CEO_EXPERT_ID,
+  CEO_INSTRUCTIONS,
+  CEO_NAME,
+  CEO_VERSION,
+  answerCeoQuery,
+  runExecutiveCuration,
+  ExecutiveCurationValidationError,
+} from "./experts/ceo";
+export type {
+  CeoQueryResult,
+  ExecutiveCuration,
+  ExecutiveCurationConflict,
+  ExecutiveCurationPosition,
+  ExecutiveCurationResult,
+} from "./experts/ceo";
+
+export type { CurationInput, CurationSourceType, ExpertCurationResult, ExpertRoutingDecision, MultiExpertCuration } from "./curation";
+export { decideExpertRouting, runMultiExpertCuration } from "./curation";
 
 export type {
   ClaimCategory,

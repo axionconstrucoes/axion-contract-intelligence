@@ -24,6 +24,7 @@ const {
   runCommercialDirectorExpert,
 } = await import("../apps/web/lib/ai/experts/commercial-director/index");
 const { buildEventAnalysisContext } = await import("../apps/web/lib/ai/context/build-event-context");
+const { createFakeAiProvider } = await import("../apps/web/lib/ai/providers/fake-provider");
 
 let passed = 0;
 let failed = 0;
@@ -246,7 +247,7 @@ if (!supabaseUrl || !serviceKey) {
         eventId: REFERENCE_EVENT_ID,
       });
 
-      const result = await runCommercialDirectorExpert(context);
+      const result = await runCommercialDirectorExpert(context, createFakeAiProvider());
 
       assert(result.assessment.expertId === "commercial-director", "expertId deveria ser commercial-director");
       assert(result.assessment.requiresHumanReview === true);
@@ -277,7 +278,7 @@ if (!supabaseUrl || !serviceKey) {
       candidateId: "cf375b5c-c18e-42f4-9337-ec48ecbf4306",
     });
 
-    const result = await runCommercialDirectorExpert(context);
+    const result = await runCommercialDirectorExpert(context, createFakeAiProvider());
     assert(result.audit.focusCandidateId === "cf375b5c-c18e-42f4-9337-ec48ecbf4306");
 
     const after = await snapshotCandidates();

@@ -19,6 +19,7 @@ const { COMMERCIAL_DIRECTOR_ASSESSMENT_JSON_SCHEMA } = await import(
   "../apps/web/lib/ai/experts/commercial-director/json-schema"
 );
 const { EXPERT_QUERY_RESPONSE_JSON_SCHEMA } = await import("../apps/web/lib/ai/query/json-schema");
+const { EXECUTIVE_CURATION_JSON_SCHEMA } = await import("../apps/web/lib/ai/experts/ceo/json-schema");
 const { runCommercialDirectorExpert } = await import("../apps/web/lib/ai/experts/commercial-director/index");
 const { validateCommercialDirectorAssessment } = await import("../apps/web/lib/ai/experts/commercial-director/schema");
 const { COMMERCIAL_DIRECTOR_VERSION } = await import("../apps/web/lib/ai/experts/commercial-director/identity");
@@ -282,6 +283,30 @@ function validAssessmentOutput() {
   };
 }
 
+function validQueryOutput() {
+  return {
+    expertId: "commercial-director",
+    expertName: "x",
+    expertVersion: "v1",
+    scope: "PROJECT",
+    question: "x",
+    fatosDocumentados: [],
+    contextoInternoDeclarado: [],
+    baseContratual: [],
+    baseLegal: [],
+    praticasNegociais: [],
+    interpretacao: "Interpretação de teste.",
+    riscos: [],
+    severity: "LOW",
+    recomendacoes: [],
+    acoesSugeridas: [],
+    informacoesFaltantes: [],
+    rascunhoSugerido: null,
+    confidence: 0.4,
+    requiresHumanReview: true,
+  };
+}
+
 function minimalEventContext() {
   return {
     projectId: "proj-1",
@@ -354,27 +379,30 @@ await checkAsync("request enviado ao Anthropic contém as instruções do Expert
   assert(callOptions[0]?.signal instanceof AbortSignal, "um AbortSignal deveria ser repassado ao client como segundo argumento (cortesia para cancelamento)");
 });
 
-await checkAsync("generateAssessment (esg-director) é rejeitado — Anthropic ainda não autorizado para ESG nesta fase", async () => {
-  const { client, calls } = makeMockClient(() => {
-    throw new Error("client não deveria ter sido chamado");
-  });
-  const provider = createAnthropicAiProvider({ config: FAKE_CONFIG, client });
+await checkAsync("answerQuery é aceito para os cinco Experts oficiais (todos autorizados no AnthropicAiProvider nesta fase)", async () => {
+  const toolInput = { ...validQueryOutput(), expertId: "placeholder" };
+  for (const expertId of ["commercial-director", "esg-director", "legal-consultant", "planning-director", "ceo"]) {
+    const output = { ...toolInput, expertId };
+    const { client, calls } = makeMockClient(() => ({
+      content: [{ type: "tool_use", id: "tu_1", name: "emit_expert_structured_output", input: output }],
+      stop_reason: "tool_use",
+    }));
+    const provider = createAnthropicAiProvider({ config: FAKE_CONFIG, client });
 
-  const error = await assertRejects(
-    provider.generateAssessment({
-      expertId: "esg-director",
-      expertName: "Diretor de ESG IA",
+    const response = await provider.answerQuery({
+      expertId,
+      expertName: "x",
       expertVersion: "v1",
       instructions: "x",
-      analysisType: "RISK_ASSESSMENT",
-      context: minimalEventContext(),
+      scope: "PROJECT",
+      question: "x",
+      eventContext: null,
+      projectContext: { projectId: "p1", project: { id: "p1", name: "P", client: "C", status: "ATIVO", contractNumber: null }, events: [], eventsTotalCount: 0, esgObligations: [], esgObligationsTotalCount: 0 },
       outputSchema: EXPERT_QUERY_RESPONSE_JSON_SCHEMA,
-    }),
-    "esg-director",
-    "esg-director deveria ser rejeitado"
-  );
-  assert(error.message.includes("commercial-director"), "mensagem deveria citar quem está autorizado");
-  assert(calls.length === 0, "client não deveria ter sido chamado — nenhum Expert não autorizado é ativado");
+    });
+    assert(response.providerId === "anthropic", `${expertId} deveria ter sido aceito pelo AnthropicAiProvider`);
+    assert(calls.length === 1, `${expertId} deveria ter chamado o client exatamente uma vez`);
+  }
 });
 
 await checkAsync('"contract-lawyer" continua rejeitado pelo AnthropicAiProvider (nunca reintroduzido)', async () => {
@@ -706,6 +734,45 @@ await checkAsync(
     assert(signalWasAborted, "o AbortSignal repassado ao client deveria ter sido abortado no timeout — evita deixar a requisição HTTP pendurada em segundo plano");
   }
 );
+
+// --- consolidateExecutiveCuration (CEO IA) ---
+
+await checkAsync("consolidateExecutiveCuration envia situationSummary + positions e retorna o output validável", async () => {
+  const output = {
+    situacao: "x",
+    fatosPrincipais: [],
+    posicoes: [],
+    divergencias: [],
+    riscos: [],
+    overallSeverity: "LOW",
+    alternativas: [],
+    recomendacao: "x",
+    decisoesHumanasNecessarias: [],
+    requiresHumanReview: true,
+  };
+  const { client, calls } = makeMockClient(() => ({
+    content: [{ type: "tool_use", id: "tu_1", name: "emit_expert_structured_output", input: output }],
+    stop_reason: "tool_use",
+  }));
+  const provider = createAnthropicAiProvider({ config: FAKE_CONFIG, client });
+
+  const response = await provider.consolidateExecutiveCuration({
+    expertId: "ceo",
+    expertName: "CEO IA",
+    expertVersion: "v1",
+    instructions: "INSTRUÇÕES-DE-TESTE-CEO",
+    situationSummary: "Situação de teste.",
+    positions: [{ expertId: "commercial-director", expertName: "Diretor Comercial IA", severity: "LOW", interpretacao: "x", riscos: [], recomendacoes: [], informacoesFaltantes: [] }],
+    outputSchema: EXECUTIVE_CURATION_JSON_SCHEMA,
+  });
+
+  assert(response.providerId === "anthropic");
+  assert(response.output === output);
+  assert(calls[0].system.includes("INSTRUÇÕES-DE-TESTE-CEO"));
+  assert(calls[0].tools[0].input_schema === EXECUTIVE_CURATION_JSON_SCHEMA);
+  assert(JSON.stringify(calls[0].messages).includes("Situação de teste."), "conteúdo enviado deveria incluir situationSummary");
+  assert(JSON.stringify(calls[0].messages).includes("commercial-director"), "conteúdo enviado deveria incluir as posições dos especialistas");
+});
 
 check("createAnthropicAiProvider não recebe nenhum client de banco de dados (nunca escreve no banco)", () => {
   assert(createAnthropicAiProvider.length <= 1, "assinatura não deveria aceitar um client de banco de dados");

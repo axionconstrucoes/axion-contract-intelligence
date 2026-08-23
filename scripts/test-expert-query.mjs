@@ -217,28 +217,28 @@ await checkAsync("fake provider (answerQuery) é determinístico", async () => {
 
 await checkAsync("escopo DOCUMENT falha fechado (não implementado nesta fase)", async () => {
   await assertRejects(
-    answerCommercialDirectorQuery({}, { scope: "DOCUMENT", projectId: "x", question: "teste" }),
+    answerCommercialDirectorQuery({}, { scope: "DOCUMENT", projectId: "x", question: "teste" }, createFakeAiProvider()),
     "DOCUMENT deveria falhar"
   );
 });
 
 await checkAsync("escopo EMAIL falha fechado (não implementado nesta fase)", async () => {
   await assertRejects(
-    answerCommercialDirectorQuery({}, { scope: "EMAIL", projectId: "x", question: "teste" }),
+    answerCommercialDirectorQuery({}, { scope: "EMAIL", projectId: "x", question: "teste" }, createFakeAiProvider()),
     "EMAIL deveria falhar"
   );
 });
 
 await checkAsync("escopo MULTI_EXPERT falha fechado (não implementado nesta fase)", async () => {
   await assertRejects(
-    answerCommercialDirectorQuery({}, { scope: "MULTI_EXPERT", projectId: "x", question: "teste" }),
+    answerCommercialDirectorQuery({}, { scope: "MULTI_EXPERT", projectId: "x", question: "teste" }, createFakeAiProvider()),
     "MULTI_EXPERT deveria falhar"
   );
 });
 
 await checkAsync("pergunta vazia falha", async () => {
   await assertRejects(
-    answerCommercialDirectorQuery({}, { scope: "PROJECT", projectId: "x", question: "   " }),
+    answerCommercialDirectorQuery({}, { scope: "PROJECT", projectId: "x", question: "   " }, createFakeAiProvider()),
     "pergunta vazia deveria falhar"
   );
 });
@@ -269,11 +269,11 @@ if (!supabaseUrl || !serviceKey) {
   await checkAsync("consulta PROJECT real não altera dados", async () => {
     const before = await snapshotCandidates();
 
-    const result = await answerCommercialDirectorQuery(supabase, {
-      scope: "PROJECT",
-      projectId: REFERENCE_PROJECT_ID,
-      question: "Quais são os principais riscos comerciais deste projeto?",
-    });
+    const result = await answerCommercialDirectorQuery(
+      supabase,
+      { scope: "PROJECT", projectId: REFERENCE_PROJECT_ID, question: "Quais são os principais riscos comerciais deste projeto?" },
+      createFakeAiProvider()
+    );
 
     assert(result.response.scope === "PROJECT");
     assert(result.response.requiresHumanReview === true);
@@ -285,12 +285,11 @@ if (!supabaseUrl || !serviceKey) {
   await checkAsync("consulta EVENT real não altera dados e reconhece USER_NOTE quando existir", async () => {
     const before = await snapshotCandidates();
 
-    const result = await answerCommercialDirectorQuery(supabase, {
-      scope: "EVENT",
-      projectId: REFERENCE_PROJECT_ID,
-      eventId: REFERENCE_EVENT_ID,
-      question: "Quais informações ainda faltam para tomarmos uma decisão?",
-    });
+    const result = await answerCommercialDirectorQuery(
+      supabase,
+      { scope: "EVENT", projectId: REFERENCE_PROJECT_ID, eventId: REFERENCE_EVENT_ID, question: "Quais informações ainda faltam para tomarmos uma decisão?" },
+      createFakeAiProvider()
+    );
 
     assert(result.response.scope === "EVENT");
     assert(result.response.requiresHumanReview === true);
@@ -301,12 +300,11 @@ if (!supabaseUrl || !serviceKey) {
   });
 
   await checkAsync('pergunta "redija um e-mail" produz rascunho DRAFT_PENDING_REVIEW (nunca enviado)', async () => {
-    const result = await answerCommercialDirectorQuery(supabase, {
-      scope: "EVENT",
-      projectId: REFERENCE_PROJECT_ID,
-      eventId: REFERENCE_EVENT_ID,
-      question: "Redija um e-mail ao cliente sobre este aditivo.",
-    });
+    const result = await answerCommercialDirectorQuery(
+      supabase,
+      { scope: "EVENT", projectId: REFERENCE_PROJECT_ID, eventId: REFERENCE_EVENT_ID, question: "Redija um e-mail ao cliente sobre este aditivo." },
+      createFakeAiProvider()
+    );
 
     assert(result.response.rascunhoSugerido !== null, "deveria ter sugerido rascunho");
     assert(result.response.rascunhoSugerido.status === "DRAFT_PENDING_REVIEW");

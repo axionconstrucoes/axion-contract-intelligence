@@ -11,9 +11,11 @@ import type { ResponseGroundingSummary } from "./grounding/types";
  * Identificador técnico estável do Expert. Nunca reutilizado para outro
  * papel. Só existe aqui um id por Expert realmente implementado — nomes de
  * Experts oficiais ainda não implementados (ver docs/ai/experts.md) não
- * entram nesta união.
+ * entram nesta união. Os cinco Experts oficiais (ver
+ * expert-definitions/types.ts OfficialExpertId) estão todos aqui desde a
+ * conexão a um provider real (ver providers/anthropic-provider.ts).
  */
-export type ExpertId = "commercial-director" | "esg-director";
+export type ExpertId = "commercial-director" | "esg-director" | "legal-consultant" | "planning-director" | "ceo";
 
 export type ExpertSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
 

@@ -4,7 +4,7 @@
 // FakeAiProvider (determinístico, sem custo, sem rede).
 
 import type { EventAnalysisContext, ProjectAnalysisContext } from "../context/types";
-import type { ExpertAnalysisType, ExpertId } from "../types";
+import type { ExpertAnalysisType, ExpertId, ExpertSeverity } from "../types";
 import type { ExpertQueryScope } from "../query/types";
 
 export interface AiProviderRequest {
@@ -53,6 +53,41 @@ export interface AiProviderQueryRequest {
 }
 
 /**
+ * Posição condensada de um Expert já consultado — a unidade de entrada da
+ * curadoria executiva do CEO IA (ver experts/ceo/consolidate.ts). Nunca a
+ * ExpertQueryResponse inteira (evita reenviar rascunhos/baseLegal/
+ * baseContratual completos ao consolidar — mesmo princípio de "não
+ * despejar tudo no modelo" já aplicado pelos Context Builders).
+ */
+export interface AiProviderExpertPosition {
+  expertId: ExpertId;
+  expertName: string;
+  severity: ExpertSeverity;
+  interpretacao: string;
+  riscos: string[];
+  recomendacoes: string[];
+  informacoesFaltantes: string[];
+}
+
+/**
+ * Requisição de consolidação executiva (CEO IA — ver
+ * experts/ceo/consolidate.ts). Distinta de AiProviderRequest/
+ * AiProviderQueryRequest: a "fonte de fatos" aqui não é um contexto do
+ * projeto, e sim as posições já produzidas pelos demais Experts nesta
+ * mesma rodada de curadoria (nunca inferidas, sempre as que realmente
+ * rodaram).
+ */
+export interface AiProviderCurationRequest {
+  expertId: ExpertId;
+  expertName: string;
+  expertVersion: string;
+  instructions: string;
+  situationSummary: string;
+  positions: AiProviderExpertPosition[];
+  outputSchema: Record<string, unknown>;
+}
+
+/**
  * Resultado bruto do provider — ainda NÃO validado como ExpertAssessment
  * nem como ExpertQueryResponse. A validação/normalização final é sempre
  * responsabilidade do Expert (ver schemas/), nunca do provider.
@@ -75,4 +110,6 @@ export interface AiProvider {
   generateAssessment(request: AiProviderRequest): Promise<AiProviderResponse>;
   /** Responde uma consulta conversacional (escopo PROJECT/EVENT nesta fase). */
   answerQuery(request: AiProviderQueryRequest): Promise<AiProviderResponse>;
+  /** Consolida posições de múltiplos Experts em uma curadoria executiva (CEO IA — ver experts/ceo/consolidate.ts). */
+  consolidateExecutiveCuration(request: AiProviderCurationRequest): Promise<AiProviderResponse>;
 }

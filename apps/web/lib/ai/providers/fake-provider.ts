@@ -15,7 +15,13 @@
 import type { EventAnalysisContext, ProjectAnalysisContext } from "../context/types";
 import { LEGAL_SOURCE_UNAVAILABLE_NOTICE } from "../legal/types";
 import type { ExpertContractualBasisRef, ExpertEvidenceRef, ExpertSeverity } from "../types";
-import type { AiProvider, AiProviderQueryRequest, AiProviderRequest, AiProviderResponse } from "./types";
+import type {
+  AiProvider,
+  AiProviderCurationRequest,
+  AiProviderQueryRequest,
+  AiProviderRequest,
+  AiProviderResponse,
+} from "./types";
 
 const SEVERITY_RANK: Record<ExpertSeverity, number> = {
   LOW: 0,
@@ -210,6 +216,45 @@ export function createFakeAiProvider(): AiProvider {
         ],
         uncertainties: [
           "Este resultado foi gerado por um provider determinístico (fake) — nenhuma análise real foi realizada.",
+        ],
+        requiresHumanReview: true,
+      };
+
+      return {
+        providerId: "fake",
+        model: null,
+        output,
+      };
+    },
+
+    async consolidateExecutiveCuration(request: AiProviderCurationRequest): Promise<AiProviderResponse> {
+      const highestSeverity = request.positions.reduce<ExpertSeverity>(
+        (highest, position) => (SEVERITY_RANK[position.severity] > SEVERITY_RANK[highest] ? position.severity : highest),
+        "LOW"
+      );
+
+      const output = {
+        situacao: request.situationSummary,
+        fatosPrincipais: request.positions.map((p) => `${p.expertName}: ${p.interpretacao}`),
+        posicoes: request.positions.map((p) => ({
+          expertId: p.expertId,
+          expertName: p.expertName,
+          severity: p.severity,
+          summary: p.interpretacao,
+        })),
+        // O provider fake nunca infere divergência real entre posições —
+        // isso exigiria interpretação, que este provider deliberadamente
+        // não produz (ver comentário no topo do arquivo).
+        divergencias: [],
+        riscos: request.positions.flatMap((p) => p.riscos),
+        overallSeverity: highestSeverity,
+        alternativas: [],
+        recomendacao:
+          "Nenhuma consolidação executiva real foi realizada — este é o provider determinístico (fake) usado para " +
+          "validar a estrutura de saída antes da conexão de um LLM real. Configure um provider real (AXION_AI_PROVIDER_CEO).",
+        decisoesHumanasNecessarias: [
+          ...new Set(request.positions.flatMap((p) => p.informacoesFaltantes)),
+          "Revisar manualmente as posições de cada Expert antes de qualquer decisão executiva.",
         ],
         requiresHumanReview: true,
       };

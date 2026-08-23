@@ -3,14 +3,10 @@
 // Code CLI/SDK. Ver docs/ai/anthropic-provider.md para a documentação
 // completa (configuração, saída estruturada, fail-closed, limites).
 //
-// DELIBERADAMENTE RESTRITO NESTA FASE: diferente do FakeAiProvider
-// (genérico por design — nunca conhece qual Expert está chamando), o
-// AnthropicAiProvider só está autorizado a operar para o Diretor
-// Comercial IA (commercial-director). Isto é uma decisão de produto
-// explícita desta fase, aplicada em runtime (ANTHROPIC_ALLOWED_EXPERT_IDS),
-// não uma limitação técnica — nunca ativa CEO IA, Consultor Jurídico IA,
-// Diretor de Planejamento IA nem Diretor de ESG IA, mesmo que
-// AXION_AI_PROVIDER=anthropic esteja configurado globalmente.
+// Autorizado para os cinco Experts oficiais do ACC
+// (ANTHROPIC_ALLOWED_EXPERT_IDS) — cada um só é efetivamente ativado
+// quando sua própria variável de provider resolve para "anthropic" (ver
+// resolve-provider-for-expert.ts); ativar um nunca ativa os demais.
 //
 // Saída estruturada: usa tool-use forçado (tool_choice fixo em uma
 // única ferramenta cujo input_schema é o JSON Schema do Expert
@@ -24,9 +20,21 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ExpertId } from "../types";
 import { loadAnthropicConfig, type AnthropicProviderConfig } from "./anthropic-config";
-import type { AiProvider, AiProviderQueryRequest, AiProviderRequest, AiProviderResponse } from "./types";
+import type {
+  AiProvider,
+  AiProviderCurationRequest,
+  AiProviderQueryRequest,
+  AiProviderRequest,
+  AiProviderResponse,
+} from "./types";
 
-const ANTHROPIC_ALLOWED_EXPERT_IDS: ExpertId[] = ["commercial-director"];
+const ANTHROPIC_ALLOWED_EXPERT_IDS: ExpertId[] = [
+  "commercial-director",
+  "esg-director",
+  "legal-consultant",
+  "planning-director",
+  "ceo",
+];
 const ANTHROPIC_MAX_RETRIES = 2;
 const TOOL_NAME = "emit_expert_structured_output";
 
@@ -78,8 +86,7 @@ function assertExpertAllowed(expertId: ExpertId): void {
   if (!ANTHROPIC_ALLOWED_EXPERT_IDS.includes(expertId)) {
     throw new Error(
       `AnthropicAiProvider ainda não está autorizado para o Expert "${expertId}" nesta fase — somente ` +
-        `${ANTHROPIC_ALLOWED_EXPERT_IDS.join(", ")}. Não conectar CEO IA, Consultor Jurídico IA, Diretor de ` +
-        "Planejamento IA nem Diretor de ESG IA a um LLM real ainda (decisão de produto, não limitação técnica)."
+        `${ANTHROPIC_ALLOWED_EXPERT_IDS.join(", ")}.`
     );
   }
 }
@@ -340,6 +347,21 @@ export function createAnthropicAiProvider(overrides?: AnthropicAiProviderOverrid
         "",
         "CONTEXTO AUTORIZADO (única fonte de fatos permitida — nunca use conhecimento geral para preencher fatos deste projeto):",
         serializeContext(contextPayload),
+      ].join("\n");
+
+      return callAnthropic(client, config, systemPrompt, userContent, request.outputSchema);
+    },
+
+    async consolidateExecutiveCuration(request: AiProviderCurationRequest): Promise<AiProviderResponse> {
+      assertExpertAllowed(request.expertId);
+
+      const systemPrompt = buildSystemPrompt(request.instructions);
+      const userContent = [
+        `Situação a consolidar: ${request.situationSummary}`,
+        "",
+        "POSIÇÕES JÁ PRODUZIDAS PELOS ESPECIALISTAS NESTA RODADA (única fonte de fatos permitida — nunca invente a " +
+          "posição de um Expert que não está listado aqui):",
+        serializeContext(request.positions),
       ].join("\n");
 
       return callAnthropic(client, config, systemPrompt, userContent, request.outputSchema);

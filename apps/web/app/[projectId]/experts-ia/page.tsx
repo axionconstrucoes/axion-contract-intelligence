@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ALL_OFFICIAL_EXPERT_DEFINITIONS, type OfficialExpertId } from "@/lib/ai/expert-definitions";
+import { buildAiProviderUiMetadata } from "@/lib/ai/provider-ui-metadata";
+import { resolveAiProviderNameForExpert } from "@/lib/ai/providers/resolve-provider-for-expert";
 import { cn } from "@/lib/utils";
 
 // Hub central dos 5 Experts oficiais do ACC — nunca substitui os
@@ -35,6 +37,7 @@ export default async function ExpertsIaPage({ params }: { params: Promise<{ proj
         {ALL_OFFICIAL_EXPERT_DEFINITIONS.map((expert) => {
           const isActive = expert.status === "IMPLEMENTED";
           const href = EXPERT_ACCESS_HREF[expert.expertId]?.(projectId);
+          const providerMeta = buildAiProviderUiMetadata(resolveAiProviderNameForExpert(expert.expertId), null);
 
           return (
             <Card key={expert.expertId} className="flex flex-col">
@@ -47,12 +50,19 @@ export default async function ExpertsIaPage({ params }: { params: Promise<{ proj
                   </Badge>
                 </div>
                 <p className="text-xs text-muted-foreground">{expert.mission}</p>
+                <Badge variant="outline" className="w-fit text-[10px] font-normal text-muted-foreground">
+                  Provider: {providerMeta.providerLabel}
+                </Badge>
               </CardHeader>
               <CardContent className="mt-auto">
                 {isActive && href ? (
                   <Link href={href} className={cn(buttonVariants({ size: "sm" }))}>
                     Abrir Expert
                   </Link>
+                ) : isActive ? (
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Operacional — consulta disponível via API; interface dedicada ainda não construída nesta fase.
+                  </span>
                 ) : (
                   <span className="text-xs font-medium text-muted-foreground">
                     Em implantação — ainda não operacional nesta fase.

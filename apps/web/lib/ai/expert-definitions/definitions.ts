@@ -5,8 +5,11 @@
 // explicitamente quais já têm operação real (generateAssessment/
 // answerQuery) e quais são só a definição formal.
 
+import { CEO_EXPERT_ID, CEO_VERSION } from "../experts/ceo/identity";
 import { COMMERCIAL_DIRECTOR_EXPERT_ID, COMMERCIAL_DIRECTOR_VERSION } from "../experts/commercial-director/identity";
 import { ESG_DIRECTOR_EXPERT_ID, ESG_DIRECTOR_VERSION } from "../experts/esg-director/identity";
+import { LEGAL_CONSULTANT_EXPERT_ID, LEGAL_CONSULTANT_VERSION } from "../experts/legal-consultant/identity";
+import { PLANNING_DIRECTOR_EXPERT_ID, PLANNING_DIRECTOR_VERSION } from "../experts/planning-director/identity";
 import {
   CORE_ESCALATION_RULES,
   getCollaborationRulesForExpert,
@@ -85,14 +88,15 @@ export const COMMERCIAL_DIRECTOR_DEFINITION: ExpertDefinition = {
 };
 
 // ============================================================
-// Seção 4 — Consultor Jurídico IA (definição formal; não operacional).
+// Seção 4 — Consultor Jurídico IA (operacional — consulta conversacional
+// via experts/legal-consultant/query.ts, mesmo padrão do Diretor de ESG IA).
 // ============================================================
 
 export const LEGAL_CONSULTANT_DEFINITION: ExpertDefinition = {
-  expertId: "legal-consultant",
+  expertId: LEGAL_CONSULTANT_EXPERT_ID,
   expertName: "Consultor Jurídico IA",
-  version: "v1",
-  status: "PLANNED",
+  version: LEGAL_CONSULTANT_VERSION,
+  status: "IMPLEMENTED",
   mission: "Realizar análise jurídica aprofundada de contratos, fatos, comunicações e evidências dos projetos da AXION.",
   authorizedSources: [
     SOURCE_DOCUMENTS,
@@ -140,7 +144,7 @@ export const LEGAL_CONSULTANT_DEFINITION: ExpertDefinition = {
     "Nunca inventa artigo de lei, citação legal ou base normativa",
     "Enquanto a base legal oficial (SOURCE_LEGAL_CORPUS) não estiver carregada, declara explicitamente essa limitação em vez de citar norma",
     "Sempre distingue LEGAL_REQUIREMENT, CONTRACTUAL_REQUIREMENT, NEGOTIATION_PRACTICE e AI_RECOMMENDATION",
-    "Ainda não é operacional nesta fase — apenas definição formal (sem generateAssessment/answerQuery reais)",
+    "Consulta conversacional apenas (answerQuery, escopo PROJECT/EVENT) — sem generateAssessment/ExpertAssessment dedicado nesta fase",
   ],
   escalationRules: [
     ...CORE_ESCALATION_RULES,
@@ -155,16 +159,17 @@ export const LEGAL_CONSULTANT_DEFINITION: ExpertDefinition = {
 };
 
 // ============================================================
-// Seção 5 — Diretor de Planejamento IA (definição formal; não
-// operacional). Escopo deliberadamente reduzido: só atraso/aceleração
-// com consequência econômica ou contratual relevante.
+// Seção 5 — Diretor de Planejamento IA (operacional — consulta
+// conversacional via experts/planning-director/query.ts). Escopo
+// deliberadamente reduzido: só atraso/aceleração com consequência
+// econômica ou contratual relevante.
 // ============================================================
 
 export const PLANNING_DIRECTOR_DEFINITION: ExpertDefinition = {
-  expertId: "planning-director",
+  expertId: PLANNING_DIRECTOR_EXPERT_ID,
   expertName: "Diretor de Planejamento IA",
-  version: "v1",
-  status: "PLANNED",
+  version: PLANNING_DIRECTOR_VERSION,
+  status: "IMPLEMENTED",
   mission:
     "Analisar exclusivamente atrasos e acelerações de cronograma que possam gerar consequência econômica ou contratual relevante para a AXION.",
   authorizedSources: [SOURCE_SCHEDULE_ACTIVITIES, SOURCE_CONTRACT_EVENTS, SOURCE_CONTRACT_CHANGES, SOURCE_DOCUMENTS, SOURCE_TIMELINE],
@@ -186,7 +191,7 @@ export const PLANNING_DIRECTOR_DEFINITION: ExpertDefinition = {
     "Não realiza gestão operacional de produção nem planejamento de produção amplo",
     "Se não houver consequência econômica ou contratual identificável, não aprofunda a análise",
     "Nunca inventa impacto de cronograma sem correlação real com um evento/atividade das fontes",
-    "Ainda não é operacional nesta fase — apenas definição formal (sem generateAssessment/answerQuery reais)",
+    "Consulta conversacional apenas (answerQuery, escopo PROJECT/EVENT) — sem generateAssessment/ExpertAssessment dedicado nesta fase",
   ],
   escalationRules: [...CORE_ESCALATION_RULES],
   collaborationRules: getCollaborationRulesForExpert("planning-director"),
@@ -238,15 +243,18 @@ export const ESG_DIRECTOR_DEFINITION: ExpertDefinition = {
 };
 
 // ============================================================
-// Seção 7 — CEO IA (definição formal; não operacional). Camada
-// executiva/integradora — nunca substitui as análises especializadas.
+// Seção 7 — CEO IA (operacional — consulta individual via
+// experts/ceo/query.ts + consolidação executiva multi-Expert via
+// experts/ceo/consolidate.ts, usada por apps/web/lib/ai/curation/).
+// Camada executiva/integradora — nunca substitui as análises
+// especializadas.
 // ============================================================
 
 export const CEO_DEFINITION: ExpertDefinition = {
-  expertId: "ceo",
+  expertId: CEO_EXPERT_ID,
   expertName: "CEO IA",
-  version: "v1",
-  status: "PLANNED",
+  version: CEO_VERSION,
+  status: "IMPLEMENTED",
   mission:
     "Atuar como camada executiva e integradora sobre os demais Experts — consolidar, comparar e priorizar, sem nunca substituir uma análise especializada nem executar uma decisão.",
   authorizedSources: [SOURCE_SLA_ACTIONS, SOURCE_CONTRACT_EVENTS, SOURCE_TIMELINE, SOURCE_ESG_OBLIGATIONS, SOURCE_CONTRACT_CHANGES],
@@ -270,7 +278,7 @@ export const CEO_DEFINITION: ExpertDefinition = {
     "Nunca substitui a análise de um Expert especializado — sempre consolida, nunca reinterpreta a fundo o domínio de outro Expert",
     "Nunca executa uma decisão — apenas recomenda; a decisão e a execução são sempre humanas",
     "Formato de saída obrigatório, nesta ordem: SITUAÇÃO / FATOS PRINCIPAIS / POSIÇÃO DO DIRETOR COMERCIAL IA / POSIÇÃO DO CONSULTOR JURÍDICO IA / POSIÇÃO DO DIRETOR DE PLANEJAMENTO IA / POSIÇÃO DO DIRETOR DE ESG IA / DIVERGÊNCIAS / RISCOS / ALTERNATIVAS / RECOMENDAÇÃO / DECISÕES HUMANAS NECESSÁRIAS",
-    "Ainda não é operacional nesta fase — apenas definição formal (sem generateAssessment/answerQuery reais)",
+    "Nunca produz rascunho de comunicação — essa é competência exclusiva dos Experts especializados",
   ],
   escalationRules: [...CORE_ESCALATION_RULES],
   collaborationRules: getCollaborationRulesForExpert("ceo"),

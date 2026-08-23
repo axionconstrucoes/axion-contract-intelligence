@@ -173,28 +173,28 @@ await checkAsync("fake provider (answerQuery) é determinístico", async () => {
 
 await checkAsync("escopo DOCUMENT falha fechado (não implementado nesta fase)", async () => {
   await assertRejects(
-    answerEsgDirectorQuery({}, { scope: "DOCUMENT", projectId: "x", question: "teste" }),
+    answerEsgDirectorQuery({}, { scope: "DOCUMENT", projectId: "x", question: "teste" }, createFakeAiProvider()),
     "DOCUMENT deveria falhar"
   );
 });
 
 await checkAsync("escopo EMAIL falha fechado (não implementado nesta fase)", async () => {
   await assertRejects(
-    answerEsgDirectorQuery({}, { scope: "EMAIL", projectId: "x", question: "teste" }),
+    answerEsgDirectorQuery({}, { scope: "EMAIL", projectId: "x", question: "teste" }, createFakeAiProvider()),
     "EMAIL deveria falhar"
   );
 });
 
 await checkAsync("escopo MULTI_EXPERT falha fechado (não implementado nesta fase)", async () => {
   await assertRejects(
-    answerEsgDirectorQuery({}, { scope: "MULTI_EXPERT", projectId: "x", question: "teste" }),
+    answerEsgDirectorQuery({}, { scope: "MULTI_EXPERT", projectId: "x", question: "teste" }, createFakeAiProvider()),
     "MULTI_EXPERT deveria falhar"
   );
 });
 
 await checkAsync("pergunta vazia falha", async () => {
   await assertRejects(
-    answerEsgDirectorQuery({}, { scope: "PROJECT", projectId: "x", question: "   " }),
+    answerEsgDirectorQuery({}, { scope: "PROJECT", projectId: "x", question: "   " }, createFakeAiProvider()),
     "pergunta vazia deveria falhar"
   );
 });
@@ -225,11 +225,11 @@ if (!supabaseUrl || !serviceKey) {
   await checkAsync("consulta PROJECT real não altera dados (nenhuma obrigação criada/alterada)", async () => {
     const before = await snapshotObligations();
 
-    const result = await answerEsgDirectorQuery(supabase, {
-      scope: "PROJECT",
-      projectId: REFERENCE_PROJECT_ID,
-      question: "Quais obrigações ESG/SSMA estão pendentes ou vencidas?",
-    });
+    const result = await answerEsgDirectorQuery(
+      supabase,
+      { scope: "PROJECT", projectId: REFERENCE_PROJECT_ID, question: "Quais obrigações ESG/SSMA estão pendentes ou vencidas?" },
+      createFakeAiProvider()
+    );
 
     assert(result.response.scope === "PROJECT");
     assert(result.response.expertId === "esg-director");
@@ -240,23 +240,22 @@ if (!supabaseUrl || !serviceKey) {
   });
 
   await checkAsync("consulta EVENT real não altera dados (contexto de evento, sem obrigações — nível de projeto)", async () => {
-    const result = await answerEsgDirectorQuery(supabase, {
-      scope: "EVENT",
-      projectId: REFERENCE_PROJECT_ID,
-      eventId: REFERENCE_EVENT_ID,
-      question: "Este evento tem relação com alguma obrigação ESG/SSMA?",
-    });
+    const result = await answerEsgDirectorQuery(
+      supabase,
+      { scope: "EVENT", projectId: REFERENCE_PROJECT_ID, eventId: REFERENCE_EVENT_ID, question: "Este evento tem relação com alguma obrigação ESG/SSMA?" },
+      createFakeAiProvider()
+    );
 
     assert(result.response.scope === "EVENT");
     assert(result.response.requiresHumanReview === true);
   });
 
   await checkAsync('pergunta "prepare uma cobrança" produz rascunho DRAFT_PENDING_REVIEW (nunca enviado)', async () => {
-    const result = await answerEsgDirectorQuery(supabase, {
-      scope: "PROJECT",
-      projectId: REFERENCE_PROJECT_ID,
-      question: "Prepare uma cobrança para os documentos ESG/SSMA faltantes.",
-    });
+    const result = await answerEsgDirectorQuery(
+      supabase,
+      { scope: "PROJECT", projectId: REFERENCE_PROJECT_ID, question: "Prepare uma cobrança para os documentos ESG/SSMA faltantes." },
+      createFakeAiProvider()
+    );
 
     assert(result.response.rascunhoSugerido !== null, "deveria ter sugerido rascunho");
     assert(result.response.rascunhoSugerido.status === "DRAFT_PENDING_REVIEW");
