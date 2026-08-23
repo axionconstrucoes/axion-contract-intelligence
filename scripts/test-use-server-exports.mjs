@@ -80,11 +80,41 @@ function findInvalidUseServerExports(source) {
   return invalid;
 }
 
+// Todos os módulos "use server" do app (varredura registrada
+// manualmente — ver relatório da tarefa "MODO ACELERADO ACC" para a
+// data desta varredura). Adicionar aqui qualquer novo Server Action
+// futuro para manter a proteção global.
+const ALL_USE_SERVER_FILES = [
+  "apps/web/app/login/actions.ts",
+  "apps/web/app/[projectId]/acoes/actions.ts",
+  "apps/web/app/[projectId]/action-requests/actions.ts",
+  "apps/web/app/[projectId]/esg/actions.ts",
+  "apps/web/app/[projectId]/ledger/[eventId]/actions.ts",
+  "apps/web/app/[projectId]/ledger/[eventId]/event-notes-actions.ts",
+  "apps/web/app/[projectId]/ledger/[eventId]/send-alert-actions.ts",
+  "apps/web/app/[projectId]/revisao-clausulas/actions.ts",
+  "apps/web/app/[projectId]/revisao-contratual/actions.ts",
+  "apps/web/app/[projectId]/timeline/timeline-export-actions.ts",
+  "apps/web/lib/ai/esg-query-action.ts",
+  "apps/web/lib/ai/expert-query-action.ts",
+  "apps/web/lib/auth-actions.ts",
+];
+
 console.log("");
 console.log("======================================");
-console.log('"USE SERVER" EXPORT SHAPE — TESTES (fluxo dos Experts)');
+console.log('"USE SERVER" EXPORT SHAPE — TESTES');
 console.log("======================================");
 console.log("");
+
+check(`todos os ${ALL_USE_SERVER_FILES.length} módulos "use server" do app exportam SOMENTE funções async (varredura global)`, () => {
+  const offenders = [];
+  for (const file of ALL_USE_SERVER_FILES) {
+    const source = readSource(file);
+    const invalid = findInvalidUseServerExports(source);
+    if (invalid.length > 0) offenders.push(`${file}: ${JSON.stringify(invalid)}`);
+  }
+  assert(offenders.length === 0, `arquivo(s) com export inválido: ${offenders.join(" | ")}`);
+});
 
 check(
   'expert-query-action.ts (Diretor Comercial IA) exporta SOMENTE funções async — nunca objeto/const/enum/schema/metadata (o bug real reportado)',
@@ -124,6 +154,39 @@ check("expert-query-panel.tsx (Client Component) importa o estado inicial de exp
     !/initialAskCommercialDirectorState.*from\s+"@\/lib\/ai\/expert-query-action"/s.test(source),
     "estado inicial não deveria mais ser importado do módulo use server"
   );
+});
+
+check("acoes/actions-state.ts concentra os 9 estados iniciais de Ações e Escalonamentos, fora do módulo use server", () => {
+  const source = readSource("apps/web/app/[projectId]/acoes/actions-state.ts");
+  assert(!source.trimStart().startsWith('"use server"'));
+  for (const name of [
+    "initialCreateSlaActionState",
+    "initialAssumeSlaActionState",
+    "initialStartSlaActionState",
+    "initialCompleteSlaActionState",
+    "initialReassignSlaActionState",
+    "initialConfigureSlaMatrixState",
+    "initialConfigureSlaResponsiblesState",
+    "initialProcessSlaEscalationsState",
+    "initialConfigureSlaProjectSettingsState",
+  ]) {
+    assert(source.includes(`export const ${name}`), `${name} deveria estar em actions-state.ts`);
+  }
+  const actionsSource = readSource("apps/web/app/[projectId]/acoes/actions.ts");
+  assert(!actionsSource.includes("export const initial"), "actions.ts não deveria mais exportar nenhum estado inicial");
+});
+
+check("esg/actions-state.ts, ledger/[eventId]/actions-state.ts, event-notes-actions-state.ts e send-alert-actions-state.ts existem e não têm use server", () => {
+  for (const file of [
+    "apps/web/app/[projectId]/esg/actions-state.ts",
+    "apps/web/app/[projectId]/ledger/[eventId]/actions-state.ts",
+    "apps/web/app/[projectId]/ledger/[eventId]/event-notes-actions-state.ts",
+    "apps/web/app/[projectId]/ledger/[eventId]/send-alert-actions-state.ts",
+  ]) {
+    const source = readSource(file);
+    assert(!source.trimStart().startsWith('"use server"'), `${file} não deveria ter a diretiva use server`);
+    assert(source.includes("export const initial"), `${file} deveria exportar ao menos um estado inicial`);
+  }
 });
 
 console.log("");

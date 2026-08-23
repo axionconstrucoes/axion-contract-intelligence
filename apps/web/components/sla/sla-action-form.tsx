@@ -8,7 +8,8 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { slaAreaLabels } from "@/lib/labels";
 import type { SlaArea } from "@/lib/sla/types";
-import { createSlaActionAction, initialCreateSlaActionState } from "@/app/[projectId]/acoes/actions";
+import { createSlaActionAction } from "@/app/[projectId]/acoes/actions";
+import { initialCreateSlaActionState } from "@/app/[projectId]/acoes/actions-state";
 
 const AREA_OPTIONS = Object.keys(slaAreaLabels) as SlaArea[];
 

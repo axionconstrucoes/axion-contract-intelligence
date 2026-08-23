@@ -6,6 +6,10 @@ import { createSupabaseServerClient } from "@axion/db/server";
 
 import { computeObligationRisk } from "@/lib/esg/compute-obligation-risk";
 import type { EsgRiskLevel } from "@/lib/esg/types";
+import type { CreateEsgObligationState, CreateEsgSubmissionState, ReviewEsgSubmissionState } from "./actions-state";
+
+// Este módulo é "use server" — só pode exportar funções async (Server
+// Actions). Tipos e estados iniciais vivem em ./actions-state.ts.
 
 function optionalField(formData: FormData, name: string): string | null {
   const value = String(formData.get(name) ?? "").trim();
@@ -19,9 +23,6 @@ function requiredField(formData: FormData, name: string): string {
 }
 
 // ---------------- Criar obrigação (checklist configurável) ----------------
-
-export type CreateEsgObligationState = { error: string | null; success: boolean };
-export const initialCreateEsgObligationState: CreateEsgObligationState = { error: null, success: false };
 
 // Configurar o checklist exige EDITOR/ADMIN — a policy RLS
 // "esg_obligations_insert_editor" (identidade + permissão) é a única
@@ -77,9 +78,6 @@ export async function createEsgObligationAction(
 }
 
 // ---------------- Registrar comprovação (submission) ----------------
-
-export type CreateEsgSubmissionState = { error: string | null; submissionId: string | null };
-export const initialCreateEsgSubmissionState: CreateEsgSubmissionState = { error: null, submissionId: null };
 
 // O cálculo de risco (seção 12/13) é sempre determinístico e feito aqui,
 // nunca pela IA — computeObligationRisk é puro e testado isoladamente.
@@ -193,9 +191,6 @@ export async function createEsgObligationSubmissionAction(
 }
 
 // ---------------- Revisão (ADMIN) ----------------
-
-export type ReviewEsgSubmissionState = { error: string | null; success: boolean };
-export const initialReviewEsgSubmissionState: ReviewEsgSubmissionState = { error: null, success: false };
 
 export async function reviewEsgObligationSubmissionAction(
   _prevState: ReviewEsgSubmissionState,

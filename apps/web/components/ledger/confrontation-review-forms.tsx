@@ -3,10 +3,8 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  initialReviewEventClauseConfrontationCandidateState,
-  reviewEventClauseConfrontationCandidateAction,
-} from "@/app/[projectId]/ledger/[eventId]/actions";
+import { reviewEventClauseConfrontationCandidateAction } from "@/app/[projectId]/ledger/[eventId]/actions";
+import { initialReviewEventClauseConfrontationCandidateState } from "@/app/[projectId]/ledger/[eventId]/actions-state";
 
 export function ConfrontationReviewForms({
   projectId,

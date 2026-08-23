@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { esgObligationStatusLabels, type EsgObligationStatus } from "@/lib/labels";
-import { createEsgObligationSubmissionAction, initialCreateEsgSubmissionState } from "@/app/[projectId]/esg/actions";
+import { createEsgObligationSubmissionAction } from "@/app/[projectId]/esg/actions";
+import { initialCreateEsgSubmissionState } from "@/app/[projectId]/esg/actions-state";
 
 const STATUS_OPTIONS = Object.keys(esgObligationStatusLabels) as EsgObligationStatus[];
 const BUCKET = "project-documents";

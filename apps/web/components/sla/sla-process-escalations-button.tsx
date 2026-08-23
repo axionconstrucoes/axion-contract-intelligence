@@ -3,7 +3,8 @@
 import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { initialProcessSlaEscalationsState, processSlaEscalationsAction } from "@/app/[projectId]/acoes/actions";
+import { processSlaEscalationsAction } from "@/app/[projectId]/acoes/actions";
+import { initialProcessSlaEscalationsState } from "@/app/[projectId]/acoes/actions-state";
 
 // Dispara a varredura do motor determinístico de SLA (seção 10) — nenhum
 // LLM decide aqui, só aritmética de datas já calculada em

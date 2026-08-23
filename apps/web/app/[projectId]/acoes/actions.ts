@@ -20,6 +20,20 @@ import {
   getSlaProjectSettings,
 } from "@/lib/sla/sla-actions-data";
 import type { SlaArea, SlaEscalationLevel, SlaRiskLevel } from "@/lib/sla/types";
+import type {
+  AssumeSlaActionState,
+  CompleteSlaActionState,
+  ConfigureSlaMatrixState,
+  ConfigureSlaProjectSettingsState,
+  ConfigureSlaResponsiblesState,
+  CreateSlaActionState,
+  ProcessSlaEscalationsState,
+  ReassignSlaActionState,
+  StartSlaActionState,
+} from "./actions-state";
+
+// Este módulo é "use server" — só pode exportar funções async (Server
+// Actions). Tipos e estados iniciais vivem em ./actions-state.ts.
 
 function optionalField(formData: FormData, name: string): string | null {
   const value = String(formData.get(name) ?? "").trim();
@@ -47,9 +61,6 @@ const ESCALATION_LEVEL_LABELS: Record<SlaEscalationLevel, string> = {
 };
 
 // ---------------- Criar ação ----------------
-
-export type CreateSlaActionState = { error: string | null; success: boolean };
-export const initialCreateSlaActionState: CreateSlaActionState = { error: null, success: false };
 
 // A ação nasce sujeita à matriz: os três prazos do Relógio B são
 // calculados aqui, uma única vez, a partir da regra resolvida
@@ -134,9 +145,6 @@ export async function createSlaActionAction(
 
 // ---------------- Assumir ação ----------------
 
-export type AssumeSlaActionState = { error: string | null; success: boolean };
-export const initialAssumeSlaActionState: AssumeSlaActionState = { error: null, success: false };
-
 export async function assumeSlaActionAction(
   _prevState: AssumeSlaActionState,
   formData: FormData
@@ -177,9 +185,6 @@ export async function assumeSlaActionAction(
 
 // ---------------- Iniciar ação ----------------
 
-export type StartSlaActionState = { error: string | null; success: boolean };
-export const initialStartSlaActionState: StartSlaActionState = { error: null, success: false };
-
 export async function startSlaActionAction(
   _prevState: StartSlaActionState,
   formData: FormData
@@ -204,9 +209,6 @@ export async function startSlaActionAction(
 }
 
 // ---------------- Concluir ação ----------------
-
-export type CompleteSlaActionState = { error: string | null; success: boolean };
-export const initialCompleteSlaActionState: CompleteSlaActionState = { error: null, success: false };
 
 export async function completeSlaActionAction(
   _prevState: CompleteSlaActionState,
@@ -250,9 +252,6 @@ export async function completeSlaActionAction(
 
 // ---------------- Reatribuir ação (ADMIN) ----------------
 
-export type ReassignSlaActionState = { error: string | null; success: boolean };
-export const initialReassignSlaActionState: ReassignSlaActionState = { error: null, success: false };
-
 export async function reassignSlaActionAction(
   _prevState: ReassignSlaActionState,
   formData: FormData
@@ -281,9 +280,6 @@ export async function reassignSlaActionAction(
 }
 
 // ---------------- Configurar matriz de SLA (ADMIN) ----------------
-
-export type ConfigureSlaMatrixState = { error: string | null; success: boolean };
-export const initialConfigureSlaMatrixState: ConfigureSlaMatrixState = { error: null, success: false };
 
 export async function configureSlaMatrixRuleAction(
   _prevState: ConfigureSlaMatrixState,
@@ -344,9 +340,6 @@ export async function configureSlaMatrixRuleAction(
 
 // ---------------- Configurar responsáveis por área (ADMIN) ----------------
 
-export type ConfigureSlaResponsiblesState = { error: string | null; success: boolean };
-export const initialConfigureSlaResponsiblesState: ConfigureSlaResponsiblesState = { error: null, success: false };
-
 export async function configureSlaAreaResponsiblesAction(
   _prevState: ConfigureSlaResponsiblesState,
   formData: FormData
@@ -390,9 +383,6 @@ export async function configureSlaAreaResponsiblesAction(
 }
 
 // ---------------- Motor de escalonamento (determinístico) ----------------
-
-export type ProcessSlaEscalationsState = { error: string | null; escalatedCount: number };
-export const initialProcessSlaEscalationsState: ProcessSlaEscalationsState = { error: null, escalatedCount: 0 };
 
 /**
  * Varre as ações abertas do projeto e aplica o motor determinístico
@@ -524,12 +514,6 @@ export async function processSlaEscalationsAction(
 }
 
 // ---------------- Configurar timezone/expediente do projeto (ADMIN) ----------------
-
-export type ConfigureSlaProjectSettingsState = { error: string | null; success: boolean };
-export const initialConfigureSlaProjectSettingsState: ConfigureSlaProjectSettingsState = {
-  error: null,
-  success: false,
-};
 
 // Correção de timezone: o cálculo de horário útil nunca usa UTC como
 // horário comercial — America/Sao_Paulo é o default institucional

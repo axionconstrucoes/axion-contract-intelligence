@@ -8,7 +8,8 @@ import { Select } from "@/components/ui/select";
 import { slaTimeUnitLabels } from "@/lib/labels";
 import type { SlaRiskLevel, SlaTimeUnit } from "@/lib/sla/types";
 import type { ResolvedSlaMatrixRule } from "@/lib/sla/resolve-matrix-rule";
-import { configureSlaMatrixRuleAction, initialConfigureSlaMatrixState } from "@/app/[projectId]/acoes/actions";
+import { configureSlaMatrixRuleAction } from "@/app/[projectId]/acoes/actions";
+import { initialConfigureSlaMatrixState } from "@/app/[projectId]/acoes/actions-state";
 
 const TIME_UNIT_OPTIONS = Object.keys(slaTimeUnitLabels) as SlaTimeUnit[];
 

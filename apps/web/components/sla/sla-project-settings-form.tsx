@@ -4,10 +4,8 @@ import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  configureSlaProjectSettingsAction,
-  initialConfigureSlaProjectSettingsState,
-} from "@/app/[projectId]/acoes/actions";
+import { configureSlaProjectSettingsAction } from "@/app/[projectId]/acoes/actions";
+import { initialConfigureSlaProjectSettingsState } from "@/app/[projectId]/acoes/actions-state";
 
 // Correção de timezone: o cálculo de horário útil nunca usa UTC como
 // horário comercial — ver apps/web/lib/sla/time-units.ts. Default

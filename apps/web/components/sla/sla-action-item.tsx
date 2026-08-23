@@ -21,13 +21,15 @@ import type { SlaAction, SlaActionEscalation } from "@/lib/sla/types";
 import {
   assumeSlaActionAction,
   completeSlaActionAction,
+  reassignSlaActionAction,
+  startSlaActionAction,
+} from "@/app/[projectId]/acoes/actions";
+import {
   initialAssumeSlaActionState,
   initialCompleteSlaActionState,
   initialReassignSlaActionState,
   initialStartSlaActionState,
-  reassignSlaActionAction,
-  startSlaActionAction,
-} from "@/app/[projectId]/acoes/actions";
+} from "@/app/[projectId]/acoes/actions-state";
 
 export function SlaActionItem({
   projectId,

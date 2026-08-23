@@ -4,10 +4,8 @@ import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  initialSendContractAlertState,
-  sendContractAlertEmailAction,
-} from "@/app/[projectId]/ledger/[eventId]/send-alert-actions";
+import { sendContractAlertEmailAction } from "@/app/[projectId]/ledger/[eventId]/send-alert-actions";
+import { initialSendContractAlertState } from "@/app/[projectId]/ledger/[eventId]/send-alert-actions-state";
 
 export function SendContractAlertForm({ projectId, eventId }: { projectId: string; eventId: string }) {
   const [state, formAction, pending] = useActionState(

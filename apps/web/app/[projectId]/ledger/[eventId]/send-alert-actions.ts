@@ -8,9 +8,10 @@ import { EmailSendError } from "@/lib/email/email-provider";
 import { NotAuthorizedError, sendContractAlertEmail } from "@/lib/email/send-contract-alert-email";
 import { getEvent, getProject } from "@/lib/data";
 import { findingTypeLabels } from "@/lib/labels";
+import type { SendContractAlertState } from "./send-alert-actions-state";
 
-export type SendContractAlertState = { error: string | null; success: string | null };
-export const initialSendContractAlertState: SendContractAlertState = { error: null, success: null };
+// Este módulo é "use server" — só pode exportar funções async (Server
+// Actions). Tipo e estado inicial vivem em ./send-alert-actions-state.ts.
 
 // "IA prepara → humano revisa/edita → humano aprova → sistema envia": o
 // achado de IA (event.aiAssessment) já existe e já passou por revisão

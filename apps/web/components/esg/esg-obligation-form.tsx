@@ -12,7 +12,8 @@ import {
   type EsgObligationCategory,
   type EsgObligationPeriodicity,
 } from "@/lib/labels";
-import { createEsgObligationAction, initialCreateEsgObligationState } from "@/app/[projectId]/esg/actions";
+import { createEsgObligationAction } from "@/app/[projectId]/esg/actions";
+import { initialCreateEsgObligationState } from "@/app/[projectId]/esg/actions-state";
 
 const CATEGORY_OPTIONS = Object.keys(esgObligationCategoryLabels) as EsgObligationCategory[];
 const PERIODICITY_OPTIONS = Object.keys(esgObligationPeriodicityLabels) as EsgObligationPeriodicity[];

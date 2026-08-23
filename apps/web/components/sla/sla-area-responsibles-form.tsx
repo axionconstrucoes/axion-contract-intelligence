@@ -6,10 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { slaAreaLabels } from "@/lib/labels";
 import type { SlaArea } from "@/lib/sla/types";
-import {
-  configureSlaAreaResponsiblesAction,
-  initialConfigureSlaResponsiblesState,
-} from "@/app/[projectId]/acoes/actions";
+import { configureSlaAreaResponsiblesAction } from "@/app/[projectId]/acoes/actions";
+import { initialConfigureSlaResponsiblesState } from "@/app/[projectId]/acoes/actions-state";
 
 // ÁREA → RESPONSÁVEL DIRETO → 1º ESCALÃO → 2º ESCALÃO → DIRETORIA
 // (seção 4). Cada nível é opcional — nem todo projeto/área terá os

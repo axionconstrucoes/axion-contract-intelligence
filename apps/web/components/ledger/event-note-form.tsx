@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { eventNoteCategoryLabels, type EventNoteCategory } from "@/lib/labels";
-import { createEventNoteAction, initialCreateEventNoteState } from "@/app/[projectId]/ledger/[eventId]/event-notes-actions";
+import { createEventNoteAction } from "@/app/[projectId]/ledger/[eventId]/event-notes-actions";
+import { initialCreateEventNoteState } from "@/app/[projectId]/ledger/[eventId]/event-notes-actions-state";
 
 const CATEGORY_OPTIONS = Object.keys(eventNoteCategoryLabels) as EventNoteCategory[];
 

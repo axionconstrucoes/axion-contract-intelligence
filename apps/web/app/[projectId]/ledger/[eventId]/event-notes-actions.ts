@@ -2,12 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
+import type { CreateEventNoteState } from "./event-notes-actions-state";
 
-export type CreateEventNoteState = {
-  error: string | null;
-};
-
-export const initialCreateEventNoteState: CreateEventNoteState = { error: null };
+// Este módulo é "use server" — só pode exportar funções async (Server
+// Actions). Tipo e estado inicial vivem em ./event-notes-actions-state.ts.
 
 const VALID_CATEGORIES = [
   "CONTEXTO_OPERACIONAL",

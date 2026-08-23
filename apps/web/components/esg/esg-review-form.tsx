@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { esgObligationStatusLabels, type EsgObligationStatus } from "@/lib/labels";
-import { initialReviewEsgSubmissionState, reviewEsgObligationSubmissionAction } from "@/app/[projectId]/esg/actions";
+import { reviewEsgObligationSubmissionAction } from "@/app/[projectId]/esg/actions";
+import { initialReviewEsgSubmissionState } from "@/app/[projectId]/esg/actions-state";
 
 const STATUS_OPTIONS = Object.keys(esgObligationStatusLabels) as EsgObligationStatus[];
 

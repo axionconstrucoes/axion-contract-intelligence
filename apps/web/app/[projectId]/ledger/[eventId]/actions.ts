@@ -2,14 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
+import type { ReviewEventClauseConfrontationCandidateState } from "./actions-state";
 
-export type ReviewEventClauseConfrontationCandidateState = {
-  error: string | null;
-};
-
-export const initialReviewEventClauseConfrontationCandidateState: ReviewEventClauseConfrontationCandidateState = {
-  error: null,
-};
+// Este módulo é "use server" — só pode exportar funções async (Server
+// Actions). Tipo e estado inicial vivem em ./actions-state.ts.
 
 function optionalField(formData: FormData, name: string): string | null {
   const value = String(formData.get(name) ?? "").trim();
