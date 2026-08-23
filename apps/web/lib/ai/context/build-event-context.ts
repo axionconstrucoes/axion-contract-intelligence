@@ -12,6 +12,7 @@
 // Evento → Evidências → Cláusulas relacionadas → Documentos fonte → E-mails.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getEmailAttachmentsForEmails } from "../../email/attachments/get-email-attachments";
 import type {
   ContextClause,
   ContextConfrontationCandidate,
@@ -181,6 +182,12 @@ async function resolveEmails(supabase: SupabaseClient, emailIds: string[]): Prom
     throw new Error(`Falha ao carregar e-mails do contexto: ${error.message}`);
   }
 
+  // Nunca deixa o Expert ignorar uma planilha/PDF anexado que seja a
+  // fonte material da comunicação: todo e-mail no contexto sempre
+  // declara seus anexos (mesmo os ainda não promovidos a documento —
+  // ver ContextEmailAttachment).
+  const attachmentsByEmailId = await getEmailAttachmentsForEmails(supabase, emailIds);
+
   return (data as unknown as EmailRow[]).map((row) => ({
     id: row.id,
     subject: row.subject,
@@ -188,6 +195,13 @@ async function resolveEmails(supabase: SupabaseClient, emailIds: string[]): Prom
     sentAt: row.sent_at,
     fromAddress: row.from_address,
     toAddress: row.to_address,
+    attachments: (attachmentsByEmailId.get(row.id) ?? []).map((attachment) => ({
+      id: attachment.id,
+      originalFileName: attachment.originalFileName,
+      mimeType: attachment.mimeType,
+      processingStatus: attachment.processingStatus,
+      documentVersionId: attachment.documentVersionId,
+    })),
   }));
 }
 

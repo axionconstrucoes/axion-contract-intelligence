@@ -24,6 +24,7 @@ export type {
   ContextClause,
   ContextConfrontationCandidate,
   ContextEmail,
+  ContextEmailAttachment,
   ContextEsgObligationSummary,
   ContextEvent,
   ContextEventNote,

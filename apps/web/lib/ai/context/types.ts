@@ -35,6 +35,15 @@ export interface ContextClause {
   relation: "CROSS_REFERENCE" | "CONFRONTATION_CANDIDATE";
 }
 
+/** Metadados leves de um anexo — nunca o conteúdo; documentVersionId só é não-nulo após promoção via linkEmailAttachmentToDocument. */
+export interface ContextEmailAttachment {
+  id: string;
+  originalFileName: string;
+  mimeType: string;
+  processingStatus: string;
+  documentVersionId: string | null;
+}
+
 export interface ContextEmail {
   id: string;
   subject: string;
@@ -42,6 +51,8 @@ export interface ContextEmail {
   sentAt: string;
   fromAddress: string;
   toAddress: string;
+  /** Nunca ausente/undefined — [] quando o e-mail não tem anexo ingerido. */
+  attachments: ContextEmailAttachment[];
 }
 
 export interface ContextConfrontationCandidate {
