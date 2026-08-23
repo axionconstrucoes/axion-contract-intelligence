@@ -19,6 +19,7 @@ import type { OfficialExpertId } from "../../ai/expert-definitions/types";
 import type { AiProvider, AiProviderExpertPosition } from "../../ai/providers/types";
 import type { ExpertId, ExpertSeverity } from "../../ai/types";
 import { runClientSourceConfrontation } from "../confrontation/run-client-source-confrontation";
+import { classifyInitialLifecycleStatus } from "./classify-finding-lifecycle";
 import { computeFindingFingerprint, computeSourceFingerprint } from "./compute-fingerprint";
 import { completeCurationRun, failCurationRun, findCompletedCurationRun, startCurationRun } from "./curation-run";
 import { persistFinding } from "./persist-finding";
@@ -160,17 +161,10 @@ export async function runAutomaticCurationForClientSource(
     // operacional nasce HISTORICAL_PENDING_STARTUP_REVIEW — nunca
     // apresentado como ocorrência nova, nunca dispara e-mail/escalonamento
     // normal antes da revisão humana do Start-up.
-    let initialLifecycleStatus: "NEW" | "HISTORICAL_PENDING_STARTUP_REVIEW" = "NEW";
-    if (input.effectiveDate) {
-      const { data: projectRow } = await supabase
-        .from("projects")
-        .select("acc_operational_start_date")
-        .eq("id", input.projectId)
-        .single();
-      if (projectRow?.acc_operational_start_date && input.effectiveDate < projectRow.acc_operational_start_date) {
-        initialLifecycleStatus = "HISTORICAL_PENDING_STARTUP_REVIEW";
-      }
-    }
+    const initialLifecycleStatus = await classifyInitialLifecycleStatus(supabase, {
+      projectId: input.projectId,
+      effectiveDate: input.effectiveDate,
+    });
 
     const { finding, created } = await persistFinding(supabase, {
       projectId: input.projectId,

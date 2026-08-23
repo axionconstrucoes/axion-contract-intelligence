@@ -155,10 +155,24 @@ if (config.window_mode === "CUSTOM") {
   startAt = new Date(
     config.monitoring_started_at ?? config.created_at
   );
+} else if (config.window_mode === "FROM_PROJECT_START") {
+  const { data: project, error: projectError } = await supabase
+    .from("projects")
+    .select("project_start_date")
+    .eq("id", PROJECT_ID)
+    .single();
+
+  if (projectError) throw new Error(projectError.message);
+
+  if (!project?.project_start_date) {
+    throw new Error(
+      "FROM_PROJECT_START requer projects.project_start_date configurado (ver Start-up ACC)."
+    );
+  }
+
+  startAt = new Date(project.project_start_date);
 } else {
-  throw new Error(
-    "FROM_PROJECT_START requires project start date implementation."
-  );
+  throw new Error(`window_mode desconhecido: ${config.window_mode}`);
 }
 
 const now = new Date();

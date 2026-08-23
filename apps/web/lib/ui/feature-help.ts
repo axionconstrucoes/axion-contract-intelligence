@@ -403,6 +403,65 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
     description: "Indica que o arquivo também foi classificado e incorporado ao repositório documental formal do projeto.",
   },
 
+  // ---------- Ingestão Controlada de E-mails (Integrações) ----------
+  {
+    id: "gmail-add-account",
+    title: "Adicionar conta AXION",
+    shortDescription: "Registra uma conta @axion.com.br autorizada.",
+    description:
+      "Registra uma conta de e-mail @axion.com.br como conta AXION autorizada a ser monitorada pelo ACC. Somente contas @axion.com.br podem ser registradas — nunca contas pessoais ou de outro domínio.",
+    humanReview: "Registrar a conta é sempre uma decisão humana (ADMIN); nenhuma senha ou token é solicitado nesta tela.",
+  },
+  {
+    id: "gmail-account-connected",
+    title: "Conta conectada",
+    shortDescription: "Conta autorizada e pronta para ser usada em projetos.",
+    description:
+      "Indica que esta conta AXION está registrada e autorizada. O ACC nunca armazena a senha nem exibe tokens de acesso — a credencial de acesso ao Gmail é administrada separadamente, fora da interface.",
+  },
+  {
+    id: "gmail-client-domain",
+    title: "Domínio do cliente",
+    shortDescription: "Domínio de e-mail usado para reconhecer mensagens do cliente.",
+    description:
+      "Define o domínio de e-mail do cliente deste projeto. Junto com os participantes cadastrados, delimita quais mensagens são consideradas relacionadas ao projeto — conectar uma conta nunca significa importar a caixa inteira.",
+  },
+  {
+    id: "gmail-participants",
+    title: "Participantes",
+    shortDescription: "Pessoas específicas cujas mensagens são consideradas.",
+    description:
+      "Endereços específicos autorizados a serem considerados na ingestão deste projeto, além do domínio do cliente — útil para consultores externos ou contatos individuais.",
+  },
+  {
+    id: "gmail-ingestion-period",
+    title: "Período de ingestão",
+    shortDescription: "Janela temporal considerada na sincronização.",
+    description:
+      "Define desde quando o ACC procura mensagens relacionadas a este projeto: desde o início da obra, a partir de agora, ou um período personalizado. A data final histórica nunca ultrapassa o momento atual.",
+  },
+  {
+    id: "gmail-include-attachments",
+    title: "Incluir anexos",
+    shortDescription: "Também ingerir os arquivos anexados às mensagens.",
+    description:
+      "Quando ativado, os anexos das mensagens elegíveis também são ingeridos e aparecem em Documentos → Anexos de E-mail, com a mesma proveniência e diferenciação processado/considerado.",
+  },
+  {
+    id: "gmail-incremental-sync",
+    title: "Sincronização incremental",
+    shortDescription: "Depois da carga inicial, só o que é novo é buscado.",
+    description:
+      "Após a primeira sincronização, as próximas execuções buscam apenas mensagens novas — nunca reimportam a caixa inteira, e a mesma mensagem nunca é duplicada.",
+  },
+  {
+    id: "gmail-sync-progress",
+    title: "Progresso da sincronização",
+    shortDescription: "Percentual real, calculado a partir de unidades já processadas.",
+    description:
+      "Mostra o andamento real da sincronização — nunca uma estimativa baseada em tempo decorrido. Enquanto o total de mensagens ainda não é conhecido, o estado mostrado é \"Preparando...\".",
+  },
+
   // ---------- Seção 13 — campos complexos adicionais ----------
   {
     id: "finding",

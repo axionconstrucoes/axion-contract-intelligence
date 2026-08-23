@@ -357,6 +357,14 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+export const emailAccountStatusLabels: Record<"NOT_CONNECTED" | "CONNECTED" | "SYNCING" | "AUTH_EXPIRED" | "ERROR", string> = {
+  NOT_CONNECTED: "Não conectada",
+  CONNECTED: "Conectada",
+  SYNCING: "Sincronizando",
+  AUTH_EXPIRED: "Autorização expirada",
+  ERROR: "Erro",
+};
+
 export const documentKindLabels: Record<DocumentKind, string> = {
   CONTRATO_BASE: "Contrato base",
   ADITIVO: "Aditivo",

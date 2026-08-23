@@ -7,6 +7,7 @@ export type {
   AiFindingSourceRef,
 } from "./types";
 export { computeFindingFingerprint, computeSourceFingerprint } from "./compute-fingerprint";
+export { classifyInitialLifecycleStatus } from "./classify-finding-lifecycle";
 export { completeCurationRun, failCurationRun, findCompletedCurationRun, getCurationRunsForProject, startCurationRun } from "./curation-run";
 export type { StartCurationRunInput } from "./curation-run";
 export { persistFinding } from "./persist-finding";

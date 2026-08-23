@@ -5,6 +5,7 @@ import {
   additionalProposalStatusLabels,
   categoryLabels,
   confrontationCandidateStatusLabels,
+  emailAccountStatusLabels,
   eventStatusLabels,
   integrationStatusLabels,
   severityLabels,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/labels";
 import type { AdditionalProposalStatus } from "@/lib/additionals/types";
 import type { AttachmentDisplayStatus } from "@/lib/email/attachments/registry/types";
+import type { EmailAccountStatus } from "@/lib/email/inbound/ingestion-controls/types";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { cn } from "@/lib/utils";
 
@@ -121,4 +123,16 @@ const attachmentStatusToneClasses: Record<AttachmentDisplayStatus["tone"], strin
 
 export function AttachmentStatusBadge({ status }: { status: AttachmentDisplayStatus }) {
   return <Badge className={cn(attachmentStatusToneClasses[status.tone])}>{status.label}</Badge>;
+}
+
+const emailAccountStatusClasses: Record<EmailAccountStatus, string> = {
+  NOT_CONNECTED: "border-transparent bg-muted text-muted-foreground",
+  CONNECTED: "border-transparent bg-severity-baixa/15 text-severity-baixa",
+  SYNCING: "border-transparent bg-accent text-accent-foreground",
+  AUTH_EXPIRED: "border-transparent bg-severity-media/15 text-severity-media",
+  ERROR: "border-transparent bg-severity-critica/15 text-severity-critica",
+};
+
+export function EmailAccountStatusBadge({ status }: { status: EmailAccountStatus }) {
+  return <Badge className={cn(emailAccountStatusClasses[status])}>{emailAccountStatusLabels[status]}</Badge>;
 }
