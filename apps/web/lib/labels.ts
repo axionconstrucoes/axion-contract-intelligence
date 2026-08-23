@@ -18,6 +18,14 @@ import type {
   SlaEscalationReason,
   SlaTimeUnit,
 } from "@/lib/sla/types";
+import type {
+  AdditionalProposalApprovalStatus,
+  AdditionalProposalDocumentalState,
+  AdditionalProposalFormalizationType,
+  AdditionalProposalLinkRole,
+  AdditionalProposalScheduleExtensionStatus,
+  AdditionalProposalStatus,
+} from "@/lib/additionals/types";
 
 export const categoryLabels: Record<ImplicationCategory, string> = {
   PRAZO: "Prazo",
@@ -40,11 +48,15 @@ export const eventStatusLabels: Record<EventStatus, string> = {
   RESOLVIDO: "Resolvido",
 };
 
+// Padrão visível PT-BR de risco: BAIXO/MÉDIO/ALTO/CRÍTICO — nunca a
+// forma feminina ("Alta"/"Crítica") nem HIGH/CRITICAL em interface.
+// HIGH/CRITICAL continuam corretos em enums/types/schema/migrations/
+// testes técnicos — nunca removidos de lá, só nunca exibidos assim.
 export const severityLabels: Record<AlertSeverity, string> = {
-  BAIXA: "Baixa",
-  MEDIA: "Média",
-  ALTA: "Alta",
-  CRITICA: "Crítica",
+  BAIXA: "Baixo",
+  MEDIA: "Médio",
+  ALTA: "Alto",
+  CRITICA: "Crítico",
 };
 
 export const findingTypeLabels: Record<AiFindingType, string> = {
@@ -273,6 +285,60 @@ export const slaEscalationReasonLabels: Record<SlaEscalationReason, string> = {
   CONTRACTUAL_DEADLINE_NEAR: "Prazo contratual próximo",
   CONTRACTUAL_DEADLINE_MISSED: "Prazo contratual perdido",
   NEW_EVIDENCE_INCREASED_RISK: "Nova evidência aumentou o risco",
+};
+
+export const additionalProposalStatusLabels: Record<AdditionalProposalStatus, string> = {
+  POSSIBLE_ADDITIONAL: "Possível adicional",
+  UNDER_ANALYSIS: "Em análise",
+  IN_NEGOTIATION: "Em negociação",
+  CONTRACTED: "Contratado",
+  NOT_CONTRACTED: "Não contratado",
+  CANCELLED: "Cancelado",
+};
+
+export const additionalProposalApprovalStatusLabels: Record<AdditionalProposalApprovalStatus, string> = {
+  NOT_EVALUATED: "Não avaliado",
+  NOT_REQUIRED: "Não necessário",
+  PENDING: "Pendente",
+  APPROVED: "Aprovado",
+  REJECTED: "Rejeitado",
+};
+
+export const additionalProposalScheduleExtensionStatusLabels: Record<AdditionalProposalScheduleExtensionStatus, string> = {
+  NOT_EVALUATED: "Não avaliado",
+  NOT_REQUIRED: "Não necessário",
+  TO_BE_REQUESTED: "A solicitar",
+  REQUESTED: "Solicitado",
+  APPROVED: "Aprovado",
+  PARTIALLY_APPROVED: "Aprovado parcialmente",
+  REJECTED: "Rejeitado",
+};
+
+export const additionalProposalFormalizationTypeLabels: Record<AdditionalProposalFormalizationType, string> = {
+  ADITIVO_CONTRATUAL: "Aditivo contratual",
+  EMAIL_APROVACAO: "E-mail de aprovação",
+  ORDEM_COMPRA_PO: "Ordem de compra / PO",
+  ORDEM_SERVICO: "Ordem de serviço",
+  CARTA_AUTORIZACAO_FORMAL: "Carta / autorização formal",
+  ATA_REGISTRO_FORMAL_ACEITO: "Ata / registro formal aceito",
+  OUTRO: "Outro",
+  NAO_IDENTIFICADO: "Não identificado",
+};
+
+export const additionalProposalDocumentalStateLabels: Record<AdditionalProposalDocumentalState, string> = {
+  CONTRATADO_DOCUMENTACAO_COMPLETA: "Contratado — documentação completa",
+  CONTRATADO_DOCUMENTACAO_PENDENTE: "Contratado — documentação pendente",
+  CONTRATADO_FORMALIZACAO_COM_RESSALVA: "Contratado — formalização com ressalva",
+};
+
+export const additionalProposalLinkRoleLabels: Record<AdditionalProposalLinkRole, string> = {
+  ORIGIN_SOURCE: "Fonte de origem",
+  EVIDENCIA_CONTRATACAO: "Evidência da contratação",
+  PROPOSTA_FINAL_AXION: "Proposta final AXION",
+  CRONOGRAMA_IMPACTO: "Cronograma atualizado / análise de impacto",
+  EVIDENCIA_VALOR: "Evidência de valor aprovado",
+  EVIDENCIA_PRAZO: "Evidência de prazo aprovado/extensão",
+  ESCOPO_PROJETO: "Escopo/projeto aprovado",
 };
 
 export function formatDate(iso: string): string {

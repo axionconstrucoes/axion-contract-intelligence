@@ -43,6 +43,7 @@ export const COMMERCIAL_DIRECTOR_DEFINITION: ExpertDefinition = {
   expertName: "Diretor Comercial IA",
   version: COMMERCIAL_DIRECTOR_VERSION,
   status: "IMPLEMENTED",
+  visualIdentity: { icon: "TrendingUp", colorToken: "blue" },
   mission:
     "Apoiar decisões e negociações comerciais relacionadas aos contratos e projetos da AXION — nunca decidir ou executar em nome da empresa.",
   authorizedSources: [
@@ -97,6 +98,7 @@ export const LEGAL_CONSULTANT_DEFINITION: ExpertDefinition = {
   expertName: "Consultor Jurídico IA",
   version: LEGAL_CONSULTANT_VERSION,
   status: "IMPLEMENTED",
+  visualIdentity: { icon: "Scale", colorToken: "indigo" },
   mission: "Realizar análise jurídica aprofundada de contratos, fatos, comunicações e evidências dos projetos da AXION.",
   authorizedSources: [
     SOURCE_DOCUMENTS,
@@ -170,6 +172,7 @@ export const PLANNING_DIRECTOR_DEFINITION: ExpertDefinition = {
   expertName: "Diretor de Planejamento IA",
   version: PLANNING_DIRECTOR_VERSION,
   status: "IMPLEMENTED",
+  visualIdentity: { icon: "CalendarClock", colorToken: "cyan" },
   mission:
     "Analisar exclusivamente atrasos e acelerações de cronograma que possam gerar consequência econômica ou contratual relevante para a AXION.",
   authorizedSources: [SOURCE_SCHEDULE_ACTIVITIES, SOURCE_CONTRACT_EVENTS, SOURCE_CONTRACT_CHANGES, SOURCE_DOCUMENTS, SOURCE_TIMELINE],
@@ -212,6 +215,7 @@ export const ESG_DIRECTOR_DEFINITION: ExpertDefinition = {
   expertName: "Diretor de ESG IA",
   version: ESG_DIRECTOR_VERSION,
   status: "IMPLEMENTED",
+  visualIdentity: { icon: "Leaf", colorToken: "green" },
   mission:
     "Gerenciar e analisar exclusivamente obrigações ESG/SSMA de origem contratual cujo descumprimento possa gerar consequência econômica ou contratual para a AXION.",
   authorizedSources: [SOURCE_ESG_OBLIGATIONS, SOURCE_ESG_EVIDENCE, SOURCE_CONTRACT_EVENTS, SOURCE_DOCUMENTS, SOURCE_CLAUSES],
@@ -255,6 +259,7 @@ export const CEO_DEFINITION: ExpertDefinition = {
   expertName: "CEO IA",
   version: CEO_VERSION,
   status: "IMPLEMENTED",
+  visualIdentity: { icon: "Crown", colorToken: "purple" },
   mission:
     "Atuar como camada executiva e integradora sobre os demais Experts — consolidar, comparar e priorizar, sem nunca substituir uma análise especializada nem executar uma decisão.",
   authorizedSources: [SOURCE_SLA_ACTIONS, SOURCE_CONTRACT_EVENTS, SOURCE_TIMELINE, SOURCE_ESG_OBLIGATIONS, SOURCE_CONTRACT_CHANGES],

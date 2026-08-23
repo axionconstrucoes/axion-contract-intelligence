@@ -97,6 +97,21 @@ export interface ExpertConfidenceRule {
 }
 
 /**
+ * Identidade visual de um Expert (ícone + cor) — nunca a mesma paleta
+ * usada para severidade/risco (ver components/shared/badges.tsx), para
+ * não confundir "quem está falando" com "quanto risco existe". `icon` é
+ * o nome exato do componente em lucide-react (resolvido só na camada de
+ * UI — este módulo permanece puro/sem React); `colorToken` é uma chave
+ * estável resolvida para classes Tailwind literais em
+ * components/ai/expert-visual-identity.ts (nunca interpolada
+ * dinamicamente, para o JIT do Tailwind sempre encontrar a classe).
+ */
+export interface ExpertVisualIdentity {
+  icon: string;
+  colorToken: "purple" | "blue" | "indigo" | "cyan" | "green";
+}
+
+/**
  * Especificação formal de um Expert oficial do ACC. `requiresHumanReview`
  * é sempre `true` (tipo literal) — nenhuma definição pode existir sem
  * essa garantia, mesmo antes do Expert ter qualquer implementação
@@ -109,6 +124,7 @@ export interface ExpertDefinition {
   version: string;
   status: ExpertImplementationStatus;
   mission: string;
+  visualIdentity: ExpertVisualIdentity;
   authorizedSources: AuthorizedSourceRef[];
   capabilities: string[];
   typicalQuestions: string[];

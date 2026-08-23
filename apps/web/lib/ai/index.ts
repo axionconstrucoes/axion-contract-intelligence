@@ -171,6 +171,7 @@ export type {
   ExpertImplementationStatus,
   ExpertOutputType,
   ExpertSourceStatus,
+  ExpertVisualIdentity,
   FactCategory,
   OfficialExpertId,
 } from "./expert-definitions/types";

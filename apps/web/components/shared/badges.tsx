@@ -2,6 +2,7 @@ import type { ActionRequestStatus, AlertSeverity, EventStatus, ImplicationCatego
 import { Badge } from "@/components/ui/badge";
 import {
   actionRequestStatusLabels,
+  additionalProposalStatusLabels,
   categoryLabels,
   confrontationCandidateStatusLabels,
   eventStatusLabels,
@@ -9,13 +10,20 @@ import {
   severityLabels,
   type ConfrontationCandidateStatus,
 } from "@/lib/labels";
+import type { AdditionalProposalStatus } from "@/lib/additionals/types";
 import { cn } from "@/lib/utils";
 
+// ALTA/CRÍTICA usam caixa sólida + fonte branca + bold (forte contraste
+// proposital, distinto de BAIXA/MÉDIA) — mesmo token de cor já usado em
+// toda a base (--severity-alta/--severity-critica), só a opacidade/peso
+// mudam. Único componente compartilhado de severidade do ACC — nunca
+// duplicar esta paleta em Dashboard/Timeline/Event Ledger/Ações/ESG/
+// Experts IA/Adicionais.
 const severityClasses: Record<AlertSeverity, string> = {
   BAIXA: "border-transparent bg-severity-baixa/15 text-severity-baixa",
   MEDIA: "border-transparent bg-severity-media/15 text-severity-media",
-  ALTA: "border-transparent bg-severity-alta/15 text-severity-alta",
-  CRITICA: "border-transparent bg-severity-critica/15 text-severity-critica",
+  ALTA: "border-transparent bg-severity-alta text-white font-bold",
+  CRITICA: "border-transparent bg-severity-critica text-white font-bold",
 };
 
 export function SeverityBadge({ severity }: { severity: AlertSeverity }) {
@@ -69,4 +77,17 @@ export function ConfrontationCandidateStatusBadge({ status }: { status: Confront
       {confrontationCandidateStatusLabels[status]}
     </Badge>
   );
+}
+
+const additionalProposalStatusClasses: Record<AdditionalProposalStatus, string> = {
+  POSSIBLE_ADDITIONAL: "border-transparent bg-muted text-muted-foreground",
+  UNDER_ANALYSIS: "border-transparent bg-severity-media/15 text-severity-media",
+  IN_NEGOTIATION: "border-transparent bg-accent text-accent-foreground",
+  CONTRACTED: "border-transparent bg-severity-baixa/15 text-severity-baixa",
+  NOT_CONTRACTED: "border-transparent bg-muted text-muted-foreground",
+  CANCELLED: "border-transparent bg-muted text-muted-foreground line-through",
+};
+
+export function AdditionalProposalStatusBadge({ status }: { status: AdditionalProposalStatus }) {
+  return <Badge className={cn(additionalProposalStatusClasses[status])}>{additionalProposalStatusLabels[status]}</Badge>;
 }

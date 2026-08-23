@@ -32,7 +32,8 @@ export type ExpertAnalysisType =
   | "SCOPE_CHANGE_ASSESSMENT"
   | "RISK_ASSESSMENT"
   | "COMMERCIAL_NEGOTIATION_STRATEGY"
-  | "COMMERCIAL_COMMUNICATION_DRAFT";
+  | "COMMERCIAL_COMMUNICATION_DRAFT"
+  | "CLIENT_SOURCE_CONFRONTATION";
 
 /** Mesmas fontes de evidência já usadas no Event Ledger (EvidenceRef/CrossReference). */
 export type ExpertEvidenceSourceType = "DOCUMENT" | "CLAUSE" | "EVENT" | "EMAIL" | "SCHEDULE_ACTIVITY";
