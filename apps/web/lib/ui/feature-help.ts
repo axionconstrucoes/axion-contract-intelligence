@@ -455,6 +455,13 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
       "Após a primeira sincronização, as próximas execuções buscam apenas mensagens novas — nunca reimportam a caixa inteira, e a mesma mensagem nunca é duplicada.",
   },
   {
+    id: "gmail-prefilled-fields",
+    title: "Campos em verde",
+    shortDescription: "Indica que o valor já está salvo no sistema.",
+    description:
+      "O destaque verde indica apenas que aquele campo já foi carregado da configuração salva — nunca que o valor foi validado, aprovado ou está livre de risco. Ao editar, o destaque some até a próxima gravação bem-sucedida.",
+  },
+  {
     id: "gmail-sync-progress",
     title: "Progresso da sincronização",
     shortDescription: "Percentual real, calculado a partir de unidades já processadas.",

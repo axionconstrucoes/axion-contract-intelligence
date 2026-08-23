@@ -392,6 +392,28 @@ if (!supabaseUrl || !serviceKey) {
   await checkAsync(
     "save_project_email_ingestion_config: salva domínio/participantes/anexos; axion.com.br é sempre incluído automaticamente (nunca exclui e-mail interno)",
     async () => {
+      // project_email_ingestion_configs é ÚNICO por projeto (unique(project_id))
+      // — REFERENCE_PROJECT_ID pode já ter uma configuração REAL em uso (ex.:
+      // uma conta AXION genuinamente registrada por um usuário real). Este
+      // teste precisa restaurar tudo (config/domínios/participantes/mailboxes)
+      // ao final, exatamente como scripts/test-startup.mjs já faz para
+      // projects — nunca deixar dado de teste poluindo um projeto
+      // compartilhado.
+      const { data: beforeConfig } = await supabase
+        .from("project_email_ingestion_configs")
+        .select("*")
+        .eq("project_id", REFERENCE_PROJECT_ID)
+        .maybeSingle();
+      const beforeDomains = beforeConfig
+        ? (await supabase.from("project_email_ingestion_domains").select("*").eq("config_id", beforeConfig.id)).data
+        : [];
+      const beforeParticipants = beforeConfig
+        ? (await supabase.from("project_email_ingestion_participants").select("*").eq("config_id", beforeConfig.id)).data
+        : [];
+      const beforeMailboxes = beforeConfig
+        ? (await supabase.from("project_email_ingestion_mailboxes").select("*").eq("config_id", beforeConfig.id)).data
+        : [];
+
       const email = `teste-gmail-config-${Date.now()}@example.com`;
       const password = `Teste-${randomUUID()}`;
       const { data: created } = await supabase.auth.admin.createUser({ email, password, email_confirm: true });
@@ -409,38 +431,79 @@ if (!supabaseUrl || !serviceKey) {
       const sessionClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
       await sessionClient.auth.signInWithPassword({ email, password });
 
-      const { data: configId, error } = await sessionClient
-        .rpc("save_project_email_ingestion_config", {
-          p_project_id: REFERENCE_PROJECT_ID,
-          p_email_account_id: accountId.id,
-          p_window_mode: "CUSTOM",
-          p_custom_start_at: "2026-01-01T00:00:00Z",
-          p_custom_end_at: null,
-          p_client_domains: [{ domain: "cliente-teste.com.br", domainRole: "CLIENT", enabled: true }],
-          p_participants: [{ emailAddress: "consultor@externo.com", roleNote: "Consultor jurídico do cliente", enabled: true }],
-          p_include_attachments: true,
-          p_enabled: true,
-        })
-        .single();
-      if (error) throw new Error(error.message);
+      try {
+        const { data: configId, error } = await sessionClient
+          .rpc("save_project_email_ingestion_config", {
+            p_project_id: REFERENCE_PROJECT_ID,
+            p_email_account_id: accountId.id,
+            p_window_mode: "CUSTOM",
+            p_custom_start_at: "2026-01-01T00:00:00Z",
+            p_custom_end_at: null,
+            p_client_domains: [{ domain: "cliente-teste.com.br", domainRole: "CLIENT", enabled: true }],
+            p_participants: [{ emailAddress: "consultor@externo.com", roleNote: "Consultor jurídico do cliente", enabled: true }],
+            p_include_attachments: true,
+            p_enabled: true,
+          })
+          .single();
+        if (error) throw new Error(error.message);
 
-      const { data: domainRows } = await supabase.from("project_email_ingestion_domains").select("domain, domain_role").eq("config_id", configId);
-      const axionDomain = domainRows.find((d) => d.domain === "axion.com.br");
-      assert(axionDomain, "axion.com.br deveria ser incluído automaticamente — e-mail interno nunca excluído por engano");
-      assert(axionDomain.domain_role === "AXION");
-      assert(domainRows.some((d) => d.domain === "cliente-teste.com.br" && d.domain_role === "CLIENT"));
+        const { data: domainRows } = await supabase.from("project_email_ingestion_domains").select("domain, domain_role").eq("config_id", configId);
+        const axionDomain = domainRows.find((d) => d.domain === "axion.com.br");
+        assert(axionDomain, "axion.com.br deveria ser incluído automaticamente — e-mail interno nunca excluído por engano");
+        assert(axionDomain.domain_role === "AXION");
+        assert(domainRows.some((d) => d.domain === "cliente-teste.com.br" && d.domain_role === "CLIENT"));
 
-      const { data: participantRows } = await supabase
-        .from("project_email_ingestion_participants")
-        .select("email_address, role_note")
-        .eq("config_id", configId);
-      assert(participantRows.length === 1);
-      assert(participantRows[0].email_address === "consultor@externo.com");
+        const { data: participantRows } = await supabase
+          .from("project_email_ingestion_participants")
+          .select("email_address, role_note")
+          .eq("config_id", configId);
+        assert(participantRows.length === 1);
+        assert(participantRows[0].email_address === "consultor@externo.com");
 
-      const { data: mailboxRows } = await supabase.from("project_email_ingestion_mailboxes").select("mailbox_address").eq("config_id", configId);
-      assert(mailboxRows.some((m) => m.mailbox_address === accountAddress), "a mailbox monitorada deveria ser a conta AXION escolhida");
+        const { data: mailboxRows } = await supabase.from("project_email_ingestion_mailboxes").select("mailbox_address").eq("config_id", configId);
+        assert(mailboxRows.some((m) => m.mailbox_address === accountAddress), "a mailbox monitorada deveria ser a conta AXION escolhida");
+      } finally {
+        await supabase.from("project_memberships").delete().eq("project_id", REFERENCE_PROJECT_ID).eq("user_id", created.user.id);
 
-      await supabase.from("project_memberships").delete().eq("project_id", REFERENCE_PROJECT_ID).eq("user_id", created.user.id);
+        // Restaura o projeto de referência exatamente como estava antes deste teste.
+        if (beforeConfig) {
+          await supabase
+            .from("project_email_ingestion_configs")
+            .update({
+              enabled: beforeConfig.enabled,
+              window_mode: beforeConfig.window_mode,
+              custom_start_at: beforeConfig.custom_start_at,
+              custom_end_at: beforeConfig.custom_end_at,
+              include_attachments: beforeConfig.include_attachments,
+              email_account_id: beforeConfig.email_account_id,
+            })
+            .eq("id", beforeConfig.id);
+
+          await supabase.from("project_email_ingestion_domains").delete().eq("config_id", beforeConfig.id);
+          if (beforeDomains.length > 0) {
+            await supabase
+              .from("project_email_ingestion_domains")
+              .insert(beforeDomains.map(({ id: _id, ...rest }) => rest));
+          }
+
+          await supabase.from("project_email_ingestion_participants").delete().eq("config_id", beforeConfig.id);
+          if (beforeParticipants.length > 0) {
+            await supabase
+              .from("project_email_ingestion_participants")
+              .insert(beforeParticipants.map(({ id: _id, ...rest }) => rest));
+          }
+
+          await supabase.from("project_email_ingestion_mailboxes").delete().eq("config_id", beforeConfig.id);
+          if (beforeMailboxes.length > 0) {
+            await supabase
+              .from("project_email_ingestion_mailboxes")
+              .insert(beforeMailboxes.map(({ id: _id, ...rest }) => rest));
+          }
+        } else {
+          // Não havia configuração antes deste teste — remover tudo que o teste criou.
+          await supabase.from("project_email_ingestion_configs").delete().eq("project_id", REFERENCE_PROJECT_ID);
+        }
+      }
     }
   );
 

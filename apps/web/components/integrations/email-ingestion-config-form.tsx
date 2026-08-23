@@ -5,6 +5,13 @@
 // INCLUIR ANEXOS. Nunca interpreta "conta conectada" como "importar a
 // caixa inteira" — o perímetro real é sempre domínio + participantes +
 // período, salvos explicitamente aqui.
+//
+// Identificação visual de pré-preenchido: cada campo é comparado contra
+// `savedSnapshot` (o que está persistido). Igual ao salvo → verde
+// (PREFILLED_FIELD_CLASSNAME); diferente (usuário editou) → branco
+// padrão. Depois de salvar com sucesso, savedSnapshot é atualizado para
+// o valor atual, então os campos voltam a ficar verdes. Verde aqui
+// NUNCA significa "validado" — só "já preenchido/salvo".
 
 import { useActionState, useState } from "react";
 import { FeatureInfo } from "@/components/shared/feature-info";
@@ -13,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { saveEmailIngestionConfigAction } from "@/app/[projectId]/integracoes/actions";
 import { initialSaveEmailIngestionConfigState } from "@/app/[projectId]/integracoes/actions-state";
+import { isFieldPrefilled, resolvePrefilledFieldProps } from "@/lib/ui/prefilled-field-style";
 import type { EmailAccount, EmailIngestionWindowMode, ProjectEmailIngestionConfig } from "@/lib/email/inbound/ingestion-controls/types";
 
 interface DomainRow {
@@ -27,6 +35,28 @@ interface ParticipantRow {
   enabled: boolean;
 }
 
+interface ConfigSnapshot {
+  emailAccountId: string;
+  windowMode: EmailIngestionWindowMode;
+  customStartAt: string;
+  customEndAt: string;
+  includeAttachments: boolean;
+  domains: DomainRow[];
+  participants: ParticipantRow[];
+}
+
+function snapshotFromConfig(config: ProjectEmailIngestionConfig | null): ConfigSnapshot {
+  return {
+    emailAccountId: config?.emailAccountId ?? "",
+    windowMode: config?.windowMode ?? "FROM_PROJECT_START",
+    customStartAt: config?.customStartAt?.slice(0, 10) ?? "",
+    customEndAt: config?.customEndAt?.slice(0, 10) ?? "",
+    includeAttachments: config?.includeAttachments ?? true,
+    domains: config?.domains.filter((d) => d.domainRole !== "AXION").map((d) => ({ domain: d.domain, domainRole: d.domainRole as "CLIENT" | "OTHER_AUTHORIZED", enabled: d.enabled })) ?? [],
+    participants: config?.participants.map((p) => ({ emailAddress: p.emailAddress, roleNote: p.roleNote ?? "", enabled: p.enabled })) ?? [],
+  };
+}
+
 export function EmailIngestionConfigForm({
   projectId,
   accounts,
@@ -38,18 +68,42 @@ export function EmailIngestionConfigForm({
 }) {
   const [state, formAction, pending] = useActionState(saveEmailIngestionConfigAction, initialSaveEmailIngestionConfigState);
 
-  const [emailAccountId, setEmailAccountId] = useState(config?.emailAccountId ?? accounts[0]?.id ?? "");
-  const [windowMode, setWindowMode] = useState<EmailIngestionWindowMode>(config?.windowMode ?? "FROM_PROJECT_START");
-  const [customStartAt, setCustomStartAt] = useState(config?.customStartAt?.slice(0, 10) ?? "");
-  const [customEndAt, setCustomEndAt] = useState(config?.customEndAt?.slice(0, 10) ?? "");
-  const [includeAttachments, setIncludeAttachments] = useState(config?.includeAttachments ?? true);
+  const initialSnapshot = snapshotFromConfig(config);
+  // hasSavedConfig distingue "não há nada salvo ainda" (projeto novo,
+  // campo deve ficar branco mesmo que o valor atual coincida com um
+  // default de UI) de "existe configuração persistida" — nunca inferir
+  // "pré-preenchido" só porque o valor bate com um default local.
+  const [hasSavedConfig, setHasSavedConfig] = useState(config !== null);
+  const [savedSnapshot, setSavedSnapshot] = useState<ConfigSnapshot>(initialSnapshot);
 
-  const [domains, setDomains] = useState<DomainRow[]>(
-    config?.domains.filter((d) => d.domainRole !== "AXION").map((d) => ({ domain: d.domain, domainRole: d.domainRole as "CLIENT" | "OTHER_AUTHORIZED", enabled: d.enabled })) ?? []
-  );
-  const [participants, setParticipants] = useState<ParticipantRow[]>(
-    config?.participants.map((p) => ({ emailAddress: p.emailAddress, roleNote: p.roleNote ?? "", enabled: p.enabled })) ?? []
-  );
+  const [emailAccountId, setEmailAccountId] = useState(initialSnapshot.emailAccountId || accounts[0]?.id || "");
+  const [windowMode, setWindowMode] = useState<EmailIngestionWindowMode>(initialSnapshot.windowMode);
+  const [customStartAt, setCustomStartAt] = useState(initialSnapshot.customStartAt);
+  const [customEndAt, setCustomEndAt] = useState(initialSnapshot.customEndAt);
+  const [includeAttachments, setIncludeAttachments] = useState(initialSnapshot.includeAttachments);
+  const [domains, setDomains] = useState<DomainRow[]>(initialSnapshot.domains);
+  const [participants, setParticipants] = useState<ParticipantRow[]>(initialSnapshot.participants);
+
+  // Salvamento confirmado: o valor atual passa a ser a configuração
+  // persistida — os campos voltam a ficar verdes (seção "EDIÇÃO PELO
+  // USUÁRIO" do requisito). Ajuste de estado durante a renderização
+  // (padrão recomendado pelo React para reagir a uma mudança sem usar
+  // useEffect — nunca causa um efeito colateral externo, só sincroniza
+  // dois estados internos do próprio componente).
+  const [handledActionState, setHandledActionState] = useState(state);
+  if (state !== handledActionState) {
+    setHandledActionState(state);
+    if (state.success) {
+      setHasSavedConfig(true);
+      setSavedSnapshot({ emailAccountId, windowMode, customStartAt, customEndAt, includeAttachments, domains, participants });
+    }
+  }
+
+  const accountPrefilled = resolvePrefilledFieldProps(hasSavedConfig && isFieldPrefilled(emailAccountId, savedSnapshot.emailAccountId));
+  const windowModePrefilled = resolvePrefilledFieldProps(hasSavedConfig && isFieldPrefilled(windowMode, savedSnapshot.windowMode));
+  const startAtPrefilled = resolvePrefilledFieldProps(hasSavedConfig && isFieldPrefilled(customStartAt, savedSnapshot.customStartAt));
+  const endAtPrefilled = resolvePrefilledFieldProps(hasSavedConfig && isFieldPrefilled(customEndAt, savedSnapshot.customEndAt));
+  const includeAttachmentsPrefilled = hasSavedConfig && includeAttachments === savedSnapshot.includeAttachments;
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -57,13 +111,26 @@ export function EmailIngestionConfigForm({
       <input type="hidden" name="clientDomains" value={JSON.stringify(domains)} />
       <input type="hidden" name="participants" value={JSON.stringify(participants)} />
 
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="inline-block size-2.5 rounded-sm border border-green-400 bg-green-50 dark:border-green-700 dark:bg-green-950/30" aria-hidden="true" />
+        Campos em verde já possuem informações salvas.
+        <FeatureInfo helpId="gmail-prefilled-fields" />
+      </p>
+
       <div className="grid gap-4 md:grid-cols-2">
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           <span className="flex items-center gap-1.5">
             Conta AXION
             <FeatureInfo helpId="gmail-account-connected" />
           </span>
-          <Select name="emailAccountId" required value={emailAccountId} onChange={(event) => setEmailAccountId(event.target.value)}>
+          <Select
+            name="emailAccountId"
+            required
+            value={emailAccountId}
+            onChange={(event) => setEmailAccountId(event.target.value)}
+            className={accountPrefilled.className}
+            title={accountPrefilled.title}
+          >
             <option value="" disabled>
               Selecione…
             </option>
@@ -80,7 +147,14 @@ export function EmailIngestionConfigForm({
             Período de ingestão
             <FeatureInfo helpId="gmail-ingestion-period" />
           </span>
-          <Select name="windowMode" required value={windowMode} onChange={(event) => setWindowMode(event.target.value as EmailIngestionWindowMode)}>
+          <Select
+            name="windowMode"
+            required
+            value={windowMode}
+            onChange={(event) => setWindowMode(event.target.value as EmailIngestionWindowMode)}
+            className={windowModePrefilled.className}
+            title={windowModePrefilled.title}
+          >
             <option value="FROM_PROJECT_START">Desde o início do projeto</option>
             <option value="FROM_NOW">A partir de hoje</option>
             <option value="CUSTOM">Período personalizado</option>
@@ -98,6 +172,8 @@ export function EmailIngestionConfigForm({
               required
               value={customStartAt}
               onChange={(event) => setCustomStartAt(event.target.value)}
+              className={startAtPrefilled.className}
+              title={startAtPrefilled.title}
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm font-medium">
@@ -108,6 +184,8 @@ export function EmailIngestionConfigForm({
               max={new Date().toISOString().slice(0, 10)}
               value={customEndAt}
               onChange={(event) => setCustomEndAt(event.target.value)}
+              className={endAtPrefilled.className}
+              title={endAtPrefilled.title}
             />
           </label>
         </div>
@@ -122,11 +200,16 @@ export function EmailIngestionConfigForm({
           rows={domains}
           onChange={setDomains}
           newRow={{ domain: "", domainRole: "CLIENT", enabled: true }}
-          renderRow={(row, update) => (
+          isRowPrefilled={(row) =>
+            row.domain !== "" && savedSnapshot.domains.some((s) => s.domain === row.domain && s.domainRole === row.domainRole && s.enabled === row.enabled)
+          }
+          renderRow={(row, update, prefilled) => (
             <Input
               placeholder="cliente.com.br"
               value={row.domain}
               onChange={(event) => update({ ...row, domain: event.target.value.toLowerCase() })}
+              className={resolvePrefilledFieldProps(prefilled).className}
+              title={resolvePrefilledFieldProps(prefilled).title}
             />
           )}
         />
@@ -141,21 +224,35 @@ export function EmailIngestionConfigForm({
           rows={participants}
           onChange={setParticipants}
           newRow={{ emailAddress: "", roleNote: "", enabled: true }}
-          renderRow={(row, update) => (
+          isRowPrefilled={(row) =>
+            row.emailAddress !== "" &&
+            savedSnapshot.participants.some((s) => s.emailAddress === row.emailAddress && s.roleNote === row.roleNote && s.enabled === row.enabled)
+          }
+          renderRow={(row, update, prefilled) => (
             <>
               <Input
                 placeholder="contato@cliente.com.br"
                 value={row.emailAddress}
                 onChange={(event) => update({ ...row, emailAddress: event.target.value.toLowerCase() })}
-                className="flex-1"
+                className={`flex-1 ${resolvePrefilledFieldProps(prefilled).className}`}
+                title={resolvePrefilledFieldProps(prefilled).title}
               />
-              <Input placeholder="observação (opcional)" value={row.roleNote} onChange={(event) => update({ ...row, roleNote: event.target.value })} className="flex-1" />
+              <Input
+                placeholder="observação (opcional)"
+                value={row.roleNote}
+                onChange={(event) => update({ ...row, roleNote: event.target.value })}
+                className={`flex-1 ${resolvePrefilledFieldProps(prefilled).className}`}
+                title={resolvePrefilledFieldProps(prefilled).title}
+              />
             </>
           )}
         />
       </div>
 
-      <label className="flex items-center gap-2 text-sm font-medium">
+      <label
+        className={`flex w-fit items-center gap-2 rounded-md border p-2 text-sm font-medium ${includeAttachmentsPrefilled ? "border-green-400 bg-green-50 dark:border-green-700 dark:bg-green-950/30" : "border-transparent"}`}
+        title={includeAttachmentsPrefilled ? "Valor carregado do sistema (já salvo)." : undefined}
+      >
         <input
           type="checkbox"
           name="includeAttachments"
@@ -183,17 +280,19 @@ function ListEditor<T extends { enabled: boolean }>({
   onChange,
   newRow,
   renderRow,
+  isRowPrefilled,
 }: {
   rows: T[];
   onChange: (rows: T[]) => void;
   newRow: T;
-  renderRow: (row: T, update: (row: T) => void) => React.ReactNode;
+  renderRow: (row: T, update: (row: T) => void, prefilled: boolean) => React.ReactNode;
+  isRowPrefilled: (row: T) => boolean;
 }) {
   return (
     <div className="flex flex-col gap-2">
       {rows.map((row, index) => (
         <div key={index} className="flex items-center gap-2">
-          {renderRow(row, (updated) => onChange(rows.map((r, i) => (i === index ? updated : r))))}
+          {renderRow(row, (updated) => onChange(rows.map((r, i) => (i === index ? updated : r))), isRowPrefilled(row))}
           <Button type="button" size="sm" variant="ghost" onClick={() => onChange(rows.filter((_, i) => i !== index))}>
             Remover
           </Button>
