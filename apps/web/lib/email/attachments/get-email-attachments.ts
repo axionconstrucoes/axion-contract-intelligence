@@ -80,6 +80,21 @@ export async function getEmailAttachmentsForEmail(
   return (data as unknown as EmailAttachmentRow[]).map(mapRow);
 }
 
+/** Todos os anexos de um projeto — project_id é denormalizado em email_attachments, então não é preciso join com emails. Usada pela aba "Anexos de E-mail" de Documentos. */
+export async function getEmailAttachmentsForProject(supabase: SupabaseClient, projectId: string): Promise<EmailAttachment[]> {
+  const { data, error } = await supabase
+    .from("email_attachments")
+    .select(SELECT_COLUMNS)
+    .eq("project_id", projectId)
+    .order("received_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Falha ao carregar anexos do projeto: ${error.message}`);
+  }
+
+  return (data as unknown as EmailAttachmentRow[]).map(mapRow);
+}
+
 /** Bulk — usada pelo Context Builder para resolver anexos de vários e-mails de uma vez (evita N+1). */
 export async function getEmailAttachmentsForEmails(
   supabase: SupabaseClient,

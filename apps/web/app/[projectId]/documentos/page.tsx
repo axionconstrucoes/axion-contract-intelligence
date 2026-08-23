@@ -1,5 +1,6 @@
 import { DocumentDownloadButton } from "@/components/documents/document-download-button";
 import { DocumentUploadForm } from "@/components/documents/document-upload-form";
+import { EmailAttachmentsPanel } from "@/components/documents/email-attachments-panel";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ import {
   getScheduleActivities,
 } from "@/lib/data";
 import { getManagedDocuments } from "@/lib/document-management";
+import { getEmailAttachmentRegistryForProject } from "@/lib/email/attachments/registry/get-attachment-registry";
 import {
   formatDate,
   scheduleStatusLabels,
@@ -76,11 +78,13 @@ export default async function DocumentosPage({
     clauses,
     scheduleActivities,
     permission,
+    emailAttachmentRows,
   ] = await Promise.all([
     getManagedDocuments(projectId),
     getClauses(projectId),
     getScheduleActivities(projectId),
     getCurrentProjectPermission(projectId),
+    getEmailAttachmentRegistryForProject(projectId),
   ]);
 
   const canUpload =
@@ -122,6 +126,13 @@ export default async function DocumentosPage({
               Cronograma
             </TabsTrigger>
             <FeatureInfo helpId="documentos-tab-cronograma" />
+          </span>
+
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="anexos-email">
+              Anexos de E-mail
+            </TabsTrigger>
+            <FeatureInfo helpId="documentos-tab-anexos-email" />
           </span>
         </TabsList>
 
@@ -379,6 +390,10 @@ export default async function DocumentosPage({
               )}
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="anexos-email">
+          <EmailAttachmentsPanel projectId={projectId} rows={emailAttachmentRows} canPromote={canUpload} />
         </TabsContent>
       </Tabs>
     </div>

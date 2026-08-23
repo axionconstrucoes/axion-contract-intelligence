@@ -2,6 +2,7 @@ import type {
   ActionRequestStatus,
   AiFindingType,
   AlertSeverity,
+  DocumentKind,
   EventStatus,
   ImplicationCategory,
   IntegrationStatus,
@@ -350,3 +351,24 @@ export function formatDateTime(iso: string): string {
   const date = new Date(iso);
   return date.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
+
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export const documentKindLabels: Record<DocumentKind, string> = {
+  CONTRATO_BASE: "Contrato base",
+  ADITIVO: "Aditivo",
+  EDITAL: "Edital",
+  RFI: "RFI",
+  RFP: "RFP",
+  ESPECIFICACAO: "Especificação",
+  DESENHO: "Desenho",
+  PLANILHA: "Planilha",
+  CRONOGRAMA_BASELINE: "Cronograma baseline",
+  CRONOGRAMA_REVISAO: "Revisão de cronograma",
+  RELATORIO_SEMANAL: "Relatório semanal",
+  PROPOSTA_AXION: "Proposta AXION",
+  CLARIFICACAO_CLIENTE: "Clarificação do cliente",
+};

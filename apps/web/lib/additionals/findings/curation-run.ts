@@ -49,6 +49,18 @@ export async function findCompletedCurationRun(
   return data ? mapRow(data as unknown as Record<string, unknown>) : null;
 }
 
+/** Todas as execuções de curadoria de um projeto — usada para detectar "considerado pelo ACC" mesmo quando a execução não gerou finding (ver seção 11 do requisito de Anexos de E-mail). */
+export async function getCurationRunsForProject(supabase: SupabaseClient, projectId: string): Promise<AiCurationRun[]> {
+  const { data, error } = await supabase
+    .from("ai_curation_runs")
+    .select(RUN_COLUMNS)
+    .eq("project_id", projectId)
+    .order("started_at", { ascending: false });
+
+  if (error) throw new Error(`Falha ao carregar execuções de curadoria: ${error.message}`);
+  return (data as unknown as Record<string, unknown>[]).map(mapRow);
+}
+
 export interface StartCurationRunInput {
   projectId: string;
   sourceType: AiCurationSourceType;

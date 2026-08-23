@@ -11,6 +11,7 @@ import {
   type ConfrontationCandidateStatus,
 } from "@/lib/labels";
 import type { AdditionalProposalStatus } from "@/lib/additionals/types";
+import type { AttachmentDisplayStatus } from "@/lib/email/attachments/registry/types";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { cn } from "@/lib/utils";
 
@@ -109,4 +110,15 @@ const additionalProposalStatusClasses: Record<AdditionalProposalStatus, string> 
 
 export function AdditionalProposalStatusBadge({ status }: { status: AdditionalProposalStatus }) {
   return <Badge className={cn(additionalProposalStatusClasses[status])}>{additionalProposalStatusLabels[status]}</Badge>;
+}
+
+const attachmentStatusToneClasses: Record<AttachmentDisplayStatus["tone"], string> = {
+  pending: "border-transparent bg-severity-media/15 text-severity-media",
+  processing: "border-transparent bg-accent text-accent-foreground",
+  processed: "border-transparent bg-severity-baixa/15 text-severity-baixa",
+  failed: "border-transparent bg-severity-critica/15 text-severity-critica",
+};
+
+export function AttachmentStatusBadge({ status }: { status: AttachmentDisplayStatus }) {
+  return <Badge className={cn(attachmentStatusToneClasses[status.tone])}>{status.label}</Badge>;
 }

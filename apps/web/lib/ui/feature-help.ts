@@ -382,6 +382,27 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
     description: "Lista as propostas de adicionais já cadastradas, com status, título e data.",
   },
 
+  // ---------- Anexos de E-mail (aba de Documentos) ----------
+  {
+    id: "documentos-tab-anexos-email",
+    title: "Anexos de E-mail",
+    shortDescription: "Arquivos recebidos como anexos dos e-mails do projeto.",
+    description:
+      "Mostra os arquivos encontrados nos e-mails do projeto e identifica quais foram processados pelo ACC e quais efetivamente participaram das análises dos Experts IA. Cada arquivo preserva vínculo com o e-mail original e com eventuais findings ou documentos do ACC.",
+  },
+  {
+    id: "anexos-considerado",
+    title: "Considerado pelo ACC",
+    shortDescription: "O conteúdo foi efetivamente usado numa análise do ACC.",
+    description: "Indica que o conteúdo deste arquivo foi efetivamente utilizado como fonte em uma análise ou finding do ACC.",
+  },
+  {
+    id: "anexos-incorporado",
+    title: "Incorporado aos Documentos",
+    shortDescription: "O arquivo também virou um documento formal do projeto.",
+    description: "Indica que o arquivo também foi classificado e incorporado ao repositório documental formal do projeto.",
+  },
+
   // ---------- Seção 13 — campos complexos adicionais ----------
   {
     id: "finding",
