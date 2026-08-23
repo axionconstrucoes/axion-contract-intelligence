@@ -3,6 +3,7 @@ import type {
   AiFindingType,
   AlertSeverity,
   DocumentKind,
+  DriveType,
   EventStatus,
   ImplicationCategory,
   IntegrationStatus,
@@ -79,12 +80,24 @@ export const sourceTypeShortLabels: Record<SourceType, string> = {
   RELATORIO_SEMANAL: "Relatório Semanal",
   ERP: "ERP",
   ORCAMENTO: "Orçamento",
+  ESG_SSMA: "ESG/SSMA",
 };
 
+// CONECTADO (valor bruto do banco, nome histórico) é exibido como
+// "Ativo" — configuração válida + fonte apta a operar (seção 7 do
+// requisito de Integrações). ATENCAO é distinto de ERRO: autorização
+// expirada/retry/falha não bloqueante, nunca "não consegue operar".
 export const integrationStatusLabels: Record<IntegrationStatus, string> = {
-  CONECTADO: "Conectado",
+  CONECTADO: "Ativo",
   PENDENTE: "Pendente",
+  ATENCAO: "Atenção",
   ERRO: "Erro",
+};
+
+export const driveTypeLabels: Record<DriveType, string> = {
+  MEU_DRIVE: "Meu Drive",
+  DRIVE_COMPARTILHADO: "Drive compartilhado",
+  PASTA_COMPARTILHADA: "Pasta compartilhada",
 };
 
 export const permissionLabels: Record<ProjectPermission, string> = {

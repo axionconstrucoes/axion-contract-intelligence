@@ -21,7 +21,7 @@ export async function getProjectEmailIngestionConfig(
     await Promise.all([
       supabase.from("project_email_ingestion_mailboxes").select("id,mailbox_address,enabled").eq("config_id", configRow.id),
       supabase.from("project_email_ingestion_domains").select("id,domain,domain_role,enabled").eq("config_id", configRow.id),
-      supabase.from("project_email_ingestion_participants").select("id,email_address,role_note,enabled").eq("config_id", configRow.id),
+      supabase.from("project_email_ingestion_participants").select("id,email_address,role_note,enabled,participant_type").eq("config_id", configRow.id),
     ]);
 
   if (mailboxError) throw new Error(`Falha ao carregar mailboxes: ${mailboxError.message}`);
@@ -46,6 +46,7 @@ export async function getProjectEmailIngestionConfig(
       emailAddress: row.email_address,
       roleNote: row.role_note,
       enabled: row.enabled,
+      participantType: row.participant_type,
     })),
   };
 }

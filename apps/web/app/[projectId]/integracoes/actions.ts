@@ -15,6 +15,7 @@ import type {
   DisconnectEmailAccountState,
   RegisterEmailAccountState,
   SaveEmailIngestionConfigState,
+  SaveIntegrationOriginState,
   StartEmailSyncState,
 } from "./actions-state";
 
@@ -112,6 +113,36 @@ export async function saveEmailIngestionConfigAction(
     return { error: null, success: true };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Falha ao salvar configuração de ingestão.", success: false };
+  }
+}
+
+export async function saveIntegrationOriginAction(
+  _prevState: SaveIntegrationOriginState,
+  formData: FormData
+): Promise<SaveIntegrationOriginState> {
+  const supabase = await createSupabaseServerClient();
+  try {
+    await requireUser(supabase);
+    const projectId = requiredField(formData, "projectId");
+    const sourceType = requiredField(formData, "sourceType");
+
+    const { error } = await supabase.rpc("save_integration_origin", {
+      p_project_id: projectId,
+      p_source_type: sourceType,
+      p_external_system_reference: optionalField(formData, "externalSystemReference"),
+      p_external_project_reference: optionalField(formData, "externalProjectReference"),
+      p_account_reference: optionalField(formData, "accountReference"),
+      p_folder_reference: optionalField(formData, "folderReference"),
+      p_file_reference: optionalField(formData, "fileReference"),
+      p_responsible_reference: optionalField(formData, "responsibleReference"),
+      p_drive_type: optionalField(formData, "driveType"),
+    });
+    if (error) throw new Error(error.message);
+
+    revalidatePath(`/${projectId}/integracoes`);
+    return { error: null, success: true };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Falha ao salvar origem da fonte.", success: false };
   }
 }
 

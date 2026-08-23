@@ -1,10 +1,13 @@
+import type { Metadata } from "next";
 import { createSupabaseServerClient } from "@axion/db/server";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { IntegrationStatusBadge } from "@/components/shared/badges";
 import { EmailAccountsPanel } from "@/components/integrations/email-accounts-panel";
 import { EmailIngestionConfigForm } from "@/components/integrations/email-ingestion-config-form";
+import { EmailIntegrationCard } from "@/components/integrations/email-integration-card";
 import { EmailSyncConfirmationPanel } from "@/components/integrations/email-sync-confirmation-panel";
 import { EmailSyncPanel } from "@/components/integrations/email-sync-panel";
+import { IntegrationCard } from "@/components/integrations/integration-card";
+import { PageHeader } from "@/components/layout/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getIntegrationConfigs, getProject, getSourceDefinitions } from "@/lib/data";
 import { getEmailAccounts } from "@/lib/email/inbound/ingestion-controls/get-email-accounts";
@@ -12,8 +15,8 @@ import { getProjectEmailIngestionConfig } from "@/lib/email/inbound/ingestion-co
 import { getLatestEmailSyncRun } from "@/lib/email/inbound/ingestion-controls/get-sync-runs";
 import { estimateEligibleEmailCount } from "@/lib/email/inbound/ingestion-controls/estimate-eligible-email-count";
 import { getEmailAttachmentRegistryForProject } from "@/lib/email/attachments/registry/get-attachment-registry";
-import { formatDateTime } from "@/lib/labels";
-import { normalizeLegacyMojibake } from "@/lib/normalize-legacy-mojibake";
+
+export const metadata: Metadata = { title: "Integrações" };
 
 export default async function IntegracoesPage({
   params,
@@ -46,55 +49,17 @@ export default async function IntegracoesPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">
-          Administração de Integrações
-        </h1>
+      <PageHeader title="Administração de Integrações" description="Status operacional das fontes configuradas para este projeto." />
 
-        <p className="text-sm text-muted-foreground">
-          Status operacional das fontes configuradas para este projeto.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {sources.map((source) => {
-          const config = configs.find(
-            (item) => item.sourceType === source.type
-          );
+          const config = configs.find((item) => item.sourceType === source.type);
 
-          return (
-            <Card key={source.type}>
-              <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
-                <CardTitle>{source.label}</CardTitle>
+          if (source.type === "EMAIL") {
+            return <EmailIntegrationCard key={source.type} source={source} config={ingestionConfig} accounts={accounts} />;
+          }
 
-                {config && (
-                  <IntegrationStatusBadge status={config.status} />
-                )}
-              </CardHeader>
-
-              <CardContent className="flex flex-col gap-1 pt-0 text-sm text-muted-foreground">
-                <p>{source.description}</p>
-
-                {config ? (
-                  <p className="text-xs">
-                    {normalizeLegacyMojibake(config.detail) || "Integração configurada."}
-
-                    {config.lastSyncAt && (
-                      <>
-                        {" "}
-                        · Última sincronização:{" "}
-                        {formatDateTime(config.lastSyncAt)}
-                      </>
-                    )}
-                  </p>
-                ) : (
-                  <p className="text-xs">
-                    Integração ainda não configurada para este projeto.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          );
+          return <IntegrationCard key={source.type} projectId={projectId} source={source} config={config} canManage={canManage} />;
         })}
       </div>
 

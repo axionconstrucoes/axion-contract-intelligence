@@ -1,5 +1,7 @@
-﻿import Link from "next/link";
+﻿import type { Metadata } from "next";
+import Link from "next/link";
 
+import { PageHeader } from "@/components/layout/page-header";
 import {
   getClauseReviewCandidates,
 } from "@/lib/clause-review";
@@ -20,6 +22,8 @@ function formatConfidence(
   return `${Math.round(value * 100)}%`;
 }
 
+export const metadata: Metadata = { title: "Análise de Cláusulas" };
+
 export default async function ClauseReviewPage({
   params,
 }: PageProps) {
@@ -33,19 +37,13 @@ export default async function ClauseReviewPage({
     );
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-6">
-      <header className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Revisão de Cláusulas
-            </h1>
-
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              Valide os candidatos identificados automaticamente
-              antes que sejam incorporados à base contratual.
-            </p>
-          </div>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <PageHeader
+            title="Revisão de Cláusulas"
+            description="Valide os candidatos identificados automaticamente antes que sejam incorporados à base contratual."
+          />
 
           <Link
             href={`/${projectId}/documentos`}
@@ -63,7 +61,7 @@ export default async function ClauseReviewPage({
           A criação da cláusula contratual definitiva exige
           aprovação humana.
         </div>
-      </header>
+      </div>
 
       {candidates.length === 0 ? (
         <section className="rounded-xl border border-dashed p-8">
@@ -371,6 +369,6 @@ export default async function ClauseReviewPage({
           )}
         </section>
       )}
-    </main>
+    </div>
   );
 }

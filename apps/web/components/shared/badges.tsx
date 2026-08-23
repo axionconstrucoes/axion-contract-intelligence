@@ -67,9 +67,14 @@ export function CategoryBadge({ category }: { category: ImplicationCategory }) {
   return <Badge variant="outline">{categoryLabels[category]}</Badge>;
 }
 
+// ATENCAO (seção 22 do requisito de Integrações) é sempre distinto de
+// ERRO — autorização expirada/retry/falha não bloqueante, nunca "não
+// consegue operar". A cor do badge identifica o ESTADO, nunca a FONTE
+// (a cor da fonte vive em integration-visual-identity.ts).
 const integrationClasses: Record<IntegrationStatus, string> = {
   CONECTADO: "border-transparent bg-severity-baixa/15 text-severity-baixa",
   PENDENTE: "border-transparent bg-severity-media/15 text-severity-media",
+  ATENCAO: "border-transparent bg-orange-500/15 text-orange-600 dark:text-orange-400",
   ERRO: "border-transparent bg-severity-critica/15 text-severity-critica",
 };
 

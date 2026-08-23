@@ -9,7 +9,10 @@ export async function TopBar({ projectId }: { projectId: string }) {
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4">
-      <ProjectSwitcher projects={projects} currentProjectId={projectId} />
+      <div className="flex items-center gap-2">
+        <ProjectSwitcher projects={projects} currentProjectId={projectId} />
+        {currentProject?.code && <span className="text-xs text-muted-foreground">{currentProject.code}</span>}
+      </div>
       <div className="flex items-center gap-3">
         {currentProject?.contractNumber && (
           <span className="text-xs text-muted-foreground">Contrato {currentProject.contractNumber}</span>

@@ -1081,7 +1081,9 @@ export async function getIntegrationConfigs(projectId: string) {
 
   const { data, error } = await supabase
     .from("project_integrations")
-    .select("source_type, status, last_sync_at, detail")
+    .select(
+      "source_type, status, last_sync_at, detail, external_system_reference, external_project_reference, account_reference, folder_reference, file_reference, responsible_reference, drive_type"
+    )
     .eq("project_id", projectId)
     .order("source_type", { ascending: true });
 
@@ -1098,6 +1100,13 @@ export async function getIntegrationConfigs(projectId: string) {
     status: row.status,
     lastSyncAt: row.last_sync_at,
     detail: row.detail,
+    externalSystemReference: row.external_system_reference,
+    externalProjectReference: row.external_project_reference,
+    accountReference: row.account_reference,
+    folderReference: row.folder_reference,
+    fileReference: row.file_reference,
+    responsibleReference: row.responsible_reference,
+    driveType: row.drive_type,
   }));
 }
 

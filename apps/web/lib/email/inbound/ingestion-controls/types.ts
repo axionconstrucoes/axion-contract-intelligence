@@ -38,6 +38,7 @@ export interface EmailIngestionParticipant {
   emailAddress: string;
   roleNote: string | null;
   enabled: boolean;
+  participantType: "AXION" | "CLIENTE" | "TERCEIRO";
 }
 
 export interface ProjectEmailIngestionConfig {

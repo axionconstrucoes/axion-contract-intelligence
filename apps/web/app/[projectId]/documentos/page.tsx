@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import { DocumentDownloadButton } from "@/components/documents/document-download-button";
 import { DocumentUploadForm } from "@/components/documents/document-upload-form";
 import { EmailAttachmentsPanel } from "@/components/documents/email-attachments-panel";
+import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +66,8 @@ function formatBytes(bytes: number | null) {
   ).toFixed(1)} MB`;
 }
 
+export const metadata: Metadata = { title: "Documentos" };
+
 export default async function DocumentosPage({
   params,
 }: {
@@ -93,17 +97,7 @@ export default async function DocumentosPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">
-          Documentos
-        </h1>
-
-        <p className="text-sm text-muted-foreground">
-          Contratos, aditivos, propostas,
-          documentos técnicos e cronogramas
-          do projeto.
-        </p>
-      </div>
+      <PageHeader title="Documentos" description="Contratos, aditivos, propostas, documentos técnicos e cronogramas do projeto." />
 
       <Tabs defaultValue="documentos">
         <TabsList>

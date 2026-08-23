@@ -1,8 +1,12 @@
+import type { Metadata } from "next";
 import { ExpertQueryPanel } from "@/components/ai/expert-query-panel";
 import { AlertCard } from "@/components/dashboard/alert-card";
+import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
 import { getAlerts, getEvents } from "@/lib/data";
+
+export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -12,12 +16,10 @@ export default async function DashboardPage({ params }: { params: Promise<{ proj
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">Dashboard de Alertas</h1>
-        <p className="text-sm text-muted-foreground">
-          Possíveis implicações contratuais identificadas pela IA — toda sugestão exige revisão humana.
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard de Alertas"
+        description="Possíveis implicações contratuais identificadas pela IA — toda sugestão exige revisão humana."
+      />
 
       <div className="grid grid-cols-3 gap-4">
         <Card>

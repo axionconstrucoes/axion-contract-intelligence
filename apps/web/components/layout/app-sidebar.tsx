@@ -95,11 +95,12 @@ export function AppSidebar({ projectId }: { projectId: string }) {
           collapsed && "justify-center px-0"
         )}
       >
+        {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático em public/, sem otimização de imagem necessária */}
+        <img src="/branding/acc-icon.svg" alt="ACC" className="size-7 shrink-0 rounded" />
         {!collapsed && (
-          <>
-            <span className="text-sm font-semibold tracking-tight">AXION</span>
-            <span className="text-xs text-muted-foreground">ACC</span>
-          </>
+          <span className="text-xs font-bold uppercase leading-tight tracking-tight text-black dark:text-white">
+            AXION Controle de Contratos
+          </span>
         )}
       </div>
 

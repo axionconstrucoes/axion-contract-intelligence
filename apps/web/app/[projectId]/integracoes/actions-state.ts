@@ -13,3 +13,6 @@ export const initialSaveEmailIngestionConfigState: SaveEmailIngestionConfigState
 
 export type StartEmailSyncState = { error: string | null; success: boolean; syncRunId: string | null };
 export const initialStartEmailSyncState: StartEmailSyncState = { error: null, success: false, syncRunId: null };
+
+export type SaveIntegrationOriginState = { error: string | null; success: boolean };
+export const initialSaveIntegrationOriginState: SaveIntegrationOriginState = { error: null, success: false };

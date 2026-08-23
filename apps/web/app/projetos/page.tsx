@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -5,15 +6,21 @@ import { LogoutButton } from "@/components/auth/logout-button";
 import { getProjects } from "@/lib/data";
 import { formatDate } from "@/lib/labels";
 
+export const metadata: Metadata = { title: "Projetos" };
+
 export default async function ProjetosPage() {
   const projects = await getProjects();
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-6 p-8">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold">Selecione um projeto</h1>
-          <p className="text-sm text-muted-foreground">Obras e projetos Axion com inteligência contratual ativa.</p>
+        <div className="flex items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático em public/, sem otimização de imagem necessária */}
+          <img src="/branding/acc-logo.svg" alt="ACC" className="h-9 w-auto" />
+          <div>
+            <h1 className="text-lg font-semibold">Selecione um projeto</h1>
+            <p className="text-sm text-muted-foreground">Obras e projetos Axion com inteligência contratual ativa.</p>
+          </div>
         </div>
         <LogoutButton />
       </div>
@@ -37,6 +44,16 @@ export default async function ProjetosPage() {
             </Card>
           </Link>
         ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-4 border-t border-border pt-4 text-xs text-muted-foreground">
+        <span>Identidade visual ACC:</span>
+        <a href="/branding/acc-logo.svg" download className="underline hover:text-foreground">
+          Baixar logotipo (SVG)
+        </a>
+        <a href="/branding/acc-icon.svg" download className="underline hover:text-foreground">
+          Baixar ícone (SVG)
+        </a>
       </div>
     </div>
   );

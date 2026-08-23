@@ -1,9 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
+import { PageHeader } from "@/components/layout/page-header";
 import { ActionRequestStatusBadge } from "@/components/shared/badges";
 import { EmptyState } from "@/components/shared/empty-state";
 import { formatDateTime } from "@/lib/labels";
 import { getActionRequests } from "@/lib/data";
+
+export const metadata: Metadata = { title: "Solicitações" };
 
 export default async function ActionRequestsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -11,12 +15,7 @@ export default async function ActionRequestsPage({ params }: { params: Promise<{
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">Solicitações</h1>
-        <p className="text-sm text-muted-foreground">
-          Solicitações rastreáveis para alguém analisar, responder ou executar algo.
-        </p>
-      </div>
+      <PageHeader title="Solicitações" description="Solicitações rastreáveis para alguém analisar, responder ou executar algo." />
 
       {actionRequests.length === 0 ? (
         <EmptyState message="Nenhuma solicitação registrada para este projeto." />

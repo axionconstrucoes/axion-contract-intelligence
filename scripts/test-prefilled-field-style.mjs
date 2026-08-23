@@ -150,7 +150,7 @@ check("salvar com sucesso atualiza savedSnapshot para os valores atuais (campos 
 });
 
 check("sem regressão: FeatureInfo dos campos já existentes (conta/período/domínio/participantes/anexos) continuam presentes", () => {
-  for (const helpId of ["gmail-account-connected", "gmail-ingestion-period", "gmail-client-domain", "gmail-participants", "gmail-include-attachments"]) {
+  for (const helpId of ["gmail-account-connected", "gmail-ingestion-period", "gmail-client-domain", "gmail-participant-monitored", "gmail-include-attachments"]) {
     assert(formSource.includes(`helpId="${helpId}"`), `${helpId} deveria continuar renderizado (sem regressão)`);
   }
 });

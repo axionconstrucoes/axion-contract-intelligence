@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { CheckCircle2, Clock } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,19 +23,17 @@ const EXPERT_ACCESS_HREF: Partial<Record<OfficialExpertId, (projectId: string) =
   "esg-director": (projectId) => `/${projectId}/esg`,
 };
 
+export const metadata: Metadata = { title: "Experts IA" };
+
 export default async function ExpertsIaPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">Experts IA</h1>
-        <p className="text-sm text-muted-foreground">
-          Hub central dos Experts oficiais do ACC para este projeto — toda sugestão exige revisão humana. Os
-          acessos já existentes (Diretor Comercial IA no Dashboard, Diretor de ESG IA em ESG/SSMA) continuam
-          disponíveis normalmente; este hub não os substitui.
-        </p>
-      </div>
+      <PageHeader
+        title="Experts IA"
+        description="Hub central dos Experts oficiais do ACC para este projeto — toda sugestão exige revisão humana. Os acessos já existentes (Diretor Comercial IA no Dashboard, Diretor de ESG IA em ESG/SSMA) continuam disponíveis normalmente; este hub não os substitui."
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {ALL_OFFICIAL_EXPERT_DEFINITIONS.map((expert) => {

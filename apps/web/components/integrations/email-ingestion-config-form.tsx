@@ -21,6 +21,9 @@ import { Select } from "@/components/ui/select";
 import { saveEmailIngestionConfigAction } from "@/app/[projectId]/integracoes/actions";
 import { initialSaveEmailIngestionConfigState } from "@/app/[projectId]/integracoes/actions-state";
 import { isFieldPrefilled, resolvePrefilledFieldProps } from "@/lib/ui/prefilled-field-style";
+import { ADD_BUTTON_CLASSNAME } from "@/lib/ui/add-button-style";
+import { isEmailIngestionConfigDirty } from "@/lib/email/inbound/ingestion-controls/compute-config-dirty";
+import { classifyParticipantType, type ParticipantType } from "@/lib/email/inbound/ingestion-controls/classify-participant-type";
 import type { EmailAccount, EmailIngestionWindowMode, ProjectEmailIngestionConfig } from "@/lib/email/inbound/ingestion-controls/types";
 
 interface DomainRow {
@@ -33,7 +36,14 @@ interface ParticipantRow {
   emailAddress: string;
   roleNote: string;
   enabled: boolean;
+  participantType: ParticipantType;
 }
+
+const PARTICIPANT_TYPE_LABELS: Record<ParticipantType, string> = {
+  AXION: "AXION",
+  CLIENTE: "Cliente",
+  TERCEIRO: "Terceiro",
+};
 
 interface ConfigSnapshot {
   emailAccountId: string;
@@ -53,7 +63,7 @@ function snapshotFromConfig(config: ProjectEmailIngestionConfig | null): ConfigS
     customEndAt: config?.customEndAt?.slice(0, 10) ?? "",
     includeAttachments: config?.includeAttachments ?? true,
     domains: config?.domains.filter((d) => d.domainRole !== "AXION").map((d) => ({ domain: d.domain, domainRole: d.domainRole as "CLIENT" | "OTHER_AUTHORIZED", enabled: d.enabled })) ?? [],
-    participants: config?.participants.map((p) => ({ emailAddress: p.emailAddress, roleNote: p.roleNote ?? "", enabled: p.enabled })) ?? [],
+    participants: config?.participants.map((p) => ({ emailAddress: p.emailAddress, roleNote: p.roleNote ?? "", enabled: p.enabled, participantType: p.participantType })) ?? [],
   };
 }
 
@@ -104,6 +114,18 @@ export function EmailIngestionConfigForm({
   const startAtPrefilled = resolvePrefilledFieldProps(hasSavedConfig && isFieldPrefilled(customStartAt, savedSnapshot.customStartAt));
   const endAtPrefilled = resolvePrefilledFieldProps(hasSavedConfig && isFieldPrefilled(customEndAt, savedSnapshot.customEndAt));
   const includeAttachmentsPrefilled = hasSavedConfig && includeAttachments === savedSnapshot.includeAttachments;
+
+  // Botão [Salvar configuração]: oculto quando não há nenhuma alteração
+  // pendente em relação ao que já está salvo — permanecer visível
+  // indefinidamente daria a impressão de uma ação pendente que não
+  // existe. Falha de salvamento nunca atualiza savedSnapshot (ver
+  // handledActionState acima), então o botão continua visível
+  // automaticamente sem lógica extra.
+  const isDirty = isEmailIngestionConfigDirty(
+    { emailAccountId, windowMode, customStartAt, customEndAt, includeAttachments, domains, participants },
+    savedSnapshot,
+    hasSavedConfig
+  );
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
@@ -200,6 +222,7 @@ export function EmailIngestionConfigForm({
           rows={domains}
           onChange={setDomains}
           newRow={{ domain: "", domainRole: "CLIENT", enabled: true }}
+          addLabel="+ Adicionar domínio"
           isRowPrefilled={(row) =>
             row.domain !== "" && savedSnapshot.domains.some((s) => s.domain === row.domain && s.domainRole === row.domainRole && s.enabled === row.enabled)
           }
@@ -217,26 +240,53 @@ export function EmailIngestionConfigForm({
 
       <div className="flex flex-col gap-2">
         <span className="flex items-center gap-1.5 text-sm font-medium">
-          Participantes relevantes
-          <FeatureInfo helpId="gmail-participants" />
+          B) Participantes monitorados
+          <FeatureInfo helpId="gmail-participant-monitored" />
         </span>
+        <p className="text-xs text-muted-foreground">
+          Endereços específicos considerados na ingestão — não precisam de profile, membership nem login no ACC, e nunca ganham acesso ao
+          sistema.
+        </p>
         <ListEditor
           rows={participants}
           onChange={setParticipants}
-          newRow={{ emailAddress: "", roleNote: "", enabled: true }}
+          newRow={{ emailAddress: "", roleNote: "", enabled: true, participantType: "TERCEIRO" }}
+          addLabel="+ Adicionar participante"
           isRowPrefilled={(row) =>
             row.emailAddress !== "" &&
-            savedSnapshot.participants.some((s) => s.emailAddress === row.emailAddress && s.roleNote === row.roleNote && s.enabled === row.enabled)
+            savedSnapshot.participants.some(
+              (s) =>
+                s.emailAddress === row.emailAddress &&
+                s.roleNote === row.roleNote &&
+                s.enabled === row.enabled &&
+                s.participantType === row.participantType
+            )
           }
           renderRow={(row, update, prefilled) => (
             <>
               <Input
                 placeholder="contato@cliente.com.br"
                 value={row.emailAddress}
-                onChange={(event) => update({ ...row, emailAddress: event.target.value.toLowerCase() })}
+                onChange={(event) => {
+                  const emailAddress = event.target.value.toLowerCase();
+                  const clientDomainList = domains.filter((d) => d.domainRole === "CLIENT").map((d) => d.domain);
+                  update({ ...row, emailAddress, participantType: classifyParticipantType(emailAddress, "axion.com.br", clientDomainList) });
+                }}
                 className={`flex-1 ${resolvePrefilledFieldProps(prefilled).className}`}
                 title={resolvePrefilledFieldProps(prefilled).title}
               />
+              <Select
+                value={row.participantType}
+                onChange={(event) => update({ ...row, participantType: event.target.value as ParticipantType })}
+                className={`w-32 shrink-0 ${resolvePrefilledFieldProps(prefilled).className}`}
+                title="Classificação sugerida automaticamente pelo domínio — corrigível."
+              >
+                {(Object.keys(PARTICIPANT_TYPE_LABELS) as ParticipantType[]).map((type) => (
+                  <option key={type} value={type}>
+                    {PARTICIPANT_TYPE_LABELS[type]}
+                  </option>
+                ))}
+              </Select>
               <Input
                 placeholder="observação (opcional)"
                 value={row.roleNote}
@@ -264,13 +314,16 @@ export function EmailIngestionConfigForm({
       </label>
 
       {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-      {state.success ? <p className="text-sm">Configuração salva.</p> : null}
 
-      <div>
-        <Button type="submit" size="sm" disabled={pending || !emailAccountId}>
-          {pending ? "Salvando…" : "Salvar configuração"}
-        </Button>
-      </div>
+      {isDirty ? (
+        <div>
+          <Button type="submit" size="sm" disabled={pending || !emailAccountId}>
+            {pending ? "Salvando…" : "Salvar configuração"}
+          </Button>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">Configuração salva</p>
+      )}
     </form>
   );
 }
@@ -281,12 +334,14 @@ function ListEditor<T extends { enabled: boolean }>({
   newRow,
   renderRow,
   isRowPrefilled,
+  addLabel,
 }: {
   rows: T[];
   onChange: (rows: T[]) => void;
   newRow: T;
   renderRow: (row: T, update: (row: T) => void, prefilled: boolean) => React.ReactNode;
   isRowPrefilled: (row: T) => boolean;
+  addLabel: string;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -299,8 +354,8 @@ function ListEditor<T extends { enabled: boolean }>({
         </div>
       ))}
       <div>
-        <Button type="button" size="sm" variant="outline" onClick={() => onChange([...rows, newRow])}>
-          + Adicionar
+        <Button type="button" size="sm" variant="outline" className={ADD_BUTTON_CLASSNAME} onClick={() => onChange([...rows, newRow])}>
+          {addLabel}
         </Button>
       </div>
     </div>

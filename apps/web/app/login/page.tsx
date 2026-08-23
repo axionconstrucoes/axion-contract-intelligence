@@ -1,9 +1,12 @@
+import type { Metadata } from "next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { login } from "./actions";
 import { GoogleSignInButton } from "./google-signin-button";
+
+export const metadata: Metadata = { title: "Login" };
 
 const oauthErrorMessages: Record<string, string> = {
   oauth_missing_code: "Não foi possível concluir o login com Google. Tente novamente.",
@@ -23,7 +26,11 @@ export default async function LoginPage({
     <div className="flex min-h-dvh items-center justify-center bg-muted p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-base">AXION Acompanhamento de Contratos</CardTitle>
+          <div className="mb-1 flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático em public/, sem otimização de imagem necessária */}
+            <img src="/branding/acc-logo.svg" alt="ACC" className="h-10 w-auto" />
+          </div>
+          <CardTitle className="text-base">AXION Controle de Contratos</CardTitle>
           <CardDescription>Acesso restrito a usuários autorizados por projeto.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">

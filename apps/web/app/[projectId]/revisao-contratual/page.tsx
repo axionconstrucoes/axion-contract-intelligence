@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +32,8 @@ const priorityClasses:
     "border-border bg-muted text-muted-foreground",
 };
 
+export const metadata: Metadata = { title: "Análise Contratual" };
+
 export default async function ContractReviewPage({
   params,
 }: {
@@ -59,17 +63,10 @@ export default async function ContractReviewPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">
-          Revisão Contratual
-        </h1>
-
-        <p className="text-sm text-muted-foreground">
-          Candidatos detectados automaticamente a partir
-          das comunicações do projeto. Nenhum candidato
-          entra no Event Ledger sem revisão humana.
-        </p>
-      </div>
+      <PageHeader
+        title="Revisão Contratual"
+        description="Candidatos detectados automaticamente a partir das comunicações do projeto. Nenhum candidato entra no Event Ledger sem revisão humana."
+      />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>

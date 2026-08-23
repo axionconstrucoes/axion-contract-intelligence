@@ -1,9 +1,11 @@
+import type { Metadata } from "next";
 import { ExpertQueryPanel } from "@/components/ai/expert-query-panel";
 import { EsgManagerialSummary, type EsgManagerialRow } from "@/components/esg/esg-managerial-summary";
 import { EsgObligationForm } from "@/components/esg/esg-obligation-form";
 import { EsgReviewForm } from "@/components/esg/esg-review-form";
 import { EsgSubmissionForm } from "@/components/esg/esg-submission-form";
 import { EsgTechnicianPendingList, type EsgPendingItem } from "@/components/esg/esg-technician-pending-list";
+import { PageHeader } from "@/components/layout/page-header";
 import { SeverityBadge } from "@/components/shared/badges";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +30,8 @@ import {
   formatDate,
   formatDateTime,
 } from "@/lib/labels";
+
+export const metadata: Metadata = { title: "ESG / SSMA" };
 
 export default async function EsgObligationsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -117,11 +121,10 @@ export default async function EsgObligationsPage({ params }: { params: Promise<{
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold">Comprovação de Obrigações ESG/SSMA</h1>
-        <p className="text-sm text-muted-foreground">
-          Obrigações contratuais de ESG/SSMA — prazo, comprovação, evidência, status e risco de penalidade. Não é um
-          sistema de ESG corporativo nem de gestão operacional de segurança do trabalho.
-        </p>
+        <PageHeader
+          title="Comprovação de Obrigações ESG/SSMA"
+          description="Obrigações contratuais de ESG/SSMA — prazo, comprovação, evidência, status e risco de penalidade. Não é um sistema de ESG corporativo nem de gestão operacional de segurança do trabalho."
+        />
       </div>
 
       <Tabs defaultValue="pendencias">

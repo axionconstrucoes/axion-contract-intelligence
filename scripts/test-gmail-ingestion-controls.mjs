@@ -184,7 +184,7 @@ check("registry: os 8 helpIds da ingestão de e-mails existem", () => {
     "gmail-add-account",
     "gmail-account-connected",
     "gmail-client-domain",
-    "gmail-participants",
+    "gmail-participant-monitored",
     "gmail-ingestion-period",
     "gmail-include-attachments",
     "gmail-incremental-sync",
@@ -200,7 +200,7 @@ check("FeatureInfo realmente renderizado nos componentes certos", () => {
 
   const configSource = readSource("apps/web/components/integrations/email-ingestion-config-form.tsx");
   assert(configSource.includes('helpId="gmail-client-domain"'));
-  assert(configSource.includes('helpId="gmail-participants"'));
+  assert(configSource.includes('helpId="gmail-participant-monitored"'));
   assert(configSource.includes('helpId="gmail-ingestion-period"'));
   assert(configSource.includes('helpId="gmail-include-attachments"'));
 

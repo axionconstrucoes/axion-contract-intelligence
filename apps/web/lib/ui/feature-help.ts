@@ -427,13 +427,6 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
       "Define o domínio de e-mail do cliente deste projeto. Junto com os participantes cadastrados, delimita quais mensagens são consideradas relacionadas ao projeto — conectar uma conta nunca significa importar a caixa inteira.",
   },
   {
-    id: "gmail-participants",
-    title: "Participantes",
-    shortDescription: "Pessoas específicas cujas mensagens são consideradas.",
-    description:
-      "Endereços específicos autorizados a serem considerados na ingestão deste projeto, além do domínio do cliente — útil para consultores externos ou contatos individuais.",
-  },
-  {
     id: "gmail-ingestion-period",
     title: "Período de ingestão",
     shortDescription: "Janela temporal considerada na sincronização.",
@@ -460,6 +453,47 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
     shortDescription: "Indica que o valor já está salvo no sistema.",
     description:
       "O destaque verde indica apenas que aquele campo já foi carregado da configuração salva — nunca que o valor foi validado, aprovado ou está livre de risco. Ao editar, o destaque some até a próxima gravação bem-sucedida.",
+  },
+  {
+    id: "gmail-participant-monitored",
+    title: "Participante monitorado",
+    shortDescription: "Endereço específico considerado na ingestão.",
+    description:
+      "Endereço específico autorizado a ser considerado na ingestão deste projeto, além do domínio do cliente. Classificado como AXION, Cliente ou Terceiro — sugerido automaticamente pelo domínio, sempre corrigível por humano. Nunca precisa de profile, membership ou login no ACC, e nunca ganha acesso ao sistema.",
+  },
+  {
+    id: "gmail-participant-cliente",
+    title: "Cliente",
+    shortDescription: "Participante do domínio configurado como cliente do projeto.",
+    description: "Indica que o participante pertence ao domínio de e-mail configurado como cliente deste projeto.",
+  },
+  {
+    id: "gmail-participant-terceiro",
+    title: "Terceiro",
+    shortDescription: "Participante externo que não é AXION nem do domínio do cliente.",
+    description:
+      "Indica um participante externo (ex.: consultor) que não é AXION nem pertence ao domínio configurado como cliente. Nunca é classificado automaticamente como Cliente.",
+  },
+  {
+    id: "integration-origin",
+    title: "Origem da fonte",
+    shortDescription: "De onde vem, de fato, esta integração.",
+    description:
+      "Mostra apenas informações realmente preenchidas por um humano sobre a origem desta fonte (sistema, projeto/obra, conta, pasta, arquivo, responsável) — nunca inventa informação. Quando nada foi definido, mostra \"Origem ainda não definida\".",
+  },
+  {
+    id: "esg-ssma-source",
+    title: "ESG/SSMA",
+    shortDescription: "Registros e evidências de segurança, saúde, meio ambiente e ESG/SSMA.",
+    description:
+      "Consolida registros, evidências e documentos de segurança, saúde, meio ambiente e obrigações ESG/SSMA relacionados ao projeto — formulário ESG/SSMA do ACC, e-mails, Drive e evidências anexadas. Técnico de Segurança e Responsável/Gerente ESG são configuráveis por projeto e não precisam ser usuários do ACC.",
+  },
+  {
+    id: "drive-type",
+    title: "Tipo de Drive",
+    shortDescription: "Meu Drive, Drive compartilhado ou Pasta compartilhada.",
+    description:
+      "Identifica tecnicamente o tipo de local no Google Drive monitorado: Meu Drive (pessoal), Drive compartilhado (de equipe) ou Pasta compartilhada (pasta específica) — nunca confundir os três tipos.",
   },
   {
     id: "gmail-sync-progress",

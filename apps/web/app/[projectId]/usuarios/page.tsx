@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+import { PageHeader } from "@/components/layout/page-header";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -5,16 +7,15 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { getProjectMembers } from "@/lib/data";
 import { originLabels, permissionLabels } from "@/lib/labels";
 
+export const metadata: Metadata = { title: "Usuários" };
+
 export default async function UsuariosPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const members = await getProjectMembers(projectId);
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">Usuários & Permissões</h1>
-        <p className="text-sm text-muted-foreground">Usuários internos Axion e terceiros com acesso a este projeto.</p>
-      </div>
+      <PageHeader title="Usuários & Permissões" description="Usuários internos Axion e terceiros com acesso a este projeto." />
       {members.length === 0 ? (
         <EmptyState message="Nenhum usuário com acesso a este projeto." />
       ) : (

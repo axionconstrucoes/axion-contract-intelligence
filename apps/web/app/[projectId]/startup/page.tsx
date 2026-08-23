@@ -1,7 +1,9 @@
+import type { Metadata } from "next";
 import { createSupabaseServerClient } from "@axion/db/server";
 import { CompleteStartupButton } from "@/components/startup/complete-startup-button";
 import { HistoricalFindingCard } from "@/components/startup/historical-finding-card";
 import { StartupConfigForm } from "@/components/startup/startup-config-form";
+import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { RiskLegend } from "@/components/shared/risk-legend";
@@ -20,6 +22,8 @@ const STATUS_LABELS = {
   COMPLETED: "Concluído",
 } as const;
 
+export const metadata: Metadata = { title: "Start-up ACC" };
+
 export default async function StartupPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
   const supabase = await createSupabaseServerClient();
@@ -36,13 +40,10 @@ export default async function StartupPage({ params }: { params: Promise<{ projec
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">Start-up ACC</h1>
-        <p className="text-sm text-muted-foreground">
-          Validação dos riscos históricos antes de ativar o acompanhamento operacional — o ACC conhece todo o
-          passado do projeto, mas nunca trata fato histórico já pacificado como ocorrência nova.
-        </p>
-      </div>
+      <PageHeader
+        title="Start-up ACC"
+        description="Validação dos riscos históricos antes de ativar o acompanhamento operacional — o ACC conhece todo o passado do projeto, mas nunca trata fato histórico já pacificado como ocorrência nova."
+      />
 
       <Card>
         <CardHeader>

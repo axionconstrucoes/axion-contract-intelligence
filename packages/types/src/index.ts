@@ -12,7 +12,8 @@ export type SourceType =
   | "CRONOGRAMA"
   | "RELATORIO_SEMANAL"
   | "ERP"
-  | "ORCAMENTO";
+  | "ORCAMENTO"
+  | "ESG_SSMA";
 
 export interface SourceDefinition {
   type: SourceType;
@@ -37,6 +38,7 @@ export type ProjectStatus = "ATIVO" | "SUSPENSO" | "ENCERRADO";
 
 export interface Project {
   id: string;
+  code: string;
   name: string;
   client: string;
   status: ProjectStatus;
@@ -237,13 +239,24 @@ export interface Alert {
   acknowledged: boolean;
 }
 
-export type IntegrationStatus = "CONECTADO" | "PENDENTE" | "ERRO";
+export type IntegrationStatus = "CONECTADO" | "PENDENTE" | "ATENCAO" | "ERRO";
+
+export type DriveType = "MEU_DRIVE" | "DRIVE_COMPARTILHADO" | "PASTA_COMPARTILHADA";
 
 export interface IntegrationConfig {
   sourceType: SourceType;
   status: IntegrationStatus;
   lastSyncAt: string | null; // ISO datetime
   detail: string;
+  // Origem da fonte — sempre preenchida por humano, nunca inferida.
+  // null/ausente => "Origem ainda não definida" na UI.
+  externalSystemReference: string | null;
+  externalProjectReference: string | null;
+  accountReference: string | null;
+  folderReference: string | null;
+  fileReference: string | null;
+  responsibleReference: string | null;
+  driveType: DriveType | null;
 }
 
 export interface AuditLogEntry {

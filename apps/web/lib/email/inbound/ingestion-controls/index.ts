@@ -17,3 +17,5 @@ export { getEmailAccounts } from "./get-email-accounts";
 export { getProjectEmailIngestionConfig } from "./get-project-email-ingestion-config";
 export { getEmailSyncRunsForProject, getLatestEmailSyncRun } from "./get-sync-runs";
 export { estimateEligibleEmailCount } from "./estimate-eligible-email-count";
+export { isEmailIngestionConfigDirty } from "./compute-config-dirty";
+export type { EmailIngestionConfigFormValues } from "./compute-config-dirty";

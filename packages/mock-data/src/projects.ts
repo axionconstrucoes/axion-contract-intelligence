@@ -4,6 +4,7 @@ import { DEV_PROJECT_ID } from "./constants";
 export const projects: Project[] = [
   {
     id: DEV_PROJECT_ID,
+    code: "ARN-2025-001",
     name: "Arena Multiuso Zona Norte",
     client: "Prefeitura Municipal de Itaguaí",
     status: "ATIVO",
@@ -14,6 +15,7 @@ export const projects: Project[] = [
   },
   {
     id: "prj-industrial",
+    code: "VTR-2025-002",
     name: "Complexo Industrial Vetraria",
     client: "Vetraria Componentes Ltda.",
     status: "ATIVO",

@@ -1,6 +1,8 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { createSupabaseServerClient } from "@axion/db/server";
 import { AdditionalProposalCreateForm } from "@/components/additionals/additional-proposal-create-form";
+import { PageHeader } from "@/components/layout/page-header";
 import { AdditionalProposalStatusBadge } from "@/components/shared/badges";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FeatureInfo } from "@/components/shared/feature-info";
@@ -9,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getAdditionalProposals } from "@/lib/additionals/get-additional-proposals";
 import { formatDate } from "@/lib/labels";
+
+export const metadata: Metadata = { title: "Adicionais" };
 
 export default async function AdditionalProposalsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -22,13 +26,10 @@ export default async function AdditionalProposalsPage({ params }: { params: Prom
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">Propostas de Adicionais</h1>
-        <p className="text-sm text-muted-foreground">
-          Escopo, preço e prazo adicionais rastreados por projeto — o contrato-base permanece o instrumento
-          vigente; um adicional só é considerado contratado por decisão humana.
-        </p>
-      </div>
+      <PageHeader
+        title="Propostas de Adicionais"
+        description="Escopo, preço e prazo adicionais rastreados por projeto — o contrato-base permanece o instrumento vigente; um adicional só é considerado contratado por decisão humana."
+      />
 
       <Tabs defaultValue="propostas">
         <TabsList>

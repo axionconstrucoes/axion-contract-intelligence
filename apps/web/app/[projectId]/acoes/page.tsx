@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { createSupabaseServerClient } from "@axion/db/server";
@@ -8,6 +9,7 @@ import { SlaActionsSummary } from "@/components/sla/sla-actions-summary";
 import { SlaProcessEscalationsButton } from "@/components/sla/sla-process-escalations-button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FeatureInfo } from "@/components/shared/feature-info";
+import { PageHeader } from "@/components/layout/page-header";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,6 +20,8 @@ import {
   getSlaActions,
 } from "@/lib/sla/sla-actions-data";
 import type { SlaArea } from "@/lib/sla/types";
+
+export const metadata: Metadata = { title: "Ações e Escalonamentos" };
 
 export default async function SlaActionsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -55,13 +59,10 @@ export default async function SlaActionsPage({ params }: { params: Promise<{ pro
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-lg font-semibold">Ações e Escalonamentos</h1>
-          <p className="text-sm text-muted-foreground">
-            Matriz de criticidade, SLA interno e escalonamento automático — RESPONSÁVEL → 1º ESCALÃO → 2º ESCALÃO →
-            DIRETORIA.
-          </p>
-        </div>
+        <PageHeader
+          title="Ações e Escalonamentos"
+          description="Matriz de criticidade, SLA interno e escalonamento automático — RESPONSÁVEL → 1º ESCALÃO → 2º ESCALÃO → DIRETORIA."
+        />
         <div className="flex items-center gap-2">
           {isMember ? <SlaProcessEscalationsButton projectId={projectId} /> : null}
           {canConfigure ? (

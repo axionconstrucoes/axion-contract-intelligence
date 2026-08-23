@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import {
   Table,
   TableBody,
@@ -6,10 +7,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { getAuditLog, getUser } from "@/lib/data";
 import { formatDateTime } from "@/lib/labels";
 import { normalizeLegacyMojibake } from "@/lib/normalize-legacy-mojibake";
+
+export const metadata: Metadata = { title: "Auditoria" };
 
 export default async function AuditoriaPage({
   params,
@@ -47,12 +51,7 @@ export default async function AuditoriaPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">Auditoria</h1>
-        <p className="text-sm text-muted-foreground">
-          Trilha cronológica de ações realizadas na plataforma.
-        </p>
-      </div>
+      <PageHeader title="Auditoria" description="Trilha cronológica de ações realizadas na plataforma." />
 
       {entries.length === 0 ? (
         <EmptyState message="Nenhum registro de auditoria." />

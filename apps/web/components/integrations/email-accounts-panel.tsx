@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { disconnectEmailAccountAction, registerEmailAccountAction } from "@/app/[projectId]/integracoes/actions";
 import { initialDisconnectEmailAccountState, initialRegisterEmailAccountState } from "@/app/[projectId]/integracoes/actions-state";
+import { ADD_BUTTON_CLASSNAME } from "@/lib/ui/add-button-style";
 import { formatDateTime } from "@/lib/labels";
 import type { EmailAccount } from "@/lib/email/inbound/ingestion-controls/types";
 
@@ -29,8 +30,8 @@ export function EmailAccountsPanel({ projectId, accounts, canManage }: { project
         </CardTitle>
         {canManage && !adding ? (
           <span className="flex items-center gap-1.5">
-            <Button type="button" size="sm" variant="outline" onClick={() => setAdding(true)}>
-              Adicionar conta de e-mail AXION
+            <Button type="button" size="sm" variant="outline" className={ADD_BUTTON_CLASSNAME} onClick={() => setAdding(true)}>
+              + Adicionar conta AXION
             </Button>
             <FeatureInfo helpId="gmail-add-account" />
           </span>

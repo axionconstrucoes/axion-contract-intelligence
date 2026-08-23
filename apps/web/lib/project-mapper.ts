@@ -15,6 +15,7 @@ export type ProjectRow = {
 export function mapProjectRow(row: ProjectRow): Project {
   return {
     id: row.id,
+    code: row.code,
     name: row.name,
     client: row.client,
     status: row.status,

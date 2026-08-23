@@ -1,5 +1,7 @@
+import type { Metadata } from "next";
 import { createSupabaseServerClient } from "@axion/db/server";
 
+import { PageHeader } from "@/components/layout/page-header";
 import { TimelinePageClient } from "@/components/timeline/timeline-page-client";
 import { getEmails, getEvents, getProject } from "@/lib/data";
 import { getEventNotesForProject } from "@/lib/event-notes";
@@ -9,6 +11,8 @@ import type {
   TimelineEmailContext,
   TimelineEventNoteContext,
 } from "@/lib/timeline-export/types";
+
+export const metadata: Metadata = { title: "Timeline" };
 
 export default async function TimelinePage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
@@ -81,10 +85,7 @@ export default async function TimelinePage({ params }: { params: Promise<{ proje
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-lg font-semibold">Timeline</h1>
-        <p className="text-sm text-muted-foreground">Linha do tempo cronológica de todos os eventos consolidados.</p>
-      </div>
+      <PageHeader title="Timeline" description="Linha do tempo cronológica de todos os eventos consolidados." />
       <TimelinePageClient
         events={events}
         projectId={projectId}
