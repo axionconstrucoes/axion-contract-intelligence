@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { SeverityBadge } from "@/components/shared/badges";
+import { FeatureInfo } from "@/components/shared/feature-info";
 import { expertIconClassName, resolveExpertIcon } from "@/components/ai/expert-visual-identity";
 import {
   createActionForFindingAction,
@@ -76,16 +77,25 @@ export function HistoricalFindingCard({
       ) : (
         <>
           {mode === null ? (
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => setMode("dismiss")}>
-                Desconsiderar
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => setMode("resolve")}>
-                Já tratado / Pacificado
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => setMode("action")}>
-                Cuidar deste assunto
-              </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex items-center gap-1">
+                <Button type="button" size="sm" variant="outline" onClick={() => setMode("dismiss")}>
+                  Desconsiderar
+                </Button>
+                <FeatureInfo helpId="startup-dismiss" />
+              </span>
+              <span className="flex items-center gap-1">
+                <Button type="button" size="sm" variant="outline" onClick={() => setMode("resolve")}>
+                  Já tratado / Pacificado
+                </Button>
+                <FeatureInfo helpId="startup-resolve" />
+              </span>
+              <span className="flex items-center gap-1">
+                <Button type="button" size="sm" variant="outline" onClick={() => setMode("action")}>
+                  Cuidar deste assunto
+                </Button>
+                <FeatureInfo helpId="startup-create-action" />
+              </span>
             </div>
           ) : null}
 

@@ -5,6 +5,7 @@ import { EsgReviewForm } from "@/components/esg/esg-review-form";
 import { EsgSubmissionForm } from "@/components/esg/esg-submission-form";
 import { EsgTechnicianPendingList, type EsgPendingItem } from "@/components/esg/esg-technician-pending-list";
 import { SeverityBadge } from "@/components/shared/badges";
+import { FeatureInfo } from "@/components/shared/feature-info";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -125,10 +126,22 @@ export default async function EsgObligationsPage({ params }: { params: Promise<{
 
       <Tabs defaultValue="pendencias">
         <TabsList>
-          <TabsTrigger value="pendencias">Minhas pendências</TabsTrigger>
-          <TabsTrigger value="gerencial">Visão gerencial</TabsTrigger>
-          <TabsTrigger value="checklist">Checklist do projeto</TabsTrigger>
-          <TabsTrigger value="consultar">Diretor de ESG IA</TabsTrigger>
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="pendencias">Minhas pendências</TabsTrigger>
+            <FeatureInfo helpId="esg-tab-pendencias" />
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="gerencial">Visão gerencial</TabsTrigger>
+            <FeatureInfo helpId="esg-tab-gerencial" />
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="checklist">Checklist do projeto</TabsTrigger>
+            <FeatureInfo helpId="esg-tab-checklist" />
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="consultar">Diretor de ESG IA</TabsTrigger>
+            <FeatureInfo helpId="esg-tab-consultar" />
+          </span>
         </TabsList>
 
         <TabsContent value="pendencias">

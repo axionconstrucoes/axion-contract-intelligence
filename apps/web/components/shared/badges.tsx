@@ -11,6 +11,7 @@ import {
   type ConfrontationCandidateStatus,
 } from "@/lib/labels";
 import type { AdditionalProposalStatus } from "@/lib/additionals/types";
+import { FeatureInfo } from "@/components/shared/feature-info";
 import { cn } from "@/lib/utils";
 
 // ALTA/CRÍTICA usam caixa sólida + fonte branca + bold (forte contraste
@@ -26,8 +27,26 @@ const severityClasses: Record<AlertSeverity, string> = {
   CRITICA: "border-transparent bg-severity-critica text-white font-bold",
 };
 
-export function SeverityBadge({ severity }: { severity: AlertSeverity }) {
-  return <Badge className={cn(severityClasses[severity])}>{severityLabels[severity]}</Badge>;
+const SEVERITY_HELP_ID: Record<AlertSeverity, string> = {
+  BAIXA: "risco-baixo",
+  MEDIA: "risco-medio",
+  ALTA: "risco-alto",
+  CRITICA: "risco-critico",
+};
+
+/**
+ * `withInfo` é opcional e default false: onde houver muitos badges numa
+ * tela densa (tabelas/listas), manter a UI limpa (seção 11 — "sem
+ * poluir a tela") — usar `withInfo` só em legendas/explicações
+ * pontuais.
+ */
+export function SeverityBadge({ severity, withInfo = false }: { severity: AlertSeverity; withInfo?: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Badge className={cn(severityClasses[severity])}>{severityLabels[severity]}</Badge>
+      {withInfo ? <FeatureInfo helpId={SEVERITY_HELP_ID[severity]} /> : null}
+    </span>
+  );
 }
 
 const statusClasses: Record<EventStatus, string> = {

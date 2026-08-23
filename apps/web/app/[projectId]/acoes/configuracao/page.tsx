@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SlaAreaResponsiblesForm } from "@/components/sla/sla-area-responsibles-form";
 import { SlaMatrixConfigForm } from "@/components/sla/sla-matrix-config-form";
 import { SlaProjectSettingsForm } from "@/components/sla/sla-project-settings-form";
+import { FeatureInfo } from "@/components/shared/feature-info";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getProjectMembers } from "@/lib/data";
@@ -52,7 +53,10 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
 
       <Card>
         <CardHeader>
-          <CardTitle>Timezone e horário útil</CardTitle>
+          <CardTitle className="flex items-center gap-1.5">
+            Timezone e horário útil
+            <FeatureInfo helpId="sla-config-timezone" />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <SlaProjectSettingsForm
@@ -67,7 +71,10 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
 
       <Card>
         <CardHeader>
-          <CardTitle>Prazos por nível de risco</CardTitle>
+          <CardTitle className="flex items-center gap-1.5">
+            Prazos por nível de risco
+            <FeatureInfo helpId="sla-config-matriz-prazos" />
+          </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {RISK_LEVELS.map((riskLevel) => (
@@ -83,7 +90,10 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
 
       <Card>
         <CardHeader>
-          <CardTitle>Responsáveis por área e escalão</CardTitle>
+          <CardTitle className="flex items-center gap-1.5">
+            Responsáveis por área e escalão
+            <FeatureInfo helpId="sla-config-responsaveis" />
+          </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {AREAS.map((area) => {

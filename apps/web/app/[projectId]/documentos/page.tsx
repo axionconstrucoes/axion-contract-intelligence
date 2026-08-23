@@ -1,6 +1,7 @@
 import { DocumentDownloadButton } from "@/components/documents/document-download-button";
 import { DocumentUploadForm } from "@/components/documents/document-upload-form";
 import { EmptyState } from "@/components/shared/empty-state";
+import { FeatureInfo } from "@/components/shared/feature-info";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -102,17 +103,26 @@ export default async function DocumentosPage({
 
       <Tabs defaultValue="documentos">
         <TabsList>
-          <TabsTrigger value="documentos">
-            Documentos
-          </TabsTrigger>
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="documentos">
+              Documentos
+            </TabsTrigger>
+            <FeatureInfo helpId="documentos-tab-documentos" />
+          </span>
 
-          <TabsTrigger value="clausulas">
-            Cláusulas
-          </TabsTrigger>
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="clausulas">
+              Cláusulas
+            </TabsTrigger>
+            <FeatureInfo helpId="documentos-tab-clausulas" />
+          </span>
 
-          <TabsTrigger value="cronograma">
-            Cronograma
-          </TabsTrigger>
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="cronograma">
+              Cronograma
+            </TabsTrigger>
+            <FeatureInfo helpId="documentos-tab-cronograma" />
+          </span>
         </TabsList>
 
         <TabsContent

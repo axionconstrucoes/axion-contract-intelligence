@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { FeatureInfo } from "@/components/shared/feature-info";
 import { markAdditionalProposalContractedAction } from "@/app/[projectId]/adicionais/actions";
 import { initialMarkAdditionalProposalContractedState } from "@/app/[projectId]/adicionais/actions-state";
 import { additionalProposalDocumentalStateLabels, additionalProposalFormalizationTypeLabels } from "@/lib/labels";
@@ -42,7 +43,10 @@ export function AdditionalProposalContractedForm({ projectId, proposalId }: { pr
     <form action={formAction} className="flex flex-col gap-3 rounded-md border border-severity-alta/40 bg-severity-alta/5 p-4">
       <input type="hidden" name="projectId" value={projectId} />
       <input type="hidden" name="proposalId" value={proposalId} />
-      <p className="text-sm font-semibold">Marcar como CONTRATADO</p>
+      <p className="flex items-center gap-1.5 text-sm font-semibold">
+        Marcar como CONTRATADO
+        <FeatureInfo helpId="adicionais-marcar-contratado" />
+      </p>
       <p className="text-xs text-muted-foreground">Ação exclusivamente humana — nenhum Expert IA pode executar esta ação.</p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -55,7 +59,10 @@ export function AdditionalProposalContractedForm({ projectId, proposalId }: { pr
           <Input type="number" step="0.01" name="contractedValue" />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
-          Forma de formalização
+          <span className="flex items-center gap-1.5">
+            Forma de formalização
+            <FeatureInfo helpId="adicionais-formalizacao" />
+          </span>
           <Select name="formalizationType" defaultValue="NAO_IDENTIFICADO" required>
             {FORMALIZATION_TYPES.map((t) => (
               <option key={t} value={t}>

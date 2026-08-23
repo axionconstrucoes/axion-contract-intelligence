@@ -3,6 +3,8 @@ import { CompleteStartupButton } from "@/components/startup/complete-startup-but
 import { HistoricalFindingCard } from "@/components/startup/historical-finding-card";
 import { StartupConfigForm } from "@/components/startup/startup-config-form";
 import { EmptyState } from "@/components/shared/empty-state";
+import { FeatureInfo } from "@/components/shared/feature-info";
+import { RiskLegend } from "@/components/shared/risk-legend";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getProjectMembers } from "@/lib/data";
@@ -48,8 +50,14 @@ export default async function StartupPage({ params }: { params: Promise<{ projec
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="grid gap-2 text-sm sm:grid-cols-2">
-            <p>Data de início da obra: {summary.config.projectStartDate ? formatDate(summary.config.projectStartDate) : "Não configurada"}</p>
-            <p>Data de início operacional ACC: {formatDate(summary.config.accOperationalStartDate)}</p>
+            <p className="flex items-center gap-1.5">
+              Data de início da obra: {summary.config.projectStartDate ? formatDate(summary.config.projectStartDate) : "Não configurada"}
+              <FeatureInfo helpId="startup-project-start-date" />
+            </p>
+            <p className="flex items-center gap-1.5">
+              Data de início operacional ACC: {formatDate(summary.config.accOperationalStartDate)}
+              <FeatureInfo helpId="startup-acc-operational-start-date" />
+            </p>
             {summary.config.projectStartDate ? (
               <p className="sm:col-span-2 text-xs text-muted-foreground">
                 Período histórico analisado: {formatDate(summary.config.projectStartDate)} → dia anterior ao início operacional
@@ -73,7 +81,13 @@ export default async function StartupPage({ params }: { params: Promise<{ projec
       <StartupConfigForm projectId={projectId} config={summary.config} />
 
       <div className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold">Findings históricos ALTO/CRÍTICO</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+            Findings históricos ALTO/CRÍTICO
+            <FeatureInfo helpId="finding" />
+          </h2>
+          <RiskLegend />
+        </div>
         {highCriticalFindings.length === 0 ? (
           <EmptyState message="Nenhum finding histórico ALTO/CRÍTICO registrado ainda — LOW/MEDIUM permanecem pesquisáveis mas não bloqueiam o Start-up." />
         ) : (

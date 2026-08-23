@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { FeatureInfo } from "@/components/shared/feature-info";
 import { updateAdditionalProposalApprovalsAction } from "@/app/[projectId]/adicionais/actions";
 import { initialUpdateAdditionalProposalApprovalsState } from "@/app/[projectId]/adicionais/actions-state";
 import {
@@ -62,7 +63,10 @@ export function AdditionalProposalApprovalsForm({ projectId, proposal }: { proje
         </label>
 
         <label className="flex flex-col gap-1.5 text-xs font-medium">
-          Extensão de prazo
+          <span className="flex items-center gap-1.5">
+            Extensão de prazo
+            <FeatureInfo helpId="adicionais-status-prazo" />
+          </span>
           <Select name="scheduleExtensionStatus" defaultValue={proposal.scheduleExtensionStatus}>
             {SCHEDULE_OPTIONS.map((v) => (
               <option key={v} value={v}>

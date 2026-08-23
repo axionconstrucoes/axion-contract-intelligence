@@ -7,6 +7,7 @@ import { SlaActionItem } from "@/components/sla/sla-action-item";
 import { SlaActionsSummary } from "@/components/sla/sla-actions-summary";
 import { SlaProcessEscalationsButton } from "@/components/sla/sla-process-escalations-button";
 import { EmptyState } from "@/components/shared/empty-state";
+import { FeatureInfo } from "@/components/shared/feature-info";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -73,10 +74,24 @@ export default async function SlaActionsPage({ params }: { params: Promise<{ pro
 
       <Tabs defaultValue="abertas">
         <TabsList>
-          <TabsTrigger value="abertas">Ações abertas</TabsTrigger>
-          <TabsTrigger value="gerencial">Visão gerencial</TabsTrigger>
-          <TabsTrigger value="historico">Histórico</TabsTrigger>
-          {canCreate ? <TabsTrigger value="nova">Nova ação</TabsTrigger> : null}
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="abertas">Ações abertas</TabsTrigger>
+            <FeatureInfo helpId="acoes-tab-abertas" />
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="gerencial">Visão gerencial</TabsTrigger>
+            <FeatureInfo helpId="acoes-tab-gerencial" />
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="historico">Histórico</TabsTrigger>
+            <FeatureInfo helpId="acoes-tab-historico" />
+          </span>
+          {canCreate ? (
+            <span className="inline-flex items-center gap-1">
+              <TabsTrigger value="nova">Nova ação</TabsTrigger>
+              <FeatureInfo helpId="acoes-tab-nova" />
+            </span>
+          ) : null}
         </TabsList>
 
         <TabsContent value="abertas" className="flex flex-col gap-4">

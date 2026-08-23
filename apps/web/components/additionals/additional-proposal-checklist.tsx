@@ -1,4 +1,5 @@
 import { AdditionalProposalLinkForm } from "./additional-proposal-link-form";
+import { FeatureInfo } from "@/components/shared/feature-info";
 import { CHECKLIST_LINK_ROLES, type AdditionalProposalLink } from "@/lib/additionals/types";
 import type { SuggestedExistingSources } from "@/lib/additionals/suggest-existing-sources";
 import { additionalProposalLinkRoleLabels, formatDate } from "@/lib/labels";
@@ -32,7 +33,10 @@ export function AdditionalProposalChecklist({
   return (
     <div className="flex flex-col gap-4 rounded-md border p-4">
       <div>
-        <p className="text-sm font-medium">Checklist documental</p>
+        <p className="flex items-center gap-1.5 text-sm font-medium">
+          Checklist documental
+          <FeatureInfo helpId="adicionais-documentacao" />
+        </p>
         <p className="text-xs text-muted-foreground">
           O sistema busca automaticamente o que já existe no projeto antes de pedir um novo upload.
         </p>

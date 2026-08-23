@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@axion/db/server";
 import { AdditionalProposalCreateForm } from "@/components/additionals/additional-proposal-create-form";
 import { AdditionalProposalStatusBadge } from "@/components/shared/badges";
 import { EmptyState } from "@/components/shared/empty-state";
+import { FeatureInfo } from "@/components/shared/feature-info";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
@@ -31,8 +32,16 @@ export default async function AdditionalProposalsPage({ params }: { params: Prom
 
       <Tabs defaultValue="propostas">
         <TabsList>
-          <TabsTrigger value="propostas">Propostas ({proposals.length})</TabsTrigger>
-          {canCreate ? <TabsTrigger value="nova">+ Nova proposta</TabsTrigger> : null}
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="propostas">Propostas ({proposals.length})</TabsTrigger>
+            <FeatureInfo helpId="adicionais-tab-propostas" />
+          </span>
+          {canCreate ? (
+            <span className="inline-flex items-center gap-1">
+              <TabsTrigger value="nova">+ Nova proposta</TabsTrigger>
+              <FeatureInfo helpId="adicionais-nova-proposta" />
+            </span>
+          ) : null}
         </TabsList>
 
         <TabsContent value="propostas" className="flex flex-col gap-3">
@@ -62,7 +71,11 @@ export default async function AdditionalProposalsPage({ params }: { params: Prom
         </TabsContent>
 
         {canCreate ? (
-          <TabsContent value="nova">
+          <TabsContent value="nova" className="flex flex-col gap-3">
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+              Nova proposta de adicional
+              <FeatureInfo helpId="adicionais-nova-proposta" />
+            </h2>
             <AdditionalProposalCreateForm projectId={projectId} />
           </TabsContent>
         ) : null}

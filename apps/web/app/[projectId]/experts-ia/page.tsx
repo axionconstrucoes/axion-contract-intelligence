@@ -7,6 +7,7 @@ import { ALL_OFFICIAL_EXPERT_DEFINITIONS, type OfficialExpertId } from "@/lib/ai
 import { buildAiProviderUiMetadata } from "@/lib/ai/provider-ui-metadata";
 import { resolveAiProviderNameForExpert } from "@/lib/ai/providers/resolve-provider-for-expert";
 import { expertAccentBorderClassName, expertIconClassName, resolveExpertIcon } from "@/components/ai/expert-visual-identity";
+import { FeatureInfo } from "@/components/shared/feature-info";
 import { cn } from "@/lib/utils";
 
 // Hub central dos 5 Experts oficiais do ACC — nunca substitui os
@@ -45,9 +46,10 @@ export default async function ExpertsIaPage({ params }: { params: Promise<{ proj
             <Card key={expert.expertId} className={cn("flex flex-col", expertAccentBorderClassName(expert.visualIdentity))}>
               <CardHeader className="gap-2">
                 <div className="flex items-start justify-between gap-2">
-                  <CardTitle className="flex items-center gap-2 text-base">
+                  <CardTitle className="flex items-center gap-1.5 text-base">
                     <Icon className={cn("size-4 shrink-0", expertIconClassName(expert.visualIdentity))} aria-hidden="true" />
                     {expert.expertName}
+                    <FeatureInfo helpId={`expert-${expert.expertId}`} />
                   </CardTitle>
                   <Badge variant={isActive ? "default" : "secondary"} className="shrink-0">
                     {isActive ? <CheckCircle2 className="size-3" /> : <Clock className="size-3" />}

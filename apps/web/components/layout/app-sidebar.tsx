@@ -18,27 +18,31 @@ import {
   Plug,
   Rocket,
   TimerReset,
-  Users as UsersIcon,
+  Users,
+  type LucideIcon,
 } from "lucide-react";
+import { FeatureInfo } from "@/components/shared/feature-info";
+import { getFeatureHelp } from "@/lib/ui/feature-help";
+import { NAV_ITEMS } from "@/lib/ui/nav-items";
 import { cn } from "@/lib/utils";
 
-const navItems = [
-  { href: "startup", label: "Start-up ACC", icon: Rocket },
-  { href: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "timeline", label: "Timeline", icon: History },
-  { href: "ledger", label: "Event Ledger", icon: BookText },
-  { href: "action-requests", label: "Solicitações", icon: ListChecks },
-  { href: "acoes", label: "Ações e Escalonamentos", icon: TimerReset },
-  { href: "adicionais", label: "Propostas de Adicionais", icon: PackagePlus },
-  { href: "revisao-contratual", label: "Análise Contratual", icon: BookText },
-  { href: "revisao-clausulas", label: "Análise de Cláusulas", icon: BookText },
-  { href: "documentos", label: "Documentos", icon: FileStack },
-  { href: "esg", label: "ESG/SSMA", icon: Leaf },
-  { href: "experts-ia", label: "Experts IA", icon: Bot },
-  { href: "integracoes", label: "Integrações", icon: Plug },
-  { href: "usuarios", label: "Usuários", icon: UsersIcon },
-  { href: "auditoria", label: "Auditoria", icon: AlertTriangle },
-];
+// Resolve NavItem.icon (nome de string, ver lib/ui/nav-items.ts) para o
+// componente Lucide real — mesmo padrão de components/ai/expert-visual-identity.ts.
+const ICONS_BY_NAME: Record<string, LucideIcon> = {
+  AlertTriangle,
+  Bot,
+  BookText,
+  FileStack,
+  History,
+  LayoutDashboard,
+  Leaf,
+  ListChecks,
+  PackagePlus,
+  Plug,
+  Rocket,
+  TimerReset,
+  Users,
+};
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "acc.sidebar.collapsed";
 
@@ -100,15 +104,20 @@ export function AppSidebar({ projectId }: { projectId: string }) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 p-2">
-        {navItems.map((item) => {
+        {NAV_ITEMS.map((item) => {
           const href = `/${projectId}/${item.href}`;
           const active = pathname?.startsWith(href);
-          const Icon = item.icon;
+          const Icon = ICONS_BY_NAME[item.icon];
+          const help = getFeatureHelp(item.helpId);
+          // Recolhido: a ajuda entra dentro do mesmo tooltip nativo do
+          // item (nunca um segundo ⓘ poluindo a sidebar recolhida — seção 14).
+          const collapsedTitle = help ? `${item.label} — ${help.shortDescription}` : item.label;
+
           return (
             <Link
               key={item.href}
               href={href}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? collapsedTitle : undefined}
               className={cn(
                 "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 collapsed && "justify-center px-0",
@@ -117,8 +126,13 @@ export function AppSidebar({ projectId }: { projectId: string }) {
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
               )}
             >
-              <Icon className="size-4 shrink-0" />
-              {!collapsed && item.label}
+              {Icon ? <Icon className="size-4 shrink-0" /> : null}
+              {!collapsed ? (
+                <span className="flex flex-1 items-center justify-between gap-1.5">
+                  <span className="truncate">{item.label}</span>
+                  <FeatureInfo helpId={item.helpId} />
+                </span>
+              ) : null}
             </Link>
           );
         })}
