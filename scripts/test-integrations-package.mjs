@@ -19,9 +19,8 @@ import { fileURLToPath } from "node:url";
 register("./ts-module-resolver.mjs", import.meta.url);
 
 const { classifyParticipantType } = await import("../apps/web/lib/email/inbound/ingestion-controls/classify-participant-type");
-const { resolveEmailIntegrationDisplayStatus, resolveGenericIntegrationDisplayStatus } = await import(
-  "../apps/web/lib/ui/resolve-integration-display-status"
-);
+const { resolveEmailIntegrationDisplayStatus, resolveGenericIntegrationDisplayStatus, resolveAllIntegrationStatuses, summarizeIntegrationStatuses } =
+  await import("../apps/web/lib/ui/resolve-integration-display-status");
 const { ADD_BUTTON_CLASSNAME } = await import("../apps/web/lib/ui/add-button-style");
 const { ACC_FEATURE_HELP } = await import("../apps/web/lib/ui/feature-help");
 const { integrationStatusLabels, sourceTypeShortLabels, driveTypeLabels } = await import("../apps/web/lib/labels");
@@ -141,6 +140,76 @@ check("fontes genéricas: status real armazenado é reaproveitado sem reinterpre
   assert(resolveGenericIntegrationDisplayStatus("PENDENTE") === "PENDENTE");
   assert(resolveGenericIntegrationDisplayStatus("ATENCAO") === "ATENCAO");
   assert(resolveGenericIntegrationDisplayStatus("ERRO") === "ERRO");
+});
+
+// ---------------- resumo de status no Dashboard: total + hover com todos os nomes ----------------
+
+const STATUS_SUMMARY_SOURCES = [
+  { type: "EMAIL", label: "E-mail Corporativo", description: "" },
+  { type: "CONSTRUMANAGER", label: "Construmanager", description: "" },
+  { type: "DRIVE", label: "Google Drive", description: "" },
+  { type: "ERP", label: "ERP", description: "" },
+];
+
+check("resolveAllIntegrationStatuses: EMAIL usa o status resolvido separadamente (nunca o config bruto), demais usam o status genérico armazenado", () => {
+  const entries = resolveAllIntegrationStatuses(
+    STATUS_SUMMARY_SOURCES,
+    [
+      { sourceType: "CONSTRUMANAGER", status: "PENDENTE" },
+      { sourceType: "DRIVE", status: "ATENCAO" },
+    ],
+    "CONECTADO"
+  );
+  assert(entries.find((e) => e.sourceType === "EMAIL").status === "CONECTADO");
+  assert(entries.find((e) => e.sourceType === "CONSTRUMANAGER").status === "PENDENTE");
+  assert(entries.find((e) => e.sourceType === "DRIVE").status === "ATENCAO");
+  assert(entries.find((e) => e.sourceType === "ERP").status === "PENDENTE", "fonte sem config ainda deve aparecer como PENDENTE, nunca inventada como ATIVO");
+});
+
+check("summarizeIntegrationStatuses: sempre inclui os 4 status (mesmo com contagem 0) e agrupa os nomes corretamente", () => {
+  const entries = resolveAllIntegrationStatuses(
+    STATUS_SUMMARY_SOURCES,
+    [
+      { sourceType: "CONSTRUMANAGER", status: "PENDENTE" },
+      { sourceType: "DRIVE", status: "ATENCAO" },
+    ],
+    "CONECTADO"
+  );
+  const groups = summarizeIntegrationStatuses(entries);
+  assert(groups.length === 4, "deve sempre haver 4 grupos (ATIVO/PENDENTE/ATENÇÃO/ERRO)");
+
+  const conectado = groups.find((g) => g.status === "CONECTADO");
+  assert(conectado.count === 1 && conectado.labels[0] === "E-mail Corporativo");
+
+  const pendente = groups.find((g) => g.status === "PENDENTE");
+  assert(pendente.count === 2, `esperado 2 pendentes (Construmanager + ERP sem config), obtido ${pendente.count}`);
+  assert(pendente.labels.includes("Construmanager") && pendente.labels.includes("ERP"));
+
+  const atencao = groups.find((g) => g.status === "ATENCAO");
+  assert(atencao.count === 1 && atencao.labels[0] === "Google Drive");
+
+  const erro = groups.find((g) => g.status === "ERRO");
+  assert(erro.count === 0 && erro.labels.length === 0, "sem fontes em ERRO, grupo deve existir com contagem 0");
+});
+
+check("Dashboard: bloco de status usa o total resolvido (nunca a contagem de mensagens de e-mail) e nunca inventa integração fora de sourceDefinitions", () => {
+  const dashboardSource = readSource("apps/web/app/[projectId]/dashboard/page.tsx");
+  assert(/resolveAllIntegrationStatuses/.test(dashboardSource));
+  assert(/summarizeIntegrationStatuses/.test(dashboardSource));
+  assert(/resolveEmailIntegrationDisplayStatus/.test(dashboardSource), "Dashboard deve resolver o status de e-mail com a mesma função usada em Integrações, nunca reimplementar");
+  assert(/getSourceDefinitions/.test(dashboardSource), "os grupos de status devem vir das fontes reais do projeto, nunca de uma lista inventada");
+});
+
+check("IntegrationStatusSummary: cada chip de status usa title nativo para revelar todos os nomes no hover (mesmo padrão de PrefilledField)", () => {
+  const componentSource = readSource("apps/web/components/dashboard/integration-status-summary.tsx");
+  assert(/title=\{/.test(componentSource), "hover deve usar o atributo title nativo, acessível por teclado/leitor de tela");
+  assert(/group\.labels/.test(componentSource) && /join\("\\n"\)/.test(componentSource), "o title deve conter a lista completa de nomes daquele status");
+  assert(/group\.count/.test(componentSource), "o chip deve mostrar apenas o total, não a lista inline");
+  assert(/FeatureInfo helpId="dashboard-integration-status-summary"/.test(componentSource));
+});
+
+check("feature-help: existe entrada registrada para o resumo de status de integrações do Dashboard", () => {
+  assert(ACC_FEATURE_HELP["dashboard-integration-status-summary"] !== undefined, "helpId usado pelo componente deve existir no registro central");
 });
 
 check("labels PT-BR: ATIVO/PENDENTE/ATENÇÃO/ERRO", () => {

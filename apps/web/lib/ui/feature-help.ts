@@ -124,6 +124,13 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
     description: "Mostra e gerencia fontes externas utilizadas pelo projeto, como Gmail, Google Drive e demais integrações disponíveis.",
   },
   {
+    id: "dashboard-integration-status-summary",
+    title: "Status das integrações",
+    shortDescription: "Total de fontes em cada status, com os nomes ao passar o mouse.",
+    description:
+      "Mostra quantas fontes do projeto estão Ativo, Pendente, Atenção ou Erro. Passe o mouse sobre cada número para ver quais fontes compõem aquele status; para detalhes e configuração, acesse Integrações.",
+  },
+  {
     id: "usuarios",
     title: "Usuários",
     shortDescription: "Controle de acesso e permissões do projeto.",

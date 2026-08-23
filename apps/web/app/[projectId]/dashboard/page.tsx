@@ -1,18 +1,41 @@
 import type { Metadata } from "next";
 import { ExpertQueryPanel } from "@/components/ai/expert-query-panel";
 import { AlertCard } from "@/components/dashboard/alert-card";
+import { IntegrationStatusSummary } from "@/components/dashboard/integration-status-summary";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Card, CardContent } from "@/components/ui/card";
-import { getAlerts, getEvents } from "@/lib/data";
+import { getAlerts, getEvents, getIntegrationConfigs, getSourceDefinitions } from "@/lib/data";
+import { getEmailAccounts } from "@/lib/email/inbound/ingestion-controls/get-email-accounts";
+import { getProjectEmailIngestionConfig } from "@/lib/email/inbound/ingestion-controls/get-project-email-ingestion-config";
+import { resolveAllIntegrationStatuses, resolveEmailIntegrationDisplayStatus, summarizeIntegrationStatuses } from "@/lib/ui/resolve-integration-display-status";
+import { createSupabaseServerClient } from "@axion/db/server";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function DashboardPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
+  const supabase = await createSupabaseServerClient();
+  const sources = getSourceDefinitions();
+
   const alerts = getAlerts(projectId);
-  const events = await getEvents(projectId);
+  const [events, configs, accounts, ingestionConfig] = await Promise.all([
+    getEvents(projectId),
+    getIntegrationConfigs(projectId),
+    getEmailAccounts(supabase),
+    getProjectEmailIngestionConfig(supabase, projectId),
+  ]);
   const unresolved = events.filter((e) => e.status !== "RESOLVIDO").length;
+
+  const linkedAccount = accounts.find((account) => account.id === ingestionConfig?.emailAccountId) ?? null;
+  const clientDomains = ingestionConfig?.domains.filter((domain) => domain.domainRole !== "AXION") ?? [];
+  const emailStatus = resolveEmailIntegrationDisplayStatus({
+    configEnabled: ingestionConfig?.enabled ?? null,
+    hasEmailAccount: Boolean(ingestionConfig?.emailAccountId),
+    hasClientDomain: clientDomains.length > 0,
+    accountStatus: linkedAccount?.status ?? null,
+  });
+  const integrationStatusGroups = summarizeIntegrationStatuses(resolveAllIntegrationStatuses(sources, configs, emailStatus));
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,6 +64,8 @@ export default async function DashboardPage({ params }: { params: Promise<{ proj
           </CardContent>
         </Card>
       </div>
+
+      <IntegrationStatusSummary projectId={projectId} groups={integrationStatusGroups} />
 
       <div className="flex flex-col gap-3">
         {alerts.length === 0 ? (
