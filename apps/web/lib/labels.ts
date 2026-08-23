@@ -365,6 +365,10 @@ export function formatDateTime(iso: string): string {
   return date.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+export function formatCurrency(value: number): string {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 export function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;

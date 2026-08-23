@@ -13,7 +13,10 @@
 //   node --env-file=apps/web/.env.local scripts/test-acc-email-branding.mjs
 
 import { createClient } from "@supabase/supabase-js";
+import { existsSync, readFileSync } from "node:fs";
 import { register } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 register("./ts-module-resolver.mjs", import.meta.url);
 
@@ -23,9 +26,18 @@ const { base64UrlEncode, buildMimeMessage } = await import("../apps/web/lib/emai
 const { buildContractAlertSubject, buildContractAlertEmail, alertRiskLevelLabels } = await import(
   "../apps/web/lib/email/templates/contract-alert-template"
 );
+const { buildSlaEscalationEmail } = await import("../apps/web/lib/email/templates/sla-escalation-template");
 const { buildRespondToAccUrl } = await import("../apps/web/lib/email/build-respond-to-acc-url");
 const { FakeEmailProvider } = await import("../apps/web/lib/email/fake-email-provider");
 const { detectSourceLanguage } = await import("../apps/web/lib/documents/detect-source-language");
+const { ACC_EMAIL_LOGO_CID, appendAccEmailSignature, buildAccEmailSignatureHtml, buildAccEmailSignatureText } = await import(
+  "../apps/web/lib/email/branding/acc-email-signature"
+);
+const { loadAccLogoInlineImage } = await import("../apps/web/lib/email/branding/load-acc-logo-inline-image");
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(here, "..");
+const readSource = (relativePath) => readFileSync(path.join(repoRoot, relativePath), "utf8");
 
 let passed = 0;
 let failed = 0;
@@ -292,6 +304,144 @@ check("texto muito curto retorna indeterminado (null) em vez de arriscar um palp
 check("texto vazio retorna indeterminado, nunca lança exceção", () => {
   const result = detectSourceLanguage("");
   assert(result.code === null);
+});
+
+// ---------- 10. assinatura institucional ACC (logo + texto) em TODO envio outbound ----------
+
+check("banner institucional dos templates usa o nome atual da marca (AXION CONTROLE DE CONTRATOS, nunca o nome antigo ACOMPANHAMENTO)", () => {
+  const alert = buildContractAlertEmail({ ...baseAlertInput, severity: "ALTA" });
+  assert(alert.html.includes("AXION CONTROLE DE CONTRATOS"));
+  assert(!alert.html.includes("ACOMPANHAMENTO") && !alert.text.includes("Acompanhamento"));
+
+  const sla = buildSlaEscalationEmail({
+    recipientName: "Bruna",
+    projectName: "WEG Fábrica de Arames",
+    severity: "ALTA",
+    actionTitle: "Responder cliente",
+    currentResponsibleName: "Carlos Mendes",
+    originalDeadline: "22/08/2026 14:00",
+    overdueBy: "2h15min",
+    escalationLevelLabel: "2º Escalão",
+    recommendedAction: null,
+    eventUrl: "http://localhost:3000/proj-1/ledger/evt-1",
+    respondUrl: "http://localhost:3000/proj-1/ledger/evt-1?respond=acc",
+  });
+  assert(sla.html.includes("AXION CONTROLE DE CONTRATOS"));
+  assert(!sla.html.includes("ACOMPANHAMENTO") && !sla.text.includes("Acompanhamento"));
+});
+
+check("buildAccEmailSignatureText/Html reaproveitam ACC_SENDER_DISPLAY_NAME (única fonte do texto da marca)", () => {
+  assert(buildAccEmailSignatureText() === ACC_SENDER_DISPLAY_NAME);
+  assert(buildAccEmailSignatureHtml(false).includes(ACC_SENDER_DISPLAY_NAME));
+});
+
+check("assinatura HTML só referencia cid: quando o logo inline realmente está disponível (nunca uma imagem quebrada)", () => {
+  const withLogo = buildAccEmailSignatureHtml(true);
+  assert(withLogo.includes(`cid:${ACC_EMAIL_LOGO_CID}`));
+
+  const withoutLogo = buildAccEmailSignatureHtml(false);
+  assert(!withoutLogo.includes("cid:"), "sem o arquivo do logo, o HTML nunca pode referenciar um cid: inexistente");
+  assert(withoutLogo.includes(ACC_SENDER_DISPLAY_NAME), "mesmo sem logo, o texto da assinatura deve aparecer");
+});
+
+check("appendAccEmailSignature: e-mail só-texto (ActionRequest) ganha a linha de assinatura em texto puro, nunca HTML inventado", () => {
+  const signed = appendAccEmailSignature({ text: "Corpo da solicitação." }, false);
+  assert(signed.text.includes("Corpo da solicitação."));
+  assert(signed.text.includes(ACC_SENDER_DISPLAY_NAME));
+  assert(signed.html === undefined, "não pode inventar um canal HTML que não existia no e-mail original");
+});
+
+check("appendAccEmailSignature: e-mail HTML+texto preserva o conteúdo original e acrescenta a assinatura ao final de ambos", () => {
+  const signed = appendAccEmailSignature({ text: "Texto original.", html: "<p>HTML original.</p>" }, true);
+  assert(signed.text.startsWith("Texto original."));
+  assert(signed.text.includes(ACC_SENDER_DISPLAY_NAME));
+  assert(signed.html.includes("<p>HTML original.</p>"));
+  assert(signed.html.includes(`cid:${ACC_EMAIL_LOGO_CID}`));
+});
+
+check("buildMimeMessage com inlineImages envolve multipart/alternative num multipart/related e inclui o Content-ID", () => {
+  const raw = buildMimeMessage(
+    {
+      to: "cliente@exemplo.com",
+      subject: "Assunto",
+      text: "Versão texto.",
+      html: "<p>Versão HTML.</p>",
+      inlineImages: [{ cid: "acc-logo-signature", filename: "acc-logo.png", mimeType: "image/png", contentBase64: "aGVsbG8td29ybGQ=" }],
+      correlationId: "corr-cid-1",
+    },
+    "reynaldo@axion.com.br",
+    "<corr-cid-1@axion.com.br>"
+  );
+  assert(raw.includes('Content-Type: multipart/related; boundary="acc-boundary-corr-cid-1-related"'));
+  assert(raw.includes('Content-Type: multipart/alternative; boundary="acc-boundary-corr-cid-1"'));
+  assert(raw.includes("Content-ID: <acc-logo-signature>"));
+  assert(raw.includes("Content-Disposition: inline"));
+  assert(raw.includes("aGVsbG8td29ybGQ="));
+  assert(raw.includes("Versão texto.") && raw.includes("<p>Versão HTML.</p>"));
+});
+
+check("buildMimeMessage sem inlineImages continua exatamente multipart/alternative simples (nunca envolve multipart/related à toa)", () => {
+  const raw = buildMimeMessage(
+    { to: "cliente@exemplo.com", subject: "Assunto", text: "Texto.", html: "<p>HTML.</p>", correlationId: "corr-3" },
+    "reynaldo@axion.com.br",
+    "<corr-3@axion.com.br>"
+  );
+  assert(!raw.includes("multipart/related"));
+  assert(raw.includes('Content-Type: multipart/alternative; boundary="acc-boundary-corr-3"'));
+});
+
+check("loadAccLogoInlineImage nunca lança e reflete corretamente o estado real do arquivo em disco (apps/web, nunca a raiz do repo)", () => {
+  const appRootDir = path.join(repoRoot, "apps", "web");
+  const logoPath = path.join(appRootDir, "public", "branding", "acc-logo.png");
+  const fileExists = existsSync(logoPath);
+  const result = loadAccLogoInlineImage(appRootDir);
+
+  if (!fileExists) {
+    assert(result === null, "sem o arquivo em disco, deve retornar null (nunca inventar um logo)");
+  } else {
+    assert(result !== null, "com o arquivo em disco, deve carregar o logo real");
+    assert(result.cid === ACC_EMAIL_LOGO_CID);
+    assert(result.mimeType === "image/png");
+    assert(typeof result.contentBase64 === "string" && result.contentBase64.length > 0);
+  }
+});
+
+check("loadAccLogoInlineImage: em produção usa process.cwd() por padrão (mesmo cwd que Next.js sempre usa para public/ nesta monorepo)", () => {
+  const source = readSource("apps/web/lib/email/branding/load-acc-logo-inline-image.ts");
+  assert(/appRootDir:\s*string\s*=\s*process\.cwd\(\)/.test(source), "o default do parâmetro deve continuar sendo process.cwd() em produção");
+});
+
+check("governança outbound preservada: signature-injection nunca chama getEmailProvider/envia rede (só monta conteúdo)", () => {
+  const signatureSource = readSource("apps/web/lib/email/branding/acc-email-signature.ts");
+  const loaderSource = readSource("apps/web/lib/email/branding/load-acc-logo-inline-image.ts");
+  assert(!/getEmailProvider|gmail\.users|googleapis/i.test(signatureSource));
+  assert(!/getEmailProvider|gmail\.users|googleapis/i.test(loaderSource));
+});
+
+check("assinatura pessoal do Google Workspace nunca é tocada (nenhum código novo referencia sendAs/signature do Gmail)", () => {
+  const signatureSource = readSource("apps/web/lib/email/branding/acc-email-signature.ts");
+  const loaderSource = readSource("apps/web/lib/email/branding/load-acc-logo-inline-image.ts");
+  assert(!/sendAs|users\.settings/i.test(signatureSource));
+  assert(!/sendAs|users\.settings/i.test(loaderSource));
+});
+
+check("auditoria/revisão humana dos 3 fluxos de envio reais permanecem intactas (nenhuma linha de audit/autorização removida)", () => {
+  const contractAlertSource = readSource("apps/web/lib/email/send-contract-alert-email.ts");
+  assert(contractAlertSource.includes("CONTRACT_ALERT_EMAIL_SENT"));
+  assert(contractAlertSource.includes('permission !== "EDITOR" && permission !== "ADMIN"'));
+
+  const slaSource = readSource("apps/web/lib/email/send-sla-escalation-email.ts");
+  assert(slaSource.includes("ACTION_ESCALATED"));
+
+  const actionRequestSource = readSource("apps/web/lib/email/action-request-notification-core.ts");
+  assert(actionRequestSource.includes("notifications_one_initial_per_action_request_idx") || actionRequestSource.includes("DuplicateNotificationError"));
+});
+
+check("corpo persistido de ActionRequest (notifications.body / emails.snippet) permanece o texto autoral do humano, sem a assinatura anexada", () => {
+  const source = readSource("apps/web/lib/email/action-request-notification-core.ts");
+  assert(source.includes("body: input.body"), "notifications.body deve permanecer input.body puro (sem assinatura)");
+  assert(source.includes("snippet: input.body.slice(0, 280)"), "emails.snippet deve continuar vindo de input.body puro (sem assinatura)");
+  assert(source.includes("text: signed.text"), "o envio real (provider.send) deve usar o texto assinado");
 });
 
 // ---------- 9. teste real, leve: colunas multilíngues existem no schema ----------

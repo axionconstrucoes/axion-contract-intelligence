@@ -15,8 +15,8 @@ export default async function ProjetosPage() {
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col gap-6 p-8">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático em public/, sem otimização de imagem necessária */}
-          <img src="/branding/acc-logo.svg" alt="ACC" className="h-9 w-auto" />
+          {/* eslint-disable-next-line @next/next/no-img-element -- PNG estático em public/, sem otimização de imagem necessária */}
+          <img src="/branding/acc-logo.png" alt="ACC" className="h-9 w-auto" />
           <div>
             <h1 className="text-lg font-semibold">Selecione um projeto</h1>
             <p className="text-sm text-muted-foreground">Obras e projetos Axion com inteligência contratual ativa.</p>
@@ -48,11 +48,11 @@ export default async function ProjetosPage() {
 
       <div className="flex flex-wrap items-center gap-4 border-t border-border pt-4 text-xs text-muted-foreground">
         <span>Identidade visual ACC:</span>
-        <a href="/branding/acc-logo.svg" download className="underline hover:text-foreground">
-          Baixar logotipo (SVG)
+        <a href="/branding/acc-logo.png" download className="underline hover:text-foreground">
+          Baixar logotipo (PNG)
         </a>
         <a href="/branding/acc-icon.svg" download className="underline hover:text-foreground">
-          Baixar ícone (SVG)
+          Baixar ícone técnico (SVG)
         </a>
       </div>
     </div>

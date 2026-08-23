@@ -123,8 +123,11 @@ check("sidebar: ícone ACC sempre visível (expandida e recolhida) — fora do b
   const headerBlockMatch = source.match(/flex h-14 items-center gap-2 border-b[\s\S]*?<\/div>\s*\n\s*<nav/);
   assert(headerBlockMatch, "bloco de cabeçalho da sidebar não encontrado");
   const headerBlock = headerBlockMatch[0];
-  assert(headerBlock.includes('src="/branding/acc-icon.svg"'), "ícone ACC deveria estar presente no cabeçalho da sidebar");
-  assert(!/\{!collapsed &&[\s\S]*?acc-icon\.svg/.test(headerBlock), "o ícone nunca deveria estar dentro do bloco condicional 'apenas quando expandida'");
+  // Logo ACC oficial (PNG) — substitui o placeholder acc-icon.svg (ACC —
+  // AJUSTES FINAIS APROVADOS DO DASHBOARD VISUAL, seção 2/3: logo ACC
+  // aparece SOMENTE aqui, na sidebar).
+  assert(headerBlock.includes('src="/branding/acc-logo.png"'), "logo ACC deveria estar presente no cabeçalho da sidebar");
+  assert(!/\{!collapsed &&[\s\S]*?acc-logo\.png/.test(headerBlock), "o logo nunca deveria estar dentro do bloco condicional 'apenas quando expandida'");
 });
 
 check("sidebar: texto 'AXION Controle de Contratos' só aparece quando expandida (nunca na recolhida)", () => {
@@ -136,7 +139,7 @@ check("sidebar: texto 'AXION Controle de Contratos' só aparece quando expandida
 
 check("login: logo ACC presente, texto atualizado para 'AXION Controle de Contratos'", () => {
   const source = readSource("apps/web/app/login/page.tsx");
-  assert(source.includes('src="/branding/acc-logo.svg"'));
+  assert(source.includes('src="/branding/acc-logo.png"'));
   assert(source.includes("AXION Controle de Contratos"));
   assert(source.includes('title: "Login"'));
 });
@@ -145,8 +148,8 @@ check("login: logo ACC presente, texto atualizado para 'AXION Controle de Contra
 
 check("projetos: opções de download de logotipo e ícone existem, apontam para os arquivos reais", () => {
   const source = readSource("apps/web/app/projetos/page.tsx");
-  assert(source.includes('href="/branding/acc-logo.svg"') && source.includes("download"), "deveria existir link de download do logotipo");
-  assert(source.includes('href="/branding/acc-icon.svg"') && source.includes("download"), "deveria existir link de download do ícone");
+  assert(source.includes('href="/branding/acc-logo.png"') && source.includes("download"), "deveria existir link de download do logotipo");
+  assert(source.includes('href="/branding/acc-icon.svg"') && source.includes("download"), "deveria existir link de download do ícone técnico");
 });
 
 // ---------------- 7. Cabeçalho padrão de todas as telas ----------------
@@ -223,7 +226,51 @@ check("Project.code: mapeado de verdade a partir da linha do banco (mapProjectRo
 check("TopBar: mostra o código do projeto discretamente próximo ao seletor (quando disponível)", () => {
   const source = readSource("apps/web/components/layout/top-bar.tsx");
   assert(source.includes("currentProject?.code"), "TopBar deveria exibir o código do projeto quando disponível");
-  assert(source.includes("text-xs text-muted-foreground"), "código deveria ser discreto");
+  // Header institucional vermelho sólido (Dashboard Visual, seção 4): o
+  // texto discreto usa branco translúcido para permanecer legível sobre
+  // bg-brand-header, não mais muted-foreground (que presumia fundo neutro).
+  assert(source.includes("text-xs text-white/80"), "código deveria ser discreto, mas legível sobre o header vermelho");
+});
+
+// ---------------- 9b. AJUSTES FINAIS APROVADOS DO DASHBOARD VISUAL ----------------
+
+check("header: 'AXION CONTROLE DE CONTRATOS' branco/negrito, um nível de corpo maior que antes (text-base, não mais text-sm)", () => {
+  const source = readSource("apps/web/components/layout/top-bar.tsx");
+  assert(/text-base font-bold[^"]*text-white">AXION CONTROLE DE CONTRATOS/.test(source), "título do header deveria ser text-base (um nível acima de text-sm) + font-bold + text-white");
+});
+
+check("nome do projeto: amarelo + negrito, com forte contraste sobre o header vermelho (código permanece discreto)", () => {
+  const source = readSource("apps/web/components/layout/project-switcher.tsx");
+  assert(/text-yellow-\d{3}/.test(source), "seletor de projeto deveria usar uma cor amarela (text-yellow-*)");
+  assert(source.includes("font-bold"), "nome do projeto deveria ser negrito");
+});
+
+check("logo ACC aparece SOMENTE na sidebar — nunca na área branca de conteúdo, ao lado de títulos de página, em cards, ou como decoração do Dashboard Visual", () => {
+  const sidebarSource = readSource("apps/web/components/layout/app-sidebar.tsx");
+  assert(sidebarSource.includes('src="/branding/acc-logo.png"'), "a sidebar é o único lugar onde o logo ACC deveria aparecer no app");
+
+  const noLogoFiles = [
+    "apps/web/components/layout/page-header.tsx",
+    "apps/web/app/[projectId]/dashboard/page.tsx",
+    "apps/web/app/[projectId]/dashboard/visual/page.tsx",
+    "apps/web/components/dashboard/dashboard-visual-entry-card.tsx",
+    "apps/web/components/dashboard-visual/summary-cards.tsx",
+    "apps/web/components/dashboard-visual/contract-value-card.tsx",
+    "apps/web/components/dashboard-visual/deadline-card.tsx",
+    "apps/web/components/dashboard-visual/source-volume-table.tsx",
+    "apps/web/components/dashboard-visual/experts-cards.tsx",
+  ];
+  for (const file of noLogoFiles) {
+    const source = readSource(file);
+    assert(!/acc-logo\.(png|svg)/.test(source), `${file} não deveria referenciar o logo ACC (área de conteúdo/cards do app)`);
+  }
+});
+
+check("card de acesso ao Dashboard Visual: usa o ícone real (dashboard-visual.png), sem nenhum fallback Lucide", () => {
+  const source = readSource("apps/web/components/dashboard/dashboard-visual-entry-card.tsx");
+  assert(source.includes('src="/branding/dashboard-visual.png"'), "card deveria usar o ícone real dashboard-visual.png");
+  assert(!/from ["']lucide-react["']/.test(source), "não deveria mais importar nenhum ícone Lucide como substituto");
+  assert(!source.includes("LayoutDashboard"), "fallback LayoutDashboard deveria ter sido removido definitivamente");
 });
 
 // ---------------- 10. revisao-clausulas: corrige o bug de <main> duplicado ----------------

@@ -79,7 +79,7 @@ export function buildSlaEscalationEmail(input: SlaEscalationEmailInput): SlaEsca
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #e5e7eb;border-radius:8px;">
         <tr>
           <td style="padding:20px 24px 8px 24px;">
-            <span style="font-size:12px;font-weight:bold;letter-spacing:0.04em;color:#000000;">ACC · AXION ACOMPANHAMENTO DE CONTRATOS</span>
+            <span style="font-size:12px;font-weight:bold;letter-spacing:0.04em;color:#000000;">ACC · AXION CONTROLE DE CONTRATOS</span>
           </td>
         </tr>
         <tr>
@@ -135,7 +135,7 @@ export function buildSlaEscalationEmail(input: SlaEscalationEmailInput): SlaEsca
   ].filter((row) => row !== "");
 
   const text = [
-    `ACC - AXION Acompanhamento de Contratos`,
+    `ACC - AXION Controle de Contratos`,
     `RISCO ${riskLabel} · ESCALONADO PARA ${input.escalationLevelLabel.toUpperCase()}`,
     "",
     greeting,

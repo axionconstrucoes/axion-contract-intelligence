@@ -27,8 +27,8 @@ export default async function LoginPage({
       <Card className="w-full max-w-sm">
         <CardHeader>
           <div className="mb-1 flex items-center gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático em public/, sem otimização de imagem necessária */}
-            <img src="/branding/acc-logo.svg" alt="ACC" className="h-10 w-auto" />
+            {/* eslint-disable-next-line @next/next/no-img-element -- PNG estático em public/, sem otimização de imagem necessária */}
+            <img src="/branding/acc-logo.png" alt="ACC" className="h-10 w-auto" />
           </div>
           <CardTitle className="text-base">AXION Controle de Contratos</CardTitle>
           <CardDescription>Acesso restrito a usuários autorizados por projeto.</CardDescription>

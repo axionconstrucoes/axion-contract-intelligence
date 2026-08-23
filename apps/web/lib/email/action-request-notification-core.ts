@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { createSupabaseAdminClient } from "@axion/db/admin";
+import { appendAccEmailSignature } from "./branding/acc-email-signature";
 import { EmailSendError } from "./email-provider";
 import { getEmailProvider } from "./get-email-provider";
 
@@ -160,13 +161,17 @@ export async function performActionRequestNotification(
   const deliveryId = deliveryRow.id as string;
 
   const provider = getEmailProvider();
+  // Assinatura institucional anexada só ao envio real — `input.body`
+  // (persistido em notifications/emails.snippet abaixo) permanece
+  // exatamente o texto autoral do humano, sem o rodapé adicionado.
+  const signed = appendAccEmailSignature({ text: input.body }, false);
 
   let sendResult;
   try {
     sendResult = await provider.send({
       to: input.recipientEmail,
       subject: input.subject,
-      text: input.body,
+      text: signed.text,
       correlationId,
     });
   } catch (error) {

@@ -239,18 +239,15 @@ check("FeatureInfo: nunca renderiza nada quando helpId é desconhecido (nunca qu
 
 const sidebarSource = readSource("apps/web/components/layout/app-sidebar.tsx");
 
-check("sidebar expanded: mostra FeatureInfo ao lado do label quando não está collapsed", () => {
-  assert(sidebarSource.includes("!collapsed ? ("));
-  assert(sidebarSource.includes("<FeatureInfo helpId={item.helpId} />"));
+check("sidebar: NUNCA renderiza um ⓘ separado (expandida ou recolhida) — ajuda via hover/focus no próprio item, reduz poluição visual (ACC — AJUSTES FINAIS, seção 5/7)", () => {
+  assert(!sidebarSource.includes("<FeatureInfo"), "a sidebar não deveria mais importar/renderizar o componente FeatureInfo");
+  assert(!sidebarSource.includes("import { FeatureInfo }"), "import de FeatureInfo deveria ter sido removido da sidebar");
 });
 
-check("sidebar collapsed: nunca fica cheio de pequenos ⓘ — ajuda entra no mesmo tooltip nativo do item (title), nunca um ⓘ extra", () => {
-  // O ⓘ só é renderizado dentro do bloco "!collapsed" acima — aqui só
-  // confirmamos que o texto do tooltip nativo (title) incorpora o help
-  // quando collapsed, sem introduzir nenhum elemento visual novo.
-  assert(sidebarSource.includes("collapsedTitle"));
+check("sidebar: tooltip nativo (title) com label + shortDescription do registry, no MESMO item, em qualquer estado (recolhida ou expandida)", () => {
+  assert(sidebarSource.includes("itemTitle"));
   assert(sidebarSource.includes("help.shortDescription"));
-  assert(sidebarSource.includes('title={collapsed ? collapsedTitle : undefined}'));
+  assert(sidebarSource.includes("title={itemTitle}"), "o tooltip deveria valer para os dois estados (nunca condicional a collapsed)");
 });
 
 // --- Seção 12: inventário de TODAS as abas/seções reais mapeadas ---

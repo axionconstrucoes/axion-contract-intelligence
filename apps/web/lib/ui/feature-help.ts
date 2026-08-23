@@ -131,6 +131,97 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
       "Mostra quantas fontes do projeto estão Ativo, Pendente, Atenção ou Erro. Passe o mouse sobre cada número para ver quais fontes compõem aquele status; para detalhes e configuração, acesse Integrações.",
   },
   {
+    id: "dashboard-visual-time-filter",
+    title: "Período",
+    shortDescription: "Filtra métricas de fluxo por período — nunca esconde a posição atual.",
+    description:
+      "Aplica-se a métricas de fluxo (e-mails, alertas, ocorrências ESG, volume por fonte). Avanço físico/financeiro, valor contratual vigente e prazo vigente sempre mostram a posição atual, independentemente do período escolhido.",
+  },
+  {
+    id: "dashboard-visual-emails",
+    title: "E-mails",
+    shortDescription: "Recebidos, enviados, lidos pelo ACC e considerados em análises.",
+    description:
+      "\"Lido pelo ACC\" significa persistido e processado/indexado — nunca o status de lido/não lido do Gmail. \"Considerado\" significa efetivamente usado em um finding, curadoria ou evidência — um e-mail pode estar processado sem ainda ter sido considerado em nenhuma análise.",
+  },
+  {
+    id: "dashboard-visual-alerts",
+    title: "Alertas",
+    shortDescription: "Findings ativos por severidade — resolvidos/dispensados/superados não entram.",
+    description:
+      "Conta os findings da IA (ai_findings) que ainda estão ativos, excluindo os já resolvidos, dispensados, rejeitados ou superados. Respeita o filtro de período (seção de fluxo).",
+  },
+  {
+    id: "dashboard-visual-general-situation",
+    title: "Situação geral do contrato",
+    shortDescription: "Maior risco ativo do projeto — cálculo determinístico, sem IA ao vivo.",
+    description:
+      "Deriva do maior nível de severidade entre os findings ativos no momento (nunca filtrado por período — é sempre a posição atual). Não chama nenhum provider de IA para ser calculada.",
+  },
+  {
+    id: "dashboard-visual-physical-progress",
+    title: "Avanço físico",
+    shortDescription: "Ainda não há fonte configurada para percentual de avanço físico.",
+    description:
+      "Nenhuma fonte real de percentual de execução física está conectada ao projeto hoje — por isso o indicador mostra NÃO DISPONÍVEL em vez de um número inventado ou estimado.",
+  },
+  {
+    id: "dashboard-visual-financial-progress",
+    title: "Avanço financeiro",
+    shortDescription: "Aguardando integração com medições, faturamento e pagamentos.",
+    description:
+      "Valor contratual vigente, valor medido, valor faturado e valor recebido dependem de integrações financeiras (ERP/Orçamento) ainda não conectadas — por isso aparecem como AGUARDANDO FONTE.",
+  },
+  {
+    id: "dashboard-visual-contract-value",
+    title: "Valor contratual",
+    shortDescription: "Instrumentos formalizados que alteram o valor do contrato.",
+    description:
+      "Lista o Contrato Base e cada aditivo contratual formalizado (status Contratado + formalização \"Aditivo contratual\"), na ordem cronológica. Propostas possíveis, em análise, em negociação ou não formalizadas nunca entram nesta soma. O valor contratual-base ainda não está configurado no sistema, por isso o total vigente aparece como NÃO DISPONÍVEL — só o acréscimo real dos aditivos é somado.",
+  },
+  {
+    id: "dashboard-visual-deadline",
+    title: "Prazo",
+    shortDescription: "Data inicial e prazo original são reais; vigente/aprovado ainda não são modelados.",
+    description:
+      "Data inicial e prazo final original vêm do cadastro do projeto. Prazo final vigente e prazo aprovado (em dias) ainda não têm um campo formal no sistema — nunca inferidos a partir do prazo solicitado, para não confundir identificação técnica de impacto com aprovação contratual efetiva.",
+  },
+  {
+    id: "dashboard-visual-esg",
+    title: "ESG / SSMA",
+    shortDescription: "Obrigações ativas, abertura e risco pela comprovação mais recente.",
+    description:
+      "Risco por obrigação é o já calculado no momento do registro da comprovação (nunca recalculado aqui). Evidências pendentes contam comprovações cuja obrigação exige evidência e ainda não tem nenhuma anexada.",
+  },
+  {
+    id: "dashboard-visual-sla",
+    title: "Ações e escalonamentos",
+    shortDescription: "Posição atual de pendências, vencidas, vencem hoje e escalonadas.",
+    description:
+      "Sempre reflete a posição atual (nunca filtrado por período) — uma ação vencida continua vencida independentemente de quando foi criada.",
+  },
+  {
+    id: "dashboard-visual-source-volume",
+    title: "Volume por fonte de informação",
+    shortDescription: "Itens recebidos/processados/considerados por fonte configurada.",
+    description:
+      "Uma linha por caixa AXION real configurada neste projeto, mais uma linha por fonte genérica configurada. NÃO CONFIGURADA indica que a fonte não tem nenhuma origem definida; NÃO DISPONÍVEL indica que a fonte está configurada mas a contagem de itens ainda não é modelada no sistema. O total é deduplicado: a mesma mensagem recebida em mais de uma caixa é contada uma única vez.",
+  },
+  {
+    id: "dashboard-visual-experts",
+    title: "Experts IA",
+    shortDescription: "Até 3 análises persistidas mais recentes — nunca uma chamada de IA ao vivo.",
+    description:
+      "Mostra apenas findings já persistidos (ai_findings). Abrir o Dashboard Visual nunca aciona um Expert IA em tempo real.",
+  },
+  {
+    id: "dashboard-visual-ceo",
+    title: "CEO IA",
+    shortDescription: "Consolidação executiva persistida, quando existir.",
+    description:
+      "Mostra a consolidação mais recente já gerada e persistida pelo Expert CEO. Quando não houver nenhuma, exibe que ainda não há consolidação executiva disponível — nunca gera uma nova ao abrir a tela.",
+  },
+  {
     id: "usuarios",
     title: "Usuários",
     shortDescription: "Controle de acesso e permissões do projeto.",

@@ -21,7 +21,6 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { FeatureInfo } from "@/components/shared/feature-info";
 import { getFeatureHelp } from "@/lib/ui/feature-help";
 import { NAV_ITEMS } from "@/lib/ui/nav-items";
 import { cn } from "@/lib/utils";
@@ -85,20 +84,20 @@ export function AppSidebar({ projectId }: { projectId: string }) {
   return (
     <aside
       className={cn(
-        "flex shrink-0 flex-col border-r border-border bg-card transition-[width] duration-150",
+        "flex shrink-0 flex-col border-r border-black/10 bg-brand-sidebar text-brand-sidebar-foreground transition-[width] duration-150",
         collapsed ? "w-14" : "w-60"
       )}
     >
       <div
         className={cn(
-          "flex h-14 items-center gap-2 border-b border-border px-4",
+          "flex h-14 items-center gap-2 border-b border-white/15 px-4",
           collapsed && "justify-center px-0"
         )}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- SVG estático em public/, sem otimização de imagem necessária */}
-        <img src="/branding/acc-icon.svg" alt="ACC" className="size-7 shrink-0 rounded" />
+        {/* eslint-disable-next-line @next/next/no-img-element -- PNG estático em public/, sem otimização de imagem necessária. Logo ACC aparece SOMENTE aqui na sidebar — nunca duplicado na área de conteúdo/cards. */}
+        <img src="/branding/acc-logo.png" alt="ACC" className="size-7 shrink-0 rounded" />
         {!collapsed && (
-          <span className="text-xs font-bold uppercase leading-tight tracking-tight text-black dark:text-white">
+          <span className="text-xs font-bold uppercase leading-tight tracking-tight text-white">
             AXION Controle de Contratos
           </span>
         )}
@@ -110,43 +109,37 @@ export function AppSidebar({ projectId }: { projectId: string }) {
           const active = pathname?.startsWith(href);
           const Icon = ICONS_BY_NAME[item.icon];
           const help = getFeatureHelp(item.helpId);
-          // Recolhido: a ajuda entra dentro do mesmo tooltip nativo do
-          // item (nunca um segundo ⓘ poluindo a sidebar recolhida — seção 14).
-          const collapsedTitle = help ? `${item.label} — ${help.shortDescription}` : item.label;
+          // Ajuda via hover/focus no próprio item (title nativo), nunca um
+          // ⓘ separado poluindo a sidebar — mesmo tooltip em qualquer
+          // estado (recolhida ou expandida).
+          const itemTitle = help ? `${item.label} — ${help.shortDescription}` : item.label;
 
           return (
             <Link
               key={item.href}
               href={href}
-              title={collapsed ? collapsedTitle : undefined}
+              title={itemTitle}
               className={cn(
                 "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 collapsed && "justify-center px-0",
-                active
-                  ? "bg-accent text-accent-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                active ? "bg-brand-sidebar-active text-white" : "text-white/75 hover:bg-white/10 hover:text-white"
               )}
             >
               {Icon ? <Icon className="size-4 shrink-0" /> : null}
-              {!collapsed ? (
-                <span className="flex flex-1 items-center justify-between gap-1.5">
-                  <span className="truncate">{item.label}</span>
-                  <FeatureInfo helpId={item.helpId} />
-                </span>
-              ) : null}
+              {!collapsed ? <span className="leading-tight break-words">{item.label}</span> : null}
             </Link>
           );
         })}
       </nav>
 
-      <div className="border-t border-border p-2">
+      <div className="border-t border-white/15 p-2">
         <button
           type="button"
           onClick={() => setSidebarCollapsed(!collapsed)}
           aria-label={collapsed ? "Expandir menu lateral" : "Recolher menu lateral"}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
           className={cn(
-            "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+            "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white",
             collapsed && "justify-center px-0"
           )}
         >

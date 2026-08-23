@@ -5,6 +5,8 @@ import { createSupabaseServerClient } from "@axion/db/server";
 
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 
+import { appendAccEmailSignature } from "./branding/acc-email-signature";
+import { loadAccLogoInlineImage } from "./branding/load-acc-logo-inline-image";
 import { EmailSendError } from "./email-provider";
 import { getEmailProvider } from "./get-email-provider";
 import { buildContractAlertEmail, type ContractAlertEmailInput } from "./templates/contract-alert-template";
@@ -80,6 +82,8 @@ export async function sendContractAlertEmail(
   }
 
   const { subject, html, text } = buildContractAlertEmail(input.alert);
+  const inlineLogo = loadAccLogoInlineImage();
+  const signed = appendAccEmailSignature({ text, html }, inlineLogo !== null);
 
   const provider = getEmailProvider();
   const correlationId = crypto.randomUUID();
@@ -89,8 +93,9 @@ export async function sendContractAlertEmail(
     sendResult = await provider.send({
       to: input.recipientEmail,
       subject,
-      text,
-      html,
+      text: signed.text,
+      html: signed.html,
+      inlineImages: inlineLogo ? [inlineLogo] : undefined,
       correlationId,
     });
   } catch (error) {

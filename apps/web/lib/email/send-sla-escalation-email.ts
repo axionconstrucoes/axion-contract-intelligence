@@ -2,6 +2,8 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@axion/db/admin";
 
+import { appendAccEmailSignature } from "./branding/acc-email-signature";
+import { loadAccLogoInlineImage } from "./branding/load-acc-logo-inline-image";
 import { EmailSendError } from "./email-provider";
 import { getEmailProvider } from "./get-email-provider";
 import { buildSlaEscalationEmail, type SlaEscalationEmailInput } from "./templates/sla-escalation-template";
@@ -40,6 +42,8 @@ export async function sendSlaEscalationEmail(
   input: SendSlaEscalationEmailInput
 ): Promise<SendSlaEscalationEmailResult> {
   const { subject, html, text } = buildSlaEscalationEmail(input.email);
+  const inlineLogo = loadAccLogoInlineImage();
+  const signed = appendAccEmailSignature({ text, html }, inlineLogo !== null);
 
   const provider = getEmailProvider();
   const correlationId = crypto.randomUUID();
@@ -49,8 +53,9 @@ export async function sendSlaEscalationEmail(
     sendResult = await provider.send({
       to: input.recipientEmail,
       subject,
-      text,
-      html,
+      text: signed.text,
+      html: signed.html,
+      inlineImages: inlineLogo ? [inlineLogo] : undefined,
       correlationId,
     });
   } catch (error) {

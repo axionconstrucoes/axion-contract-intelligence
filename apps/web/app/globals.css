@@ -28,6 +28,15 @@
   --severity-media: oklch(0.75 0.14 85);
   --severity-alta: oklch(0.68 0.19 45);
   --severity-critica: oklch(0.58 0.22 25);
+
+  /* Identidade institucional AXION (sidebar azul / header vermelho) —
+     deliberadamente FIXA (não redefinida em .dark): é a marca do produto,
+     não um token de tema claro/escuro. */
+  --brand-sidebar: oklch(0.32 0.1 258);
+  --brand-sidebar-active: oklch(0.4 0.1 258);
+  --brand-sidebar-foreground: oklch(0.985 0 0);
+  --brand-header: oklch(0.4 0.18 26);
+  --brand-header-foreground: oklch(0.985 0 0);
 }
 
 .dark {
@@ -81,6 +90,12 @@
   --color-severity-media: var(--severity-media);
   --color-severity-alta: var(--severity-alta);
   --color-severity-critica: var(--severity-critica);
+
+  --color-brand-sidebar: var(--brand-sidebar);
+  --color-brand-sidebar-active: var(--brand-sidebar-active);
+  --color-brand-sidebar-foreground: var(--brand-sidebar-foreground);
+  --color-brand-header: var(--brand-header);
+  --color-brand-header-foreground: var(--brand-header-foreground);
 }
 
 body {

@@ -3,6 +3,18 @@
 // por um script Node standalone (mesmo padrão de
 // apps/web/lib/ai/providers/types.ts).
 //
+// Imagem embutida por Content-ID (ex.: logo da assinatura institucional
+// ACC) — só tem efeito quando `html` também está presente (vira
+// multipart/related envolvendo o multipart/alternative existente).
+// `contentBase64` já vem codificado (nunca lido de disco aqui — isso é
+// responsabilidade de quem monta o SendEmailInput).
+export interface InlineImageAttachment {
+  cid: string;
+  filename: string;
+  mimeType: string;
+  contentBase64: string;
+}
+
 // Contrato mínimo de envio de email. "from" NÃO é escolhido pelo caller —
 // cada provider resolve internamente sua própria mailbox de envio e a
 // devolve em SendEmailResult, nunca a recebe como input arbitrário.
@@ -15,6 +27,9 @@ export interface SendEmailInput {
   // continua exatamente como antes (text/plain puro). Nenhum caller
   // existente precisa mudar.
   html?: string;
+  // Imagens inline referenciadas por "cid:" dentro de `html` — ignorado
+  // quando `html` está ausente. Nenhum caller existente precisa mudar.
+  inlineImages?: InlineImageAttachment[];
   replyTo?: string;
   correlationId: string;
 }

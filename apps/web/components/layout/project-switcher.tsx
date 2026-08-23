@@ -11,7 +11,7 @@ export function ProjectSwitcher({ projects, currentProjectId }: { projects: Proj
     <Select
       value={currentProjectId}
       onChange={(e) => router.push(`/${e.target.value}/dashboard`)}
-      className="max-w-xs font-medium"
+      className="max-w-xs border-white/40 bg-white/10 font-bold text-yellow-300"
     >
       {projects.map((project) => (
         <option key={project.id} value={project.id}>

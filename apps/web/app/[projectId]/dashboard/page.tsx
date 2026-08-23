@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ExpertQueryPanel } from "@/components/ai/expert-query-panel";
 import { AlertCard } from "@/components/dashboard/alert-card";
+import { DashboardVisualEntryCard } from "@/components/dashboard/dashboard-visual-entry-card";
 import { IntegrationStatusSummary } from "@/components/dashboard/integration-status-summary";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -63,6 +64,10 @@ export default async function DashboardPage({ params }: { params: Promise<{ proj
             <p className="text-2xl font-semibold">{unresolved}</p>
           </CardContent>
         </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <DashboardVisualEntryCard projectId={projectId} />
       </div>
 
       <IntegrationStatusSummary projectId={projectId} groups={integrationStatusGroups} />
