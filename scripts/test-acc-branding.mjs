@@ -156,17 +156,24 @@ check("projetos: opções de download de logotipo e ícone existem, apontam para
 
 const pageHeaderSource = readSource("apps/web/components/layout/page-header.tsx");
 
-check("PageHeader: 'AXION CONTROLE DE CONTRATOS' preto/negrito, nome da aba vermelho-institucional/negrito, travessão entre os dois", () => {
-  assert(pageHeaderSource.includes("AXION CONTROLE DE CONTRATOS"));
-  assert(/text-black[\s\S]{0,40}AXION CONTROLE DE CONTRATOS/.test(pageHeaderSource), "prefixo deveria ser preto");
-  assert(/text-red-900[\s\S]{0,20}\{title\}/.test(pageHeaderSource), "nome da aba deveria ser vermelho institucional");
-  assert(pageHeaderSource.includes("font-semibold"), "cabeçalho deveria ser negrito");
-  assert(pageHeaderSource.includes("—"), "deveria usar travessão entre o prefixo e o nome da aba");
+// REDESIGN VISUAL PREMIUM (2026-08-24) — AJUSTES APROVADOS: o prefixo
+// "AXION CONTROLE DE CONTRATOS" repetido em preto/negrito em toda tela
+// (antes bloco único com travessão) foi substituído por um eyebrow
+// discreto (muted-foreground, uppercase via CSS) acima do título da
+// página — o nome da aba continua vermelho-institucional, agora como
+// h1 de destaque (hierarquia executiva, seção 5/7 do redesign). O
+// título usa text-brand-sidebar (o mesmo token de cor da sidebar, não
+// mais um vermelho hardcoded) — pedido explícito do usuário: título de
+// página e sidebar nunca podem divergir de cor.
+check("PageHeader: eyebrow institucional discreto acima do título; nome da aba na MESMA cor da sidebar (h1 de destaque)", () => {
+  assert(pageHeaderSource.includes("AXION Controle de Contratos"));
+  assert(/text-muted-foreground[\s\S]{0,40}AXION Controle de Contratos/.test(pageHeaderSource), "eyebrow institucional deveria ser discreto (muted-foreground)");
+  assert(/text-brand-sidebar[\s\S]{0,20}\{title\}/.test(pageHeaderSource), "nome da aba deveria usar o mesmo token de cor da sidebar (text-brand-sidebar)");
+  assert(pageHeaderSource.includes("font-semibold"), "título da página deveria ser negrito/semibold");
 });
 
-check("PageHeader usa a MESMA cor institucional do logo/ícone (red-900 ~ #7f1d1d, consistência de marca)", () => {
-  // Tailwind red-900 = #7f1d1d — mesma família de vermelho institucional usada no SVG.
-  assert(pageHeaderSource.includes("text-red-900"));
+check("PageHeader usa a MESMA variável de cor da sidebar (text-brand-sidebar) — título e sidebar nunca divergem", () => {
+  assert(pageHeaderSource.includes("text-brand-sidebar"));
 });
 
 const ALL_15_PAGES = [
@@ -226,23 +233,27 @@ check("Project.code: mapeado de verdade a partir da linha do banco (mapProjectRo
 check("TopBar: mostra o código do projeto discretamente próximo ao seletor (quando disponível)", () => {
   const source = readSource("apps/web/components/layout/top-bar.tsx");
   assert(source.includes("currentProject?.code"), "TopBar deveria exibir o código do projeto quando disponível");
-  // Header institucional vermelho sólido (Dashboard Visual, seção 4): o
-  // texto discreto usa branco translúcido para permanecer legível sobre
-  // bg-brand-header, não mais muted-foreground (que presumia fundo neutro).
-  assert(source.includes("text-xs text-white/80"), "código deveria ser discreto, mas legível sobre o header vermelho");
+  // REDESIGN VISUAL PREMIUM (2026-08-24): TopBar deixou de ser uma área
+  // vermelha sólida grande (seção 1 do redesign — "não através de
+  // grandes áreas saturadas de cor") e passou a ser clara/neutra, com o
+  // vermelho institucional reservado a acentos (logo, título de página,
+  // estado ativo da sidebar). Código do projeto agora discreto sobre
+  // fundo claro (muted-foreground), não mais branco translúcido.
+  assert(source.includes("text-xs text-muted-foreground"), "código deveria ser discreto sobre o header claro");
 });
 
-// ---------------- 9b. AJUSTES FINAIS APROVADOS DO DASHBOARD VISUAL ----------------
+// ---------------- 9b. REDESIGN VISUAL PREMIUM (2026-08-24) — AJUSTES APROVADOS ----------------
 
-check("header: 'AXION CONTROLE DE CONTRATOS' branco/negrito, um nível de corpo maior que antes (text-base, não mais text-sm)", () => {
+check("header: identidade 'AXION' em destaque + 'Controle de Contratos' discreto, sobre header claro (não mais barra vermelha sólida com texto branco)", () => {
   const source = readSource("apps/web/components/layout/top-bar.tsx");
-  assert(/text-base font-bold[^"]*text-white">AXION CONTROLE DE CONTRATOS/.test(source), "título do header deveria ser text-base (um nível acima de text-sm) + font-bold + text-white");
+  assert(/font-semibold[^"]*text-foreground">\s*AXION/.test(source), "AXION deveria continuar em destaque (semibold) no header");
+  assert(source.includes("Controle de Contratos"), "nome completo do produto deveria continuar presente no header");
 });
 
-check("nome do projeto: amarelo + negrito, com forte contraste sobre o header vermelho (código permanece discreto)", () => {
+check("nome do projeto: cor neutra de alto contraste sobre o header claro (nunca mais amarelo sobre vermelho — combinação abandonada no redesign premium)", () => {
   const source = readSource("apps/web/components/layout/project-switcher.tsx");
-  assert(/text-yellow-\d{3}/.test(source), "seletor de projeto deveria usar uma cor amarela (text-yellow-*)");
-  assert(source.includes("font-bold"), "nome do projeto deveria ser negrito");
+  assert(!/text-yellow-\d{3}/.test(source), "seletor de projeto não deveria mais usar amarelo (header deixou de ser vermelho sólido)");
+  assert(source.includes("font-semibold") || source.includes("font-bold"), "nome do projeto deveria continuar com peso visual (semibold/bold)");
 });
 
 check("logo ACC aparece SOMENTE na sidebar — nunca na área branca de conteúdo, ao lado de títulos de página, em cards, ou como decoração do Dashboard Visual", () => {
@@ -296,9 +307,13 @@ check("cabeçalho responsivo: PageHeader nunca força largura fixa/overflow hori
   assert(!/whitespace-nowrap/.test(pageHeaderSource), "título não deveria forçar nowrap (permitir quebra em telas estreitas)");
 });
 
-check("sidebar: logo/ícone tem tamanho fixo pequeno (size-7) — nunca deforma ao encolher a sidebar", () => {
+// REDESIGN VISUAL PREMIUM (2026-08-24): logo aumentado em 20% a pedido
+// do usuário (size-7/28px → 33.6px) — continua um tamanho FIXO em
+// pixels (nunca um valor relativo/percentual), então a regra original
+// ("nunca deforma ao encolher a sidebar") continua valendo.
+check("sidebar: logo/ícone tem tamanho fixo em pixels (33.6px, +20% sobre o tamanho anterior) — nunca deforma ao encolher a sidebar", () => {
   const source = readSource("apps/web/components/layout/app-sidebar.tsx");
-  assert(/className="size-7 shrink-0/.test(source), "ícone deveria ter tamanho fixo e shrink-0 (nunca deformar)");
+  assert(/className="size-\[33\.6px\] shrink-0/.test(source), "ícone deveria ter tamanho fixo em pixels e shrink-0 (nunca deformar)");
 });
 
 console.log("");

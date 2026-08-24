@@ -3,62 +3,78 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  /* Neutros — grafite frio (leve matiz azulado, alinhado ao azul
+     institucional) em vez de cinza puro: base do visual "engenharia de
+     precisão" descrito na proposta de redesign. */
+  --background: oklch(0.955 0.005 258);
+  --foreground: oklch(0.22 0.014 258);
+  /* Caixas/cards com um azul institucional bem claro (não branco puro)
+     — pedido explícito do usuário: os "boxes" de informação precisam
+     de cor visível, não uma tela toda branca/cinza. Um pouco mais
+     escuro/saturado que a primeira versão para aumentar contraste e
+     legibilidade (segundo ajuste, também pedido explícito). */
+  --card: oklch(0.965 0.026 258);
+  --card-foreground: oklch(0.22 0.014 258);
+  --popover: oklch(0.965 0.026 258);
+  --popover-foreground: oklch(0.22 0.014 258);
+  --primary: oklch(0.22 0.014 258);
+  --primary-foreground: oklch(0.985 0.002 258);
+  --secondary: oklch(0.93 0.012 258);
+  --secondary-foreground: oklch(0.28 0.014 258);
+  --muted: oklch(0.93 0.012 258);
+  --muted-foreground: oklch(0.5 0.014 258);
+  --accent: oklch(0.91 0.035 258);
+  --accent-foreground: oklch(0.28 0.08 258);
+  --destructive: oklch(0.5 0.19 25);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.91 0.006 258);
+  --input: oklch(0.91 0.006 258);
+  --ring: oklch(0.55 0.05 258);
   --radius: 0.625rem;
 
-  --severity-baixa: oklch(0.6 0.09 175);
-  --severity-media: oklch(0.75 0.14 85);
-  --severity-alta: oklch(0.68 0.19 45);
-  --severity-critica: oklch(0.58 0.22 25);
+  /* Farol de risco — recalibrado para sobriedade corporativa (menos
+     saturado que um semáforo genérico), mantendo a ordem perceptual
+     baixa→crítica inequívoca mesmo em escala de cinza (luminância
+     decrescente). */
+  --severity-baixa: oklch(0.56 0.1 165);
+  --severity-media: oklch(0.72 0.13 80);
+  --severity-alta: oklch(0.64 0.18 42);
+  --severity-critica: oklch(0.5 0.2 25);
 
-  /* Identidade institucional AXION (sidebar azul / header vermelho) —
-     deliberadamente FIXA (não redefinida em .dark): é a marca do produto,
-     não um token de tema claro/escuro. */
-  --brand-sidebar: oklch(0.32 0.1 258);
-  --brand-sidebar-active: oklch(0.4 0.1 258);
+  /* Identidade institucional AXION — sidebar na MESMA cor de fundo do
+     logo ACC (public/branding/acc-logo.*, #7f1d1d = Tailwind red-900),
+     vermelho institucional reservado a acentos no conteúdo claro —
+     deliberadamente FIXA (não redefinida em .dark): é a marca do
+     produto, não um token de tema claro/escuro. */
+  --brand-sidebar: oklch(0.396 0.141 25.723);
+  --brand-sidebar-active: oklch(0.444 0.177 26.899);
   --brand-sidebar-foreground: oklch(0.985 0 0);
-  --brand-header: oklch(0.4 0.18 26);
-  --brand-header-foreground: oklch(0.985 0 0);
+  --brand-header: oklch(0.99 0.002 258);
+  --brand-header-foreground: oklch(0.22 0.014 258);
+  --brand-accent: oklch(0.505 0.213 27.518);
+  --brand-accent-foreground: oklch(0.985 0 0);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
+  --background: oklch(0.19 0.012 258);
+  --foreground: oklch(0.96 0.004 258);
+  --card: oklch(0.23 0.014 258);
+  --card-foreground: oklch(0.96 0.004 258);
+  --popover: oklch(0.23 0.014 258);
+  --popover-foreground: oklch(0.96 0.004 258);
+  --primary: oklch(0.93 0.006 258);
+  --primary-foreground: oklch(0.22 0.014 258);
+  --secondary: oklch(0.29 0.014 258);
+  --secondary-foreground: oklch(0.96 0.004 258);
+  --muted: oklch(0.29 0.014 258);
+  --muted-foreground: oklch(0.68 0.012 258);
+  --accent: oklch(0.3 0.03 258);
+  --accent-foreground: oklch(0.96 0.004 258);
+  --destructive: oklch(0.65 0.2 25);
   --destructive-foreground: oklch(0.985 0 0);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.6 0.03 258);
 }
 
 @theme inline {
@@ -96,9 +112,33 @@
   --color-brand-sidebar-foreground: var(--brand-sidebar-foreground);
   --color-brand-header: var(--brand-header);
   --color-brand-header-foreground: var(--brand-header-foreground);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-accent-foreground: var(--brand-accent-foreground);
+
+  --font-sans: var(--font-open-sans), "Open Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+
+  --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --shadow-sm: 0 1px 2px -1px rgb(15 23 42 / 0.06), 0 1px 3px 0 rgb(15 23 42 / 0.04);
+  --shadow-md: 0 4px 10px -4px rgb(15 23 42 / 0.1), 0 2px 4px -2px rgb(15 23 42 / 0.05);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* Trilho de scroll discreto — coerente com a estética "engenharia de
+   precisão" (sem a barra padrão do sistema, larga e chapada). */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+  border: 2px solid var(--background);
+  background-clip: padding-box;
 }

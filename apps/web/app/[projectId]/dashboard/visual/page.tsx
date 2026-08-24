@@ -36,16 +36,13 @@ export default async function DashboardVisualPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <Link href={`/${projectId}/dashboard`} className="flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+      <div className="flex flex-col gap-1 border-b border-border pb-5">
+        <Link href={`/${projectId}/dashboard`} className="flex w-fit items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground">
           <ArrowLeft className="size-3.5" aria-hidden="true" />
           Voltar ao Dashboard
         </Link>
-        <h1 className="text-lg font-semibold">
-          <span className="text-black dark:text-white">AXION CONTROLE DE CONTRATOS</span>
-          <span className="text-black dark:text-white"> — </span>
-          <span className="text-red-900 dark:text-red-500">Dashboard Visual</span>
-        </h1>
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">AXION Controle de Contratos</span>
+        <h1 className="text-2xl font-semibold tracking-tight text-brand-sidebar">Dashboard Visual</h1>
         <p className="text-sm text-muted-foreground">
           Projeto: {data.project?.name ?? "Projeto não disponível"} · Código: {data.project?.code ?? "NÃO DISPONÍVEL"}
         </p>
@@ -53,40 +50,43 @@ export default async function DashboardVisualPage({
 
       <TimeRangeFilter current={data.range.option} from={data.range.from?.slice(0, 10) ?? ""} to={data.range.to.slice(0, 10)} />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <GeneralSituationCard situation={data.generalSituation} />
-        <AlertsSummaryCard summary={data.activeFindingsSummary} />
-      </div>
-
-      <EmailSummaryCard summary={data.emailSummary} />
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <PhysicalProgressCard />
-        <FinancialProgressCard />
-      </div>
-
-      <ContractValueCard table={data.contractValueTable} formatCurrency={formatCurrency} />
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <AditivosCard summary={data.aditivosSummary} formatCurrency={formatCurrency} />
+      {/* Nível 1 — situação do contrato, risco ativo e prazo: o que um
+          diretor precisa ver em ~5 segundos (seção 5 do redesign). */}
+      <section className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <GeneralSituationCard situation={data.generalSituation} />
+          <AlertsSummaryCard summary={data.activeFindingsSummary} />
+        </div>
         <DeadlineCard summary={data.deadlineSummary} />
-      </div>
+      </section>
 
-      <AdditionalProposalsCard summary={data.additionalProposalsSummary} />
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <EsgCard summary={data.esgSummary} />
+      {/* Nível 2 — evolução contratual e pendências. */}
+      <section className="flex flex-col gap-4">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Evolução contratual</h2>
+        <ContractValueCard table={data.contractValueTable} formatCurrency={formatCurrency} />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <AditivosCard summary={data.aditivosSummary} formatCurrency={formatCurrency} />
+          <AdditionalProposalsCard summary={data.additionalProposalsSummary} />
+        </div>
         <SlaActionsCard summary={data.slaSummary} />
-      </div>
+      </section>
 
-      <SourceVolumeTable rows={data.sourceVolume.rows} totals={data.sourceVolume.totals} />
-
-      <IntegrationStatusSummary projectId={projectId} groups={data.integrationStatusGroups} />
-
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <ExpertsCard findings={data.recentFindings} />
-        <CeoConsolidationCard finding={data.ceoFinding} />
-      </div>
+      {/* Nível 3 — indicadores auxiliares e informação operacional. */}
+      <section className="flex flex-col gap-4">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Indicadores operacionais</h2>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <PhysicalProgressCard />
+          <FinancialProgressCard />
+        </div>
+        <EmailSummaryCard summary={data.emailSummary} />
+        <EsgCard summary={data.esgSummary} />
+        <SourceVolumeTable rows={data.sourceVolume.rows} totals={data.sourceVolume.totals} />
+        <IntegrationStatusSummary projectId={projectId} groups={data.integrationStatusGroups} />
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <ExpertsCard findings={data.recentFindings} />
+          <CeoConsolidationCard finding={data.ceoFinding} />
+        </div>
+      </section>
     </div>
   );
 }

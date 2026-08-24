@@ -54,7 +54,7 @@ const SEVERITY_ORDER: AlertSeverity[] = ["BAIXA", "MEDIA", "ALTA", "CRITICA"];
 
 export function AlertsSummaryCard({ summary }: { summary: ActiveFindingsSummary }) {
   return (
-    <Card>
+    <Card className={summary.totalActive > 0 ? "border-severity-critica/30" : undefined}>
       <CardHeader>
         <CardTitle className="flex items-center gap-1.5">
           Alertas
@@ -70,7 +70,7 @@ export function AlertsSummaryCard({ summary }: { summary: ActiveFindingsSummary 
         ))}
         <div className="ml-auto flex flex-col items-end">
           <span className="text-xs text-muted-foreground">Total ativos</span>
-          <span className="text-xl font-bold">{summary.totalActive}</span>
+          <span className="text-3xl font-bold tracking-tight">{summary.totalActive}</span>
         </div>
       </CardContent>
     </Card>
@@ -79,7 +79,7 @@ export function AlertsSummaryCard({ summary }: { summary: ActiveFindingsSummary 
 
 export function GeneralSituationCard({ situation }: { situation: GeneralSituation }) {
   return (
-    <Card>
+    <Card className={situation === "SEM_RISCO_ATIVO" ? undefined : "border-severity-critica/30"}>
       <CardHeader>
         <CardTitle className="flex items-center gap-1.5">
           Situação geral do contrato
@@ -88,7 +88,7 @@ export function GeneralSituationCard({ situation }: { situation: GeneralSituatio
       </CardHeader>
       <CardContent>
         {situation === "SEM_RISCO_ATIVO" ? (
-          <span className="text-sm font-medium text-severity-baixa">Nenhum risco ativo identificado</span>
+          <span className="text-base font-semibold text-severity-baixa">Nenhum risco ativo identificado</span>
         ) : (
           <SeverityBadge severity={situation} />
         )}

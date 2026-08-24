@@ -635,11 +635,16 @@ check("sidebar: usa o token azul institucional (bg-brand-sidebar), texto branco,
   assert(/w-14/.test(source), "sidebar recolhida deve permanecer em ~56px (w-14)");
 });
 
-check("header (TopBar): usa o token vermelho institucional (bg-brand-header) e o texto 'AXION CONTROLE DE CONTRATOS' em branco/negrito", () => {
+// REDESIGN VISUAL PREMIUM (2026-08-24): header deixou de ser uma barra
+// vermelha sólida com texto branco (seção 1 do redesign — evitar
+// grandes áreas saturadas de cor); token bg-brand-header continua
+// existindo (agora claro/neutro), vermelho institucional reservado a
+// acentos.
+check("header (TopBar): usa o token institucional bg-brand-header e mostra 'AXION Controle de Contratos' com peso visual (semibold)", () => {
   const source = readSource("apps/web/components/layout/top-bar.tsx");
   assert(/bg-brand-header/.test(source));
-  assert(/AXION CONTROLE DE CONTRATOS/.test(source));
-  assert(/font-bold/.test(source) && /text-white/.test(source));
+  assert(source.includes("AXION") && source.includes("Controle de Contratos"));
+  assert(/font-semibold/.test(source));
 });
 
 check("tokens de marca (globals.css): azul/vermelho institucionais definidos uma única vez, fixos (não redefinidos em .dark)", () => {

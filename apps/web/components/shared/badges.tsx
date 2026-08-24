@@ -1,3 +1,4 @@
+import { AlertTriangle, Circle, Diamond, OctagonAlert } from "lucide-react";
 import type { ActionRequestStatus, AlertSeverity, EventStatus, ImplicationCategory, IntegrationStatus } from "@axion/types";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,6 +38,17 @@ const SEVERITY_HELP_ID: Record<AlertSeverity, string> = {
   CRITICA: "risco-critico",
 };
 
+// Forma distinta por nível (seção 10 do redesign — "nunca depender
+// apenas da cor"): número de lados cresce com a severidade
+// (círculo → losango → triângulo → octógono), reforço perceptível
+// mesmo em escala de cinza/daltonismo.
+const SEVERITY_ICON: Record<AlertSeverity, typeof Circle> = {
+  BAIXA: Circle,
+  MEDIA: Diamond,
+  ALTA: AlertTriangle,
+  CRITICA: OctagonAlert,
+};
+
 /**
  * `withInfo` é opcional e default false: onde houver muitos badges numa
  * tela densa (tabelas/listas), manter a UI limpa (seção 11 — "sem
@@ -44,9 +56,13 @@ const SEVERITY_HELP_ID: Record<AlertSeverity, string> = {
  * pontuais.
  */
 export function SeverityBadge({ severity, withInfo = false }: { severity: AlertSeverity; withInfo?: boolean }) {
+  const Icon = SEVERITY_ICON[severity];
   return (
     <span className="inline-flex items-center gap-1">
-      <Badge className={cn(severityClasses[severity])}>{severityLabels[severity]}</Badge>
+      <Badge className={cn(severityClasses[severity])}>
+        <Icon className="size-3" aria-hidden="true" />
+        {severityLabels[severity]}
+      </Badge>
       {withInfo ? <FeatureInfo helpId={SEVERITY_HELP_ID[severity]} /> : null}
     </span>
   );
@@ -71,11 +87,15 @@ export function CategoryBadge({ category }: { category: ImplicationCategory }) {
 // ERRO — autorização expirada/retry/falha não bloqueante, nunca "não
 // consegue operar". A cor do badge identifica o ESTADO, nunca a FONTE
 // (a cor da fonte vive em integration-visual-identity.ts).
+// ERRO usa cinza neutro (não vermelho) — pedido explícito do usuário: o
+// vermelho do farol de risco (severity-critica) fica reservado a
+// severidade contratual real, nunca reaproveitado para estado técnico
+// de integração.
 const integrationClasses: Record<IntegrationStatus, string> = {
   CONECTADO: "border-transparent bg-severity-baixa/15 text-severity-baixa",
   PENDENTE: "border-transparent bg-severity-media/15 text-severity-media",
   ATENCAO: "border-transparent bg-orange-500/15 text-orange-600 dark:text-orange-400",
-  ERRO: "border-transparent bg-severity-critica/15 text-severity-critica",
+  ERRO: "border-transparent bg-secondary text-foreground font-semibold",
 };
 
 export function IntegrationStatusBadge({ status }: { status: IntegrationStatus }) {
@@ -135,7 +155,9 @@ const emailAccountStatusClasses: Record<EmailAccountStatus, string> = {
   CONNECTED: "border-transparent bg-severity-baixa/15 text-severity-baixa",
   SYNCING: "border-transparent bg-accent text-accent-foreground",
   AUTH_EXPIRED: "border-transparent bg-severity-media/15 text-severity-media",
-  ERROR: "border-transparent bg-severity-critica/15 text-severity-critica",
+  // Cinza neutro, mesma razão do ERRO de IntegrationStatusBadge acima —
+  // consistência dentro da própria tela de Integrações.
+  ERROR: "border-transparent bg-secondary text-foreground font-semibold",
 };
 
 export function EmailAccountStatusBadge({ status }: { status: EmailAccountStatus }) {

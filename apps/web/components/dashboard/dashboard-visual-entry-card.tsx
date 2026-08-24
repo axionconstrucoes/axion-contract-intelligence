@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 export function DashboardVisualEntryCard({ projectId }: { projectId: string }) {
   return (
     <Link href={`/${projectId}/dashboard/visual`} className="block">
-      <Card className="transition-colors hover:border-brand-header/60 hover:bg-accent/40">
+      <Card className="transition-colors hover:border-brand-accent/60 hover:bg-accent/40">
         <CardContent className="flex flex-col items-center gap-2 p-6 text-center">
           {/* eslint-disable-next-line @next/next/no-img-element -- PNG estático em public/, sem otimização de imagem necessária */}
           <img src="/branding/dashboard-visual.png" alt="Dashboard Visual" className="size-10" />

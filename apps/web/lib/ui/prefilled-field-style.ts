@@ -2,10 +2,10 @@
 // reutilizável por qualquer formulário do ACC que carregue configuração
 // já salva (não só Integrações → Gmail/E-mails). Verde aqui significa
 // SOMENTE "dado já preenchido/salvo" — nunca "validado"/"aprovado"/
-// "sem risco". Nunca verde sólido forte (mesmo tom já usado em
-// apps/web/app/[projectId]/documentos/page.tsx para cards de
-// CONTRATO_BASE/ADITIVO: border-green-500/50 + bg-green-50 +
-// dark:bg-green-950/30).
+// "sem risco". Nunca verde sólido forte (mesmo espírito da assinatura
+// verde discreta usada em apps/web/app/[projectId]/documentos/page.tsx
+// para cards de CONTRATO_BASE/ADITIVO: borda lateral + fundo muito
+// sutil, nunca o card inteiro pintado).
 
 export const PREFILLED_FIELD_CLASSNAME =
   "border-green-400 bg-green-50 text-foreground dark:border-green-700 dark:bg-green-950/30";

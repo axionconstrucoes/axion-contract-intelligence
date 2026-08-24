@@ -244,10 +244,19 @@ check("sidebar: NUNCA renderiza um ⓘ separado (expandida ou recolhida) — aju
   assert(!sidebarSource.includes("import { FeatureInfo }"), "import de FeatureInfo deveria ter sido removido da sidebar");
 });
 
-check("sidebar: tooltip nativo (title) com label + shortDescription do registry, no MESMO item, em qualquer estado (recolhida ou expandida)", () => {
-  assert(sidebarSource.includes("itemTitle"));
-  assert(sidebarSource.includes("help.shortDescription"));
-  assert(sidebarSource.includes("title={itemTitle}"), "o tooltip deveria valer para os dois estados (nunca condicional a collapsed)");
+// REDESIGN VISUAL PREMIUM (2026-08-24) — AJUSTES APROVADOS: o tooltip
+// nativo (title) foi substituído por NavTooltip, um tooltip próprio
+// (via portal em document.body, posicionado por getBoundingClientRect)
+// — mesmo conteúdo (label + shortDescription do registry), mesma regra
+// (nunca um ⓘ separado), mas sem o atraso/estilo do tooltip nativo do
+// navegador e sem o bug de corte horizontal dentro do <nav> com scroll
+// (overflow-y-auto). Continua valendo nos dois estados — recolhida ou
+// expandida — e também no foco por teclado (onFocus/onBlur).
+check("sidebar: NavTooltip com label + shortDescription do registry, no MESMO item, em qualquer estado (recolhida ou expandida)", () => {
+  assert(sidebarSource.includes("function NavTooltip"), "sidebar deveria definir o componente de tooltip próprio");
+  assert(sidebarSource.includes("help?.shortDescription") || sidebarSource.includes("help.shortDescription"));
+  assert(/<NavTooltip key=\{item\.href\} label=\{item\.label\}/.test(sidebarSource), "o tooltip deveria valer para os dois estados (nunca condicional a collapsed)");
+  assert(sidebarSource.includes("onFocus={show}") && sidebarSource.includes("onBlur={hide}"), "tooltip deveria funcionar também por foco de teclado, não só mouse");
 });
 
 // --- Seção 12: inventário de TODAS as abas/seções reais mapeadas ---

@@ -177,13 +177,16 @@ export default async function DocumentosPage({
                 const nextVersionIndex =
                   (current?.versionIndex ?? 0) + 1;
 
+                const isCentralDocument =
+                  document.kind === "CONTRATO_BASE" ||
+                  document.kind.includes("ADITIVO");
+
                 return (
                   <Card
                     key={document.id}
                     className={
-                      document.kind === "CONTRATO_BASE" ||
-                      document.kind.includes("ADITIVO")
-                        ? "border-green-500/50 bg-green-50 dark:bg-green-950/30"
+                      isCentralDocument
+                        ? "border-l-4 border-l-emerald-600 bg-emerald-50/40 dark:bg-emerald-950/10"
                         : undefined
                     }
                   >
@@ -201,12 +204,17 @@ export default async function DocumentosPage({
                         </p>
                       </div>
 
-                      <Badge variant="outline">
-                        {document.kind.replaceAll(
-                          "_",
-                          " "
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        {isCentralDocument && (
+                          <Badge className="border-transparent bg-emerald-600 text-white">Documento central</Badge>
                         )}
-                      </Badge>
+                        <Badge variant="outline">
+                          {document.kind.replaceAll(
+                            "_",
+                            " "
+                          )}
+                        </Badge>
+                      </div>
                     </CardHeader>
 
                     <CardContent className="flex flex-col gap-4">

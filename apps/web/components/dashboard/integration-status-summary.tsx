@@ -10,11 +10,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { integrationStatusLabels } from "@/lib/labels";
 import type { IntegrationStatusGroup } from "@/lib/ui/resolve-integration-display-status";
 
+// ERRO usa cinza neutro (não vermelho) — mesmo ajuste de
+// components/shared/badges.tsx: o vermelho do farol de risco fica
+// reservado a severidade contratual, nunca a estado técnico de
+// integração (pedido explícito do usuário).
 const STATUS_TONE_CLASSNAME: Record<IntegrationStatusGroup["status"], string> = {
   CONECTADO: "border-transparent bg-severity-baixa/15 text-severity-baixa",
   PENDENTE: "border-transparent bg-severity-media/15 text-severity-media",
   ATENCAO: "border-transparent bg-orange-500/15 text-orange-600 dark:text-orange-400",
-  ERRO: "border-transparent bg-severity-critica/15 text-severity-critica",
+  ERRO: "border-transparent bg-secondary text-foreground font-semibold",
 };
 
 export function IntegrationStatusSummary({ projectId, groups }: { projectId: string; groups: IntegrationStatusGroup[] }) {
