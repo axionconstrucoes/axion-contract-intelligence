@@ -104,7 +104,7 @@ export const driveTypeLabels: Record<DriveType, string> = {
 
 export const permissionLabels: Record<ProjectPermission, string> = {
   ADMINISTRADOR: "Administrador",
-  GESTOR: "Gestor",
+  GERENTE: "Gerente",
   COLABORADOR: "Colaborador",
   LEITURA: "Leitura",
 };

@@ -10,7 +10,7 @@ import { EvidenceViewer } from "@/components/ledger/evidence-viewer";
 import { SendContractAlertForm } from "@/components/ledger/send-contract-alert-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { canEditProjectContent, getCurrentProjectPermission } from "@/lib/contract-review";
+import { canApproveContractReview, canEditProjectContent, getCurrentProjectPermission } from "@/lib/contract-review";
 import { getEvent, getUser } from "@/lib/data";
 import { getEventClauseConfrontationCandidates } from "@/lib/event-clause-confrontation-review";
 import { alertRiskLevelLabels } from "@/lib/email/templates/contract-alert-template";
@@ -42,7 +42,8 @@ export default async function EventDetailPage({
 
   if (!event) notFound();
 
-  const canReview = canEditProjectContent(permission);
+  const canEditContent = canEditProjectContent(permission);
+  const canApprove = canApproveContractReview(permission);
 
   let creatorLabel: string;
   if (event.createdByType === "LEGACY") {
@@ -167,7 +168,7 @@ export default async function EventDetailPage({
                       </p>
                       {candidate.reviewNote ? <p className="mt-1">Observação: {candidate.reviewNote}</p> : null}
                     </div>
-                  ) : canReview ? (
+                  ) : canApprove ? (
                     <ConfrontationReviewForms
                       projectId={projectId}
                       eventId={event.id}
@@ -175,7 +176,7 @@ export default async function EventDetailPage({
                     />
                   ) : (
                     <p className="rounded-md border bg-muted p-3 text-sm text-muted-foreground">
-                      Você possui acesso de leitura. Aprovação ou rejeição exige permissão EDITOR ou ADMIN.
+                      Aprovação ou rejeição exige permissão de Administrador ou Gerente do projeto.
                     </p>
                   )}
                 </CardContent>
@@ -197,7 +198,7 @@ export default async function EventDetailPage({
             <p className="text-xs text-muted-foreground">
               Confiança estimada: {Math.round(event.aiAssessment.confidence * 100)}% — sugestão sujeita a revisão humana, não substitui decisão da equipe.
             </p>
-            {canReview && <SendContractAlertForm projectId={projectId} eventId={event.id} />}
+            {canEditContent && <SendContractAlertForm projectId={projectId} eventId={event.id} />}
           </CardContent>
         </Card>
       )}
@@ -213,7 +214,7 @@ export default async function EventDetailPage({
       </div>
 
       <div id="responder-ao-acc">
-        <EventNotesSection projectId={projectId} eventId={event.id} canReview={canReview} />
+        <EventNotesSection projectId={projectId} eventId={event.id} canReview={canEditContent} />
       </div>
 
       <ExpertQueryPanel projectId={projectId} eventId={event.id} scope="EVENT" />

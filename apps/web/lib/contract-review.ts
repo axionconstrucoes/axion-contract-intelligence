@@ -208,6 +208,7 @@ export async function getCurrentProjectPermission(
     .select("permission")
     .eq("project_id", projectId)
     .eq("user_id", user.id)
+    .eq("status", "ACTIVE")
     .maybeSingle();
 
   if (error) {
@@ -219,17 +220,36 @@ export async function getCurrentProjectPermission(
   return (data?.permission as ProjectPermission | undefined) ?? null;
 }
 
-// COLABORADOR e GESTOR têm o mesmo nível de acesso a conteúdo do
-// projeto (edição de documentos/cláusulas/eventos etc.) nesta fase —
-// o escopo de GESTOR ainda será definido explicitamente (ver módulo
-// Usuários e Permissões), mas por ora ele não deve ter menos acesso
-// de conteúdo do que um Colaborador.
+// Matriz aprovada (módulo Usuários e Permissões):
+//   ADMINISTRADOR — edita conteúdo, cria anotações, aprova/rejeita revisão contratual;
+//   GERENTE       — mesmos direitos de conteúdo que ADMINISTRADOR (edição/anotação/aprovação),
+//                    mas nunca herda os poderes exclusivos de administração
+//                    (gestão de membros, configuração de SLA/integrações — ver
+//                    isProjectAdministrator);
+//   COLABORADOR   — edita conteúdo operacional e cria anotações, mas NÃO aprova
+//                    nem rejeita revisão contratual;
+//   LEITURA       — somente leitura, nenhuma das ações acima.
+// Espelha exatamente a hierarquia de has_project_permission() no banco
+// (20260825120000_rename_gestor_to_gerente_review_matrix.sql) — a
+// autorização real sempre é reforçada lá (RLS/RPC); estas funções só
+// controlam o que a interface oferece.
 export function canEditProjectContent(permission: ProjectPermission | null): boolean {
-  return permission === "ADMINISTRADOR";
+  return (
+    permission === "ADMINISTRADOR" ||
+    permission === "GERENTE" ||
+    permission === "COLABORADOR"
+  );
+}
+
+// Aprovar ou rejeitar revisão contratual (candidatos de evento
+// derivados de e-mail e de confronto evento x cláusula) — restrito a
+// ADMINISTRADOR/GERENTE; COLABORADOR edita conteúdo mas não aprova.
+export function canApproveContractReview(permission: ProjectPermission | null): boolean {
+  return permission === "ADMINISTRADOR" || permission === "GERENTE";
 }
 
 // Ações restritas a Administrador do projeto (gestão de configuração,
-// integrações, membros). GESTOR nunca herda estas ações nesta fase.
+// integrações, membros). GERENTE nunca herda estas ações.
 export function isProjectAdministrator(permission: ProjectPermission | null): boolean {
   return permission === "ADMINISTRADOR";
 }

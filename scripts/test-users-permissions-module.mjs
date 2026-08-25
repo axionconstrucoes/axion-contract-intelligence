@@ -99,7 +99,7 @@ check("auth/callback/route.ts ainda valida ALLOWED_EMAIL_DOMAIN = axion.com.br",
 // A migration mantém 'ADMIN'/'EDITOR'/'VIEWER' apenas como mapeamento
 // de COMPATIBILIDADE dentro de has_project_permission() (SQL) — o
 // TypeScript não deve mais comparar contra esses literais em nenhum
-// lugar; os 4 papéis novos (ADMINISTRADOR/GESTOR/COLABORADOR/LEITURA)
+// lugar; os 4 papéis novos (ADMINISTRADOR/GERENTE/COLABORADOR/LEITURA)
 // são a única fonte de verdade no app.
 
 check("nenhum arquivo .ts/.tsx de apps/web compara permission contra 'ADMIN'/'EDITOR'/'VIEWER' (literais antigos)", () => {
@@ -112,7 +112,12 @@ check("nenhum arquivo .ts/.tsx de apps/web compara permission contra 'ADMIN'/'ED
 
 check("packages/types define ProjectPermission com os 4 papéis do ACC", () => {
   const source = readSource("packages/types/src/index.ts");
-  assert(source.includes('"ADMINISTRADOR" | "GESTOR" | "COLABORADOR" | "LEITURA"'), "union de ProjectPermission não encontrada");
+  assert(source.includes('"ADMINISTRADOR" | "GERENTE" | "COLABORADOR" | "LEITURA"'), "union de ProjectPermission não encontrada");
+});
+
+check("nenhum arquivo .ts/.tsx de apps/web usa o literal 'GESTOR' (papel renomeado para GERENTE)", () => {
+  const offenders = webTsFiles.filter((file) => /["']GESTOR["']/.test(readFileSync(file, "utf8")));
+  assert(offenders.length === 0, `encontrado em: ${offenders.map((f) => path.relative(repoRoot, f)).join(", ")}`);
 });
 
 check("packages/types não referencia mais os papéis antigos (VIEWER/EDITOR/ADMIN) em ProjectPermission", () => {

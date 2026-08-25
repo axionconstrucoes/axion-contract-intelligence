@@ -72,7 +72,7 @@ export async function sendContractAlertEmail(
   const permission = await getCurrentProjectPermission(input.projectId);
   if (!canEditProjectContent(permission)) {
     throw new NotAuthorizedError(
-      "Envio de alerta por e-mail exige permissão de Colaborador, Gestor ou Administrador no projeto."
+      "Envio de alerta por e-mail exige permissão de Colaborador, Gerente ou Administrador no projeto."
     );
   }
 

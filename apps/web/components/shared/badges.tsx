@@ -193,7 +193,7 @@ export function MembershipStatusBadge({ status }: { status: ProjectMembershipSta
 // deve ser reconhecível à distância numa tabela densa).
 const permissionClasses: Record<ProjectPermission, string> = {
   ADMINISTRADOR: "border-transparent bg-primary text-primary-foreground font-semibold",
-  GESTOR: "border-transparent bg-accent text-accent-foreground",
+  GERENTE: "border-transparent bg-accent text-accent-foreground",
   COLABORADOR: "border-border text-foreground",
   LEITURA: "border-transparent bg-muted text-muted-foreground",
 };

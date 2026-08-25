@@ -17,7 +17,7 @@ import { corporateAreaLabels, permissionLabels } from "@/lib/labels";
 import { addProjectMemberAction } from "./actions";
 import { initialAddProjectMemberState } from "./actions-state";
 
-const ROLE_OPTIONS: ProjectPermission[] = ["ADMINISTRADOR", "GESTOR", "COLABORADOR", "LEITURA"];
+const ROLE_OPTIONS: ProjectPermission[] = ["ADMINISTRADOR", "GERENTE", "COLABORADOR", "LEITURA"];
 const AREA_OPTIONS = Object.keys(corporateAreaLabels) as CorporateArea[];
 
 export function AddMemberForm({ projectId }: { projectId: string }) {

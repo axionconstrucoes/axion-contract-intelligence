@@ -28,7 +28,7 @@ import {
   initialUpdateProjectMemberRoleState,
 } from "./actions-state";
 
-const ROLE_OPTIONS: ProjectPermission[] = ["ADMINISTRADOR", "GESTOR", "COLABORADOR", "LEITURA"];
+const ROLE_OPTIONS: ProjectPermission[] = ["ADMINISTRADOR", "GERENTE", "COLABORADOR", "LEITURA"];
 
 type PendingConfirm =
   | { type: "role"; nextValue: ProjectPermission }
@@ -71,7 +71,7 @@ export function MemberRowActions({
     if (nextValue === member.permission) return;
 
     // Envolver ou sair de ADMINISTRADOR exige confirmação explícita;
-    // trocas entre os demais papéis (Gestor/Colaborador/Leitura)
+    // trocas entre os demais papéis (Gerente/Colaborador/Leitura)
     // aplicam direto.
     if (nextValue === "ADMINISTRADOR" || member.permission === "ADMINISTRADOR") {
       setPendingConfirm({ type: "role", nextValue });

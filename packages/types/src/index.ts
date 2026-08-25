@@ -73,7 +73,7 @@ export interface User {
   avatarInitials: string;
 }
 
-export type ProjectPermission = "ADMINISTRADOR" | "GESTOR" | "COLABORADOR" | "LEITURA";
+export type ProjectPermission = "ADMINISTRADOR" | "GERENTE" | "COLABORADOR" | "LEITURA";
 
 export type ProjectMembershipStatus = "ACTIVE" | "INACTIVE";
 

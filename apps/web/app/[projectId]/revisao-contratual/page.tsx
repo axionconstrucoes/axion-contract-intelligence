@@ -14,7 +14,7 @@ import {
 } from "@/lib/labels";
 import {
   getContractReviewCandidates,
-  canEditProjectContent,
+  canApproveContractReview,
   getCurrentProjectPermission,
 } from "@/lib/contract-review";
 import {
@@ -58,7 +58,7 @@ export default async function ContractReviewPage({
     ),
   ]);
 
-  const canReview = canEditProjectContent(permission);
+  const canReview = canApproveContractReview(permission);
 
   return (
     <div className="flex flex-col gap-4">
