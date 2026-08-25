@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { TestModeBanner } from "@/components/layout/test-mode-banner";
 import "./globals.css";
 
 // Título de aba do navegador: "ACC | <Nome da aba>" — cada page.tsx
@@ -13,7 +14,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
-      <body className="antialiased font-sans">{children}</body>
+      <body className="antialiased font-sans">
+        <div className="flex min-h-dvh flex-col">
+          <TestModeBanner />
+          <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+        </div>
+      </body>
     </html>
   );
 }

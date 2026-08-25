@@ -15,7 +15,7 @@ export default async function WorkspaceLayout({
   if (!project) notFound();
 
   return (
-    <div className="flex h-dvh">
+    <div className="flex h-full min-h-0 flex-1">
       <AppSidebar projectId={projectId} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar projectId={projectId} />
