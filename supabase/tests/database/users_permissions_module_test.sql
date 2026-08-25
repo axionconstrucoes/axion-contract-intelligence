@@ -23,6 +23,12 @@ select plan(47);
 
 create schema if not exists test_helpers;
 
+-- Sem isto, a resolução do nome test_helpers.logout() falha com
+-- "permission denied for schema test_helpers" assim que o teste já
+-- estiver rodando como authenticated (após o primeiro login()) — USAGE
+-- em schema não tem default público como EXECUTE em função tem.
+grant usage on schema test_helpers to authenticated;
+
 create or replace function test_helpers.login(p_user_id uuid) returns void
 language plpgsql as $$
 begin
@@ -62,7 +68,8 @@ values
   ('a0000000-0000-0000-0000-000000000003', 'gestor@axion.com.br', '{}'::jsonb, 'authenticated', 'authenticated'),
   ('a0000000-0000-0000-0000-000000000004', 'colaborador@axion.com.br', '{}'::jsonb, 'authenticated', 'authenticated'),
   ('a0000000-0000-0000-0000-000000000005', 'leitura@axion.com.br', '{}'::jsonb, 'authenticated', 'authenticated'),
-  ('a0000000-0000-0000-0000-000000000006', 'fora@axion.com.br', '{}'::jsonb, 'authenticated', 'authenticated');
+  ('a0000000-0000-0000-0000-000000000006', 'fora@axion.com.br', '{}'::jsonb, 'authenticated', 'authenticated'),
+  ('a0000000-0000-0000-0000-000000000007', 'convidado@axion.com.br', '{}'::jsonb, 'authenticated', 'authenticated');
 
 -- ---------- 1. domínio AXION válido ----------
 
@@ -102,9 +109,9 @@ select is(
 );
 
 select throws_like(
-  $$select public.add_project_member('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000006', 'LEITURA', null)$$,
+  $$select public.add_project_member('11111111-1111-1111-1111-111111111111', 'a0000000-0000-0000-0000-000000000007', 'LEITURA', null)$$,
   '%Apenas administradores do projeto%',
-  'Não membro não consegue chamar add_project_member'
+  'Não membro não consegue chamar add_project_member (alvo é outro usuário, não a própria membership)'
 );
 
 select test_helpers.logout();
