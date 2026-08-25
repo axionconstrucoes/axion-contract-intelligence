@@ -6,5 +6,8 @@ build/
 *.tsbuildinfo
 .env
 .env.local
+.env*backup*
+*remote-backup*
+*.bak
 .DS_Store
 npm-debug.log*
