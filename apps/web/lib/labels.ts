@@ -162,6 +162,42 @@ export const confrontationCandidateStatusLabels: Record<ConfrontationCandidateSt
   REJECTED: "Rejeitado",
 };
 
+export type ConfrontationCandidateCategory =
+  | "PRAZO"
+  | "MULTA_PENALIDADE"
+  | "PAGAMENTO_MEDICAO"
+  | "ESCOPO_ALTERACAO"
+  | "GARANTIA"
+  | "RESCISAO"
+  | "SEGURO_RESPONSABILIDADE"
+  | "SSMA_ESG";
+
+// Léxico de categorias de scripts/event-clause-confrontation-analyzer.mjs
+// (distinto de ImplicationCategory). O analisador não persiste essas
+// categorias em coluna própria — event-clause-confrontation-review.ts as
+// extrai da frase de `summary` já gravada. O fallback cobre qualquer
+// código futuro do analisador ainda não traduzido aqui.
+export const confrontationCandidateCategoryLabels: Record<ConfrontationCandidateCategory, string> = {
+  PRAZO: "Prazo",
+  MULTA_PENALIDADE: "Multa / Penalidade",
+  PAGAMENTO_MEDICAO: "Pagamento / Medição",
+  ESCOPO_ALTERACAO: "Escopo / Alteração",
+  GARANTIA: "Garantia",
+  RESCISAO: "Rescisão",
+  SEGURO_RESPONSABILIDADE: "Seguro / Responsabilidade",
+  SSMA_ESG: "SSMA / ESG",
+};
+
+export function confrontationCandidateCategoryLabel(code: string): string {
+  const known = confrontationCandidateCategoryLabels[code as ConfrontationCandidateCategory];
+  if (known) return known;
+  return code
+    .toLowerCase()
+    .split("_")
+    .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : part))
+    .join(" ");
+}
+
 export type EventNoteCategory =
   | "CONTEXTO_OPERACIONAL"
   | "INFORMACAO_COMERCIAL"

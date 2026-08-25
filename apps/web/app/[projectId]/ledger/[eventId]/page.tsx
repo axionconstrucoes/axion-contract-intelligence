@@ -94,44 +94,17 @@ export default async function EventDetailPage({
         </div>
       </div>
 
-      {event.aiAssessment && (
-        <Card className="border-severity-alta/30 bg-severity-alta/5">
-          <CardHeader className="flex-row items-center gap-2 space-y-0">
-            <ShieldAlert className="size-4 text-severity-alta" />
-            <CardTitle>Achado da IA — {findingTypeLabels[event.aiAssessment.findingType]}</CardTitle>
-            <SeverityBadge severity={event.aiAssessment.severity} />
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 pt-0">
-            <p className="text-sm">{event.aiAssessment.summary}</p>
-            <p className="text-xs text-muted-foreground">
-              Confiança estimada: {Math.round(event.aiAssessment.confidence * 100)}% — sugestão sujeita a revisão humana, não substitui decisão da equipe.
-            </p>
-            {canReview && <SendContractAlertForm projectId={projectId} eventId={event.id} />}
-          </CardContent>
-        </Card>
-      )}
-
       <div>
-        <h2 className="mb-2 text-sm font-semibold">Evidência original</h2>
-        <EvidenceViewer evidences={event.evidence} />
-      </div>
-
-      <div>
-        <h2 className="mb-2 text-sm font-semibold">Confronto com outras fontes</h2>
-        <CrossReferenceList crossReferences={event.crossReferences} />
-      </div>
-
-      <div id="responder-ao-acc">
-        <EventNotesSection projectId={projectId} eventId={event.id} canReview={canReview} />
-      </div>
-
-      <div>
-        <h2 className="mb-2 text-sm font-semibold">Confrontação contratual — Revisão humana</h2>
+        <h2 className="mb-1 text-sm font-semibold">Confronto contratual</h2>
+        <p className="mb-3 text-xs text-muted-foreground">
+          Candidatos gerados por análise automatizada, cruzando este evento com cláusulas do contrato — cada relação
+          exige revisão humana antes de virar confronto definitivo.
+        </p>
 
         {confrontationCandidates.length === 0 ? (
-          <EmptyState message="Nenhum candidato de confronto Evento x Cláusula para este evento." />
+          <EmptyState message="Nenhum confronto Evento x Cláusula identificado para este evento." />
         ) : (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             {confrontationCandidates.map((candidate) => (
               <Card key={candidate.id}>
                 <CardHeader className="gap-2">
@@ -150,15 +123,19 @@ export default async function EventDetailPage({
 
                   <div className="flex flex-wrap items-center gap-1.5">
                     <ConfrontationCandidateStatusBadge status={candidate.status} />
-                    <Badge variant="outline">{findingTypeLabels[candidate.findingType]}</Badge>
                     <SeverityBadge severity={confrontationSeverityToAlertSeverity[candidate.severity]} />
+                    {candidate.categories.map((category) => (
+                      <Badge key={category} variant="outline">
+                        {confrontationCandidateCategoryLabel(category)}
+                      </Badge>
+                    ))}
                   </div>
                 </CardHeader>
 
-                <CardContent className="flex flex-col gap-4">
+                <CardContent className="flex flex-col gap-3">
                   <p className="text-sm">{candidate.summary}</p>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2 sm:grid-cols-2">
                     <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
                       <p className="text-xs font-medium uppercase text-muted-foreground">Fundamento do evento</p>
                       <p className="mt-1 text-muted-foreground">{candidate.eventBasis}</p>
@@ -170,9 +147,16 @@ export default async function EventDetailPage({
                     </div>
                   </div>
 
+                  {candidate.requiresHumanReview && (
+                    <div className="flex w-fit items-center gap-1.5 rounded-md border border-severity-media/30 bg-severity-media/5 px-3 py-2 text-xs font-medium text-severity-media">
+                      <ShieldAlert className="size-3.5" aria-hidden="true" />
+                      Requer revisão humana
+                    </div>
+                  )}
+
                   <p className="text-xs text-muted-foreground">
-                    Produzido por análise automatizada ({candidate.analyzer} v{candidate.analyzerVersion}) — exige
-                    revisão humana antes de gerar confronto definitivo.
+                    Produzido por análise automatizada ({candidate.analyzer} v{candidate.analyzerVersion}) — não
+                    substitui decisão da equipe.
                   </p>
 
                   {candidate.status !== "PENDING_REVIEW" ? (
@@ -199,6 +183,37 @@ export default async function EventDetailPage({
             ))}
           </div>
         )}
+      </div>
+
+      {event.aiAssessment && (
+        <Card className="border-severity-alta/30 bg-severity-alta/5">
+          <CardHeader className="flex-row items-center gap-2 space-y-0">
+            <ShieldAlert className="size-4 text-severity-alta" />
+            <CardTitle>Achado da IA — {findingTypeLabels[event.aiAssessment.findingType]}</CardTitle>
+            <SeverityBadge severity={event.aiAssessment.severity} />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 pt-0">
+            <p className="text-sm">{event.aiAssessment.summary}</p>
+            <p className="text-xs text-muted-foreground">
+              Confiança estimada: {Math.round(event.aiAssessment.confidence * 100)}% — sugestão sujeita a revisão humana, não substitui decisão da equipe.
+            </p>
+            {canReview && <SendContractAlertForm projectId={projectId} eventId={event.id} />}
+          </CardContent>
+        </Card>
+      )}
+
+      <div>
+        <h2 className="mb-2 text-sm font-semibold">Evidência original</h2>
+        <EvidenceViewer evidences={event.evidence} />
+      </div>
+
+      <div>
+        <h2 className="mb-2 text-sm font-semibold">Confronto com outras fontes</h2>
+        <CrossReferenceList crossReferences={event.crossReferences} />
+      </div>
+
+      <div id="responder-ao-acc">
+        <EventNotesSection projectId={projectId} eventId={event.id} canReview={canReview} />
       </div>
 
       <ExpertQueryPanel projectId={projectId} eventId={event.id} scope="EVENT" />

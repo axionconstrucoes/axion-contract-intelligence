@@ -17,6 +17,8 @@ export type EventClauseConfrontationCandidate = {
   summary: string;
   eventBasis: string;
   clauseBasis: string;
+  categories: string[];
+  requiresHumanReview: boolean;
   reviewedByUserId: string | null;
   reviewedAt: string | null;
   reviewNote: string | null;
@@ -39,6 +41,7 @@ type CandidateRow = {
   summary: string;
   event_basis: string;
   clause_basis: string;
+  requires_human_review: boolean;
   reviewed_by_user_id: string | null;
   reviewed_at: string | null;
   review_note: string | null;
@@ -58,6 +61,26 @@ const statusOrder: Record<ConfrontationCandidateStatus, number> = {
   REJECTED: 2,
 };
 
+// O analisador (scripts/event-clause-confrontation-analyzer.mjs) calcula as
+// categorias temáticas do confronto, mas não existe coluna dedicada para
+// elas — hoje ficam embutidas na frase de `summary` gravada pelo RPC
+// register_event_clause_confrontation_candidate. Extraímos aqui em vez de
+// alterar o schema, já que o dado é reconstruível sem perda a partir do que
+// já está persistido. Se o formato da frase mudar, o candidato apenas fica
+// sem categorias exibidas (nunca quebra a página).
+const CATEGORY_SUMMARY_PATTERN = /nas categorias ([A-Z_]+(?:,\s*[A-Z_]+)*)\.$/;
+
+function extractCandidateCategories(candidate: CandidateRow): string[] {
+  if (candidate.analyzer !== "event-clause-confrontation") {
+    return [];
+  }
+  const match = candidate.summary.match(CATEGORY_SUMMARY_PATTERN);
+  if (!match) {
+    return [];
+  }
+  return match[1].split(",").map((category) => category.trim());
+}
+
 // Candidatos de confronto Evento x Cláusula vinculados a um evento, com os
 // dados da cláusula já resolvidos para exibição. PENDING_REVIEW aparece
 // primeiro; os demais permanecem visíveis para manter o histórico de revisão.
@@ -69,7 +92,7 @@ export async function getEventClauseConfrontationCandidates(
   const { data: candidateData, error: candidateError } = await supabase
     .from("event_clause_confrontation_candidates")
     .select(
-      "id,event_id,clause_id,analyzer,analyzer_version,status,finding_type,severity,confidence,summary,event_basis,clause_basis,reviewed_by_user_id,reviewed_at,review_note,created_at"
+      "id,event_id,clause_id,analyzer,analyzer_version,status,finding_type,severity,confidence,summary,event_basis,clause_basis,requires_human_review,reviewed_by_user_id,reviewed_at,review_note,created_at"
     )
     .eq("event_id", eventId);
 
@@ -123,6 +146,8 @@ export async function getEventClauseConfrontationCandidates(
         summary: candidate.summary,
         eventBasis: candidate.event_basis,
         clauseBasis: candidate.clause_basis,
+        categories: extractCandidateCategories(candidate),
+        requiresHumanReview: candidate.requires_human_review,
         reviewedByUserId: candidate.reviewed_by_user_id,
         reviewedAt: candidate.reviewed_at,
         reviewNote: candidate.review_note,
