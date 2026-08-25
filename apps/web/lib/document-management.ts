@@ -32,6 +32,16 @@ export type ManagedDocumentVersion = {
   // apoio, nunca substitui o original. Mesmo padrão de
   // AiAssessment.requiresHumanReview.
   originalIsAuthoritative: true;
+  // SHA-256 do conteúdo do arquivo (migration 20260825130000) — null
+  // para versões enviadas antes desta migration, pelo upload
+  // individual sem hash, ou por qualquer fluxo futuro que não o
+  // informe. Usado só para deduplicação client-side no upload
+  // múltiplo, nunca como identificador de segurança por si só.
+  sha256Hash: string | null;
+  // true quando este documento exige revisão humana antes de ser
+  // considerado confiável (hoje: só Ata de Reunião, calculado no
+  // servidor a partir do kind — nunca aceito do cliente).
+  requiresHumanReview: boolean;
 };
 
 export type ManagedDocument = {
@@ -72,6 +82,8 @@ type VersionRow = {
   source_language: string | null;
   translation_language: string | null;
   translation_status: string;
+  sha256_hash: string | null;
+  requires_human_review: boolean;
 };
 
 export async function getManagedDocuments(
@@ -147,6 +159,8 @@ export async function getManagedDocuments(
       translationLanguage: version.translation_language,
       translationStatus: version.translation_status as TranslationStatus,
       originalIsAuthoritative: true,
+      sha256Hash: version.sha256_hash,
+      requiresHumanReview: version.requires_human_review,
     });
 
     versionsByDocument.set(

@@ -114,7 +114,18 @@ export type DocumentKind =
   | "CRONOGRAMA_REVISAO"
   | "RELATORIO_SEMANAL"
   | "PROPOSTA_AXION"
-  | "CLARIFICACAO_CLIENTE";
+  | "CLARIFICACAO_CLIENTE"
+  // Adicionados para o upload múltiplo (migration 20260825130000) —
+  // aditivo, nenhum valor acima foi removido/renomeado.
+  | "ATA_REUNIAO"
+  | "PROPOSTA_COMERCIAL"
+  | "PROPOSTA_TECNICA"
+  | "PLANILHA_CONTRATUAL"
+  | "RELATORIO"
+  | "NOTIFICACAO"
+  | "ESG_SSMA"
+  | "DIARIO_OBRA"
+  | "OUTRO";
 
 export interface Document {
   id: string;

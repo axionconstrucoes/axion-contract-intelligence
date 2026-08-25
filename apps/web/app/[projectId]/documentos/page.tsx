@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DocumentDownloadButton } from "@/components/documents/document-download-button";
 import { DocumentUploadForm } from "@/components/documents/document-upload-form";
+import { DocumentMultiUploadPanel } from "@/components/documents/multi-upload/document-multi-upload-panel";
 import { EmailAttachmentsPanel } from "@/components/documents/email-attachments-panel";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -91,8 +92,13 @@ export default async function DocumentosPage({
     getEmailAttachmentRegistryForProject(projectId),
   ]);
 
+  // Decisão de negócio (não a hierarquia global de
+  // has_project_permission): ADMINISTRADOR e GESTOR podem enviar
+  // documentos. Isto é só UX — a proteção definitiva é sempre a RPC
+  // (register_project_document_upload / promote_email_attachment_to_document),
+  // que revalida via can_manage_project_documents no servidor.
   const canUpload =
-    permission === "ADMINISTRADOR";
+    permission === "ADMINISTRADOR" || permission === "GESTOR";
 
   return (
     <div className="flex flex-col gap-6">
@@ -137,14 +143,27 @@ export default async function DocumentosPage({
             <Card>
               <CardHeader>
                 <CardTitle>
-                  Adicionar documento
+                  Adicionar documentos
                 </CardTitle>
               </CardHeader>
 
-              <CardContent>
-                <DocumentUploadForm
+              <CardContent className="flex flex-col gap-4">
+                <DocumentMultiUploadPanel
                   projectId={projectId}
+                  documents={documents}
                 />
+
+                <details className="rounded-md border p-4">
+                  <summary className="cursor-pointer text-sm font-medium">
+                    Upload individual (avançado)
+                  </summary>
+
+                  <div className="pt-4">
+                    <DocumentUploadForm
+                      projectId={projectId}
+                    />
+                  </div>
+                </details>
               </CardContent>
             </Card>
           ) : (
@@ -238,7 +257,21 @@ export default async function DocumentosPage({
                                       ] ?? version.sourceLanguage}
                                     </Badge>
                                   ) : null}
+
+                                  {version.requiresHumanReview ? (
+                                    <Badge variant="secondary">
+                                      Revisão humana necessária
+                                    </Badge>
+                                  ) : null}
                                 </div>
+
+                                {version.requiresHumanReview ? (
+                                  <span className="text-xs text-muted-foreground">
+                                    Extração de participantes, decisões,
+                                    responsáveis, prazos e pendências ainda
+                                    não está implementada nesta etapa.
+                                  </span>
+                                ) : null}
 
                                 <span className="text-muted-foreground">
                                   {formatDate(
