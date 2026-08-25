@@ -535,7 +535,7 @@ begin
       action, entity_type, entity_id, detail
     )
     values (
-      new.project_id, 'SYSTEM', null, null,
+      new.project_id, 'SYSTEM', null, 'sla-engine',
       'ACTION_OVERDUE', 'SLA_ACTION', new.id::text,
       format('Ação "%s" marcada como vencida.', new.title)
     );
@@ -661,7 +661,7 @@ begin
     action, entity_type, entity_id, detail
   )
   values (
-    v_action.project_id, 'SYSTEM', null, null,
+    v_action.project_id, 'SYSTEM', null, 'sla-engine',
     'ACTION_ESCALATED', 'SLA_ACTION', p_action_id::text,
     format('Ação "%s" escalada de %s para %s (motivo: %s).', v_action.title, p_expected_current_level, p_new_level, p_reason)
   );
