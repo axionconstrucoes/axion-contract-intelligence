@@ -17,15 +17,16 @@ import type { EmailAccountStatus } from "@/lib/email/inbound/ingestion-controls/
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { cn } from "@/lib/utils";
 
-// ALTA/CRÍTICA usam caixa sólida + fonte branca + bold (forte contraste
-// proposital, distinto de BAIXA/MÉDIA) — mesmo token de cor já usado em
-// toda a base (--severity-alta/--severity-critica), só a opacidade/peso
-// mudam. Único componente compartilhado de severidade do ACC — nunca
-// duplicar esta paleta em Dashboard/Timeline/Event Ledger/Ações/ESG/
-// Experts IA/Adicionais.
+// MÉDIA/ALTA/CRÍTICA usam caixa sólida + fonte branca + bold (forte
+// contraste, nunca âmbar/amarelo/laranja-claro para MÉDIA — ver token
+// dedicado --risk-media em globals.css, separado de --severity-media,
+// que continua âmbar só para estados não relacionados a risco). Único
+// componente compartilhado de severidade do ACC — nunca duplicar esta
+// paleta em Dashboard/Timeline/Event Ledger/Ações/ESG/Experts IA/
+// Adicionais/Análise Contratual.
 const severityClasses: Record<AlertSeverity, string> = {
   BAIXA: "border-transparent bg-severity-baixa/15 text-severity-baixa",
-  MEDIA: "border-transparent bg-severity-media/15 text-severity-media",
+  MEDIA: "border-transparent bg-risk-media text-white font-bold",
   ALTA: "border-transparent bg-severity-alta text-white font-bold",
   CRITICA: "border-transparent bg-severity-critica text-white font-bold",
 };

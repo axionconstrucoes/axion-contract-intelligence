@@ -124,10 +124,16 @@ check("risco CRÍTICO usa caixa sólida vermelha + fonte branca + bold no compon
   assert(/CRITICA:\s*"[^"]*bg-severity-critica\s+text-white\s+font-bold[^"]*"/.test(source), "CRITICA deveria usar bg-severity-critica sólido + text-white + font-bold");
 });
 
-check("BAIXO/MÉDIO permanecem no padrão visual existente (translúcido, sem forçar branco/bold)", () => {
+check("BAIXO permanece no padrão visual existente (translúcido, sem forçar branco/bold)", () => {
   const source = readSource("apps/web/components/shared/badges.tsx");
   assert(/BAIXA:\s*"[^"]*bg-severity-baixa\/15[^"]*"/.test(source));
-  assert(/MEDIA:\s*"[^"]*bg-severity-media\/15[^"]*"/.test(source));
+});
+
+check("risco MÉDIO usa caixa sólida AZUL + fonte branca + bold no componente compartilhado (nunca âmbar/amarelo/laranja-claro)", () => {
+  const source = readSource("apps/web/components/shared/badges.tsx");
+  assert(/MEDIA:\s*"[^"]*bg-risk-media\s+text-white\s+font-bold[^"]*"/.test(source), "MEDIA deveria usar bg-risk-media sólido + text-white + font-bold");
+  const mediaLine = source.match(/MEDIA:\s*"[^"]*"/)?.[0] ?? "";
+  assert(!/severity-media|amber|yellow|orange/.test(mediaLine), `badge MÉDIO não pode referenciar âmbar/amarelo/laranja: "${mediaLine}"`);
 });
 
 // --- Governança estrutural: IA nunca escreve em propostas ---

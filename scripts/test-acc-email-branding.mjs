@@ -135,13 +135,15 @@ check("CRÍTICO usa fundo vermelho, texto branco e forte destaque", () => {
   assert(html.includes("color:#ffffff"), "texto branco ausente no badge crítico");
 });
 
-check("BAIXO usa fundo verde, MÉDIO usa fundo amarelo/âmbar, ALTO usa fundo laranja", () => {
+check("BAIXO usa fundo verde, MÉDIO usa fundo AZUL (nunca âmbar/amarelo/laranja), ALTO usa fundo laranja", () => {
   const low = buildContractAlertEmail({ ...baseAlertInput, severity: "BAIXA" }).html;
   const medium = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" }).html;
   const high = buildContractAlertEmail({ ...baseAlertInput, severity: "ALTA" }).html;
   assert(low.includes("#16a34a") && low.includes("RISCO BAIXO"), "badge BAIXO incorreto");
-  assert(medium.includes("#f59e0b") && medium.includes("RISCO MÉDIO"), "badge MÉDIO incorreto");
-  assert(high.includes("#f97316") && high.includes("RISCO ALTO"), "badge ALTO incorreto");
+  assert(medium.includes("#2563eb") && medium.includes("RISCO MÉDIO"), "badge MÉDIO incorreto");
+  assert(medium.includes("color:#ffffff"), "texto branco ausente no badge MÉDIO");
+  assert(!/#f59e0b|#eab308|#fbbf24|#f97316/.test(medium), "badge MÉDIO não pode usar âmbar/amarelo/laranja");
+  assert(high.includes("#f97316") && high.includes("RISCO ALTO"), "badge ALTO incorreto — deveria continuar laranja, não afetado pela mudança do MÉDIO");
 });
 
 check("corpo principal do e-mail é sempre preto (#000000), nunca parágrafo inteiro colorido", () => {

@@ -9,19 +9,7 @@
 // tanto pelo bundler do Next.js quanto por um script Node standalone.
 
 import type { AlertSeverity } from "@axion/types";
-import { alertRiskLevelLabels, buildContractAlertSubject } from "./contract-alert-template";
-
-interface BadgeStyle {
-  background: string;
-  color: string;
-}
-
-const BADGE_STYLES: Record<AlertSeverity, BadgeStyle> = {
-  BAIXA: { background: "#16a34a", color: "#ffffff" },
-  MEDIA: { background: "#f59e0b", color: "#1a1200" },
-  ALTA: { background: "#f97316", color: "#ffffff" },
-  CRITICA: { background: "#dc2626", color: "#ffffff" },
-};
+import { alertRiskLevelLabels, buildContractAlertSubject, BADGE_STYLES } from "./contract-alert-template";
 
 export interface SlaEscalationEmailInput {
   recipientName: string | null;

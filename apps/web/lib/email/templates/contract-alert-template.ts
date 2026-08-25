@@ -25,11 +25,13 @@ interface BadgeStyle {
   color: string;
 }
 
-// BAIXO: verde · MÉDIO: amarelo/âmbar · ALTO: laranja · CRÍTICO: vermelho
-// com texto branco e destaque forte — exatamente como especificado.
-const BADGE_STYLES: Record<AlertSeverity, BadgeStyle> = {
+// BAIXO: verde · MÉDIO: azul (nunca âmbar/amarelo/laranja-claro) ·
+// ALTO: laranja · CRÍTICO: vermelho — todos com texto branco e destaque
+// forte, exatamente como especificado. Exportado para ser reaproveitado
+// por sla-escalation-template.ts — nunca duplicado.
+export const BADGE_STYLES: Record<AlertSeverity, BadgeStyle> = {
   BAIXA: { background: "#16a34a", color: "#ffffff" },
-  MEDIA: { background: "#f59e0b", color: "#1a1200" },
+  MEDIA: { background: "#2563eb", color: "#ffffff" },
   ALTA: { background: "#f97316", color: "#ffffff" },
   CRITICA: { background: "#dc2626", color: "#ffffff" },
 };

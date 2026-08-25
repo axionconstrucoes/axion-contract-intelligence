@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import type { AlertSeverity } from "@axion/types";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { SeverityBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,18 +21,6 @@ import {
 import {
   reviewContractCandidateAction,
 } from "./actions";
-
-const priorityClasses:
-  Record<string, string> = {
-  CRITICA:
-    "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
-  ALTA:
-    "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:text-orange-300",
-  MEDIA:
-    "border-yellow-500/40 bg-yellow-500/10 text-yellow-700 dark:text-yellow-300",
-  BAIXA:
-    "border-border bg-muted text-muted-foreground",
-};
 
 export const metadata: Metadata = { title: "Análise Contratual" };
 
@@ -126,16 +116,9 @@ export default async function ContractReviewPage({
                       </p>
                     </div>
 
-                    <span
-                      className={`rounded-md border px-2 py-1 text-xs font-semibold ${
-                        priorityClasses[
-                          candidate.priority
-                        ] ??
-                        priorityClasses.BAIXA
-                      }`}
-                    >
-                      {candidate.priority}
-                    </span>
+                    <SeverityBadge
+                      severity={candidate.priority as AlertSeverity}
+                    />
                   </div>
 
                   <div className="flex flex-wrap gap-2">

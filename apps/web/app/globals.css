@@ -29,6 +29,14 @@
   --severity-alta: oklch(0.68 0.19 45);
   --severity-critica: oklch(0.58 0.22 25);
 
+  /* Cor de risco MÉDIO (seção "Atualização global — cor do risco
+     médio"): token dedicado, separado de --severity-media. Nunca reusar
+     --severity-media aqui — ela continua âmbar e é compartilhada por
+     estados que não são risco (EM_ANALISE, PENDENTE, PENDING_REVIEW,
+     UNDER_ANALYSIS, anexo pending, AUTH_EXPIRED); mudar seu valor
+     mudaria a cor desses estados não relacionados a risco também. */
+  --risk-media: oklch(0.55 0.22 260);
+
   /* Identidade institucional AXION (sidebar azul / header vermelho) —
      deliberadamente FIXA (não redefinida em .dark): é a marca do produto,
      não um token de tema claro/escuro. */
@@ -90,6 +98,7 @@
   --color-severity-media: var(--severity-media);
   --color-severity-alta: var(--severity-alta);
   --color-severity-critica: var(--severity-critica);
+  --color-risk-media: var(--risk-media);
 
   --color-brand-sidebar: var(--brand-sidebar);
   --color-brand-sidebar-active: var(--brand-sidebar-active);
