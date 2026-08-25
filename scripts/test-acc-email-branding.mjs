@@ -254,13 +254,26 @@ check("base64UrlEncode nunca produz caracteres não-seguros para URL (+, /, =)",
 await checkAsync("FakeEmailProvider aceita html sem exigir rede e nunca envia mensagem real", async () => {
   const provider = new FakeEmailProvider();
   const { html } = buildContractAlertEmail({ ...baseAlertInput, severity: "CRITICA" });
-  const result = await provider.send({
-    to: "destinatario-de-teste@exemplo.com",
-    subject: "ACC - ALERTAS DO CONTRATO - OBRA TESTE - RISCO CRÍTICO",
-    text: "texto",
-    html,
-    correlationId: "fake-corr-1",
-  });
+  // Este teste é sobre aceitação de HTML/branding pelo provider, não
+  // sobre a trava do piloto (que tem cobertura dedicada em
+  // scripts/test-pilot-outbound-guard.mjs) — força modo produção via
+  // env override explícito para não depender de ACC_PILOT_RECIPIENT
+  // estar configurado neste ambiente. Restaurado logo em seguida para
+  // nunca vazar para outros checks deste arquivo.
+  const previousOutboundMode = process.env.ACC_OUTBOUND_MODE;
+  process.env.ACC_OUTBOUND_MODE = "production";
+  let result;
+  try {
+    result = await provider.send({
+      to: "destinatario-de-teste@exemplo.com",
+      subject: "ACC - ALERTAS DO CONTRATO - OBRA TESTE - RISCO CRÍTICO",
+      text: "texto",
+      html,
+      correlationId: "fake-corr-1",
+    });
+  } finally {
+    process.env.ACC_OUTBOUND_MODE = previousOutboundMode;
+  }
   assert(result.provider === "FAKE");
   assert(result.from === "dev-fake-sender@axion.local");
 });

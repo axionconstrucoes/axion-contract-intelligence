@@ -9,6 +9,7 @@ import {
 } from "./email-provider";
 import { loadGmailConfig, type GmailConfig } from "./gmail-auth";
 import { base64UrlEncode, buildMimeMessage } from "./mime-message";
+import { applyPilotOutboundGuard } from "./pilot-outbound-guard";
 
 export { base64UrlEncode, buildMimeMessage };
 
@@ -24,10 +25,15 @@ export class GmailEmailProvider implements EmailProvider {
   }
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
+    // Obrigatório e incondicional — antes de qualquer credencial, MIME
+    // ou chamada de rede. Nenhuma instanciação direta desta classe
+    // escapa da trava do piloto.
+    const guardedInput = applyPilotOutboundGuard(input);
+
     const senderDomain =
       this.config.senderEmail.split("@")[1] ?? "axion.local";
 
-    const messageIdHeader = `<${input.correlationId}@${senderDomain}>`;
+    const messageIdHeader = `<${guardedInput.correlationId}@${senderDomain}>`;
 
     const oauth2Client = new google.auth.OAuth2(
       this.config.clientId,
@@ -45,7 +51,7 @@ export class GmailEmailProvider implements EmailProvider {
 
     const raw = base64UrlEncode(
       buildMimeMessage(
-        input,
+        guardedInput,
         this.config.senderEmail,
         messageIdHeader
       )

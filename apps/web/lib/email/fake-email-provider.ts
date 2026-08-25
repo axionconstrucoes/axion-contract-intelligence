@@ -4,6 +4,7 @@
 
 import { createHash } from "node:crypto";
 import { EmailSendError, type EmailProvider, type SendEmailInput, type SendEmailResult } from "./email-provider";
+import { applyPilotOutboundGuard } from "./pilot-outbound-guard";
 
 const FAKE_SENDER_ADDRESS = "dev-fake-sender@axion.local";
 
@@ -28,11 +29,19 @@ export class FakeEmailProvider implements EmailProvider {
   }
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
+    // Checado sobre o `input` bruto (nunca o resultado do guard) — a
+    // convenção de falha simulada é sobre a intenção original do
+    // chamador do teste, independente do modo piloto estar ativo.
     if (input.to === FAKE_FORCED_FAILURE_RECIPIENT || this.shouldFail?.(input)) {
       throw new EmailSendError("FakeEmailProvider: falha simulada.");
     }
 
-    const digest = createHash("sha256").update(input.correlationId).digest("hex");
+    // Obrigatório e incondicional para qualquer envio que não seja a
+    // falha simulada acima — mesma trava aplicada em GmailEmailProvider,
+    // para que os testes exerçam exatamente a mesma transformação real.
+    const guardedInput = applyPilotOutboundGuard(input);
+
+    const digest = createHash("sha256").update(guardedInput.correlationId).digest("hex");
 
     return {
       provider: "FAKE",
