@@ -41,7 +41,7 @@ export default async function EventDetailPage({
 
   if (!event) notFound();
 
-  const canReview = permission === "EDITOR" || permission === "ADMIN";
+  const canReview = permission === "ADMINISTRADOR";
 
   let creatorLabel: string;
   if (event.createdByType === "LEGACY") {

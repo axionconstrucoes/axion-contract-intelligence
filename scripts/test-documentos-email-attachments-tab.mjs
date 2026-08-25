@@ -695,8 +695,8 @@ if (!supabaseUrl || !serviceKey) {
 
     const { error: membershipError } = await supabase
       .from("project_memberships")
-      .insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "EDITOR" });
-    if (membershipError) throw new Error(`vincular EDITOR: ${membershipError.message}`);
+      .insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "ADMINISTRADOR" });
+    if (membershipError) throw new Error(`vincular ADMINISTRADOR: ${membershipError.message}`);
     cleanup.membershipUserIds.push(created.user.id);
 
     const sessionClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });

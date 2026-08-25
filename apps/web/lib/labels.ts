@@ -7,6 +7,8 @@ import type {
   EventStatus,
   ImplicationCategory,
   IntegrationStatus,
+  MembershipArea,
+  MembershipStatus,
   ProjectPermission,
   ScheduleActivityStatus,
   SourceType,
@@ -20,6 +22,7 @@ import type {
   SlaEscalationReason,
   SlaTimeUnit,
 } from "@/lib/sla/types";
+import type { MemberInvitationStatus } from "@/lib/users/invitation-mapper";
 import type {
   AdditionalProposalApprovalStatus,
   AdditionalProposalDocumentalState,
@@ -101,14 +104,37 @@ export const driveTypeLabels: Record<DriveType, string> = {
 };
 
 export const permissionLabels: Record<ProjectPermission, string> = {
-  VIEWER: "Leitor",
-  EDITOR: "Editor",
-  ADMIN: "Administrador",
+  ADMINISTRADOR: "Administrador",
+  GESTOR: "Gestor",
+  COLABORADOR: "Colaborador",
+  LEITURA: "Leitura",
 };
 
 export const originLabels: Record<UserOrigin, string> = {
   AXION_INTERNO: "Axion (Interno)",
   TERCEIRO: "Terceiro",
+};
+
+export const membershipStatusLabels: Record<MembershipStatus, string> = {
+  ACTIVE: "Ativo",
+  INACTIVE: "Inativo",
+};
+
+export const membershipAreaLabels: Record<MembershipArea, string> = {
+  DIRETORIA: "Diretoria",
+  ADMINISTRATIVO: "Administrativo",
+  COMERCIAL: "Comercial",
+  FINANCEIRO: "Financeiro",
+  ENGENHARIA: "Engenharia",
+  ORÇAMENTO: "Orçamento",
+  JURÍDICO: "Jurídico",
+  PLANEJAMENTO: "Planejamento",
+};
+
+export const memberInvitationStatusLabels: Record<MemberInvitationStatus, string> = {
+  PENDING: "Aguardando primeiro login",
+  ACTIVATED: "Ativado",
+  CANCELLED: "Cancelado",
 };
 
 export const scheduleStatusLabels: Record<ScheduleActivityStatus, string> = {

@@ -39,7 +39,7 @@ export default async function IntegracoesPage({
     getEmailAttachmentRegistryForProject(projectId),
   ]);
 
-  const canManage = permission === "ADMIN";
+  const canManage = permission === "ADMINISTRADOR";
   const projectStartDate = (projectStartRow.data as { project_start_date: string | null } | null)?.project_start_date ?? null;
   const consideredCount = attachmentRows.filter((row) => row.consideredByAcc).length;
 

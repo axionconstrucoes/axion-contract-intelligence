@@ -36,8 +36,8 @@ export default async function SlaActionsPage({ params }: { params: Promise<{ pro
   ]);
 
   const currentUserId = authData.user?.id ?? null;
-  const canCreate = permission === "EDITOR" || permission === "ADMIN";
-  const canConfigure = permission === "ADMIN";
+  const canCreate = permission === "ADMINISTRADOR";
+  const canConfigure = permission === "ADMINISTRADOR";
   const isMember = permission !== null;
 
   const escalationsByActionId = new Map<string, typeof escalations>();

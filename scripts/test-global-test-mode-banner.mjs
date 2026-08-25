@@ -104,16 +104,22 @@ check("nenhuma page.tsx renderiza TestModeBanner manualmente (implementação ce
   assert(offenders.length === 0, `page.tsx renderizando TestModeBanner manualmente: ${offenders.join(", ")}`);
 });
 
-// --- Classes visuais essenciais: fundo vermelho, texto branco, sem cantos arredondados ---
+// --- Classes visuais essenciais: faixas diagonais amarelo/preto, texto sobre placa preta, sem cantos arredondados ---
 
 const bannerSource = readSource("apps/web/components/layout/test-mode-banner.tsx");
 
-check("banner: fundo vermelho de alto contraste (bg-red-*)", () => {
-  assert(/bg-red-\d{3}/.test(bannerSource), "classe bg-red-* não encontrada");
+check("banner: fundo com faixas diagonais amarelo/preto via repeating-linear-gradient (nunca cor sólida)", () => {
+  assert(/repeating-linear-gradient\(45deg/.test(bannerSource), "repeating-linear-gradient 45deg não encontrado");
+  assert(/#facc15/i.test(bannerSource), "amarelo (#facc15) não encontrado no gradiente");
+  assert(/#000000/.test(bannerSource), "preto (#000000) não encontrado no gradiente");
 });
 
-check("banner: texto branco e em negrito", () => {
-  assert(bannerSource.includes("text-white"), "classe text-white não encontrada");
+check("banner: texto SISTEMA EM TESTE fica sobre uma placa preta sólida central (proteção de contraste contra as diagonais)", () => {
+  assert(/bg-black/.test(bannerSource), "classe bg-black (placa central) não encontrada");
+});
+
+check("banner: texto branco ou amarelo, em negrito (contraste garantido sobre a placa preta)", () => {
+  assert(/text-white|text-yellow-\d{3}/.test(bannerSource), "texto deveria ser branco ou amarelo");
   assert(bannerSource.includes("font-bold"), "classe font-bold não encontrada");
 });
 

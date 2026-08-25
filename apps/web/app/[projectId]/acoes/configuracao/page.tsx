@@ -26,7 +26,7 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
   const { projectId } = await params;
 
   const permission = await getCurrentProjectPermission(projectId);
-  if (permission !== "ADMIN") {
+  if (permission !== "ADMINISTRADOR") {
     notFound();
   }
 

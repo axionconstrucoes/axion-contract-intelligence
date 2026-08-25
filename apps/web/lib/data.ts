@@ -55,6 +55,7 @@ import {
   type MembershipWithProfileRow,
   type UserRow,
 } from "./user-mapper";
+import { mapProjectMemberInvitationRow, type ProjectMemberInvitationRow } from "./users/invitation-mapper";
 
 const PROJECT_COLUMNS =
   "id, code, name, client, status, location, contract_number, start_date, baseline_end_date";
@@ -817,7 +818,7 @@ export async function getProjectMembers(projectId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("project_memberships")
-    .select(`project_id, user_id, permission, profiles(${PROFILE_COLUMNS})`)
+    .select(`project_id, user_id, permission, status, area, profiles(${PROFILE_COLUMNS})`)
     .eq("project_id", projectId);
 
   if (error) {
@@ -825,6 +826,31 @@ export async function getProjectMembers(projectId: string) {
   }
 
   return (data as MembershipWithProfileRow[]).map(mapMembershipRow);
+}
+
+// Pré-cadastros pendentes/ativados/cancelados (project_member_invitations,
+// migration 20260825120500 — ainda não aplicada em nenhum ambiente).
+// Nunca deixar a tela de Usuários quebrar por causa disso: 42P01
+// (undefined_table) é tratado como "nenhum pré-cadastro ainda", não um
+// erro — até a migration ser revisada e aplicada.
+export async function getProjectMemberInvitations(projectId: string) {
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("project_member_invitations")
+    .select(
+      "id, project_id, email, name, job_title, area, permission, status, created_by, created_at, activated_at, cancelled_at, profile_id"
+    )
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    if (error.code === "42P01") {
+      return [];
+    }
+    throw error;
+  }
+
+  return (data as ProjectMemberInvitationRow[]).map(mapProjectMemberInvitationRow);
 }
 
 export async function getAuditLog(projectId: string) {

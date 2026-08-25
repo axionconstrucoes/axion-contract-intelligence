@@ -73,10 +73,30 @@ export interface User {
   avatarInitials: string;
 }
 
-export type ProjectPermission = "VIEWER" | "EDITOR" | "ADMIN";
+// 4 papéis reais do ACC (migration 20260824090000 — "Fechamento do
+// módulo Usuários e Permissões"). ADMINISTRADOR = leitura + escrita/
+// administração; GESTOR/COLABORADOR/LEITURA = somente leitura
+// (migration 20260824232516 — enforce_admin_only_write).
+export type ProjectPermission = "ADMINISTRADOR" | "GESTOR" | "COLABORADOR" | "LEITURA";
+
+export type MembershipStatus = "ACTIVE" | "INACTIVE";
+
+// Valores exatos do CHECK constraint de project_memberships.area
+// (migration 20260824090000) — inclui acentos, nunca normalizar.
+export type MembershipArea =
+  | "DIRETORIA"
+  | "ADMINISTRATIVO"
+  | "COMERCIAL"
+  | "FINANCEIRO"
+  | "ENGENHARIA"
+  | "ORÇAMENTO"
+  | "JURÍDICO"
+  | "PLANEJAMENTO";
 
 export interface ProjectMembership {
   userId: string;
+  status: MembershipStatus;
+  area: MembershipArea | null;
   projectId: string;
   permission: ProjectPermission;
 }

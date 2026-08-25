@@ -184,7 +184,7 @@ export async function getContractReviewCandidates(
 export async function getCurrentProjectPermission(
   projectId: string
 ): Promise<
-  "VIEWER" | "EDITOR" | "ADMIN" | null
+  "ADMINISTRADOR" | "GESTOR" | "COLABORADOR" | "LEITURA" | null
 > {
   const supabase =
     await createSupabaseServerClient();
@@ -201,6 +201,9 @@ export async function getCurrentProjectPermission(
     return null;
   }
 
+  // status=ACTIVE é exigido aqui (não só no banco): uma membership
+  // desativada nunca deve conceder permissão nenhuma no app, mesmo que
+  // a linha ainda exista para preservar histórico.
   const {
     data,
     error,
@@ -209,6 +212,7 @@ export async function getCurrentProjectPermission(
     .select("permission")
     .eq("project_id", projectId)
     .eq("user_id", user.id)
+    .eq("status", "ACTIVE")
     .maybeSingle();
 
   if (error) {
@@ -219,9 +223,10 @@ export async function getCurrentProjectPermission(
 
   return (
     data?.permission as
-      | "VIEWER"
-      | "EDITOR"
-      | "ADMIN"
+      | "ADMINISTRADOR"
+      | "GESTOR"
+      | "COLABORADOR"
+      | "LEITURA"
       | undefined
   ) ?? null;
 }

@@ -70,9 +70,9 @@ export async function sendContractAlertEmail(
   }
 
   const permission = await getCurrentProjectPermission(input.projectId);
-  if (permission !== "EDITOR" && permission !== "ADMIN") {
+  if (permission !== "ADMINISTRADOR") {
     throw new NotAuthorizedError(
-      "Envio de alerta por e-mail exige permissão EDITOR ou ADMIN no projeto."
+      "Envio de alerta por e-mail exige permissão ADMINISTRADOR no projeto."
     );
   }
 

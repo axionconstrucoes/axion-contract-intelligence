@@ -37,13 +37,19 @@
      mudaria a cor desses estados não relacionados a risco também. */
   --risk-media: oklch(0.55 0.22 260);
 
-  /* Identidade institucional AXION (sidebar azul / header vermelho) —
-     deliberadamente FIXA (não redefinida em .dark): é a marca do produto,
-     não um token de tema claro/escuro. */
-  --brand-sidebar: oklch(0.32 0.1 258);
-  --brand-sidebar-active: oklch(0.4 0.1 258);
+  /* Identidade institucional AXION — deliberadamente FIXA (não
+     redefinida em .dark): é a marca do produto, não um token de tema
+     claro/escuro. --brand-sidebar é exatamente o vermelho do fundo do
+     logo ACC (#7f1d1d, public/branding/acc-icon.svg e acc-logo.svg) —
+     nunca um vermelho aproximado. --brand-header deixou de ser o fundo
+     do cabeçalho (agora branco, ver top-bar.tsx) e passa a ser só o
+     vermelho institucional disponível para acentos/título — mesmo tom
+     exato de --brand-sidebar, para nunca haver dois vermelhos
+     institucionais diferentes na mesma UI. */
+  --brand-sidebar: oklch(0.396 0.141 25.723);
+  --brand-sidebar-active: oklch(0.444 0.177 26.899);
   --brand-sidebar-foreground: oklch(0.985 0 0);
-  --brand-header: oklch(0.4 0.18 26);
+  --brand-header: oklch(0.396 0.141 25.723);
   --brand-header-foreground: oklch(0.985 0 0);
 }
 

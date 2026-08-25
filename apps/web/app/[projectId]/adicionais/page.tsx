@@ -22,7 +22,7 @@ export default async function AdditionalProposalsPage({ params }: { params: Prom
     getCurrentProjectPermission(projectId),
   ]);
 
-  const canCreate = permission === "EDITOR" || permission === "ADMIN";
+  const canCreate = permission === "ADMINISTRADOR";
 
   return (
     <div className="flex flex-col gap-6">

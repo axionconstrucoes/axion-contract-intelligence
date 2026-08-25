@@ -48,8 +48,7 @@ export default async function ContractReviewPage({
   ]);
 
   const canReview =
-    permission === "EDITOR" ||
-    permission === "ADMIN";
+    permission === "ADMINISTRADOR";
 
   return (
     <div className="flex flex-col gap-6">

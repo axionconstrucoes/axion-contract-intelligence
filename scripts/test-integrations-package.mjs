@@ -388,7 +388,7 @@ if (!supabaseUrl || !serviceKey) {
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const cleanup = { accountIds: [], authUserIds: [] };
 
-  async function createAdminSession(emailPrefix, permission = "ADMIN") {
+  async function createAdminSession(emailPrefix, permission = "ADMINISTRADOR") {
     const email = `${emailPrefix}-${Date.now()}@example.com`;
     const password = `Teste-${randomUUID()}`;
     const { data: created, error } = await supabase.auth.admin.createUser({ email, password, email_confirm: true });
@@ -588,7 +588,7 @@ if (!supabaseUrl || !serviceKey) {
   });
 
   await checkAsync("save_integration_origin: usuário sem ADMIN é rejeitado", async () => {
-    const { userId, sessionClient } = await createAdminSession("teste-integ-origin-noperm", "VIEWER");
+    const { userId, sessionClient } = await createAdminSession("teste-integ-origin-noperm", "LEITURA");
     const { error } = await sessionClient.rpc("save_integration_origin", {
       p_project_id: REFERENCE_PROJECT_ID,
       p_source_type: "CONSTRUMANAGER",

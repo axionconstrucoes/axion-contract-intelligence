@@ -92,8 +92,7 @@ export default async function DocumentosPage({
   ]);
 
   const canUpload =
-    permission === "EDITOR" ||
-    permission === "ADMIN";
+    permission === "ADMINISTRADOR";
 
   return (
     <div className="flex flex-col gap-6">

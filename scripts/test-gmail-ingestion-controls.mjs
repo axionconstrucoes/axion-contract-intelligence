@@ -311,7 +311,7 @@ if (!supabaseUrl || !serviceKey) {
     const { data: created, error: createError } = await supabase.auth.admin.createUser({ email, password, email_confirm: true });
     if (createError) throw new Error(createError.message);
     cleanup.authUserIds.push(created.user.id);
-    await supabase.from("project_memberships").insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "ADMIN" });
+    await supabase.from("project_memberships").insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "ADMINISTRADOR" });
 
     const sessionClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
     await sessionClient.auth.signInWithPassword({ email, password });
@@ -352,7 +352,7 @@ if (!supabaseUrl || !serviceKey) {
     const { data: created, error: createError } = await supabase.auth.admin.createUser({ email, password, email_confirm: true });
     if (createError) throw new Error(createError.message);
     cleanup.authUserIds.push(created.user.id);
-    await supabase.from("project_memberships").insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "ADMIN" });
+    await supabase.from("project_memberships").insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "ADMINISTRADOR" });
 
     const sessionClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
     await sessionClient.auth.signInWithPassword({ email, password });
@@ -418,7 +418,7 @@ if (!supabaseUrl || !serviceKey) {
       const password = `Teste-${randomUUID()}`;
       const { data: created } = await supabase.auth.admin.createUser({ email, password, email_confirm: true });
       cleanup.authUserIds.push(created.user.id);
-      await supabase.from("project_memberships").insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "ADMIN" });
+      await supabase.from("project_memberships").insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "ADMINISTRADOR" });
 
       const accountAddress = `conta-config-${Date.now()}@axion.com.br`;
       const { data: accountId } = await supabase
@@ -512,7 +512,7 @@ if (!supabaseUrl || !serviceKey) {
     const password = `Teste-${randomUUID()}`;
     const { data: created } = await supabase.auth.admin.createUser({ email, password, email_confirm: true });
     cleanup.authUserIds.push(created.user.id);
-    await supabase.from("project_memberships").insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "VIEWER" });
+    await supabase.from("project_memberships").insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "LEITURA" });
 
     const sessionClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
     await sessionClient.auth.signInWithPassword({ email, password });
@@ -543,7 +543,7 @@ if (!supabaseUrl || !serviceKey) {
       const password = `Teste-${randomUUID()}`;
       const { data: created } = await supabase.auth.admin.createUser({ email, password, email_confirm: true });
       cleanup.authUserIds.push(created.user.id);
-      await supabase.from("project_memberships").insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "ADMIN" });
+      await supabase.from("project_memberships").insert({ project_id: REFERENCE_PROJECT_ID, user_id: created.user.id, permission: "ADMINISTRADOR" });
 
       const sessionClient = createClient(supabaseUrl, anonKey, { auth: { persistSession: false, autoRefreshToken: false } });
       await sessionClient.auth.signInWithPassword({ email, password });
@@ -588,7 +588,7 @@ if (!supabaseUrl || !serviceKey) {
         config_id: existingConfig.id,
         project_id: REFERENCE_PROJECT_ID,
         status: "PREPARING",
-        started_by_user_id: (await supabase.from("project_memberships").select("user_id").eq("project_id", REFERENCE_PROJECT_ID).eq("permission", "ADMIN").limit(1).single()).data.user_id,
+        started_by_user_id: (await supabase.from("project_memberships").select("user_id").eq("project_id", REFERENCE_PROJECT_ID).eq("permission", "ADMINISTRADOR").limit(1).single()).data.user_id,
       })
       .select("id")
       .single();

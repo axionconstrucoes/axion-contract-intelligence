@@ -44,9 +44,9 @@ export default async function EsgObligationsPage({ params }: { params: Promise<{
     getClauses(projectId),
   ]);
 
-  const canFill = permission === "EDITOR" || permission === "ADMIN";
-  const canConfigure = permission === "EDITOR" || permission === "ADMIN";
-  const canReview = permission === "ADMIN";
+  const canFill = permission === "ADMINISTRADOR";
+  const canConfigure = permission === "ADMINISTRADOR";
+  const canReview = permission === "ADMINISTRADOR";
 
   const submissionsByObligationId = new Map<string, EsgObligationSubmission[]>();
   for (const submission of submissions) {

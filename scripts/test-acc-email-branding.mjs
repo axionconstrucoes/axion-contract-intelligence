@@ -443,7 +443,7 @@ check("assinatura pessoal do Google Workspace nunca é tocada (nenhum código no
 check("auditoria/revisão humana dos 3 fluxos de envio reais permanecem intactas (nenhuma linha de audit/autorização removida)", () => {
   const contractAlertSource = readSource("apps/web/lib/email/send-contract-alert-email.ts");
   assert(contractAlertSource.includes("CONTRACT_ALERT_EMAIL_SENT"));
-  assert(contractAlertSource.includes('permission !== "EDITOR" && permission !== "ADMIN"'));
+  assert(contractAlertSource.includes('permission !== "ADMINISTRADOR"'));
 
   const slaSource = readSource("apps/web/lib/email/send-sla-escalation-email.ts");
   assert(slaSource.includes("ACTION_ESCALATED"));

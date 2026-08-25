@@ -10,12 +10,12 @@ export const users: User[] = [
 ];
 
 export const projectMemberships: ProjectMembership[] = [
-  { userId: "usr-ana", projectId: DEV_PROJECT_ID, permission: "ADMIN" },
-  { userId: "usr-fernanda", projectId: DEV_PROJECT_ID, permission: "EDITOR" },
-  { userId: "usr-joao", projectId: DEV_PROJECT_ID, permission: "EDITOR" },
-  { userId: "usr-roberto", projectId: DEV_PROJECT_ID, permission: "VIEWER" },
+  { userId: "usr-ana", projectId: DEV_PROJECT_ID, permission: "ADMINISTRADOR", status: "ACTIVE", area: "DIRETORIA" },
+  { userId: "usr-fernanda", projectId: DEV_PROJECT_ID, permission: "GESTOR", status: "ACTIVE", area: "ADMINISTRATIVO" },
+  { userId: "usr-joao", projectId: DEV_PROJECT_ID, permission: "GESTOR", status: "ACTIVE", area: "ENGENHARIA" },
+  { userId: "usr-roberto", projectId: DEV_PROJECT_ID, permission: "LEITURA", status: "ACTIVE", area: null },
 
-  { userId: "usr-ana", projectId: "prj-industrial", permission: "ADMIN" },
-  { userId: "usr-fernanda", projectId: "prj-industrial", permission: "EDITOR" },
-  { userId: "usr-patricia", projectId: "prj-industrial", permission: "VIEWER" },
+  { userId: "usr-ana", projectId: "prj-industrial", permission: "ADMINISTRADOR", status: "ACTIVE", area: "DIRETORIA" },
+  { userId: "usr-fernanda", projectId: "prj-industrial", permission: "GESTOR", status: "ACTIVE", area: "ADMINISTRATIVO" },
+  { userId: "usr-patricia", projectId: "prj-industrial", permission: "LEITURA", status: "ACTIVE", area: null },
 ];
