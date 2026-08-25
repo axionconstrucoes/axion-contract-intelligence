@@ -52,9 +52,9 @@ const ICONS_BY_NAME: Record<string, LucideIcon> = {
 const NAV_GROUPS: Array<{ label: string; hrefs: string[] }> = [
   { label: "Visão geral", hrefs: ["startup", "dashboard", "timeline", "ledger"] },
   { label: "Gestão", hrefs: ["action-requests", "acoes", "adicionais"] },
-  { label: "Contratual", hrefs: ["revisao-contratual", "revisao-clausulas", "documentos"] },
+  { label: "Contratual", hrefs: ["revisao-contratual", "revisao-clausulas", "recebidos-cliente", "documentos"] },
+  { label: "Administração", hrefs: ["usuarios", "integracoes", "auditoria"] },
   { label: "Inteligência", hrefs: ["esg", "experts-ia"] },
-  { label: "Administração", hrefs: ["integracoes", "usuarios", "auditoria"] },
 ];
 
 // Tooltip de navegação (label + o que o item faz) — via portal em

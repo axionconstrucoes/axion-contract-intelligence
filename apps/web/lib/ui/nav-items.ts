@@ -26,10 +26,11 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "adicionais", label: "Propostas de Adicionais", icon: "PackagePlus", helpId: "adicionais" },
   { href: "revisao-contratual", label: "Análise Contratual", icon: "BookText", helpId: "analise-contratual" },
   { href: "revisao-clausulas", label: "Análise de Cláusulas", icon: "BookText", helpId: "analise-clausulas" },
-  { href: "documentos", label: "Documentos", icon: "FileStack", helpId: "documentos" },
+  { href: "recebidos-cliente", label: "Recebidos do cliente", icon: "FileStack", helpId: "recebidos-cliente" },
+  { href: "documentos", label: "Contrato e aditivos", icon: "FileStack", helpId: "documentos" },
+  { href: "usuarios", label: "Usuários", icon: "Users", helpId: "usuarios" },
   { href: "esg", label: "ESG/SSMA", icon: "Leaf", helpId: "esg-ssma" },
   { href: "experts-ia", label: "Experts IA", icon: "Bot", helpId: "experts-ia" },
   { href: "integracoes", label: "Integrações", icon: "Plug", helpId: "integracoes" },
-  { href: "usuarios", label: "Usuários", icon: "Users", helpId: "usuarios" },
   { href: "auditoria", label: "Auditoria", icon: "AlertTriangle", helpId: "auditoria" },
 ];
