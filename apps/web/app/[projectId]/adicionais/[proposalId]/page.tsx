@@ -35,7 +35,7 @@ export default async function AdditionalProposalDetailPage({
   const closingGate = computeClosingGateAssessment(proposal, allProposals);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold">

@@ -14,7 +14,7 @@ export async function EvidenceViewer({ evidences }: { evidences: EvidenceRef[] }
 
       return (
         <Card key={evidence.id ?? `${index}-${evidence.locator}`}>
-          <CardContent className="flex flex-col gap-2 p-4">
+          <CardContent className="flex flex-col gap-1.5 p-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium uppercase text-muted-foreground">
                 Evidência original — {sourceTypeShortLabels[evidence.sourceType]}

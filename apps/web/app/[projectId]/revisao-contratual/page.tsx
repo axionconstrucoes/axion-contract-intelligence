@@ -304,7 +304,7 @@ export default async function ContractReviewPage({
                             defaultValue={
                               candidate.subject
                             }
-                            className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                            className="mt-1 w-full rounded-md border bg-card px-3 py-2 text-sm"
                           />
                         </div>
 
@@ -318,7 +318,7 @@ export default async function ContractReviewPage({
                             required
                             rows={5}
                             placeholder="Descreva o fato contratual confirmado, sua relevância e o entendimento do revisor."
-                            className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                            className="mt-1 w-full rounded-md border bg-card px-3 py-2 text-sm"
                           />
                         </div>
 
@@ -359,7 +359,7 @@ export default async function ContractReviewPage({
                             required
                             rows={5}
                             placeholder="Explique por que este candidato não deve ser tratado como evento contratual."
-                            className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+                            className="mt-1 w-full rounded-md border bg-card px-3 py-2 text-sm"
                           />
                         </div>
 

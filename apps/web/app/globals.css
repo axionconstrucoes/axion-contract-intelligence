@@ -6,13 +6,20 @@
   /* Neutros — grafite frio (leve matiz azulado, alinhado ao azul
      institucional) em vez de cinza puro: base do visual "engenharia de
      precisão" descrito na proposta de redesign. */
-  --background: oklch(0.955 0.005 258);
+  /* Fundo geral cinza médio-claro — #D9DDE2 exato (restaurado; a
+     tentativa intermediária #B8BDC4 foi revertida a pedido do
+     usuário). Único ponto de definição: também usado no cabeçalho
+     (TopBar usa bg-background diretamente, sem token paralelo).
+     Cartões/inputs/tabelas continuam mais claros que isto (ver
+     --card abaixo e bg-card em Input/Textarea/Select/Card). */
+  --background: oklch(0.896 0.008 258);
   --foreground: oklch(0.22 0.014 258);
   /* Caixas/cards com um azul institucional bem claro (não branco puro)
      — pedido explícito do usuário: os "boxes" de informação precisam
      de cor visível, não uma tela toda branca/cinza. Um pouco mais
      escuro/saturado que a primeira versão para aumentar contraste e
-     legibilidade (segundo ajuste, também pedido explícito). */
+     legibilidade (segundo ajuste, também pedido explícito). Sempre
+     mais claro que --background (ver comentário acima). */
   --card: oklch(0.965 0.026 258);
   --card-foreground: oklch(0.22 0.014 258);
   --popover: oklch(0.965 0.026 258);
@@ -22,7 +29,10 @@
   --secondary: oklch(0.93 0.012 258);
   --secondary-foreground: oklch(0.28 0.014 258);
   --muted: oklch(0.93 0.012 258);
-  --muted-foreground: oklch(0.5 0.014 258);
+  /* 0.46 para manter >=4.5:1 (WCAG AA) contra o --background #D9DDE2
+     — texto secundário aparece direto sobre a página (fora de cards)
+     em vários pontos da UI. Recalculado a cada ajuste de --background. */
+  --muted-foreground: oklch(0.46 0.014 258);
   --accent: oklch(0.91 0.035 258);
   --accent-foreground: oklch(0.28 0.08 258);
   --destructive: oklch(0.5 0.19 25);
@@ -41,6 +51,17 @@
   --severity-alta: oklch(0.64 0.18 42);
   --severity-critica: oklch(0.5 0.2 25);
 
+  /* MÉDIO/MEDIUM — azul, hex exato pedido pelo usuário (não a
+     rotação oklch do resto da paleta): usado SÓ pelo badge de
+     severidade "MÉDIO" (SeverityBadge em components/shared/badges.tsx).
+     Distinto de --severity-media acima, que outros badges (status
+     "Em Análise", "Pendente" de integração/confrontação/proposta,
+     "Auth expirada" etc.) continuam reaproveitando para um tom
+     âmbar de "atenção" — não é severidade de risco e não deve virar
+     azul junto. */
+  --severity-media-risk: #2563eb;
+  --severity-media-risk-border: #1d4ed8;
+
   /* Identidade institucional AXION — sidebar na MESMA cor de fundo do
      logo ACC (public/branding/acc-logo.*, #7f1d1d = Tailwind red-900),
      vermelho institucional reservado a acentos no conteúdo claro —
@@ -49,8 +70,6 @@
   --brand-sidebar: oklch(0.396 0.141 25.723);
   --brand-sidebar-active: oklch(0.444 0.177 26.899);
   --brand-sidebar-foreground: oklch(0.985 0 0);
-  --brand-header: oklch(0.99 0.002 258);
-  --brand-header-foreground: oklch(0.22 0.014 258);
   --brand-accent: oklch(0.505 0.213 27.518);
   --brand-accent-foreground: oklch(0.985 0 0);
 }
@@ -106,12 +125,12 @@
   --color-severity-media: var(--severity-media);
   --color-severity-alta: var(--severity-alta);
   --color-severity-critica: var(--severity-critica);
+  --color-severity-media-risk: var(--severity-media-risk);
+  --color-severity-media-risk-border: var(--severity-media-risk-border);
 
   --color-brand-sidebar: var(--brand-sidebar);
   --color-brand-sidebar-active: var(--brand-sidebar-active);
   --color-brand-sidebar-foreground: var(--brand-sidebar-foreground);
-  --color-brand-header: var(--brand-header);
-  --color-brand-header-foreground: var(--brand-header-foreground);
   --color-brand-accent: var(--brand-accent);
   --color-brand-accent-foreground: var(--brand-accent-foreground);
 

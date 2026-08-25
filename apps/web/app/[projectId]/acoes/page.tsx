@@ -57,7 +57,7 @@ export default async function SlaActionsPage({ params }: { params: Promise<{ pro
   const historyActions = actions.filter((a) => a.status === "COMPLETED" || a.status === "CANCELLED");
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader
           title="Ações e Escalonamentos"

@@ -19,7 +19,7 @@ export async function EventNotesSection({
   const notes = await getEventNotes(eventId);
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+    <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
       <div className="flex items-center gap-2">
         <NotebookPen className="size-4 text-amber-600 dark:text-amber-400" />
         <h2 className="text-sm font-semibold">Anotações do Evento</h2>
@@ -35,7 +35,7 @@ export async function EventNotesSection({
       ) : (
         <ul className="flex flex-col gap-2">
           {notes.map((note) => (
-            <li key={note.id} className="rounded-md border border-amber-500/20 bg-background p-3 text-sm">
+            <li key={note.id} className="rounded-md border border-amber-500/20 bg-card p-2.5 text-sm">
               <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="rounded border border-amber-500/40 px-1.5 py-0.5 font-medium text-amber-700 dark:text-amber-400">
                   {eventNoteCategoryLabels[note.category]}

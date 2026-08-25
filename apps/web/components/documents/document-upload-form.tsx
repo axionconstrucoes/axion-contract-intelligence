@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
@@ -6,6 +6,9 @@ import { useState, type FormEvent } from "react";
 import { createSupabaseBrowserClient } from "@axion/db/browser";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 const BUCKET = "project-documents";
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -48,10 +51,18 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   xls: "application/vnd.ms-excel",
   xlsx:
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ppt: "application/vnd.ms-powerpoint",
+  pps: "application/vnd.ms-powerpoint",
+  ppsx:
+    "application/vnd.openxmlformats-officedocument.presentationml.slideshow",
+  pptx:
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   csv: "text/csv",
   txt: "text/plain",
   xml: "application/xml",
   mpp: "application/vnd.ms-project",
+  mpt: "application/vnd.ms-project",
+  mpx: "application/x-project",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   png: "image/png",
@@ -296,27 +307,26 @@ export function DocumentUploadForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-3"
     >
       {isNewDocument ? (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium">
               Tipo documental *
             </span>
 
-            <select
+            <Select
               name="kind"
               required
               defaultValue="CONTRATO_BASE"
-              className="h-10 rounded-md border bg-background px-3"
             >
               {DOCUMENT_KINDS.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
 
           <label className="flex flex-col gap-1.5 text-sm">
@@ -324,27 +334,25 @@ export function DocumentUploadForm({
               Título *
             </span>
 
-            <input
+            <Input
               name="title"
               required
               placeholder="Ex.: Contrato de empreitada"
-              className="h-10 rounded-md border bg-background px-3"
             />
           </label>
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-3">
         <label className="flex flex-col gap-1.5 text-sm">
           <span className="font-medium">
             Versão *
           </span>
 
-          <input
+          <Input
             name="versionLabel"
             required
             defaultValue={defaultVersion}
-            className="h-10 rounded-md border bg-background px-3"
           />
         </label>
 
@@ -353,12 +361,11 @@ export function DocumentUploadForm({
             Data do documento *
           </span>
 
-          <input
+          <Input
             type="date"
             name="documentDate"
             required
             defaultValue={today()}
-            className="h-10 rounded-md border bg-background px-3"
           />
         </label>
 
@@ -367,18 +374,17 @@ export function DocumentUploadForm({
             Origem *
           </span>
 
-          <select
+          <Select
             name="sourceType"
             required
             defaultValue="CONTRATO"
-            className="h-10 rounded-md border bg-background px-3"
           >
             {SOURCE_TYPES.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 
@@ -387,10 +393,9 @@ export function DocumentUploadForm({
           Autor / emissor *
         </span>
 
-        <input
+        <Input
           name="author"
           required
-          className="h-10 rounded-md border bg-background px-3"
         />
       </label>
 
@@ -399,11 +404,10 @@ export function DocumentUploadForm({
           Resumo *
         </span>
 
-        <textarea
+        <Textarea
           name="summary"
           required
           rows={3}
-          className="rounded-md border bg-background px-3 py-2"
         />
       </label>
 
@@ -412,10 +416,9 @@ export function DocumentUploadForm({
           Observações
         </span>
 
-        <textarea
+        <Textarea
           name="notes"
           rows={2}
-          className="rounded-md border bg-background px-3 py-2"
         />
       </label>
 
@@ -428,13 +431,12 @@ export function DocumentUploadForm({
           type="file"
           name="file"
           required
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.xml,.mpp,.jpg,.jpeg,.png"
-          className="rounded-md border bg-background px-3 py-2"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.pps,.ppsx,.csv,.txt,.xml,.mpp,.mpt,.mpx,.jpg,.jpeg,.png"
+          className="rounded-md border bg-card px-3 py-2"
         />
 
         <span className="text-xs text-muted-foreground">
-          PDF, Word, Excel, CSV, TXT, XML, MPP,
-          JPG ou PNG. Máximo 50 MB.
+          PDF, Word, Excel, PowerPoint, CSV, TXT, XML, MPP, JPG ou PNG. Máximo 50 MB.
         </span>
       </label>
 

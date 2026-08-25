@@ -46,7 +46,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ proj
   const integrationStatusGroups = summarizeIntegrationStatuses(resolveAllIntegrationStatuses(sources, configs, emailStatus));
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Dashboard de Alertas"
         description="Possíveis implicações contratuais identificadas pela IA — toda sugestão exige revisão humana."

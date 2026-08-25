@@ -64,7 +64,7 @@ export default async function EventDetailPage({
   }
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
+    <div className="flex max-w-3xl flex-col gap-4">
       {arrivedFromAlertEmail && (
         <div className="rounded-md border border-blue-500/30 bg-blue-500/5 p-3 text-sm">
           Você chegou aqui a partir de um alerta de{" "}

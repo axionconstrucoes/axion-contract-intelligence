@@ -35,7 +35,7 @@ export default async function DashboardVisualPage({
   const data = await getDashboardVisualData(projectId, resolvedSearchParams);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1 border-b border-border pb-5">
         <Link href={`/${projectId}/dashboard`} className="flex w-fit items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground">
           <ArrowLeft className="size-3.5" aria-hidden="true" />

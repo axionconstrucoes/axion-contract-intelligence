@@ -8,12 +8,8 @@ export async function TopBar({ projectId }: { projectId: string }) {
   const currentProject = projects.find((p) => p.id === projectId);
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-brand-header px-4 text-brand-header-foreground">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-4 text-foreground">
       <div className="flex items-center gap-4">
-        <span className="whitespace-nowrap text-sm font-semibold tracking-tight text-foreground">
-          AXION <span className="font-normal text-muted-foreground">Controle de Contratos</span>
-        </span>
-        <span className="hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
         <ProjectSwitcher projects={projects} currentProjectId={projectId} />
         {currentProject?.code && (
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{currentProject.code}</span>

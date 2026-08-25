@@ -39,7 +39,7 @@ export default async function StartupPage({ params }: { params: Promise<{ projec
   const highCriticalFindings = findings.filter((f) => f.severity === "HIGH" || f.severity === "CRITICAL");
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Start-up ACC"
         description="Validação dos riscos históricos antes de ativar o acompanhamento operacional — o ACC conhece todo o passado do projeto, mas nunca trata fato histórico já pacificado como ocorrência nova."

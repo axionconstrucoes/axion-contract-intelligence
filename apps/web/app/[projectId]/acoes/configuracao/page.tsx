@@ -42,7 +42,7 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
   const businessHoursConfig = resolveBusinessHoursConfig(projectSettings);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-lg font-semibold">Matriz de SLA e Escalonamento</h1>
         <p className="text-sm text-muted-foreground">

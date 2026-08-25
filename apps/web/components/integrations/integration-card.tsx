@@ -70,7 +70,7 @@ export function IntegrationCard({
           <p className="text-xs">Integração ainda não configurada para este projeto.</p>
         )}
 
-        <div className="mt-1 flex flex-col gap-1 rounded-md border bg-background/60 p-2">
+        <div className="mt-1 flex flex-col gap-1 rounded-md border bg-muted/40 p-2">
           <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
             Origem da fonte
             <FeatureInfo helpId="integration-origin" />

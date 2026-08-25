@@ -50,7 +50,7 @@ export default async function AuditoriaPage({
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <PageHeader title="Auditoria" description="Trilha cronológica de ações realizadas na plataforma." />
 
       {entries.length === 0 ? (

@@ -84,7 +84,7 @@ export default async function TimelinePage({ params }: { params: Promise<{ proje
   const eventNoteEntries: Array<[string, TimelineEventNoteContext[]]> = Array.from(eventNotesByEventIdMap.entries());
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <PageHeader title="Timeline" description="Linha do tempo cronológica de todos os eventos consolidados." />
       <TimelinePageClient
         events={events}

@@ -37,7 +37,7 @@ export default async function ClauseReviewPage({
     );
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4">
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <PageHeader
@@ -201,7 +201,7 @@ export default async function ClauseReviewPage({
                             candidate.proposedClauseNumber
                           }
                           required
-                          className="h-10 rounded-md border bg-background px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
+                          className="h-10 rounded-md border bg-card px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
                         />
                       </label>
 
@@ -214,7 +214,7 @@ export default async function ClauseReviewPage({
                             candidate.proposedTitle
                           }
                           required
-                          className="h-10 rounded-md border bg-background px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
+                          className="h-10 rounded-md border bg-card px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
                         />
                       </label>
 
@@ -228,7 +228,7 @@ export default async function ClauseReviewPage({
                           }
                           required
                           rows={10}
-                          className="min-h-56 resize-y rounded-md border bg-background p-3 text-sm font-normal leading-6 outline-none focus:ring-2 focus:ring-ring"
+                          className="min-h-56 resize-y rounded-md border bg-card p-3 text-sm font-normal leading-6 outline-none focus:ring-2 focus:ring-ring"
                         />
                       </label>
 
@@ -241,7 +241,7 @@ export default async function ClauseReviewPage({
                         <textarea
                           name="reviewNote"
                           rows={2}
-                          className="resize-y rounded-md border bg-background p-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
+                          className="resize-y rounded-md border bg-card p-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
                           placeholder="Ex.: numeração ajustada conforme documento original."
                         />
                       </label>
@@ -351,7 +351,7 @@ export default async function ClauseReviewPage({
                           required
                           rows={4}
                           placeholder="Informe por que este trecho não deve ser tratado como cláusula."
-                          className="resize-y rounded-md border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+                          className="resize-y rounded-md border bg-card p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                         />
 
                         <button

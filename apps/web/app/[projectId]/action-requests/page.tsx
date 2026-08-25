@@ -14,7 +14,7 @@ export default async function ActionRequestsPage({ params }: { params: Promise<{
   const actionRequests = await getActionRequests(projectId);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <PageHeader title="Solicitações" description="Solicitações rastreáveis para alguém analisar, responder ou executar algo." />
 
       {actionRequests.length === 0 ? (

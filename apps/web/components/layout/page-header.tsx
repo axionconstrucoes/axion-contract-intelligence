@@ -21,7 +21,7 @@ export function PageHeader({ title, description }: { title: string; description:
   const navItem = NAV_ITEMS.find((item) => pathname?.includes(`/${item.href}`));
 
   return (
-    <div className="flex flex-col gap-1 border-b border-border pb-5">
+    <div className="flex flex-col gap-1 border-b border-border pb-4">
       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">AXION Controle de Contratos</span>
       {/* text-brand-sidebar (não um vermelho hardcoded) — mesma variável
           de cor da sidebar, garante que título de página e sidebar

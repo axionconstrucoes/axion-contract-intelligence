@@ -144,13 +144,13 @@ export function EsgManagerialSummary({ rows }: { rows: EsgManagerialRow[] }) {
           type="date"
           value={periodFrom}
           onChange={(e) => setPeriodFrom(e.target.value)}
-          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+          className="h-10 rounded-md border border-input bg-card px-3 text-sm"
         />
         <input
           type="date"
           value={periodTo}
           onChange={(e) => setPeriodTo(e.target.value)}
-          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+          className="h-10 rounded-md border border-input bg-card px-3 text-sm"
         />
       </div>
 

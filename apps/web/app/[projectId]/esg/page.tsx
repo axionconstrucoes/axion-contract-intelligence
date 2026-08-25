@@ -119,7 +119,7 @@ export default async function EsgObligationsPage({ params }: { params: Promise<{
   }));
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div>
         <PageHeader
           title="Comprovação de Obrigações ESG/SSMA"

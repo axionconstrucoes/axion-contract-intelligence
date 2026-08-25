@@ -57,7 +57,7 @@ export function TimelineFilters({
             De
             <input
               type="date"
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+              className="h-10 rounded-md border border-input bg-card px-3 text-sm"
               value={criteria.dateFrom ?? ""}
               onChange={(e) => onChange({ ...criteria, dateFrom: e.target.value || null })}
             />
@@ -66,7 +66,7 @@ export function TimelineFilters({
             Até
             <input
               type="date"
-              className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+              className="h-10 rounded-md border border-input bg-card px-3 text-sm"
               value={criteria.dateTo ?? ""}
               onChange={(e) => onChange({ ...criteria, dateTo: e.target.value || null })}
             />

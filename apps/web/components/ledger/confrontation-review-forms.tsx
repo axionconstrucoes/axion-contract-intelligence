@@ -26,8 +26,8 @@ export function ConfrontationReviewForms({
   );
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <form action={approveAction} className="flex flex-col gap-3 rounded-md border p-4">
+    <div className="grid gap-3 lg:grid-cols-2">
+      <form action={approveAction} className="flex flex-col gap-2 rounded-md border p-3">
         <input type="hidden" name="projectId" value={projectId} />
         <input type="hidden" name="eventId" value={eventId} />
         <input type="hidden" name="candidateId" value={candidateId} />
@@ -50,7 +50,7 @@ export function ConfrontationReviewForms({
         </Button>
       </form>
 
-      <form action={rejectAction} className="flex flex-col gap-3 rounded-md border border-destructive/30 p-4">
+      <form action={rejectAction} className="flex flex-col gap-2 rounded-md border border-destructive/30 p-3">
         <input type="hidden" name="projectId" value={projectId} />
         <input type="hidden" name="eventId" value={eventId} />
         <input type="hidden" name="candidateId" value={candidateId} />

@@ -222,7 +222,7 @@ export function EsgSubmissionForm({
           name="evidenceFiles"
           multiple
           accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.jpg,.jpeg,.png"
-          className="rounded-md border bg-background px-3 py-2 text-sm"
+          className="rounded-md border bg-card px-3 py-2 text-sm"
         />
       </label>
 

@@ -67,7 +67,7 @@ export default async function ActionRequestDetailPage({
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold">{actionRequest.title}</h1>
@@ -77,7 +77,7 @@ export default async function ActionRequestDetailPage({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.7fr)]">
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-4">
           <Card>
             <CardHeader>
               <CardTitle>Envio por e-mail</CardTitle>
@@ -109,7 +109,7 @@ export default async function ActionRequestDetailPage({
                       name="recipientEmail"
                       required
                       placeholder="destinatario@exemplo.com"
-                      className="h-10 rounded-md border bg-background px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
+                      className="h-10 rounded-md border bg-card px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
                     />
                   </label>
 
@@ -119,7 +119,7 @@ export default async function ActionRequestDetailPage({
                       name="subject"
                       required
                       defaultValue={`Solicitação: ${actionRequest.title}`}
-                      className="h-10 rounded-md border bg-background px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
+                      className="h-10 rounded-md border bg-card px-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
                     />
                   </label>
 
@@ -130,7 +130,7 @@ export default async function ActionRequestDetailPage({
                       required
                       rows={6}
                       defaultValue={actionRequest.description}
-                      className="resize-y rounded-md border bg-background p-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
+                      className="resize-y rounded-md border bg-card p-3 text-sm font-normal outline-none focus:ring-2 focus:ring-ring"
                     />
                   </label>
 

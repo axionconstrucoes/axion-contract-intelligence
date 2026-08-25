@@ -11,7 +11,7 @@ export default async function LedgerPage({ params }: { params: Promise<{ project
   const events = await getEvents(projectId);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <PageHeader title="Event Ledger" description="Registro cronológico de eventos com possível implicação contratual." />
       {events.length === 0 ? <EmptyState message="Nenhum evento registrado." /> : <EventTable events={events} projectId={projectId} />}
     </div>
