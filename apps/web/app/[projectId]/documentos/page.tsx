@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { DocumentDownloadButton } from "@/components/documents/document-download-button";
+import { DocumentPackageFiles } from "@/components/documents/document-package-files";
+import { DocumentDeleteButton } from "@/components/documents/document-delete-button";
 import { DocumentUploadForm } from "@/components/documents/document-upload-form";
 import { EmailAttachmentsPanel } from "@/components/documents/email-attachments-panel";
 import { PageHeader } from "@/components/layout/page-header";
@@ -289,17 +291,37 @@ export default async function DocumentosPage({
                                 />
                               ) : null}
                             </div>
+
+                            <DocumentPackageFiles
+                              projectId={projectId}
+                              documentId={document.id}
+                              documentVersionId={version.id}
+                              canEdit={canUpload}
+                            />
                           </div>
                         )
                       )}
 
                       {canUpload ? (
+                        <div className="flex justify-end">
+                          <DocumentDeleteButton
+                            documentId={document.id}
+                            documentTitle={document.title}
+                          />
+                        </div>
+                      ) : null}
+
+                      {canUpload ? (
                         <details className="rounded-md border p-4">
                           <summary className="cursor-pointer text-sm font-medium">
-                            Adicionar nova versão
+                            Nova versão do instrumento
                           </summary>
 
                           <div className="pt-4">
+                            <p className="mb-4 text-xs text-muted-foreground">
+                              Use esta opção somente quando o instrumento contratual tiver uma nova revisão.
+                              Para planilhas, anexos, aprovações ou documentos complementares, use Arquivos do pacote na versão correspondente.
+                            </p>
                             <DocumentUploadForm
                               projectId={projectId}
                               existingDocument={{
@@ -328,15 +350,34 @@ export default async function DocumentosPage({
               {clauses.map((clause) => (
                 <Card key={clause.id}>
                   <CardHeader>
-                    <CardTitle>
-                      Cláusula{" "}
-                      {clause.clauseNumber} —{" "}
-                      {clause.title}
+                    <CardTitle className="underline underline-offset-4">
+                      Cláusula {clause.clauseNumber} - {clause.title}
                     </CardTitle>
                   </CardHeader>
 
                   <CardContent className="text-sm text-muted-foreground">
-                    {clause.text}
+                    <div className="space-y-3">
+                      {clause.text
+                        .replace(/DocuSign Envelope ID:\s*[A-F0-9-]+/gi, "")
+                        .replace(/P(?:á|a)gina\s+\d+\s+de\s+\d+/gi, "")
+                        .replace(/^\s*CLÁUSULA\b[\s\S]*?(?=\d+\.\d+\.)/i, "")
+                        .split(
+                          new RegExp(
+                            `(?=\\b${clause.clauseNumber.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.\\d+\\.(?!\\d))`,
+                            "g"
+                          )
+                        )
+                        .map((paragraph) => paragraph.trim())
+                        .filter(Boolean)
+                        .map((paragraph, index) => (
+                          <p
+                            key={`${clause.id}-${index}`}
+                            className="whitespace-pre-line leading-6"
+                          >
+                            {paragraph}
+                          </p>
+                        ))}
+                    </div>
                   </CardContent>
                 </Card>
               ))}

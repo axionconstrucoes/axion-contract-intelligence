@@ -484,9 +484,16 @@ export async function getClauses(projectId: string) {
     }
   }
 
-  return (clauseRows as ClauseRow[]).map((row) =>
-    mapClauseRow(row, parentByVersionId.get(row.document_version_id))
-  );
+  return (clauseRows as ClauseRow[])
+    .map((row) =>
+      mapClauseRow(row, parentByVersionId.get(row.document_version_id))
+    )
+    .sort((a, b) =>
+      a.clauseNumber.localeCompare(b.clauseNumber, "pt-BR", {
+        numeric: true,
+        sensitivity: "base",
+      })
+    );
 }
 
 export async function getClause(clauseId: string) {
