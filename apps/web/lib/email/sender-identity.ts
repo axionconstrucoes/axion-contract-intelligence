@@ -6,7 +6,7 @@
 // mailbox realmente autentica/envia (isso continua vindo de
 // GOOGLE_GMAIL_SENDER_EMAIL via gmail-auth.ts). Trocar o nome de exibição
 // nunca troca nem quebra o remetente atualmente funcional.
-export const ACC_SENDER_DISPLAY_NAME = "ACC AXION CONTROLE DE CONTRATOS";
+export const ACC_SENDER_DISPLAY_NAME = "ACC AXION CONTROLE DE CONTRATOS - IA";
 
 // Endereço institucional-alvo, ainda não autorizado no Google Workspace
 // nesta fase — ver docs/email-branding.md para a configuração exata

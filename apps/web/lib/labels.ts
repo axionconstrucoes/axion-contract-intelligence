@@ -2,11 +2,13 @@ import type {
   ActionRequestStatus,
   AiFindingType,
   AlertSeverity,
+  CorporateArea,
   DocumentKind,
   DriveType,
   EventStatus,
   ImplicationCategory,
   IntegrationStatus,
+  ProjectMembershipStatus,
   ProjectPermission,
   ScheduleActivityStatus,
   SourceType,
@@ -101,14 +103,31 @@ export const driveTypeLabels: Record<DriveType, string> = {
 };
 
 export const permissionLabels: Record<ProjectPermission, string> = {
-  VIEWER: "Leitor",
-  EDITOR: "Editor",
-  ADMIN: "Administrador",
+  ADMINISTRADOR: "Administrador",
+  GESTOR: "Gestor",
+  COLABORADOR: "Colaborador",
+  LEITURA: "Leitura",
 };
 
 export const originLabels: Record<UserOrigin, string> = {
   AXION_INTERNO: "Axion (Interno)",
   TERCEIRO: "Terceiro",
+};
+
+export const membershipStatusLabels: Record<ProjectMembershipStatus, string> = {
+  ACTIVE: "Ativo",
+  INACTIVE: "Inativo",
+};
+
+export const corporateAreaLabels: Record<CorporateArea, string> = {
+  DIRETORIA: "Diretoria",
+  ADMINISTRATIVO: "Administrativo",
+  COMERCIAL: "Comercial",
+  FINANCEIRO: "Financeiro",
+  ENGENHARIA: "Engenharia",
+  ORÇAMENTO: "Orçamento",
+  JURÍDICO: "Jurídico",
+  PLANEJAMENTO: "Planejamento",
 };
 
 export const scheduleStatusLabels: Record<ScheduleActivityStatus, string> = {

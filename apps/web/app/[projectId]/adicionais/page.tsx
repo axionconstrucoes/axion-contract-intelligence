@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getCurrentProjectPermission } from "@/lib/contract-review";
+import { canEditProjectContent, getCurrentProjectPermission } from "@/lib/contract-review";
 import { getAdditionalProposals } from "@/lib/additionals/get-additional-proposals";
 import { formatDate } from "@/lib/labels";
 
@@ -22,10 +22,10 @@ export default async function AdditionalProposalsPage({ params }: { params: Prom
     getCurrentProjectPermission(projectId),
   ]);
 
-  const canCreate = permission === "EDITOR" || permission === "ADMIN";
+  const canCreate = canEditProjectContent(permission);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Propostas de Adicionais"
         description="Escopo, preço e prazo adicionais rastreados por projeto — o contrato-base permanece o instrumento vigente; um adicional só é considerado contratado por decisão humana."

@@ -10,11 +10,12 @@ import { EvidenceViewer } from "@/components/ledger/evidence-viewer";
 import { SendContractAlertForm } from "@/components/ledger/send-contract-alert-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getCurrentProjectPermission } from "@/lib/contract-review";
+import { canEditProjectContent, getCurrentProjectPermission } from "@/lib/contract-review";
 import { getEvent, getUser } from "@/lib/data";
 import { getEventClauseConfrontationCandidates } from "@/lib/event-clause-confrontation-review";
 import { alertRiskLevelLabels } from "@/lib/email/templates/contract-alert-template";
 import {
+  confrontationCandidateCategoryLabel,
   confrontationSeverityToAlertSeverity,
   findingTypeLabels,
   formatDateTime,
@@ -41,7 +42,7 @@ export default async function EventDetailPage({
 
   if (!event) notFound();
 
-  const canReview = permission === "EDITOR" || permission === "ADMIN";
+  const canReview = canEditProjectContent(permission);
 
   let creatorLabel: string;
   if (event.createdByType === "LEGACY") {

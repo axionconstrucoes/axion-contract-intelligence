@@ -8,7 +8,7 @@ import { EmailSyncPanel } from "@/components/integrations/email-sync-panel";
 import { IntegrationCard } from "@/components/integrations/integration-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getCurrentProjectPermission } from "@/lib/contract-review";
+import { getCurrentProjectPermission, isProjectAdministrator } from "@/lib/contract-review";
 import { getIntegrationConfigs, getProject, getSourceDefinitions } from "@/lib/data";
 import { getEmailAccounts } from "@/lib/email/inbound/ingestion-controls/get-email-accounts";
 import { getProjectEmailIngestionConfig } from "@/lib/email/inbound/ingestion-controls/get-project-email-ingestion-config";
@@ -39,7 +39,7 @@ export default async function IntegracoesPage({
     getEmailAttachmentRegistryForProject(projectId),
   ]);
 
-  const canManage = permission === "ADMIN";
+  const canManage = isProjectAdministrator(permission);
   const projectStartDate = (projectStartRow.data as { project_start_date: string | null } | null)?.project_start_date ?? null;
   const consideredCount = attachmentRows.filter((row) => row.consideredByAcc).length;
 

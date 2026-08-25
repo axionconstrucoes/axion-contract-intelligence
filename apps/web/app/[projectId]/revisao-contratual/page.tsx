@@ -14,6 +14,7 @@ import {
 } from "@/lib/labels";
 import {
   getContractReviewCandidates,
+  canEditProjectContent,
   getCurrentProjectPermission,
 } from "@/lib/contract-review";
 import {
@@ -57,12 +58,10 @@ export default async function ContractReviewPage({
     ),
   ]);
 
-  const canReview =
-    permission === "EDITOR" ||
-    permission === "ADMIN";
+  const canReview = canEditProjectContent(permission);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <PageHeader
         title="Revisão Contratual"
         description="Candidatos detectados automaticamente a partir das comunicações do projeto. Nenhum candidato entra no Event Ledger sem revisão humana."

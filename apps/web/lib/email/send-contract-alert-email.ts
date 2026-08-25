@@ -3,7 +3,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@axion/db/admin";
 import { createSupabaseServerClient } from "@axion/db/server";
 
-import { getCurrentProjectPermission } from "@/lib/contract-review";
+import { canEditProjectContent, getCurrentProjectPermission } from "@/lib/contract-review";
 
 import { appendAccEmailSignature } from "./branding/acc-email-signature";
 import { loadAccLogoInlineImage } from "./branding/load-acc-logo-inline-image";
@@ -70,9 +70,9 @@ export async function sendContractAlertEmail(
   }
 
   const permission = await getCurrentProjectPermission(input.projectId);
-  if (permission !== "EDITOR" && permission !== "ADMIN") {
+  if (!canEditProjectContent(permission)) {
     throw new NotAuthorizedError(
-      "Envio de alerta por e-mail exige permissão EDITOR ou ADMIN no projeto."
+      "Envio de alerta por e-mail exige permissão de Colaborador, Gestor ou Administrador no projeto."
     );
   }
 

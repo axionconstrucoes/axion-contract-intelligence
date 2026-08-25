@@ -1,4 +1,4 @@
-﻿// Ponto único de acesso a dados. getProjects()/getProject()/getUsers()/
+// Ponto único de acesso a dados. getProjects()/getProject()/getUsers()/
 // getUser()/getProjectMembers()/getDocuments()/getDocument()/getClauses()/
 // getClause()/getScheduleActivities()/getScheduleActivity()/getEmails()/
 // getEmail()/getEvents()/getEvent()/getContractChanges()/getContractChange()
@@ -817,7 +817,7 @@ export async function getProjectMembers(projectId: string) {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("project_memberships")
-    .select(`project_id, user_id, permission, profiles(${PROFILE_COLUMNS})`)
+    .select(`project_id, user_id, permission, status, area, created_at, profiles(${PROFILE_COLUMNS})`)
     .eq("project_id", projectId);
 
   if (error) {

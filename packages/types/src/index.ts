@@ -73,12 +73,30 @@ export interface User {
   avatarInitials: string;
 }
 
-export type ProjectPermission = "VIEWER" | "EDITOR" | "ADMIN";
+export type ProjectPermission = "ADMINISTRADOR" | "GESTOR" | "COLABORADOR" | "LEITURA";
+
+export type ProjectMembershipStatus = "ACTIVE" | "INACTIVE";
+
+// As 8 áreas corporativas da AXION (seção "Áreas corporativas atuais").
+// Atributo do papel exercido NAQUELE projeto, não do profile — a mesma
+// pessoa pode ter áreas diferentes em projetos diferentes.
+export type CorporateArea =
+  | "DIRETORIA"
+  | "ADMINISTRATIVO"
+  | "COMERCIAL"
+  | "FINANCEIRO"
+  | "ENGENHARIA"
+  | "ORÇAMENTO"
+  | "JURÍDICO"
+  | "PLANEJAMENTO";
 
 export interface ProjectMembership {
   userId: string;
   projectId: string;
   permission: ProjectPermission;
+  status: ProjectMembershipStatus;
+  area: CorporateArea | null;
+  createdAt: string; // ISO datetime
 }
 
 export type DocumentKind =

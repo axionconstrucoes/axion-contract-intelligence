@@ -1,4 +1,11 @@
-import type { ProjectMembership, ProjectPermission, User, UserOrigin } from "@axion/types";
+import type {
+  CorporateArea,
+  ProjectMembership,
+  ProjectMembershipStatus,
+  ProjectPermission,
+  User,
+  UserOrigin,
+} from "@axion/types";
 
 export type UserRow = {
   id: string;
@@ -13,6 +20,9 @@ export type MembershipWithProfileRow = {
   project_id: string;
   user_id: string;
   permission: ProjectPermission;
+  status: ProjectMembershipStatus;
+  area: CorporateArea | null;
+  created_at: string;
   profiles: UserRow | UserRow[] | null;
 };
 
@@ -93,6 +103,9 @@ export function mapMembershipRow(
     userId: row.user_id,
     projectId: row.project_id,
     permission: row.permission,
+    status: row.status,
+    area: row.area,
+    createdAt: row.created_at,
     user: mapUserRow(profile),
   };
 }

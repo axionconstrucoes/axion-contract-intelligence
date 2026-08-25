@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createSupabaseServerClient } from "@axion/db/server";
+import type { ProjectPermission } from "@axion/types";
 
 export type ContractReviewEvidence = {
   id: string;
@@ -183,9 +184,7 @@ export async function getContractReviewCandidates(
 
 export async function getCurrentProjectPermission(
   projectId: string
-): Promise<
-  "VIEWER" | "EDITOR" | "ADMIN" | null
-> {
+): Promise<ProjectPermission | null> {
   const supabase =
     await createSupabaseServerClient();
 
@@ -217,11 +216,20 @@ export async function getCurrentProjectPermission(
     );
   }
 
-  return (
-    data?.permission as
-      | "VIEWER"
-      | "EDITOR"
-      | "ADMIN"
-      | undefined
-  ) ?? null;
+  return (data?.permission as ProjectPermission | undefined) ?? null;
+}
+
+// COLABORADOR e GESTOR têm o mesmo nível de acesso a conteúdo do
+// projeto (edição de documentos/cláusulas/eventos etc.) nesta fase —
+// o escopo de GESTOR ainda será definido explicitamente (ver módulo
+// Usuários e Permissões), mas por ora ele não deve ter menos acesso
+// de conteúdo do que um Colaborador.
+export function canEditProjectContent(permission: ProjectPermission | null): boolean {
+  return permission === "ADMINISTRADOR";
+}
+
+// Ações restritas a Administrador do projeto (gestão de configuração,
+// integrações, membros). GESTOR nunca herda estas ações nesta fase.
+export function isProjectAdministrator(permission: ProjectPermission | null): boolean {
+  return permission === "ADMINISTRADOR";
 }

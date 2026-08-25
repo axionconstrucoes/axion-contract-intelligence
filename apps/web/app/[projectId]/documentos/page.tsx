@@ -18,7 +18,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { getCurrentProjectPermission } from "@/lib/contract-review";
+import { canEditProjectContent, getCurrentProjectPermission } from "@/lib/contract-review";
 import {
   getClauses,
   getScheduleActivities,
@@ -91,12 +91,10 @@ export default async function DocumentosPage({
     getEmailAttachmentRegistryForProject(projectId),
   ]);
 
-  const canUpload =
-    permission === "EDITOR" ||
-    permission === "ADMIN";
+  const canUpload = canEditProjectContent(permission);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <PageHeader title="Documentos" description="Contratos, aditivos, propostas, documentos técnicos e cronogramas do projeto." />
 
       <Tabs defaultValue="documentos">

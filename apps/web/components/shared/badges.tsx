@@ -1,5 +1,13 @@
 import { AlertTriangle, Circle, Diamond, OctagonAlert } from "lucide-react";
-import type { ActionRequestStatus, AlertSeverity, EventStatus, ImplicationCategory, IntegrationStatus } from "@axion/types";
+import type {
+  ActionRequestStatus,
+  AlertSeverity,
+  EventStatus,
+  ImplicationCategory,
+  IntegrationStatus,
+  ProjectMembershipStatus,
+  ProjectPermission,
+} from "@axion/types";
 import { Badge } from "@/components/ui/badge";
 import {
   actionRequestStatusLabels,
@@ -9,6 +17,8 @@ import {
   emailAccountStatusLabels,
   eventStatusLabels,
   integrationStatusLabels,
+  membershipStatusLabels,
+  permissionLabels,
   severityLabels,
   type ConfrontationCandidateStatus,
 } from "@/lib/labels";
@@ -162,4 +172,27 @@ const emailAccountStatusClasses: Record<EmailAccountStatus, string> = {
 
 export function EmailAccountStatusBadge({ status }: { status: EmailAccountStatus }) {
   return <Badge className={cn(emailAccountStatusClasses[status])}>{emailAccountStatusLabels[status]}</Badge>;
+}
+
+const membershipStatusClasses: Record<ProjectMembershipStatus, string> = {
+  ACTIVE: "border-transparent bg-severity-baixa/15 text-severity-baixa",
+  INACTIVE: "border-transparent bg-muted text-muted-foreground",
+};
+
+export function MembershipStatusBadge({ status }: { status: ProjectMembershipStatus }) {
+  return <Badge className={cn(membershipStatusClasses[status])}>{membershipStatusLabels[status]}</Badge>;
+}
+
+// Administrador em destaque sólido (mesma lógica de ALTA/CRÍTICA em
+// SeverityBadge — é o papel que concentra poder de gestão de usuários,
+// deve ser reconhecível à distância numa tabela densa).
+const permissionClasses: Record<ProjectPermission, string> = {
+  ADMINISTRADOR: "border-transparent bg-primary text-primary-foreground font-semibold",
+  GESTOR: "border-transparent bg-accent text-accent-foreground",
+  COLABORADOR: "border-border text-foreground",
+  LEITURA: "border-transparent bg-muted text-muted-foreground",
+};
+
+export function ProjectPermissionBadge({ permission }: { permission: ProjectPermission }) {
+  return <Badge className={cn(permissionClasses[permission])}>{permissionLabels[permission]}</Badge>;
 }

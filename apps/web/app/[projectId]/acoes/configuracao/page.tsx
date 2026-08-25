@@ -5,7 +5,7 @@ import { SlaMatrixConfigForm } from "@/components/sla/sla-matrix-config-form";
 import { SlaProjectSettingsForm } from "@/components/sla/sla-project-settings-form";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getCurrentProjectPermission } from "@/lib/contract-review";
+import { getCurrentProjectPermission, isProjectAdministrator } from "@/lib/contract-review";
 import { getProjectMembers } from "@/lib/data";
 import { slaAreaLabels } from "@/lib/labels";
 import { resolveBusinessHoursConfig, resolveGenericMatrixRule } from "@/lib/sla/resolve-matrix-rule";
@@ -26,7 +26,7 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
   const { projectId } = await params;
 
   const permission = await getCurrentProjectPermission(projectId);
-  if (permission !== "ADMIN") {
+  if (!isProjectAdministrator(permission)) {
     notFound();
   }
 

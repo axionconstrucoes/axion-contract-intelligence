@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { askEsgDirectorAction } from "@/lib/ai/esg-query-action";
-import { getCurrentProjectPermission } from "@/lib/contract-review";
+import { canEditProjectContent, getCurrentProjectPermission, isProjectAdministrator } from "@/lib/contract-review";
 import { getClauses } from "@/lib/data";
 import { computeObligationRisk } from "@/lib/esg/compute-obligation-risk";
 import {
@@ -44,9 +44,9 @@ export default async function EsgObligationsPage({ params }: { params: Promise<{
     getClauses(projectId),
   ]);
 
-  const canFill = permission === "EDITOR" || permission === "ADMIN";
-  const canConfigure = permission === "EDITOR" || permission === "ADMIN";
-  const canReview = permission === "ADMIN";
+  const canFill = canEditProjectContent(permission);
+  const canConfigure = canEditProjectContent(permission);
+  const canReview = isProjectAdministrator(permission);
 
   const submissionsByObligationId = new Map<string, EsgObligationSubmission[]>();
   for (const submission of submissions) {

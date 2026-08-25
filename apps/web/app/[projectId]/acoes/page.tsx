@@ -13,7 +13,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getCurrentProjectPermission } from "@/lib/contract-review";
+import { canEditProjectContent, getCurrentProjectPermission, isProjectAdministrator } from "@/lib/contract-review";
 import { getProjectMembers } from "@/lib/data";
 import {
   getSlaActionEscalationsForProject,
@@ -36,8 +36,8 @@ export default async function SlaActionsPage({ params }: { params: Promise<{ pro
   ]);
 
   const currentUserId = authData.user?.id ?? null;
-  const canCreate = permission === "EDITOR" || permission === "ADMIN";
-  const canConfigure = permission === "ADMIN";
+  const canCreate = canEditProjectContent(permission);
+  const canConfigure = isProjectAdministrator(permission);
   const isMember = permission !== null;
 
   const escalationsByActionId = new Map<string, typeof escalations>();

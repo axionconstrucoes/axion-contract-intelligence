@@ -76,7 +76,7 @@ begin
     baseline_end_date = excluded.baseline_end_date;
 
   insert into public.project_memberships (project_id, user_id, permission)
-  values (dev_project_id, dev_user_id, 'ADMIN')
+  values (dev_project_id, dev_user_id, 'ADMINISTRADOR')
   on conflict (project_id, user_id) do update set
     permission = excluded.permission;
 
