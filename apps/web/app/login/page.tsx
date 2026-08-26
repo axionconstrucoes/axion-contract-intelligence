@@ -1,4 +1,8 @@
 import type { Metadata } from "next";
+import {
+  InstitutionalBackground,
+  INSTITUTIONAL_BACKGROUND_SVG_PATH,
+} from "@/components/brand/institutional-background";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,8 +27,10 @@ export default async function LoginPage({
   const oauthError = error ? oauthErrorMessages[error] : undefined;
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-muted p-4">
-      <Card className="w-full max-w-sm">
+    <div className="relative flex min-h-dvh flex-col items-center justify-center gap-3 overflow-hidden p-4">
+      <InstitutionalBackground />
+
+      <Card className="relative w-full max-w-sm">
         <CardHeader>
           <div className="mb-1 flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element -- PNG estático em public/, sem otimização de imagem necessária */}
@@ -81,6 +87,14 @@ export default async function LoginPage({
           </form>
         </CardContent>
       </Card>
+
+      <a
+        href={INSTITUTIONAL_BACKGROUND_SVG_PATH}
+        download
+        className="relative text-xs text-white/70 underline decoration-dotted hover:text-white"
+      >
+        Baixar fundo institucional
+      </a>
     </div>
   );
 }

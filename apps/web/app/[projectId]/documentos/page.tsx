@@ -25,7 +25,7 @@ import {
   getScheduleActivities,
 } from "@/lib/data";
 import { getManagedDocuments } from "@/lib/document-management";
-import { getDocumentKindHighlightClassName } from "@/lib/documents/document-kind-highlight";
+import { getDocumentKindCardAppearance } from "@/lib/documents/document-kind-card-appearance";
 import { getEmailAttachmentRegistryForProject } from "@/lib/email/attachments/registry/get-attachment-registry";
 import {
   formatDate,
@@ -196,16 +196,23 @@ export default async function DocumentosPage({
                 const nextVersionIndex =
                   (current?.versionIndex ?? 0) + 1;
 
+                const kindAppearance =
+                  getDocumentKindCardAppearance(
+                    document.kind
+                  );
+
                 return (
                   <Card
                     key={document.id}
-                    className={getDocumentKindHighlightClassName(
-                      document.kind
-                    )}
+                    className={kindAppearance.cardClassName}
                   >
                     <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
                       <div>
-                        <CardTitle>
+                        <CardTitle
+                          className={
+                            kindAppearance.titleClassName
+                          }
+                        >
                           {document.title}
                         </CardTitle>
 
