@@ -25,6 +25,7 @@ import {
   getScheduleActivities,
 } from "@/lib/data";
 import { getManagedDocuments } from "@/lib/document-management";
+import { getDocumentKindHighlightClassName } from "@/lib/documents/document-kind-highlight";
 import { getEmailAttachmentRegistryForProject } from "@/lib/email/attachments/registry/get-attachment-registry";
 import {
   formatDate,
@@ -198,12 +199,9 @@ export default async function DocumentosPage({
                 return (
                   <Card
                     key={document.id}
-                    className={
-                      document.kind === "CONTRATO_BASE" ||
-                      document.kind.includes("ADITIVO")
-                        ? "border-green-500/50 bg-green-50 dark:bg-green-950/30"
-                        : undefined
-                    }
+                    className={getDocumentKindHighlightClassName(
+                      document.kind
+                    )}
                   >
                     <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
                       <div>
