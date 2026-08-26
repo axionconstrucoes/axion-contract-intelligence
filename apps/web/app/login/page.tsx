@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { sanitizeInternalRedirect } from "@/lib/safe-redirect";
 import { login } from "./actions";
 import { GoogleSignInButton } from "./google-signin-button";
 
@@ -21,10 +22,15 @@ const oauthErrorMessages: Record<string, string> = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
   const oauthError = error ? oauthErrorMessages[error] : undefined;
+  // Revalidado aqui mesmo já vindo do proxy (nunca confiado só porque
+  // apareceu na URL) — usado só para devolver o usuário ao destino
+  // original depois do login; string vazia quando ausente/inseguro
+  // (comportamento idêntico ao login sem destino).
+  const safeNext = sanitizeInternalRedirect(next, "");
 
   return (
     <div className="relative flex min-h-dvh flex-col items-center justify-center gap-3 overflow-hidden p-4">
@@ -41,7 +47,7 @@ export default async function LoginPage({
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <GoogleSignInButton />
+            <GoogleSignInButton next={safeNext} />
             {oauthError && <p className="text-xs text-destructive">{oauthError}</p>}
           </div>
 
@@ -52,6 +58,7 @@ export default async function LoginPage({
           </div>
 
           <form action={login} className="flex flex-col gap-3">
+            {safeNext ? <input type="hidden" name="next" value={safeNext} /> : null}
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="email">
                 E-mail corporativo

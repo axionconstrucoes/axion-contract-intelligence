@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
 
 import { getAppBaseUrl } from "@/lib/app-base-url";
+import { issueEmailAlertActionButtons } from "@/lib/email-actions/issue-tokens";
 import { EmailSendError } from "@/lib/email/email-provider";
 import { sendSlaEscalationEmail } from "@/lib/email/send-sla-escalation-email";
 import { getProject } from "@/lib/data";
@@ -12,7 +13,7 @@ import { computeEscalation } from "@/lib/sla/compute-escalation";
 import { computeSlaDeadlines } from "@/lib/sla/compute-deadlines";
 import { resolveBusinessHoursConfig, resolveMatrixRule } from "@/lib/sla/resolve-matrix-rule";
 import { formatDurationBetween } from "@/lib/sla/format-duration";
-import { buildSlaActionRespondUrl, buildSlaActionUrl } from "@/lib/sla/build-action-url";
+import { buildSlaActionUrl } from "@/lib/sla/build-action-url";
 import {
   getSlaActions,
   getSlaAreaResponsibles,
@@ -473,6 +474,15 @@ export async function processSlaEscalationsAction(
 
           if (recipientProfile?.email) {
             try {
+              // Fail-closed só para os botões de ação — ver comentário
+              // equivalente em ledger/[eventId]/send-alert-actions.ts.
+              const actionButtons = await issueEmailAlertActionButtons({
+                projectId,
+                alertKind: "SLA_ACTION",
+                alertId: action.id,
+                intendedRecipientEmail: recipientProfile.email,
+              }).catch(() => []);
+
               await sendSlaEscalationEmail({
                 projectId,
                 actionId: action.id,
@@ -488,7 +498,7 @@ export async function processSlaEscalationsAction(
                   escalationLevelLabel: ESCALATION_LEVEL_LABELS[result.recommendedLevel],
                   recommendedAction: result.reasons[result.reasons.length - 1] ?? null,
                   eventUrl: buildSlaActionUrl(baseUrl, projectId, action.id),
-                  respondUrl: buildSlaActionRespondUrl(baseUrl, projectId, action.id),
+                  actionButtons,
                 },
               });
             } catch (emailError) {

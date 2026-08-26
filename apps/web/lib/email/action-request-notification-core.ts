@@ -25,6 +25,12 @@ export interface SendActionRequestNotificationInput {
   recipientEmail: string;
   subject: string;
   body: string;
+  // HTML opcional (ex.: com os botões de ação de e-mail como <a> reais)
+  // — quando presente, o provider envia multipart/alternative
+  // (text/plain + text/html); ausente, continua exatamente como sempre
+  // (text/plain puro) — nunca reduz o que clientes texto-puro recebem,
+  // `body` continua sempre completo nos dois casos.
+  htmlBody?: string | null;
 }
 
 export interface SendActionRequestNotificationResult {
@@ -164,7 +170,13 @@ export async function performActionRequestNotification(
   // Assinatura institucional anexada só ao envio real — `input.body`
   // (persistido em notifications/emails.snippet abaixo) permanece
   // exatamente o texto autoral do humano, sem o rodapé adicionado.
-  const signed = appendAccEmailSignature({ text: input.body }, false);
+  // htmlBody é opcional (ex.: botões de e-mail acionável como <a> reais)
+  // — quando ausente, o envio continua text/plain puro, exatamente como
+  // sempre.
+  const signed = appendAccEmailSignature(
+    { text: input.body, html: input.htmlBody ?? undefined },
+    false
+  );
 
   let sendResult;
   try {
@@ -172,6 +184,7 @@ export async function performActionRequestNotification(
       to: input.recipientEmail,
       subject: input.subject,
       text: signed.text,
+      html: signed.html,
       correlationId,
     });
   } catch (error) {

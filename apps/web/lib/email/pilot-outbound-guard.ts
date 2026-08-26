@@ -52,6 +52,45 @@ function ensureSubjectPrefixed(subject: string): string {
   return subject.startsWith(PILOT_SUBJECT_PREFIX) ? subject : `${PILOT_SUBJECT_PREFIX}${subject}`;
 }
 
+// Fonte ÚNICA de resolução de destinatário efetivo — modo (pilot/
+// production), destinatário efetivamente usado e destinatário
+// originalmente pretendido (sempre preservado, nunca perdido). Chamada
+// tanto por applyPilotOutboundGuard (envio real, abaixo) quanto por
+// apps/web/lib/email-actions/issue-tokens.ts (emissão dos botões de
+// e-mail acionável) — nenhum dos dois lê ACC_OUTBOUND_MODE/
+// ACC_PILOT_RECIPIENT ou reimplementa esta decisão por conta própria;
+// nenhum outro lugar do projeto pode fazê-lo. Mesma regra fail-closed
+// de sempre: só "production" exato libera o destinatário pretendido;
+// em piloto, ACC_PILOT_RECIPIENT precisa ser válido e bater
+// exatamente com ACC_EXPECTED_PILOT_RECIPIENT, senão lança antes de
+// qualquer efeito.
+export interface ResolvedEmailRecipient {
+  mode: "PRODUCTION" | "PILOT";
+  intendedRecipientEmail: string;
+  effectiveRecipientEmail: string;
+}
+
+export function resolveEffectiveRecipient(
+  intendedRecipientEmail: string,
+  env: PilotOutboundGuardEnv = defaultEnv()
+): ResolvedEmailRecipient {
+  const mode = resolveOutboundMode(env);
+
+  if (mode === "PRODUCTION") {
+    return { mode, intendedRecipientEmail, effectiveRecipientEmail: intendedRecipientEmail };
+  }
+
+  const rawRecipient = (env.pilotRecipient ?? "").trim();
+
+  if (!isValidEmailAddress(rawRecipient) || rawRecipient.toLowerCase() !== ACC_EXPECTED_PILOT_RECIPIENT) {
+    throw new EmailSendError(
+      "Modo piloto ativo: ACC_PILOT_RECIPIENT ausente, inválido ou diferente do destinatário piloto autorizado — envio bloqueado."
+    );
+  }
+
+  return { mode, intendedRecipientEmail, effectiveRecipientEmail: ACC_EXPECTED_PILOT_RECIPIENT };
+}
+
 // Único ponto de decisão: chamado obrigatoriamente no início de
 // GmailEmailProvider.send() e FakeEmailProvider.send() — nunca depois
 // de qualquer efeito colateral (chamada de rede, construção de MIME).
@@ -65,22 +104,14 @@ function ensureSubjectPrefixed(subject: string): string {
 // separadamente, exatamente como os três fluxos de envio já fazem
 // hoje com input.recipientEmail.
 export function applyPilotOutboundGuard(input: SendEmailInput, env: PilotOutboundGuardEnv = defaultEnv()): SendEmailInput {
-  const mode = resolveOutboundMode(env);
+  const resolved = resolveEffectiveRecipient(input.to, env);
 
-  if (mode === "PRODUCTION") {
+  if (resolved.mode === "PRODUCTION") {
     return input;
   }
 
-  const rawRecipient = (env.pilotRecipient ?? "").trim();
-
-  if (!isValidEmailAddress(rawRecipient) || rawRecipient.toLowerCase() !== ACC_EXPECTED_PILOT_RECIPIENT) {
-    throw new EmailSendError(
-      "Modo piloto ativo: ACC_PILOT_RECIPIENT ausente, inválido ou diferente do destinatário piloto autorizado — envio bloqueado."
-    );
-  }
-
   const guarded = { ...input } as SendEmailInput & Record<string, unknown>;
-  guarded.to = ACC_EXPECTED_PILOT_RECIPIENT;
+  guarded.to = resolved.effectiveRecipientEmail;
   guarded.subject = ensureSubjectPrefixed(input.subject);
   guarded.replyTo = undefined;
   // Defensivo: SendEmailInput não declara cc/bcc hoje — se forem

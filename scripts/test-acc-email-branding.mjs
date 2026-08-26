@@ -125,7 +125,11 @@ const baseAlertInput = {
   responsibleName: null,
   dueDate: null,
   eventUrl: "http://localhost:3000/proj-1/ledger/evt-1",
-  respondUrl: "http://localhost:3000/proj-1/ledger/evt-1?respond=acc",
+  // RESPONDER AO ACC agora é um dos botões de e-mail acionável (token
+  // seguro) — mesma infraestrutura central de apps/web/lib/email-actions/,
+  // não mais um deep-link solto por template (ver
+  // scripts/test-email-actions.mjs para a cobertura da feature nova).
+  actionButtons: [{ action: "RESPOND", url: "http://localhost:3000/email-actions/tok-respond" }],
 };
 
 check("CRÍTICO usa fundo vermelho, texto branco e forte destaque", () => {
@@ -185,9 +189,9 @@ check("responsável e prazo aparecem quando fornecidos (nunca omitidos quando ex
 check("template inclui o botão/link RESPONDER AO ACC e preserva o link para abrir o evento", () => {
   const { html, text } = buildContractAlertEmail({ ...baseAlertInput, severity: "ALTA" });
   assert(html.includes("RESPONDER AO ACC"), "botão RESPONDER AO ACC ausente do HTML");
-  assert(html.includes(baseAlertInput.respondUrl), "URL de resposta ausente do HTML");
+  assert(html.includes(baseAlertInput.actionButtons[0].url), "URL de resposta ausente do HTML");
   assert(html.includes(baseAlertInput.eventUrl), "link do evento ausente do HTML");
-  assert(text.includes("Responder ao ACC:"), "botão RESPONDER AO ACC ausente do texto");
+  assert(text.includes("RESPONDER AO ACC:"), "botão RESPONDER AO ACC ausente do texto");
 });
 
 check("buildRespondToAccUrl monta metadata correta (projectId/eventId/riskLevel/alertId)", () => {
@@ -339,7 +343,7 @@ check("banner institucional dos templates usa o nome atual da marca (AXION CONTR
     escalationLevelLabel: "2º Escalão",
     recommendedAction: null,
     eventUrl: "http://localhost:3000/proj-1/ledger/evt-1",
-    respondUrl: "http://localhost:3000/proj-1/ledger/evt-1?respond=acc",
+    actionButtons: [{ action: "RESPOND", url: "http://localhost:3000/email-actions/tok-respond" }],
   });
   assert(sla.html.includes("AXION CONTROLE DE CONTRATOS"));
   assert(!sla.html.includes("ACOMPANHAMENTO") && !sla.text.includes("Acompanhamento"));

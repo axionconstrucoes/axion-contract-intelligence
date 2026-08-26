@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ExpertQueryPanel } from "@/components/ai/expert-query-panel";
 import { ConfrontationReviewForms } from "@/components/ledger/confrontation-review-forms";
 import { CrossReferenceList } from "@/components/ledger/cross-reference-list";
+import { EmailAlertActionHistoryPanel } from "@/components/email-actions/email-alert-action-history-panel";
 import { EventNotesSection } from "@/components/ledger/event-notes-section";
 import { EvidenceViewer } from "@/components/ledger/evidence-viewer";
 import { SendContractAlertForm } from "@/components/ledger/send-contract-alert-form";
@@ -123,6 +124,12 @@ export default async function EventDetailPage({
       <div id="responder-ao-acc">
         <EventNotesSection projectId={projectId} eventId={event.id} canReview={canReview} />
       </div>
+
+      {/* contract_events não tem responsável/prazo/ciência nativos —
+          DAR CIÊNCIA/ASSUMIR RESPONSABILIDADE/DEFINIR PRAZO via e-mail
+          (RESPONDER AO ACC já aparece em Anotações do Evento acima)
+          só existem aqui (ver relatório da feature de e-mail acionável). */}
+      <EmailAlertActionHistoryPanel alertKind="CONTRACT_EVENT" alertId={event.id} />
 
       <div>
         <h2 className="mb-2 text-sm font-semibold">Confrontação contratual — Revisão humana</h2>

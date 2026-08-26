@@ -9,6 +9,10 @@
 // tanto pelo bundler do Next.js quanto por um script Node standalone.
 
 import type { AlertSeverity } from "@axion/types";
+
+import type { EmailActionButton } from "@/lib/email-actions/render-buttons";
+import { renderEmailActionButtonsHtml, renderEmailActionButtonsText } from "@/lib/email-actions/render-buttons";
+
 import { alertRiskLevelLabels, buildContractAlertSubject, BADGE_STYLES } from "./contract-alert-template";
 
 export interface SlaEscalationEmailInput {
@@ -22,7 +26,9 @@ export interface SlaEscalationEmailInput {
   escalationLevelLabel: string; // ex.: "2º Escalão", "Diretoria"
   recommendedAction: string | null;
   eventUrl: string;
-  respondUrl: string;
+  // Ver contract-alert-template.ts — mesmo padrão, mesma infraestrutura
+  // central, nunca duplicada.
+  actionButtons: EmailActionButton[];
 }
 
 export interface SlaEscalationEmail {
@@ -97,8 +103,8 @@ export function buildSlaEscalationEmail(input: SlaEscalationEmailInput): SlaEsca
         </tr>
         <tr>
           <td style="padding:8px 24px 24px 24px;">
-            <a href="${escapeHtml(input.eventUrl)}" style="display:inline-block;margin-right:12px;padding:10px 18px;background-color:#111827;color:#ffffff;font-size:13px;font-weight:bold;text-decoration:none;border-radius:6px;">Abrir ação no ACC</a>
-            <a href="${escapeHtml(input.respondUrl)}" style="display:inline-block;padding:10px 18px;background-color:#ffffff;color:#111827;font-size:13px;font-weight:bold;text-decoration:none;border-radius:6px;border:1px solid #111827;">RESPONDER AO ACC</a>
+            <a href="${escapeHtml(input.eventUrl)}" style="display:inline-block;margin:0 8px 8px 0;padding:10px 18px;background-color:#111827;color:#ffffff;font-size:13px;font-weight:bold;text-decoration:none;border-radius:6px;">Abrir ação no ACC</a>
+            ${renderEmailActionButtonsHtml(input.actionButtons)}
           </td>
         </tr>
         <tr>
@@ -132,7 +138,7 @@ export function buildSlaEscalationEmail(input: SlaEscalationEmailInput): SlaEsca
     ...(fieldRows.length > 0 ? ["", ...fieldRows] : []),
     "",
     `Abrir ação no ACC: ${input.eventUrl}`,
-    `Responder ao ACC: ${input.respondUrl}`,
+    ...(input.actionButtons.length > 0 ? ["", "Ações disponíveis:", renderEmailActionButtonsText(input.actionButtons)] : []),
     "",
     "Este escalonamento foi gerado automaticamente pelo motor determinístico de SLA do ACC — não é uma decisão de IA.",
   ].join("\n");

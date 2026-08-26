@@ -45,9 +45,20 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/auth/callback";
 
   if (!isPublicRoute && !data?.claims) {
+    // Destino original preservado em ?next= para /login devolver o
+    // usuário para cá depois do login (ex.: link de e-mail acionável) —
+    // sempre o path+query da própria requisição já roteada para este
+    // app (nunca uma URL externa: não há como isso virar open redirect
+    // aqui). "/" nunca precisa ser preservado — já é o destino padrão
+    // pós-login (ver app/page.tsx).
+    const originalPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.search = "";
+    if (originalPath !== "/") {
+      redirectUrl.searchParams.set("next", originalPath);
+    }
 
     const redirectResponse = NextResponse.redirect(redirectUrl);
 

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getAppBaseUrl } from "@/lib/app-base-url";
-import { buildRespondToAccUrl } from "@/lib/email/build-respond-to-acc-url";
+import { issueEmailAlertActionButtons } from "@/lib/email-actions/issue-tokens";
 import { EmailSendError } from "@/lib/email/email-provider";
 import { NotAuthorizedError, sendContractAlertEmail } from "@/lib/email/send-contract-alert-email";
 import { getEvent, getProject } from "@/lib/data";
@@ -50,11 +50,18 @@ export async function sendContractAlertEmailAction(
 
   const baseUrl = getAppBaseUrl();
   const eventUrl = `${baseUrl}/${projectId}/ledger/${eventId}`;
-  const respondUrl = buildRespondToAccUrl(baseUrl, {
+
+  // Fail-closed só para os botões de ação: se a emissão dos tokens
+  // falhar, o alerta ainda é enviado (comportamento já existente),
+  // só sem DAR CIÊNCIA/ASSUMIR RESPONSABILIDADE/DEFINIR PRAZO/RESPONDER
+  // AO ACC — nunca um link quebrado, nunca bloqueia o envio por causa
+  // desta feature nova.
+  const actionButtons = await issueEmailAlertActionButtons({
     projectId,
-    eventId,
-    riskLevel: event.aiAssessment.severity,
-  });
+    alertKind: "CONTRACT_EVENT",
+    alertId: eventId,
+    intendedRecipientEmail: recipientEmail,
+  }).catch(() => []);
 
   const contractualBasis =
     event.crossReferences.length > 0 ? event.crossReferences.map((c) => c.note).join(" | ") : null;
@@ -80,7 +87,7 @@ export async function sendContractAlertEmailAction(
         responsibleName: null,
         dueDate: null,
         eventUrl,
-        respondUrl,
+        actionButtons,
       },
     });
   } catch (error) {

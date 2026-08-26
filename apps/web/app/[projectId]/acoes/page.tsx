@@ -7,6 +7,7 @@ import { SlaActionForm } from "@/components/sla/sla-action-form";
 import { SlaActionItem } from "@/components/sla/sla-action-item";
 import { SlaActionsSummary } from "@/components/sla/sla-actions-summary";
 import { SlaProcessEscalationsButton } from "@/components/sla/sla-process-escalations-button";
+import { EmailAlertActionHistoryPanel } from "@/components/email-actions/email-alert-action-history-panel";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { PageHeader } from "@/components/layout/page-header";
@@ -100,17 +101,22 @@ export default async function SlaActionsPage({ params }: { params: Promise<{ pro
             <EmptyState message="Nenhuma ação aberta." />
           ) : (
             openActions.map((action) => (
-              <SlaActionItem
-                key={action.id}
-                projectId={projectId}
-                action={action}
-                escalations={escalationsByActionId.get(action.id) ?? []}
-                isResponsible={
-                  canConfigure || (canCreate && action.responsibleUserId !== null && action.responsibleUserId === currentUserId)
-                }
-                canReassign={canConfigure}
-                members={memberOptions}
-              />
+              <div key={action.id} className="flex flex-col gap-2">
+                <SlaActionItem
+                  projectId={projectId}
+                  action={action}
+                  escalations={escalationsByActionId.get(action.id) ?? []}
+                  isResponsible={
+                    canConfigure || (canCreate && action.responsibleUserId !== null && action.responsibleUserId === currentUserId)
+                  }
+                  canReassign={canConfigure}
+                  members={memberOptions}
+                />
+                {/* sla_actions não tem tabela de comentário própria —
+                    RESPONDER AO ACC via e-mail só aparece aqui (ver
+                    relatório da feature de e-mail acionável). */}
+                <EmailAlertActionHistoryPanel alertKind="SLA_ACTION" alertId={action.id} />
+              </div>
             ))
           )}
         </TabsContent>

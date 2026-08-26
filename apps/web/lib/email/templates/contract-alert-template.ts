@@ -3,6 +3,9 @@
 
 import type { AlertSeverity } from "@axion/types";
 
+import type { EmailActionButton } from "@/lib/email-actions/render-buttons";
+import { renderEmailActionButtonsHtml, renderEmailActionButtonsText } from "@/lib/email-actions/render-buttons";
+
 // Rótulo de RISCO (masculino: "RISCO ALTO") — deliberadamente distinto de
 // severityLabels (apps/web/lib/labels.ts, "ALTA"/"Alta", feminino: usado
 // para "Severidade"/"Prioridade" na UI). Os dois convivem: cada um serve
@@ -49,8 +52,13 @@ export interface ContractAlertEmailInput {
   recommendedAction: string | null; // "ação recomendada"
   responsibleName: string | null; // "responsável quando disponível"
   dueDate: string | null; // "prazo quando disponível" — ISO date
-  eventUrl: string; // "link para abrir o evento no ACC"
-  respondUrl: string; // "RESPONDER AO ACC"
+  eventUrl: string; // "link para abrir o evento no ACC" — neutro, sem token
+  // Botões de ação (DAR CIÊNCIA/ASSUMIR RESPONSABILIDADE/DEFINIR PRAZO/
+  // RESPONDER AO ACC) — vem de issueEmailAlertActionButtons(), nunca
+  // montado aqui. Substitui o antigo campo único "respondUrl": RESPONDER
+  // AO ACC agora é só mais um destes botões, todos com o mesmo padrão de
+  // token seguro.
+  actionButtons: EmailActionButton[];
 }
 
 export interface ContractAlertEmail {
@@ -145,8 +153,8 @@ export function buildContractAlertEmail(input: ContractAlertEmailInput): Contrac
         </tr>
         <tr>
           <td style="padding:8px 24px 24px 24px;">
-            <a href="${escapeHtml(input.eventUrl)}" style="display:inline-block;margin-right:12px;padding:10px 18px;background-color:#111827;color:#ffffff;font-size:13px;font-weight:bold;text-decoration:none;border-radius:6px;">Abrir evento no ACC</a>
-            <a href="${escapeHtml(input.respondUrl)}" style="display:inline-block;padding:10px 18px;background-color:#ffffff;color:#111827;font-size:13px;font-weight:bold;text-decoration:none;border-radius:6px;border:1px solid #111827;">RESPONDER AO ACC</a>
+            <a href="${escapeHtml(input.eventUrl)}" style="display:inline-block;margin:0 8px 8px 0;padding:10px 18px;background-color:#111827;color:#ffffff;font-size:13px;font-weight:bold;text-decoration:none;border-radius:6px;">Abrir evento no ACC</a>
+            ${renderEmailActionButtonsHtml(input.actionButtons)}
           </td>
         </tr>
         <tr>
@@ -188,7 +196,7 @@ export function buildContractAlertEmail(input: ContractAlertEmailInput): Contrac
       : "Nenhuma evidência vinculada nesta fase.",
     "",
     `Abrir evento no ACC: ${input.eventUrl}`,
-    `Responder ao ACC: ${input.respondUrl}`,
+    ...(input.actionButtons.length > 0 ? ["", "Ações disponíveis:", renderEmailActionButtonsText(input.actionButtons)] : []),
     "",
     "Este alerta é uma sugestão de análise automatizada e exige revisão humana — não é uma decisão contratual ou jurídica definitiva.",
   ].join("\n");
