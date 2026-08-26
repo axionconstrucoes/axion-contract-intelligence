@@ -19,7 +19,11 @@ export default async function WorkspaceLayout({
       <AppSidebar projectId={projectId} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar projectId={projectId} />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        {/* Cinza-claro só nos espaços entre cartões das páginas internas
+            autenticadas — cartões (bg-card, branco) e cabeçalho (TopBar,
+            fora deste <main>) continuam brancos; sidebar continua bordô.
+            Nunca aplicado em /login ou /projetos (fundo institucional). */}
+        <main className="flex-1 overflow-y-auto bg-gray-100 p-6">{children}</main>
       </div>
     </div>
   );

@@ -86,6 +86,15 @@ check("SVG: contém padrão de grade/quadriculado branco (pattern + stroke branc
   assert(/stroke="#ffffff"/i.test(svgSource), "traço branco do quadriculado não encontrado");
 });
 
+check("SVG: grade de 48×48 px preservada", () => {
+  assert(/<pattern[^>]*width="48"[^>]*height="48"/.test(svgSource), "pattern deveria continuar 48x48");
+});
+
+check("SVG: opacidade das linhas brancas ajustada para 16% (de ~7% anterior)", () => {
+  assert(/stroke-opacity="0\.16"/.test(svgSource), 'esperado stroke-opacity="0.16" — reticulado deveria estar mais forte');
+  assert(!/stroke-opacity="0\.0?7"/.test(svgSource), "opacidade antiga (0.07) não deveria mais estar presente");
+});
+
 check("SVG: sem texto, sem elementos de interface (só <svg>/<defs>/<pattern>/<path>/<rect>)", () => {
   assert(!/<text[\s>]/i.test(svgSource), "SVG não deveria conter elementos <text>");
   assert(!/<button|<input|<a\s/i.test(svgSource), "SVG não deveria conter elementos de interface");
@@ -264,9 +273,78 @@ if (pngExists) {
     assert(metadata.width === 1920, `largura deveria ser 1920, encontrada ${metadata.width}`);
     assert(metadata.height === 1080, `altura deveria ser 1080, encontrada ${metadata.height}`);
   });
+
+  await checkAsync("PNG: reticulado regenerado a partir do SVG atualizado (linha visivelmente mais forte que o 7% anterior)", async () => {
+    const sharp = (await import("sharp")).default;
+    const y = 500;
+    const { data, info } = await sharp(absolutePath(PNG_RELATIVE_PATH))
+      .extract({ left: 900, top: y, width: 200, height: 1 })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    let peakGreen = 0;
+    for (let x = 0; x < info.width; x++) {
+      peakGreen = Math.max(peakGreen, data[x * 4 + 1]);
+    }
+    // Base bordô puro tem G=29; a 7% (versão anterior) a linha chegava a
+    // G≈37; a 16% chega a G≈47. Faixa com folga dos dois lados para não
+    // ser frágil a diferenças de 1-2 níveis entre renderizações, mas
+    // ainda incapaz de passar com a opacidade antiga.
+    assert(
+      peakGreen >= 42 && peakGreen <= 55,
+      `pico de verde na linha de grade deveria refletir ~16% de opacidade (G entre 42-55), encontrado G=${peakGreen} — PNG pode não ter sido regenerado a partir do SVG atualizado`
+    );
+  });
 } else {
   console.log("INFO PNG não gerado nesta etapa — checagens de PNG puladas (SVG é obrigatório, PNG é opcional).");
 }
+
+// --- PARTE 2: cinza-claro entre cartões nas páginas internas ---
+
+console.log("");
+console.log("======================================");
+console.log("CINZA-CLARO ENTRE CARTÕES (páginas internas autenticadas)");
+console.log("======================================");
+console.log("");
+
+const workspaceLayoutSource = readSource("apps/web/app/[projectId]/layout.tsx");
+
+check("[projectId]/layout.tsx: <main> usa bg-gray-100 (equivalente a #f3f4f6), aplicado centralmente (não por page.tsx)", () => {
+  const mainMatch = workspaceLayoutSource.match(/<main[^>]*className="[^"]*"[^>]*>/);
+  assert(mainMatch, "elemento <main> não encontrado em [projectId]/layout.tsx");
+  assert(/\bbg-gray-100\b/.test(mainMatch[0]), `<main> deveria usar bg-gray-100: "${mainMatch[0]}"`);
+});
+
+check("TopBar (cabeçalho) continua bg-white — não afetado pelo cinza do <main>", () => {
+  const topBarSource = readSource("apps/web/components/layout/top-bar.tsx");
+  assert(/\bbg-white\b/.test(topBarSource), "TopBar deveria continuar com bg-white explícito");
+});
+
+check("AppSidebar continua bg-brand-sidebar (bordô) — não afetado pelo cinza do <main>", () => {
+  const sidebarSource = readSource("apps/web/components/layout/app-sidebar.tsx");
+  assert(/\bbg-brand-sidebar\b/.test(sidebarSource), "AppSidebar deveria continuar com bg-brand-sidebar explícito");
+});
+
+check("Card (cartões) continua bg-card (branco) — não foi tocado por esta mudança", () => {
+  const cardSource = readSource("apps/web/components/ui/card.tsx");
+  assert(/\bbg-card\b/.test(cardSource), "Card deveria continuar com bg-card explícito");
+});
+
+check("Table (tabelas soltas, ex.: auditoria/usuários) recebeu fundo branco explícito — não herda o cinza do <main>", () => {
+  const tableSource = readSource("apps/web/components/ui/table.tsx");
+  assert(/\bbg-card\b/.test(tableSource), "Table deveria ter um fundo explícito (bg-card) para não ficar cinza ao ser usada fora de um Card");
+});
+
+check("/login e /projetos NÃO recebem o cinza-claro (usam o fundo institucional, não o layout interno)", () => {
+  assert(!/\bbg-gray-100\b/.test(loginPageSource), "/login não deveria usar bg-gray-100");
+  assert(!/\bbg-gray-100\b/.test(projetosPageSource), "/projetos não deveria usar bg-gray-100");
+});
+
+check("faixa SISTEMA EM TESTE e layout raiz não referenciam o cinza-claro (mudança fica só dentro de [projectId]/layout.tsx)", () => {
+  const rootLayoutSource = readSource("apps/web/app/layout.tsx");
+  const testModeBannerSource = readSource("apps/web/components/layout/test-mode-banner.tsx");
+  assert(!/\bbg-gray-100\b/.test(rootLayoutSource), "layout raiz não deveria ter ganhado bg-gray-100");
+  assert(!/\bbg-gray-100\b/.test(testModeBannerSource), "faixa SISTEMA EM TESTE não deveria ter sido tocada");
+});
 
 console.log("");
 console.log("======================================");

@@ -3,7 +3,10 @@ import { cn } from "@/lib/utils";
 
 function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) {
   return (
-    <div className="w-full overflow-x-auto">
+    // bg-card explícito: tabelas usadas soltas (sem <Card> ao redor,
+    // ex.: auditoria/usuarios) não podem ficar cinza ao herdar o fundo
+    // cinza-claro do <main> em [projectId]/layout.tsx.
+    <div className="w-full overflow-x-auto rounded-lg border border-border bg-card">
       <table className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   );

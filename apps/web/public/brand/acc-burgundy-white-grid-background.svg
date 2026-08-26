@@ -1,14 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
   <!-- Fundo institucional AXION/ACC: base bordô (#7f1d1d, mesmo tom exato
        da sidebar e do fundo do logo ACC — ver o token brand sidebar em
-       apps/web/app/globals.css) com quadriculado branco discreto.
+       apps/web/app/globals.css) com quadriculado branco (16% de opacidade
+       — ajustado a partir de 7% para ficar mais visível, ainda elegante,
+       sem competir com logo/texto/cartões).
        Reutilizado como background-image real em
        apps/web/components/brand/institutional-background.tsx (/login,
        /projetos) e oferecido para download nas mesmas páginas. Sem
        texto, sem dados pessoais, sem elementos de interface. -->
   <defs>
     <pattern id="acc-white-grid" width="48" height="48" patternUnits="userSpaceOnUse">
-      <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="1" />
+      <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#ffffff" stroke-opacity="0.16" stroke-width="1" />
     </pattern>
   </defs>
   <rect width="1920" height="1080" fill="#7f1d1d" />
