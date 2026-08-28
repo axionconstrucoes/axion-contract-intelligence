@@ -12,7 +12,7 @@ import { SendContractAlertForm } from "@/components/ledger/send-contract-alert-f
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
-import { getEvent, getUser } from "@/lib/data";
+import { getEvent, getProjectMembers, getUser } from "@/lib/data";
 import { getEventClauseConfrontationCandidates } from "@/lib/event-clause-confrontation-review";
 import { alertRiskLevelLabels } from "@/lib/email/templates/contract-alert-template";
 import {
@@ -34,15 +34,21 @@ export default async function EventDetailPage({
   const arrivedFromAlertEmail = resolvedSearchParams.respond === "acc";
   const alertRiskLevel = resolvedSearchParams.riskLevel as keyof typeof alertRiskLevelLabels | undefined;
 
-  const [event, confrontationCandidates, permission] = await Promise.all([
+  const [event, confrontationCandidates, permission, members] = await Promise.all([
     getEvent(eventId),
     getEventClauseConfrontationCandidates(eventId),
     getCurrentProjectPermission(projectId),
+    getProjectMembers(projectId),
   ]);
 
   if (!event) notFound();
 
   const canReview = permission === "ADMINISTRADOR";
+  // Mesma fonte canônica de membros usada pela tela de Usuários — só
+  // usuários ACTIVE podem ser escolhidos como destinatário do alerta.
+  const eligibleAlertRecipients = members
+    .filter((m) => m.status === "ACTIVE")
+    .map((m) => ({ email: m.user.email, name: m.user.name }));
 
   let creatorLabel: string;
   if (event.createdByType === "LEGACY") {
@@ -106,7 +112,13 @@ export default async function EventDetailPage({
             <p className="text-xs text-muted-foreground">
               Confiança estimada: {Math.round(event.aiAssessment.confidence * 100)}% — sugestão sujeita a revisão humana, não substitui decisão da equipe.
             </p>
-            {canReview && <SendContractAlertForm projectId={projectId} eventId={event.id} />}
+            {canReview && (
+              <SendContractAlertForm
+                projectId={projectId}
+                eventId={event.id}
+                eligibleRecipients={eligibleAlertRecipients}
+              />
+            )}
           </CardContent>
         </Card>
       )}

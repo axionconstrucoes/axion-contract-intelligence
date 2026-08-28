@@ -6,7 +6,7 @@ import { getAppBaseUrl } from "@/lib/app-base-url";
 import { issueEmailAlertActionButtons } from "@/lib/email-actions/issue-tokens";
 import { EmailSendError } from "@/lib/email/email-provider";
 import { NotAuthorizedError, sendContractAlertEmail } from "@/lib/email/send-contract-alert-email";
-import { getEvent, getProject } from "@/lib/data";
+import { getEvent, getProject, getProjectMembers } from "@/lib/data";
 import { findingTypeLabels } from "@/lib/labels";
 import type { SendContractAlertState } from "./send-alert-actions-state";
 
@@ -25,17 +25,20 @@ export async function sendContractAlertEmailAction(
 ): Promise<SendContractAlertState> {
   const projectId = String(formData.get("projectId") ?? "").trim();
   const eventId = String(formData.get("eventId") ?? "").trim();
-  const recipientEmail = String(formData.get("recipientEmail") ?? "").trim();
-  const recipientName = String(formData.get("recipientName") ?? "").trim() || null;
+  const submittedRecipientEmail = String(formData.get("recipientEmail") ?? "").trim();
 
   if (!projectId || !eventId) {
     return { error: "Dados do evento ausentes. Recarregue a página e tente novamente.", success: null };
   }
-  if (!recipientEmail) {
+  if (!submittedRecipientEmail) {
     return { error: "Informe o e-mail do destinatário.", success: null };
   }
 
-  const [project, event] = await Promise.all([getProject(projectId), getEvent(eventId)]);
+  const [project, event, members] = await Promise.all([
+    getProject(projectId),
+    getEvent(eventId),
+    getProjectMembers(projectId),
+  ]);
 
   if (!project || !event || event.projectId !== projectId) {
     return { error: "Evento ou projeto não encontrado.", success: null };
@@ -47,6 +50,26 @@ export async function sendContractAlertEmailAction(
       success: null,
     };
   }
+
+  // Nunca confiar no nome (nem, por segurança adicional, na capitalização
+  // do e-mail) vindos do navegador: o destinatário é resolvido de novo
+  // aqui a partir da mesma fonte canônica de membros ACTIVE do projeto
+  // usada pela tela de Usuários (getProjectMembers), nunca de uma
+  // consulta paralela. Um e-mail que não pertence a um membro ACTIVE
+  // deste projeto bloqueia o envio inteiro.
+  const recipientMember = members.find(
+    (m) => m.status === "ACTIVE" && m.user.email.toLowerCase() === submittedRecipientEmail.toLowerCase()
+  );
+
+  if (!recipientMember) {
+    return {
+      error: "O destinatário informado não corresponde a um usuário ativo deste projeto.",
+      success: null,
+    };
+  }
+
+  const recipientEmail = recipientMember.user.email;
+  const recipientName = recipientMember.user.name;
 
   const baseUrl = getAppBaseUrl();
   const eventUrl = `${baseUrl}/${projectId}/ledger/${eventId}`;
