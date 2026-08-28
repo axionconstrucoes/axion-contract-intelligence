@@ -278,6 +278,8 @@ export interface IntegrationConfig {
   sourceType: SourceType;
   status: IntegrationStatus;
   lastSyncAt: string | null; // ISO datetime
+  lastConnectionCheckAt?: string | null;
+  lastConnectionError?: string | null;
   detail: string;
   // Origem da fonte — sempre preenchida por humano, nunca inferida.
   // null/ausente => "Origem ainda não definida" na UI.
