@@ -78,9 +78,20 @@ export function FeatureInfo({
       </button>
 
       {!open ? (
+        // hidden (display:none) em vez de opacity-0: um elemento absolute
+        // com opacity-0 continua ocupando sua caixa no layout — como esta
+        // caixa é centralizada sob um ícone de 16px (w-max max-w-56
+        // -translate-x-1/2), ela transborda ~100px para cada lado o tempo
+        // todo, mesmo invisível, e isso soma no "scrollable overflow" de
+        // QUALQUER ancestral sem overflow próprio — foi a causa real da
+        // rolagem horizontal indevida em Start-up ACC (e potencialmente em
+        // qualquer página com FeatureInfo perto de uma borda). display:none
+        // remove a caixa do layout por completo enquanto oculta; ela só
+        // volta a existir (e só então pode transbordar) no momento real do
+        // hover/foco, quando isso é esperado e correto.
         <span
           role="tooltip"
-          className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 w-max max-w-56 -translate-x-1/2 rounded-md border bg-popover px-2 py-1 text-[11px] text-popover-foreground opacity-0 shadow-sm transition-opacity group-hover/feature-info:opacity-100 group-focus-within/feature-info:opacity-100"
+          className="pointer-events-none absolute left-1/2 top-full z-50 mt-1 hidden w-max max-w-56 -translate-x-1/2 rounded-md border bg-popover px-2 py-1 text-[11px] text-popover-foreground shadow-sm group-hover/feature-info:block group-focus-within/feature-info:block"
         >
           {help.shortDescription}
         </span>

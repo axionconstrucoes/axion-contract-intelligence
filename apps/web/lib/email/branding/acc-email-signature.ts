@@ -21,9 +21,15 @@ export function buildAccEmailSignatureText(): string {
  * nesta execução (load-acc-logo-inline-image.ts) — quando não está,
  * NUNCA referencia "cid:" (isso quebraria a exibição em qualquer cliente
  * de e-mail); a assinatura cai para texto em negrito, sem imagem.
+ *
+ * `includeLogoImage` (default true, preserva o comportamento existente
+ * para SLA/solicitação de ação, que não têm logo em nenhum outro lugar
+ * do e-mail) — o chamador passa `false` quando o e-mail já mostra o logo
+ * em outro bloco (ex.: cabeçalho do alerta de contrato), para nunca
+ * repetir a mesma imagem duas vezes no mesmo e-mail.
  */
-export function buildAccEmailSignatureHtml(hasInlineLogo: boolean): string {
-  const logoCell = hasInlineLogo
+export function buildAccEmailSignatureHtml(hasInlineLogo: boolean, includeLogoImage: boolean = true): string {
+  const logoCell = hasInlineLogo && includeLogoImage
     ? `<td style="vertical-align:middle;padding-right:8px;"><img src="cid:${ACC_EMAIL_LOGO_CID}" alt="ACC" width="28" height="28" style="display:block;border:0;" /></td>`
     : "";
 
@@ -43,8 +49,12 @@ export function buildAccEmailSignatureHtml(hasInlineLogo: boolean): string {
  * aparece no retorno quando já estava presente na entrada (nunca cria um
  * canal HTML que não existia).
  */
-export function appendAccEmailSignature(email: { text: string; html?: string }, hasInlineLogo: boolean): { text: string; html?: string } {
+export function appendAccEmailSignature(
+  email: { text: string; html?: string },
+  hasInlineLogo: boolean,
+  includeLogoImage: boolean = true
+): { text: string; html?: string } {
   const text = `${email.text}\n\n— \n${buildAccEmailSignatureText()}`;
   if (!email.html) return { text };
-  return { text, html: `${email.html}\n${buildAccEmailSignatureHtml(hasInlineLogo)}` };
+  return { text, html: `${email.html}\n${buildAccEmailSignatureHtml(hasInlineLogo, includeLogoImage)}` };
 }

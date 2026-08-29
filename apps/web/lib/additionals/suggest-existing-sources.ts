@@ -6,6 +6,7 @@
 // link-additional-proposal-source.ts).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { withActiveDocumentFilter } from "../documents/active-document-filter";
 
 export interface SuggestedDocumentSource {
   documentVersionId: string;
@@ -34,16 +35,29 @@ export async function suggestExistingSourcesForProposal(
   const needle = proposalNumber.trim();
   if (!needle) return { documents: [], emails: [] };
 
-  const [documentsResult, emailsResult] = await Promise.all([
-    supabase
+  // Regra CANÔNICA — nunca sugerir como fonte de evidência um
+  // documento que o Administrador já enviou para a lixeira.
+  const documentsResult = await withActiveDocumentFilter((filterActive) => {
+    let query = supabase
       .from("documents")
       .select("id,kind,title,document_versions(id,version_label,version_index)")
       .eq("project_id", projectId)
-      .ilike("title", `%${needle}%`),
-    supabase.from("emails").select("id,subject,sent_at").eq("project_id", projectId).ilike("subject", `%${needle}%`).order("sent_at", { ascending: false }),
-  ]);
+      .ilike("title", `%${needle}%`);
+    if (filterActive) query = query.is("deleted_at", null);
+    return query;
+  });
 
-  if (documentsResult.error) throw new Error(`Falha ao buscar documentos existentes: ${documentsResult.error.message}`);
+  if (documentsResult.error) {
+    throw new Error(`Falha ao buscar documentos existentes: ${documentsResult.error.message}`);
+  }
+
+  const emailsResult = await supabase
+    .from("emails")
+    .select("id,subject,sent_at")
+    .eq("project_id", projectId)
+    .ilike("subject", `%${needle}%`)
+    .order("sent_at", { ascending: false });
+
   if (emailsResult.error) throw new Error(`Falha ao buscar e-mails existentes: ${emailsResult.error.message}`);
 
   type DocumentRow = { id: string; kind: string; title: string; document_versions: { id: string; version_label: string; version_index: number }[] };

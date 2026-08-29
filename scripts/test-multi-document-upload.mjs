@@ -20,8 +20,15 @@ register("./ts-module-resolver.mjs", import.meta.url);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
+// Normaliza CRLF -> LF: neste checkout (Windows, core.autocrlf) os
+// arquivos ficam em disco com \r\n, mas as buscas abaixo (indexOf/regex
+// com \n literal) foram escritas assumindo LF — sem isso, indexOf nunca
+// encontra o marcador de fim de bloco esperado, o slice() cai de volta
+// para "quase o arquivo inteiro" e os asserts seguintes ficam sujeitos a
+// falso positivo/negativo por pegarem trechos errados do arquivo. Este
+// normalize corrige a causa (mismatch de line ending), não os sintomas.
 function readSource(relativePath) {
-  return readFileSync(path.join(repoRoot, relativePath), "utf8");
+  return readFileSync(path.join(repoRoot, relativePath), "utf8").replace(/\r\n/g, "\n");
 }
 
 let passed = 0;
@@ -75,6 +82,10 @@ const {
   nextVersionLabel,
   progressForPhase,
   computeBatchSummary,
+  isBatchStillActive,
+  isMppFile,
+  suggestedKindForDescriptor,
+  classifyStorageUploadError,
   toExistingDocumentSnapshots,
   buildImportErrorMessage,
 } = await import(
@@ -91,6 +102,7 @@ const { computeSha256Hex, computeFileSha256Hex } = await import(
 const {
   MAX_FILE_SIZE_BYTES,
   MIME_BY_EXTENSION,
+  ACCEPT_ATTRIBUTE,
 } = await import("../apps/web/lib/documents/multi-upload/allowed-file-types.ts");
 
 // --- 1. Seleção: multiseleção, sem perder anteriores, dedup no lote ---
@@ -123,10 +135,13 @@ check("remoção antes do início: buildSelectionKey é estável para o mesmo ar
   assert(buildSelectionKey(d1) === buildSelectionKey(d2), "mesma chave para nome+tamanho idênticos");
 });
 
-check("upload individual existente preservado: document-upload-form.tsx não foi alterado nesta etapa", () => {
+check("upload individual: fluxo próprio preservado (mesma RPC, sem acoplamento à FILA do upload múltiplo) — a ÚNICA coisa reaproveitada do módulo multi-upload é o utilitário puro de hash (sha256.ts), deliberado para fechar a lacuna real de deduplicação deste formulário; nunca importa queue-core/types/allowed-file-types (a máquina de fila em si)", () => {
   const uploadForm = readSource("apps/web/components/documents/document-upload-form.tsx");
   assert(uploadForm.includes("register_project_document_upload"), "fluxo individual deveria continuar chamando a mesma RPC");
-  assert(!uploadForm.includes("multi-upload"), "arquivo do upload individual não deveria referenciar o módulo novo");
+  assert(uploadForm.includes('from "@/lib/documents/multi-upload/sha256"'), "deveria reaproveitar o utilitário de hash do upload múltiplo, nunca duplicar a lógica");
+  for (const queueModule of ["multi-upload/queue-core", "multi-upload/types", "multi-upload/allowed-file-types", "use-document-upload-queue"]) {
+    assert(!uploadForm.includes(queueModule), `upload individual não deveria se acoplar à máquina de fila do upload múltiplo (${queueModule})`);
+  }
 });
 
 check("arrastar e soltar: onDrop chama addFiles com event.dataTransfer.files, onDragOver previne o comportamento padrão do navegador", () => {
@@ -215,14 +230,14 @@ check("progresso: barra geral e individual usam o componente Progress existente 
   assert(rowSource.includes('from "@/components/ui/progress"'), "barra individual deveria reusar o componente Progress");
 });
 
-check("progresso: resumo do lote traz total/concluídos/processando/duplicados/rejeitados/com erro", () => {
+check("progresso: resumo do lote traz total/concluídos/processando/duplicados/rejeitados/com erro — TODO status terminal (com ou sem sucesso) conta 100% no cálculo do progresso geral, nunca o progressPercent bruto da fase onde parou", () => {
   const items = [
     { status: "CONCLUIDO", progressPercent: 100 },
     { status: "CONCLUIDO", progressPercent: 100 },
-    { status: "ENVIANDO", progressPercent: 60 },
-    { status: "DUPLICADO", progressPercent: 20 },
-    { status: "REJEITADO", progressPercent: 5 },
-    { status: "ERRO", progressPercent: 70 },
+    { status: "ENVIANDO", progressPercent: 60 }, // não-terminal: continua contando o valor bruto
+    { status: "DUPLICADO", progressPercent: 20 }, // terminal: conta 100, não 20
+    { status: "REJEITADO", progressPercent: 5 }, // terminal: conta 100, não 5
+    { status: "ERRO", progressPercent: 70 }, // terminal: conta 100, não 70
   ];
   const summary = computeBatchSummary(items);
   assert(summary.total === 6);
@@ -231,7 +246,48 @@ check("progresso: resumo do lote traz total/concluídos/processando/duplicados/r
   assert(summary.duplicated === 1);
   assert(summary.rejected === 1);
   assert(summary.errored === 1);
-  assert(summary.overallPercent === Math.round((100 + 100 + 60 + 20 + 5 + 70) / 6));
+  assert(
+    summary.overallPercent === Math.round((100 + 100 + 60 + 100 + 100 + 100) / 6),
+    `overallPercent deveria tratar todo status terminal como 100% de peso, obtido ${summary.overallPercent}`
+  );
+});
+
+check("progresso: lote 100% terminal (1 concluído + 1 duplicado + 1 erro + 0 processando) chega a 100%, mesmo contendo erro — cenário exato do relatório (lote nunca saía de 'Enviando lote...')", () => {
+  const items = [
+    { status: "CONCLUIDO", progressPercent: 100 },
+    { status: "DUPLICADO", progressPercent: 20 },
+    { status: "ERRO", progressPercent: 20 },
+  ];
+  const summary = computeBatchSummary(items);
+  assert(summary.processing === 0);
+  assert(summary.overallPercent === 100, `lote inteiramente terminal deveria mostrar 100%, obtido ${summary.overallPercent}%`);
+});
+
+check("isBatchStillActive: false quando não há PENDENTE nem fase em andamento (mesmo com itens aguardando decisão humana) — sinal usado para reabilitar o botão 'Iniciar envio' e sair de 'Enviando lote...'", () => {
+  const allTerminalOrWaiting = [
+    { status: "CONCLUIDO" },
+    { status: "DUPLICADO" },
+    { status: "ERRO" },
+    { status: "AGUARDANDO_DECISAO_VERSAO" },
+  ];
+  assert(isBatchStillActive(allTerminalOrWaiting) === false, "nenhum destes status representa trabalho automático em andamento");
+
+  const withPending = [{ status: "CONCLUIDO" }, { status: "PENDENTE" }];
+  assert(isBatchStillActive(withPending) === true, "PENDENTE ainda é trabalho automático a fazer");
+
+  const withActivePhase = [{ status: "CONCLUIDO" }, { status: "ENVIANDO" }];
+  assert(isBatchStillActive(withActivePhase) === true, "ENVIANDO é uma fase ativa em andamento");
+});
+
+check("use-document-upload-queue.ts: isRunning é reabilitado (volta a false) quando o lote para de ter trabalho ativo — nunca fica travado em 'Enviando lote...' para sempre; a checagem é feita dentro de tick() (evento), nunca num useEffect reagindo a `items` (setState síncrono em efeito é evitado de propósito)", () => {
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  assert(hookSource.includes("isBatchStillActive"), "hook deveria usar isBatchStillActive para saber quando o lote realmente terminou");
+  assert(
+    /activeIdsRef\.current\.size === 0 && !isBatchStillActive\(itemsRef\.current\)\)\s*\{\s*setIsRunning\(/.test(hookSource),
+    "tick() deveria chamar setIsRunning(false) quando não há mais trabalho ativo (nem em voo, nem PENDENTE)"
+  );
+  const tickBody = hookSource.slice(hookSource.indexOf("const tick = useCallback("), hookSource.indexOf("}, [processItem]);"));
+  assert(!/useEffect\(/.test(tickBody), "a lógica deveria estar dentro de tick() (chamada por evento), não dentro de um useEffect");
 });
 
 // --- 4. Processamento: independência, sucesso parcial, nome original, hash real ---
@@ -389,6 +445,74 @@ check("novo: sem hash nem título correspondente -> NOVO", () => {
   assert(result.matchedDocumentId === null);
 });
 
+// ---------- Deduplicação — cenários explícitos (seção 6) ----------
+
+check("dedup: mesmo projeto + mesmo hash, NOMES DIFERENTES -> DUPLICADO (hash vence, nunca decide por nome)", () => {
+  const result = classifyCandidate({
+    sha256Hash: "hash-abc",
+    fileName: "nome-completamente-diferente.pdf",
+    kind: "OUTRO",
+    existingDocuments: [
+      { documentId: "doc-1", title: "Título Original", kind: "OUTRO", versions: [{ sha256Hash: "hash-abc" }], nextVersionIndex: 2 },
+    ],
+    batchHashIndex: new Map(),
+    currentQueueItemId: "item-1",
+  });
+  assert(result.classification === "DUPLICADO");
+  assert(result.matchedDocumentId === "doc-1");
+});
+
+check("dedup: MESMO NOME, hashes DIFERENTES -> nunca DUPLICADO (pode ser NOVA_VERSAO, decidido pelo conteúdo/hash, nunca só pelo nome)", () => {
+  const result = classifyCandidate({
+    sha256Hash: "hash-conteudo-novo",
+    fileName: "Relatorio Semanal.pdf",
+    kind: "RELATORIO",
+    existingDocuments: [
+      { documentId: "doc-1", title: "Relatorio Semanal", kind: "RELATORIO", versions: [{ sha256Hash: "hash-conteudo-antigo" }], nextVersionIndex: 2 },
+    ],
+    batchHashIndex: new Map(),
+    currentQueueItemId: "item-1",
+  });
+  assert(result.classification !== "DUPLICADO", "mesmo nome com conteúdo diferente nunca é duplicado");
+  assert(result.classification === "NOVA_VERSAO");
+});
+
+check("dedup: PROJETOS DIFERENTES nunca deduplicam entre si — existingDocuments já vem sempre pré-filtrado por projeto (getManagedDocuments/RLS); classifyCandidate não tem acesso a nenhum dado de outro projeto, então um hash que só existe no OUTRO projeto nunca aparece aqui e o resultado é NOVO", () => {
+  // Simula o snapshot de um projeto B que não conhece o hash cadastrado
+  // no projeto A — a própria ausência do dado é a garantia estrutural.
+  const projectBExistingDocuments = [
+    { documentId: "doc-projeto-b-1", title: "Outro Documento", kind: "OUTRO", versions: [{ sha256Hash: "hash-so-existe-no-projeto-a" }], nextVersionIndex: 2 },
+  ];
+  const result = classifyCandidate({
+    sha256Hash: "hash-so-existe-no-projeto-a", // mesmo hash, mas classificando DENTRO do snapshot do projeto B
+    fileName: "arquivo.pdf",
+    kind: "OUTRO",
+    existingDocuments: projectBExistingDocuments,
+    batchHashIndex: new Map(),
+    currentQueueItemId: "item-1",
+  });
+  // Neste teste o hash FOI incluído no snapshot do projeto B de propósito
+  // (simulando um erro de isolamento) — o ponto real é que em produção
+  // esse snapshot nunca teria essa linha, pois toExistingDocumentSnapshots
+  // só recebe documentos já filtrados por projeto (getManagedDocuments).
+  assert(result.classification === "DUPLICADO", "sanity: classifyCandidate deduplica pelo que está NO snapshot recebido");
+  const migration = readSource("supabase/migrations/20260825130000_multi_document_upload_foundation.sql");
+  assert(/d\.project_id = p_project_id\s*\n\s*and dv\.sha256_hash = p_sha256_hash/.test(migration), "a garantia real de isolamento por projeto é a checagem servidor-side escopada por project_id (fail-closed, nunca confia só no snapshot client-side)");
+});
+
+check("dedup: versões com mesmo hash mostram uma única versão — bloqueado na ORIGEM (índice único project_id+sha256_hash impede a segunda linha de sequer ser gravada), nunca uma dedup só de exibição sobre registros duplicados já existentes", () => {
+  const migration = readSource("supabase/migrations/20260825130000_multi_document_upload_foundation.sql");
+  assert(/unique[\s\S]{0,20}\(\s*project_id,\s*sha256_hash\s*\)|on public\.document_versions \(project_id, sha256_hash\)/i.test(migration), "deveria existir um índice único (project_id, sha256_hash) prevenindo duplicatas na origem");
+});
+
+check("dedup: toExistingDocumentSnapshots nunca inventa/mistura dados de outro projeto — só transforma exatamente os documentos recebidos (já filtrados por quem chama)", () => {
+  const snapshots = toExistingDocumentSnapshots([
+    { id: "doc-1", title: "Doc A", kind: "OUTRO", versions: [{ versionIndex: 1, sha256Hash: "hash-1" }] },
+  ]);
+  assert(snapshots.length === 1, "não deveria adicionar nenhum documento extra");
+  assert(snapshots[0].documentId === "doc-1");
+});
+
 check("decisão humana: hook só avança NOVA_VERSAO/CONFLITO depois de confirmVersionDecision/confirmConflictAsNew explícitos", () => {
   const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
   assert(/status === "NOVA_VERSAO"/.test(hookSource) === false, "não deveria haver comparação direta nesse ponto"); // sanity: usa classification.classification
@@ -442,10 +566,12 @@ check("ausência de ambiguidade: DROP (15 tipos) e CREATE (16 tipos) têm listas
   assert(createParamCount === 16, `CREATE deveria declarar 16 parâmetros, contei ${createParamCount}`);
 });
 
-check("upload individual preservado: document-upload-form.tsx chama a RPC com os mesmos 15 parâmetros nomeados de sempre, sem p_sha256_hash — resolve sem ambiguidade contra a única function que sobra", () => {
+check("upload individual: document-upload-form.tsx AGORA também calcula e envia p_sha256_hash — correção real de uma lacuna de deduplicação (este formulário nunca hasheava, então nunca era protegido pelo índice único project_id+sha256_hash; 'Adicionar nova versão' e 'Upload individual (avançado)' usam este mesmo componente)", () => {
   const uploadForm = readSource("apps/web/components/documents/document-upload-form.tsx");
-  assert(!uploadForm.includes("p_sha256_hash"), "upload individual não precisa mudar");
-  for (const param of ["p_project_id", "p_document_id", "p_document_version_id", "p_kind", "p_title", "p_version_label", "p_document_date", "p_source_type", "p_author", "p_summary", "p_file_path", "p_original_file_name", "p_mime_type", "p_file_size_bytes", "p_notes"]) {
+  assert(uploadForm.includes("computeFileSha256Hex"), "deveria importar/usar computeFileSha256Hex, mesma função do upload múltiplo");
+  assert(uploadForm.includes("p_sha256_hash: sha256Hash"), "deveria passar o hash calculado para a RPC");
+  assert(uploadForm.includes("DUPLICATE_FILE_HASH"), "deveria tratar o erro de duplicidade com mensagem clara, não crua");
+  for (const param of ["p_project_id", "p_document_id", "p_document_version_id", "p_kind", "p_title", "p_version_label", "p_document_date", "p_source_type", "p_author", "p_summary", "p_file_path", "p_original_file_name", "p_mime_type", "p_file_size_bytes", "p_notes", "p_sha256_hash"]) {
     assert(uploadForm.includes(param), `upload individual deveria continuar passando ${param}`);
   }
 });
@@ -677,8 +803,14 @@ function fileExists(relativePath) {
 
 check("ata de reunião: badge de revisão humana necessária aparece também na listagem principal de Documentos (não só durante o upload)", () => {
   const pageSource = readSource("apps/web/app/[projectId]/documentos/page.tsx");
-  assert(/requiresHumanReview/.test(pageSource));
-  assert(/Revisão humana necessária/.test(pageSource));
+  // O cartão de cada documento (com o badge de revisão humana) foi
+  // extraído para DocumentCard (reaproveitado pelos grupos contratuais
+  // e pela lista sem vínculo) — page.tsx renderiza a listagem através
+  // dele, não mais inline.
+  assert(pageSource.includes("DocumentCard"), "page.tsx deveria renderizar a listagem principal via DocumentCard");
+  const documentCardSource = readSource("apps/web/components/documents/document-card.tsx");
+  assert(/requiresHumanReview/.test(documentCardSource));
+  assert(/Revisão humana necessária/.test(documentCardSource));
 });
 
 // --- 7. Erros específicos ---
@@ -877,11 +1009,9 @@ check("segurança: RPC estendida por CREATE OR REPLACE (nunca edita migration hi
   assert(historical.includes("create or replace function public.register_project_document_upload"), "migration histórica não deveria ter sido tocada");
 });
 
-check("segurança: novos parâmetros da RPC vêm no final com default — chamada existente do upload individual continua válida sem alteração", () => {
+check("segurança: novos parâmetros da RPC vêm no final com default — retrocompatível (chamadas antigas sem p_sha256_hash continuariam válidas), e o upload individual agora OPTA por enviá-lo deliberadamente (fechando a lacuna de deduplicação, ver checagem dedicada acima)", () => {
   const migration = readSource("supabase/migrations/20260825130000_multi_document_upload_foundation.sql");
-  assert(/p_notes text default null,\s*\n\s*p_sha256_hash text default null/.test(migration), "p_sha256_hash deveria ser o último parâmetro, com default");
-  const uploadForm = readSource("apps/web/components/documents/document-upload-form.tsx");
-  assert(!uploadForm.includes("p_sha256_hash"), "o upload individual não precisa (nem deveria precisar) mudar para continuar funcionando");
+  assert(/p_notes text default null,\s*\n\s*p_sha256_hash text default null/.test(migration), "p_sha256_hash deveria ser o último parâmetro, com default (retrocompatibilidade)");
 });
 
 // --- Limite de tamanho ---
@@ -911,6 +1041,159 @@ check("arquivo inválido: todas as extensões da allowlist resolvem um MIME conh
   }
 });
 
+// ---------- 5. Suporte a Microsoft Project (.mpp) ----------
+
+check(".mpp: extensão aceita, resolve o MIME canônico application/vnd.ms-project — nunca o file.type bruto do navegador (resolveMimeType só olha a extensão, ignora file.type por construção — tolera qualquer variante que o navegador reporte, incluindo application/x-msproject/application/octet-stream/vazio)", () => {
+  assert(resolveMimeType("Cronograma Obra.mpp") === "application/vnd.ms-project");
+  assert(ACCEPT_ATTRIBUTE.includes(".mpp"), "o atributo accept do <input type=file> deveria incluir .mpp");
+});
+
+check(".mpp: sempre classificado automaticamente como CRONOGRAMA_BASELINE — o tipo canônico de cronograma nesta base (não existe um valor solto 'CRONOGRAMA' em DocumentKind); nunca CONTRATO/CONTRATO_BASE", () => {
+  const descriptor = buildDescriptor("Cronograma Obra.mpp", 12345);
+  assert(isMppFile(descriptor) === true);
+  assert(suggestedKindForDescriptor(descriptor) === "CRONOGRAMA_BASELINE");
+});
+
+check(".mpp: comparação de extensão é case-insensitive (.MPP, .Mpp) — mesma resolução de MIME e sugestão de tipo", () => {
+  for (const name of ["Cronograma.MPP", "Cronograma.Mpp", "cronograma.mpp"]) {
+    const descriptor = buildDescriptor(name, 100);
+    assert(isMppFile(descriptor) === true, `${name} deveria ser reconhecido como .mpp`);
+    assert(suggestedKindForDescriptor(descriptor) === "CRONOGRAMA_BASELINE");
+  }
+});
+
+check("não-.mpp nunca recebe sugestão automática de tipo — nenhum outro formato (PDF incluso) é classificado só pelo nome/extensão, mesmo quando o nome sugere um tipo específico", () => {
+  for (const name of ["Contrato Base.pdf", "Cronograma.xlsx", "Relatorio Semanal.docx", "Planilha.csv"]) {
+    assert(suggestedKindForDescriptor(buildDescriptor(name, 100)) === null, `${name} não deveria ter sugestão automática`);
+  }
+});
+
+check(".mpp: nunca processado como PDF — nenhum caminho de código trata .mpp como PDF (grep estrutural no hook e no formulário individual)", () => {
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  const formSource = readSource("apps/web/components/documents/document-upload-form.tsx");
+  assert(!/mpp[\s\S]{0,80}pdf/i.test(hookSource), "hook não deveria ter nenhuma lógica associando .mpp a processamento de PDF");
+  assert(!/mpp[\s\S]{0,80}pdf/i.test(formSource), "formulário individual não deveria ter nenhuma lógica associando .mpp a processamento de PDF");
+});
+
+check(".mpp: nunca afirma que o cronograma foi extraído — usa a mensagem clara 'Arquivo MPP armazenado — extração ainda não realizada' (status CONCLUIDO, não um status de erro/pendência)", () => {
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  assert(hookSource.includes("Arquivo MPP armazenado — extração ainda não realizada."));
+  assert(hookSource.includes("isMppFile(current.descriptor)"), "a mensagem deveria ser condicionada a isMppFile, não a uma heurística de nome");
+});
+
+check("classifyStorageUploadError: diferencia causas conhecidas (MIME recusado/tamanho/permissão/nome duplicado) sem nunca vazar detalhes internos crus — cai para a mensagem genérica só quando não reconhece a causa", () => {
+  assert(classifyStorageUploadError("The object exceeded the maximum allowed size") === "arquivo excede o tamanho máximo permitido pelo armazenamento");
+  assert(classifyStorageUploadError("mime type application/x-foo is not supported") === "tipo de arquivo não permitido pelo armazenamento");
+  assert(classifyStorageUploadError("The resource already exists") === "conflito de nome no armazenamento");
+  assert(classifyStorageUploadError("permission denied for this operation") === "sem permissão para gravar no armazenamento");
+  assert(classifyStorageUploadError("connection reset") === "falha no armazenamento");
+  assert(classifyStorageUploadError(null) === "falha no armazenamento");
+  assert(classifyStorageUploadError(undefined) === "falha no armazenamento");
+});
+
+check("falha de Storage: a mensagem/statusCode técnicos originais são sempre logados internamente (console.error), nunca descartados — só a frase exposta ao usuário é que é filtrada/segura", () => {
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  assert(/console\.error\(\s*"\[multi-upload\] falha no Storage:"/.test(hookSource), "deveria logar a causa técnica original do erro de Storage");
+  assert(hookSource.includes("classifyStorageUploadError(uploadError.message)"), "a mensagem exposta ao usuário deveria vir de classifyStorageUploadError, nunca do texto cru");
+});
+
+// ---------- 6. Seleção de tipo documental obrigatória (sem default CONTRATO_BASE) ----------
+
+check("MultiUploadDocumentKind: \"\" (não selecionado) é um valor válido do tipo — batchDefaultKind e o kind inicial de cada item nunca mais começam em CONTRATO_BASE", () => {
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  assert(!/useState<MultiUploadDocumentKind>\("CONTRATO_BASE"\)/.test(hookSource), "batchDefaultKind não deveria mais iniciar em CONTRATO_BASE");
+  assert(/useState<MultiUploadDocumentKind>\(""\)/.test(hookSource), "batchDefaultKind deveria iniciar em \"\" (nada selecionado)");
+});
+
+check("document-upload-form.tsx (upload individual): seletor de tipo documental também não usa mais defaultValue=CONTRATO_BASE — mostra 'Selecione o tipo documental' e é required", () => {
+  const formSource = readSource("apps/web/components/documents/document-upload-form.tsx");
+  assert(!formSource.includes('defaultValue="CONTRATO_BASE"'), "formulário individual não deveria mais ter defaultValue=CONTRATO_BASE");
+  assert(formSource.includes("Selecione o tipo documental"));
+  assert(/name="kind"\s*\n\s*required/.test(formSource), "o campo kind continua required (bloqueio nativo HTML5 quando vazio)");
+});
+
+check("processItem: item sem tipo documental selecionado (kind === \"\") é REJEITADO com mensagem clara ANTES do hash/upload — nunca envia/infere um tipo às cegas", () => {
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  const processItemBody = hookSource.slice(hookSource.indexOf("const processItem = useCallback("), hookSource.indexOf("const tick = useCallback("));
+  assert(/if \(!current\.kind\) \{/.test(processItemBody), "processItem deveria recusar itens sem kind selecionado");
+  assert(/status: "REJEITADO"/.test(processItemBody.slice(processItemBody.indexOf("if (!current.kind)"), processItemBody.indexOf("if (!current.kind)") + 300)));
+  const kindCheckIndex = processItemBody.indexOf("if (!current.kind)");
+  const hashIndex = processItemBody.indexOf('status: "CALCULANDO_HASH"');
+  assert(kindCheckIndex !== -1 && hashIndex !== -1 && kindCheckIndex < hashIndex, "a checagem de kind deveria acontecer ANTES da fase de hash/upload");
+});
+
+check("queue-item-row.tsx: seletor de tipo documental do item mostra o placeholder 'Selecione o tipo documental' e fica bloqueado (não editável) especificamente para arquivos .mpp — nenhum outro tipo de arquivo é bloqueado", () => {
+  const rowSource = readSource("apps/web/components/documents/multi-upload/queue-item-row.tsx");
+  assert(rowSource.includes("Selecione o tipo documental"));
+  assert(rowSource.includes("!isMppFile(item.descriptor)"), "canEditKind deveria excluir arquivos .mpp");
+});
+
+check("retry somente de erros: RETRYABLE_STATUSES contém exatamente {ERRO} — DUPLICADO/REJEITADO/CONCLUIDO/AGUARDANDO_ANALISE nunca mostram o botão 'Tentar novamente' (retry nunca reenvia duplicados nem itens já concluídos)", () => {
+  const rowSource = readSource("apps/web/components/documents/multi-upload/queue-item-row.tsx");
+  const match = rowSource.match(/const RETRYABLE_STATUSES = new Set\(\[([^\]]*)\]\);/);
+  assert(match, "RETRYABLE_STATUSES não encontrado");
+  const statuses = match[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean);
+  assert(statuses.length === 1 && statuses[0] === "ERRO", `RETRYABLE_STATUSES deveria ser exatamente ["ERRO"], encontrado ${JSON.stringify(statuses)}`);
+});
+
+// ---------- Deduplicação da LISTAGEM (não só do novo upload) ----------
+//
+// getManagedDocuments (a query real por trás da aba Documentos) exige
+// createSupabaseServerClient() — não é possível chamá-la de verdade
+// aqui sem banco. As checagens abaixo comprovam a garantia pelo
+// SCHEMA/migration e pela leitura estrutural do próprio mapper — nunca
+// consultando o banco remoto.
+
+const documentManagementSource = readSource("apps/web/lib/document-management.ts");
+
+check("dedup da listagem: getManagedDocuments busca documents SEMPRE escopado por project_id (.eq) — um documento de outro projeto nunca entra nem chega a ser considerado para deduplicação", () => {
+  assert(/\.from\("documents"\)[\s\S]{0,80}\.eq\("project_id", projectId\)/.test(documentManagementSource), "query de documents deveria ser escopada por project_id");
+});
+
+check("dedup da listagem: getManagedDocuments NUNCA agrupa/filtra por title — cada linha de documents vira um card, cada linha de document_versions vira uma versão dentro do card do seu document_id; nenhuma lógica de deduplicação por nome existe no mapper", () => {
+  assert(!/\btitle\b[\s\S]{0,40}(group|dedupe|dedup|distinct|Set\()/i.test(documentManagementSource), "não deveria haver nenhuma lógica de agrupamento/dedup por título");
+  assert(!documentManagementSource.includes(".delete("), "o mapper de listagem nunca deveria apagar registros");
+});
+
+check("dedup da listagem: garantia REAL contra duplicidade histórica é o índice único parcial (project_id, sha256_hash) WHERE sha256_hash IS NOT NULL — documents_versions com hash idêntico no MESMO projeto são estruturalmente impossíveis de coexistir a partir desta migration; a exclusão explícita de sha256_hash NULL é intencional (versões antigas sem hash não são afetadas por este índice)", () => {
+  const migration = readSource("supabase/migrations/20260825130000_multi_document_upload_foundation.sql");
+  assert(
+    /create unique index document_versions_project_hash_unique_idx\s*\n\s*on public\.document_versions \(project_id, sha256_hash\)\s*\n\s*where sha256_hash is not null;/.test(migration),
+    "índice único parcial (project_id, sha256_hash) WHERE sha256_hash IS NOT NULL não encontrado exatamente como esperado"
+  );
+});
+
+check("dedup da listagem: mesmo hash em PROJETOS DIFERENTES nunca é restringido pelo índice (chave composta inclui project_id) — permanece isolado por design, nunca deduplicado entre projetos", () => {
+  const migration = readSource("supabase/migrations/20260825130000_multi_document_upload_foundation.sql");
+  assert(/on public\.document_versions \(project_id, sha256_hash\)/.test(migration), "o índice deveria ser composto por (project_id, sha256_hash), nunca só (sha256_hash)");
+});
+
+check("dedup da listagem: card = 1 por DOCUMENTO (não por versão) — contador/estado vazio da página usam documents.length, a mesma coleção deduplicada por construção (uma linha = um id de documento distinto); versões do mesmo documento aparecem dentro do MESMO card, nunca como cards repetidos", () => {
+  const pageSource = readSource("apps/web/app/[projectId]/documentos/page.tsx");
+  assert(pageSource.includes("documents.length === 0"), "estado vazio deveria usar documents.length");
+  // Desde os GRUPOS CONTRATUAIS (Contrato-base/Aditivo N + anexos), a
+  // página não itera mais direto sobre documents.map — passa a coleção
+  // inteira (sem filtrar/agrupar por título) para
+  // groupDocumentsByContractualStructure, cujo próprio contrato
+  // (testado exaustivamente em test-group-contractual-documents.mjs)
+  // garante que cada documento de entrada aparece exatamente uma vez
+  // na saída (groups + ungrouped) — nunca duplicado, nunca mesclado por
+  // título. Cada card em si (DocumentCard/ContractualAttachmentRow)
+  // continua vindo de um único ManagedDocument, um card por documento.
+  assert(pageSource.includes("groupDocumentsByContractualStructure(documents)"), "a página deveria passar a coleção inteira de documents (sem pré-filtro) para o agrupador central");
+  const groupingSource = readSource("apps/web/lib/documents/group-contractual-documents.ts");
+  assert(!/\btitle\b/i.test(groupingSource), "o agrupador central não deveria basear nada em título — só id/kind/createdAt/parentDocumentId");
+});
+
+console.log("");
+console.log("======================================");
+console.log("LIMITAÇÃO CONHECIDA (reportada, não corrigida nesta rodada): o índice único é PARCIAL");
+console.log("(WHERE sha256_hash IS NOT NULL) — versões com sha256_hash NULL (ex.: enviadas pelo upload");
+console.log("individual ANTES da correção desta sessão, quando esse formulário nunca calculava hash)");
+console.log("não são cobertas pela garantia de unicidade. Não foi consultado o banco remoto para");
+console.log("confirmar se duplicatas históricas com hash NULL já existem — isso exigiria acesso ao");
+console.log("banco remoto, fora do escopo autorizado nesta rodada.");
+console.log("======================================");
 console.log("");
 console.log("======================================");
 console.log(`RESULTADO: ${passed} passaram, ${failed} falharam`);

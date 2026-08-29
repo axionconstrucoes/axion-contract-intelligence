@@ -70,6 +70,19 @@ function assert(condition, message) {
   if (!condition) throw new Error(message ?? "assertion failed");
 }
 
+// Corpos MIME agora são sempre base64 (ver mime-message.ts) — decodifica a
+// parte pedida (por Content-Type) para inspecionar o conteúdo real.
+function extractMimePartBody(raw, boundary, contentType) {
+  const escapedBoundary = boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedContentType = contentType.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const partRegex = new RegExp(
+    `--${escapedBoundary}\\r\\nContent-Type: ${escapedContentType}\\r\\nContent-Transfer-Encoding: base64\\r\\n\\r\\n([\\s\\S]*?)\\r\\n--${escapedBoundary}`
+  );
+  const match = raw.match(partRegex);
+  if (!match) throw new Error(`parte MIME não encontrada: ${contentType} (boundary ${boundary})`);
+  return Buffer.from(match[1].replace(/\r\n/g, ""), "base64").toString("utf-8");
+}
+
 console.log("");
 console.log("======================================");
 console.log("ACC — E-MAILS OFICIAIS + MULTIIDIOMA — TESTES");
@@ -82,6 +95,54 @@ check("remetente visível correto no header From (nome + endereço, endereço nu
   const header = formatSenderHeader("reynaldo@axion.com.br");
   assert(header === '"ACC AXION CONTROLE DE CONTRATOS" <reynaldo@axion.com.br>', `header inesperado: ${header}`);
   assert(ACC_SENDER_DISPLAY_NAME === "ACC AXION CONTROLE DE CONTRATOS", "nome de exibição não corresponde ao padrão pedido");
+});
+
+check("formatSenderHeader: nunca duplica/aninha o From — recusa em runtime qualquer valor que já pareça formatado", () => {
+  // Reprodução exata do bug corrigido nesta rodada: chamar
+  // formatSenderHeader sobre o RESULTADO de uma chamada anterior (o que
+  // produzia `"X" <"X" <a@b>>`) agora precisa lançar, nunca silenciosamente
+  // gerar um header inválido.
+  const alreadyFormatted = formatSenderHeader("acc_ia@axion.com.br");
+  assert(/^"ACC AXION CONTROLE DE CONTRATOS" <acc_ia@axion\.com\.br>$/.test(alreadyFormatted));
+
+  const rejections = [
+    ["display name duplicado / endereço aninhado", alreadyFormatted],
+    ["CR/LF (header injection)", "acc_ia@axion.com.br\r\nBcc: atacante@x.com"],
+    ["NUL", "acc_ia@axion.com.br\0"],
+    ["endereço vazio", ""],
+    ["header contendo <\"", '<"ACC" <acc_ia@axion.com.br>'],
+    ["header contendo dois pares de <...>", "<a@b.com> <c@d.com>"],
+  ];
+  for (const [label, value] of rejections) {
+    let threw = false;
+    try {
+      formatSenderHeader(value);
+    } catch {
+      threw = true;
+    }
+    assert(threw, `formatSenderHeader deveria recusar: ${label} (valor: ${JSON.stringify(value)})`);
+  }
+});
+
+check("buildMimeMessage: From nunca sai duplicado/aninhado quando o chamador passa o endereço puro (mesmo contrato do provider real)", () => {
+  const mime = buildMimeMessage(
+    { to: "reynaldo@axion.com.br", subject: "Teste", text: "corpo", correlationId: "test-corr-id" },
+    "acc_ia@axion.com.br",
+    "<msg@axion.com.br>"
+  );
+  const fromLine = mime.split("\r\n").find((line) => line.startsWith("From: "));
+  assert(fromLine === 'From: "ACC AXION CONTROLE DE CONTRATOS" <acc_ia@axion.com.br>', `From line inesperada: ${fromLine}`);
+  assert(!fromLine.includes('<"'), "From não deveria conter o padrão de aninhamento <\"");
+  assert((fromLine.match(/</g) ?? []).length === 1, "From deveria ter só 1 '<' (um único endereço, nunca dois pares aninhados)");
+});
+
+check("gmail-email-provider.ts (caminho real do provider): passa this.config.senderEmail (endereço puro) para buildMimeMessage, nunca um valor pré-formatado", () => {
+  const providerSource = readSource("apps/web/lib/email/gmail-email-provider.ts");
+  assert(
+    /buildMimeMessage\(\s*guardedInput,\s*this\.config\.senderEmail,/.test(providerSource),
+    "gmail-email-provider.ts deveria chamar buildMimeMessage(guardedInput, this.config.senderEmail, ...) — endereço puro, sem formatSenderHeader aplicado antes"
+  );
+  assert(!providerSource.includes("formatSenderHeader"), "gmail-email-provider.ts não deveria importar/chamar formatSenderHeader — isso é responsabilidade exclusiva de buildMimeMessage");
 });
 
 check("acc_ia@axion.com.br ainda não é o remetente configurado (não inventamos que já está autorizado)", () => {
@@ -119,6 +180,12 @@ const baseAlertInput = {
   summary: "O cliente notificou atraso de 20 dias.",
   relatedEventTitle: "Notificação de atraso — 05/01/2026",
   contractualBasis: "Cláusula 5.2 — Prazo de execução",
+  // Confronto estruturado (Parte D) e cabeçalho com logo (Parte B) são
+  // cobertos por scripts/test-alert-email-mime-confront-evidence.mjs —
+  // aqui ficam vazio/false para exercitar exatamente o caminho antigo
+  // (fallback contractualBasis, cabeçalho só texto).
+  confrontationBlocks: [],
+  hasInlineLogo: false,
   keyEvidence: ["E-mail: Atraso na entrega (Gmail > Assunto: Atraso na entrega)"],
   potentialImpact: "Impacto Potencial",
   recommendedAction: null,
@@ -150,11 +217,11 @@ check("BAIXO usa fundo verde, MÉDIO usa fundo AZUL (nunca âmbar/amarelo/laranj
   assert(high.includes("#f97316") && high.includes("RISCO ALTO"), "badge ALTO incorreto — deveria continuar laranja, não afetado pela mudança do MÉDIO");
 });
 
-check("corpo principal do e-mail é sempre preto (#000000), nunca parágrafo inteiro colorido", () => {
+check("corpo principal do e-mail é sempre preto (#111111 ou #000000 — Parte C.4), nunca parágrafo inteiro colorido", () => {
   const { html } = buildContractAlertEmail({ ...baseAlertInput, severity: "ALTA" });
   assert(html.includes("background-color:#ffffff"), "fundo deveria ser branco");
-  const bodyTextOccurrences = (html.match(/color:#000000/g) ?? []).length;
-  assert(bodyTextOccurrences >= 5, "texto principal deveria usar preto na maior parte do corpo");
+  const bodyTextOccurrences = (html.match(/color:#111111/g) ?? []).length + (html.match(/color:#000000/g) ?? []).length;
+  assert(bodyTextOccurrences >= 5, "texto principal deveria usar preto (#111111 ou #000000) na maior parte do corpo");
 });
 
 check("campos ausentes (responsável/prazo/ação recomendada) nunca aparecem como placeholder inventado", () => {
@@ -246,8 +313,18 @@ check("buildMimeMessage com html gera multipart/alternative com as duas partes",
   assert(raw.includes("Content-Type: multipart/alternative; boundary=\"acc-boundary-corr-2\""));
   assert(raw.includes("Content-Type: text/plain; charset=UTF-8"));
   assert(raw.includes("Content-Type: text/html; charset=UTF-8"));
-  assert(raw.includes("Versão texto."));
-  assert(raw.includes("<p>Versão HTML.</p>"));
+  assert(
+    (raw.match(/Content-Transfer-Encoding: base64/g) ?? []).length >= 2,
+    "os dois corpos (text/plain e text/html) deveriam declarar Content-Transfer-Encoding: base64"
+  );
+  assert(
+    extractMimePartBody(raw, "acc-boundary-corr-2", "text/plain; charset=UTF-8").includes("Versão texto."),
+    "corpo text/plain deveria decodificar para o texto original"
+  );
+  assert(
+    extractMimePartBody(raw, "acc-boundary-corr-2", "text/html; charset=UTF-8").includes("<p>Versão HTML.</p>"),
+    "corpo text/html deveria decodificar para o HTML original"
+  );
 });
 
 check("base64UrlEncode nunca produz caracteres não-seguros para URL (+, /, =)", () => {
@@ -363,6 +440,32 @@ check("assinatura HTML só referencia cid: quando o logo inline realmente está 
   assert(withoutLogo.includes(ACC_SENDER_DISPLAY_NAME), "mesmo sem logo, o texto da assinatura deve aparecer");
 });
 
+check("buildAccEmailSignatureHtml/appendAccEmailSignature: includeLogoImage=false suprime SÓ a imagem do rodapé (texto continua), sem quebrar o default (true) dos demais fluxos (SLA/solicitação de ação)", () => {
+  // Default (sem o 3º argumento) continua exatamente como antes — SLA e
+  // solicitação de ação, que não têm logo em nenhum outro lugar do
+  // e-mail, não perdem a única ocorrência do logo que tinham.
+  const defaultBehavior = buildAccEmailSignatureHtml(true);
+  assert(defaultBehavior.includes(`cid:${ACC_EMAIL_LOGO_CID}`), "sem passar includeLogoImage, o comportamento anterior (logo no rodapé) precisa continuar idêntico");
+
+  // O alerta de contrato (único fluxo com logo no cabeçalho) passa false
+  // explicitamente para nunca repetir a mesma imagem duas vezes.
+  const suppressed = buildAccEmailSignatureHtml(true, false);
+  assert(!suppressed.includes(`cid:${ACC_EMAIL_LOGO_CID}`), "com includeLogoImage=false, o rodapé não deveria referenciar o logo de novo");
+  assert(suppressed.includes(ACC_SENDER_DISPLAY_NAME), "o texto/disclaimer do rodapé continua presente mesmo sem a imagem");
+
+  const signedSuppressed = appendAccEmailSignature({ text: "Texto.", html: "<p>HTML.</p>" }, true, false);
+  assert(!signedSuppressed.html.includes(`cid:${ACC_EMAIL_LOGO_CID}`));
+  assert(signedSuppressed.html.includes(ACC_SENDER_DISPLAY_NAME));
+});
+
+check("send-contract-alert-email.ts: chama appendAccEmailSignature com includeLogoImage=false (o cabeçalho do alerta já mostra o logo — nunca duas vezes no mesmo e-mail)", () => {
+  const sendSource = readSource("apps/web/lib/email/send-contract-alert-email.ts");
+  assert(
+    /appendAccEmailSignature\(\{\s*text,\s*html\s*\},\s*hasInlineLogo,\s*false\s*\)/.test(sendSource),
+    "send-contract-alert-email.ts deveria passar includeLogoImage=false para appendAccEmailSignature"
+  );
+});
+
 check("appendAccEmailSignature: e-mail só-texto (ActionRequest) ganha a linha de assinatura em texto puro, nunca HTML inventado", () => {
   const signed = appendAccEmailSignature({ text: "Corpo da solicitação." }, false);
   assert(signed.text.includes("Corpo da solicitação."));
@@ -396,7 +499,11 @@ check("buildMimeMessage com inlineImages envolve multipart/alternative num multi
   assert(raw.includes("Content-ID: <acc-logo-signature>"));
   assert(raw.includes("Content-Disposition: inline"));
   assert(raw.includes("aGVsbG8td29ybGQ="));
-  assert(raw.includes("Versão texto.") && raw.includes("<p>Versão HTML.</p>"));
+  assert(
+    extractMimePartBody(raw, "acc-boundary-corr-cid-1", "text/plain; charset=UTF-8").includes("Versão texto.") &&
+      extractMimePartBody(raw, "acc-boundary-corr-cid-1", "text/html; charset=UTF-8").includes("<p>Versão HTML.</p>"),
+    "corpos text/plain e text/html deveriam decodificar para o conteúdo original mesmo com imagem inline"
+  );
 });
 
 check("buildMimeMessage sem inlineImages continua exatamente multipart/alternative simples (nunca envolve multipart/related à toa)", () => {

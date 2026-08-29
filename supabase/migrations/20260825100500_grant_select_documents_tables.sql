@@ -1,0 +1,40 @@
+-- ============================================================
+-- 20260825100500_grant_select_documents_tables.sql
+--
+-- Mesma causa raiz de 20260825100000_grant_select_core_identity_tables.sql
+-- (RLS + policy de SELECT existentes, mas sem o GRANT SELECT explicito
+-- para authenticated), agora confirmada para public.documents e
+-- public.document_versions ao validar funcionalmente
+-- public.delete_project_document (Tarefa 3 — supabase/tests/database/
+-- document_safe_delete_test.sql), e diretamente relevante tambem para
+-- a pagina Documentos em producao (apps/web/lib/data.ts chama
+-- getDocuments()/getClauses() via cliente vinculado a RLS, papel
+-- authenticated).
+--
+-- Reproduzido em supabase_db local:
+--   set local role authenticated;
+--   select count(*) from public.documents;
+--   -> ERROR: permission denied for table documents
+--
+-- ATENCAO (documentado, nao corrigido aqui): uma auditoria mais ampla
+-- encontrou o MESMO gap em 53 tabelas do schema public (toda tabela
+-- com RLS habilitado cuja policy de SELECT nunca ganhou o GRANT
+-- explicito ao lado). O ambiente remoto funciona porque um projeto
+-- Supabase hospedado recebe privilegios padrao de anon/authenticated/
+-- service_role na criacao da plataforma (fora de qualquer migration);
+-- um `supabase start`/`db reset` local nao reproduz esse bootstrap.
+-- Este arquivo concede apenas o que foi comprovadamente exercitado
+-- pelos testes desta sessao (documents/document_versions) — as
+-- demais 51 tabelas ficam registradas no relatorio final como
+-- pendencia para uma migration dedicada, decidida deliberadamente
+-- pelo usuario (grant tabela a tabela vs. um GRANT amplo por
+-- schema), em vez de uma expansao apressada de escopo aqui.
+--
+-- Nao concede nada a anon. Nao concede INSERT/UPDATE/DELETE: nenhum
+-- teste ou caminho de escrita real precisa de acesso direto a estas
+-- duas tabelas (toda escrita passa por RPCs SECURITY DEFINER ou por
+-- register_project_document_upload).
+-- ============================================================
+
+grant select on public.documents to authenticated;
+grant select on public.document_versions to authenticated;

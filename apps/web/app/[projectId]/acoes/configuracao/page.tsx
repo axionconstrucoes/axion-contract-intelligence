@@ -51,14 +51,12 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-1.5">
-            Timezone e horário útil
-            <FeatureInfo helpId="sla-config-timezone" />
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+      <details className="rounded-md border">
+        <summary className="flex cursor-pointer items-center gap-1.5 px-3 py-2 text-sm font-medium">
+          Timezone e horário útil
+          <FeatureInfo helpId="sla-config-timezone" />
+        </summary>
+        <div className="border-t px-3 py-3">
           <SlaProjectSettingsForm
             projectId={projectId}
             timezone={businessHoursConfig.timeZone}
@@ -66,8 +64,8 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
             businessDayEndHour={businessHoursConfig.businessDayEndHour}
             isDefault={projectSettings === null}
           />
-        </CardContent>
-      </Card>
+        </div>
+      </details>
 
       <Card>
         <CardHeader>
@@ -76,15 +74,41 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
             <FeatureInfo helpId="sla-config-matriz-prazos" />
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {RISK_LEVELS.map((riskLevel) => (
-            <SlaMatrixConfigForm
-              key={riskLevel}
-              projectId={projectId}
-              riskLevel={riskLevel}
-              rule={resolveGenericMatrixRule(matrixRules, riskLevel)}
-            />
-          ))}
+        <CardContent>
+          {/* Tabela SEMÂNTICA real (<table>/<thead>/<tbody>/<th scope>),
+              não um CSS Grid disfarçado — cada uma das 4 linhas
+              (Baixo/Médio/Alto/Crítico) salva/audita independentemente
+              através de um <form> próprio, EXTERNO à tabela (portalado
+              para o body, ver sla-matrix-config-form.tsx — um <form>
+              nunca pode envolver <tr>/<td> validamente), associado aos
+              controles de cada linha só pelo atributo HTML `form`. */}
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[720px] text-xs">
+              <thead>
+                <tr className="border-b text-left">
+                  <th scope="col" className="px-2 py-1.5 font-semibold text-muted-foreground">Risco</th>
+                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Unidade</th>
+                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Assumir</th>
+                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Responder</th>
+                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Concluir</th>
+                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">2º escalão</th>
+                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Diretoria</th>
+                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Opções</th>
+                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {RISK_LEVELS.map((riskLevel) => (
+                  <SlaMatrixConfigForm
+                    key={riskLevel}
+                    projectId={projectId}
+                    riskLevel={riskLevel}
+                    rule={resolveGenericMatrixRule(matrixRules, riskLevel)}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
 

@@ -23,6 +23,7 @@ import {
 } from "./action-request-mapper";
 import { mapClauseRow, type ClauseRow, type ClauseVersionParent } from "./clause-mapper";
 import { mapContractChangeRow, type ContractChangeRow } from "./contract-change-mapper";
+import { resolveNonTrashedDocumentIds, withActiveDocumentFilter } from "./documents/active-document-filter";
 import {
   mapNotificationEmailDeliveryRow,
   mapNotificationRecipientRow,
@@ -72,7 +73,10 @@ const CLAUSE_COLUMNS = "id, document_version_id, clause_number, title, text, cre
 const SCHEDULE_ACTIVITY_COLUMNS =
   "id, schedule_version_id, name, baseline_start, baseline_end, planned_start, planned_end, status, created_at";
 
-const EMAIL_COLUMNS = "id, project_id, from_address, to_address, subject, sent_at, snippet";
+// direction (INBOUND/OUTBOUND/null) já é resolvida e gravada na ingestão
+// Gmail (evaluateGmailMessagePolicy — mailboxIsSender ? OUTBOUND : INBOUND,
+// migration 20260820125115) — nunca recalculada/adivinhada aqui, só lida.
+const EMAIL_COLUMNS = "id, project_id, from_address, to_address, subject, sent_at, snippet, direction";
 
 const CONTRACT_EVENT_COLUMNS =
   "id, project_id, occurred_at, title, description, source_type, status, created_by_type, created_by_user_id, created_by_label, created_at";
@@ -116,6 +120,7 @@ type EmailRow = {
   subject: string;
   sent_at: string;
   snippet: string;
+  direction: "INBOUND" | "OUTBOUND" | null;
 };
 
 function mapEmailRow(row: EmailRow) {
@@ -127,6 +132,7 @@ function mapEmailRow(row: EmailRow) {
     subject: row.subject,
     date: row.sent_at,
     snippet: row.snippet,
+    direction: row.direction,
   };
 }
 
@@ -323,10 +329,17 @@ export async function getProjectPackages(projectId: string) {
 
 export async function getDocuments(projectId: string) {
   const supabase = await createSupabaseServerClient();
-  const { data: documentRows, error: documentsError } = await supabase
-    .from("documents")
-    .select(DOCUMENT_COLUMNS)
-    .eq("project_id", projectId);
+  // Regra CANÔNICA de "documento ativo" (nunca na lixeira) — ver
+  // apps/web/lib/documents/active-document-filter.ts. Só filtra a
+  // consulta de ENTRADA em documents; document_versions abaixo já
+  // fica automaticamente restrita aos ids resultantes.
+  const { data: documentRows, error: documentsError } = await withActiveDocumentFilter(
+    (filterActive) => {
+      let query = supabase.from("documents").select(DOCUMENT_COLUMNS).eq("project_id", projectId);
+      if (filterActive) query = query.is("deleted_at", null);
+      return query;
+    }
+  );
 
   if (documentsError) {
     if (documentsError.code === "22P02") {
@@ -366,11 +379,14 @@ export async function getDocuments(projectId: string) {
 
 export async function getDocument(documentId: string) {
   const supabase = await createSupabaseServerClient();
-  const { data: documentRow, error: documentError } = await supabase
-    .from("documents")
-    .select(DOCUMENT_COLUMNS)
-    .eq("id", documentId)
-    .maybeSingle();
+  // Um documento na lixeira é tratado como "não encontrado" — mesmo
+  // caminho de retorno (null) já usado para um id genuinamente
+  // inexistente, nunca uma exceção nova/diferente.
+  const { data: documentRow, error: documentError } = await withActiveDocumentFilter((filterActive) => {
+    let query = supabase.from("documents").select(DOCUMENT_COLUMNS).eq("id", documentId);
+    if (filterActive) query = query.is("deleted_at", null);
+    return query.maybeSingle();
+  });
 
   if (documentError) {
     if (documentError.code === "22P02") {
@@ -413,7 +429,19 @@ export async function getDocumentVersion(documentVersionId: string) {
     throw new Error(`Falha ao carregar versão do documento: ${versionError.message}`);
   }
 
-  return versionRow ? mapDocumentVersionRow(versionRow as DocumentVersionRow) : null;
+  if (!versionRow) {
+    return null;
+  }
+
+  const row = versionRow as DocumentVersionRow;
+  // Versão de um documento na lixeira é tratada como "não encontrada"
+  // — mesma regra canônica das demais funções desta tabela.
+  const nonTrashed = await resolveNonTrashedDocumentIds(supabase, [row.document_id]);
+  if (!nonTrashed.has(row.document_id)) {
+    return null;
+  }
+
+  return mapDocumentVersionRow(row);
 }
 
 // TEMPORARY MOCK SEAM: usada apenas por resolveCrossReferenceLabel, que ficou
@@ -427,10 +455,13 @@ export function getMockDocument(documentId: string) {
 export async function getClauses(projectId: string) {
   const supabase = await createSupabaseServerClient();
 
-  const { data: documentRows, error: documentsError } = await supabase
-    .from("documents")
-    .select("id, project_id")
-    .eq("project_id", projectId);
+  // Regra CANÔNICA — cláusulas de um documento na lixeira nunca
+  // aparecem na aba Cláusulas (nem em nenhum outro consumidor).
+  const { data: documentRows, error: documentsError } = await withActiveDocumentFilter((filterActive) => {
+    let query = supabase.from("documents").select("id, project_id").eq("project_id", projectId);
+    if (filterActive) query = query.is("deleted_at", null);
+    return query;
+  });
 
   if (documentsError) {
     if (documentsError.code === "22P02") {
@@ -530,11 +561,15 @@ export async function getClause(clauseId: string) {
 
   const version = versionRow as { id: string; document_id: string };
 
-  const { data: documentRow, error: documentError } = await supabase
-    .from("documents")
-    .select("id, project_id")
-    .eq("id", version.document_id)
-    .maybeSingle();
+  // Regra CANÔNICA — uma cláusula cujo documento foi enviado para a
+  // lixeira é tratada como "não encontrada" (mesmo caminho de exceção
+  // de uma inconsistência estrutural genuína, já esperado por quem
+  // chama esta função) — nunca devolvida como se o documento continuasse ativo.
+  const { data: documentRow, error: documentError } = await withActiveDocumentFilter((filterActive) => {
+    let query = supabase.from("documents").select("id, project_id").eq("id", version.document_id);
+    if (filterActive) query = query.is("deleted_at", null);
+    return query.maybeSingle();
+  });
 
   if (documentError) {
     throw new Error(`Falha ao carregar documento da cláusula: ${documentError.message}`);
@@ -542,7 +577,7 @@ export async function getClause(clauseId: string) {
 
   if (!documentRow) {
     throw new Error(
-      `Inconsistência estrutural: clause (id=${clauseId}) → document_version (id=${version.id}) → document (id=${version.document_id}) não encontrado.`
+      `Inconsistência estrutural: clause (id=${clauseId}) → document_version (id=${version.id}) → document (id=${version.document_id}) não encontrado (ou está na lixeira).`
     );
   }
 
@@ -565,10 +600,14 @@ export function getMockClause(clauseId: string) {
 export async function getScheduleActivities(projectId: string) {
   const supabase = await createSupabaseServerClient();
 
-  const { data: documentRows, error: documentsError } = await supabase
-    .from("documents")
-    .select("id, project_id")
-    .eq("project_id", projectId);
+  // Regra CANÔNICA — cronograma de um documento na lixeira nunca conta
+  // como fonte operacional (nem para exibição, nem para nenhuma
+  // análise automatizada).
+  const { data: documentRows, error: documentsError } = await withActiveDocumentFilter((filterActive) => {
+    let query = supabase.from("documents").select("id, project_id").eq("project_id", projectId);
+    if (filterActive) query = query.is("deleted_at", null);
+    return query;
+  });
 
   if (documentsError) {
     if (documentsError.code === "22P02") {
@@ -704,11 +743,14 @@ export async function getScheduleActivity(activityId: string) {
 
   const documentVersion = documentVersionRow as { id: string; document_id: string };
 
-  const { data: documentRow, error: documentError } = await supabase
-    .from("documents")
-    .select("id, project_id")
-    .eq("id", documentVersion.document_id)
-    .maybeSingle();
+  // Regra CANÔNICA — atividade cujo documento fonte foi enviado para a
+  // lixeira é tratada como "não encontrada" no mesmo caminho de
+  // exceção da inconsistência estrutural genuína.
+  const { data: documentRow, error: documentError } = await withActiveDocumentFilter((filterActive) => {
+    let query = supabase.from("documents").select("id, project_id").eq("id", documentVersion.document_id);
+    if (filterActive) query = query.is("deleted_at", null);
+    return query.maybeSingle();
+  });
 
   if (documentError) {
     throw new Error(`Falha ao carregar documento do cronograma: ${documentError.message}`);
@@ -716,7 +758,7 @@ export async function getScheduleActivity(activityId: string) {
 
   if (!documentRow) {
     throw new Error(
-      `Inconsistência estrutural: schedule_activity (id=${activityId}) → document_version (id=${documentVersion.id}) → document (id=${documentVersion.document_id}) não encontrado.`
+      `Inconsistência estrutural: schedule_activity (id=${activityId}) → document_version (id=${documentVersion.id}) → document (id=${documentVersion.document_id}) não encontrado (ou está na lixeira).`
     );
   }
 

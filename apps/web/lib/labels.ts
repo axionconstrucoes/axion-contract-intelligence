@@ -381,7 +381,24 @@ export const additionalProposalLinkRoleLabels: Record<AdditionalProposalLinkRole
   ESCOPO_PROJETO: "Escopo/projeto aprovado",
 };
 
+// Colunas `date` do Postgres (ex.: acc_operational_start_date,
+// project_start_date, due_date) chegam como "YYYY-MM-DD" puro, sem hora —
+// uma data CIVIL, não um instante. `new Date("2026-08-24")` interpreta
+// isso como meia-noite UTC; toLocaleDateString então converte para o
+// timezone local, o que pode voltar um dia (ex.: exibe "23/08/2026" para
+// quem está em UTC-3) — bug real, não hipotético. Datas civis nunca devem
+// passar pelo pipeline Date/timezone: os componentes Y/M/D já são
+// exatamente o que deve aparecer na tela, sem conversão nenhuma.
+const CIVIL_DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
 export function formatDate(iso: string): string {
+  const civilDateMatch = CIVIL_DATE_ONLY.exec(iso);
+  if (civilDateMatch) {
+    const [, year, month, day] = civilDateMatch;
+    return `${day}/${month}/${year}`;
+  }
+  // Timestamp completo (instante real, ex.: created_at) — comportamento
+  // inalterado: converte para o timezone local, como sempre foi.
   const date = new Date(iso);
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }

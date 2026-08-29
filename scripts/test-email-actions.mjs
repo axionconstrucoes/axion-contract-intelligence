@@ -25,7 +25,7 @@
 // Uso:
 //   node scripts/test-email-actions.mjs
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { register } from "node:module";
@@ -377,7 +377,6 @@ const proxySource = readSource("apps/web/proxy.ts");
 const callbackSource2 = readSource("apps/web/app/auth/callback/route.ts");
 const loginPageSourceForNext = readSource("apps/web/app/login/page.tsx");
 const googleButtonSourceForNext = readSource("apps/web/app/login/google-signin-button.tsx");
-const loginActionsSourceForNext = readSource("apps/web/app/login/actions.ts");
 
 check("proxy.ts: preserva o destino original em ?next= ao redirecionar para /login (só quando não é '/')", () => {
   assert(proxySource.includes('redirectUrl.searchParams.set("next", originalPath)'));
@@ -390,10 +389,9 @@ check("auth/callback/route.ts: lê e revalida 'next' com sanitizeInternalRedirec
   assert(!callbackSource2.includes('new URL("/projetos", url.origin)'), "o destino final não deveria mais ser um literal fixo — precisa vir de nextDestination");
 });
 
-check("login/page.tsx: revalida 'next' de novo (nunca confia só porque já veio do proxy) e propaga para Google + formulário de senha", () => {
+check("login/page.tsx: revalida 'next' de novo (nunca confia só porque já veio do proxy) e propaga para o Google (login é Google-only, sem formulário de senha)", () => {
   assert(loginPageSourceForNext.includes("sanitizeInternalRedirect(next"));
   assert(loginPageSourceForNext.includes("<GoogleSignInButton next={safeNext} />"));
-  assert(loginPageSourceForNext.includes('name="next"'));
 });
 
 check("google-signin-button.tsx: anexa 'next' à URL de callback só quando presente — comportamento sem destino é idêntico ao anterior", () => {
@@ -401,13 +399,12 @@ check("google-signin-button.tsx: anexa 'next' à URL de callback só quando pres
   assert(/if \(next\)/.test(googleButtonSourceForNext));
 });
 
-check("login/actions.ts (login por senha): também propaga 'next' — comportamento sem destino continua idêntico ao anterior (redirect(\"/projetos\"))", () => {
-  assert(loginActionsSourceForNext.includes("sanitizeInternalRedirect(formData.get(\"next\")"));
-  assert(loginActionsSourceForNext.includes('nextDestination === "/projetos" ? "" :'));
+check("login/actions.ts (login por senha) foi removido — login é Google-only também no servidor, não só na interface", () => {
+  assert(!existsSync(path.join(repoRoot, "apps/web/app/login/actions.ts")), "login/actions.ts (signInWithPassword) não deveria mais existir");
 });
 
 check("nenhum arquivo do fluxo de login registra o token em log/console — 'next' só é usado para montar a URL de redirect", () => {
-  for (const source of [callbackSource2, loginPageSourceForNext, googleButtonSourceForNext, loginActionsSourceForNext]) {
+  for (const source of [callbackSource2, loginPageSourceForNext, googleButtonSourceForNext]) {
     assert(!/console\.(log|error|warn|info)\(/.test(source), "nenhum destes arquivos deveria logar nada (token/next poderiam vazar)");
   }
 });
@@ -582,21 +579,18 @@ check("proxy.ts (auth gate) não foi alterado por esta feature — /email-action
   assert(!proxySource.includes("email-actions"), "proxy.ts não deveria mencionar email-actions — a proteção é automática (rota não pública)");
 });
 
-check("auth/callback/route.ts e login/actions.ts: alterados só no mínimo necessário para o retorno pós-login — validação de domínio/senha/exchangeCodeForSession intactas", () => {
+check("auth/callback/route.ts: alterado só no mínimo necessário para o retorno pós-login — validação de domínio/exchangeCodeForSession intactas (login por senha foi removido por completo — ver login/actions.ts)", () => {
   const callbackSource = readSource("apps/web/app/auth/callback/route.ts");
-  const loginActionsSource = readSource("apps/web/app/login/actions.ts");
-  // Nenhum dos dois importa/chama a feature de e-mail acionável
-  // diretamente (só o helper genérico de redirect seguro, já validado
-  // acima) — um comentário explicando o motivo do "next" é esperado e
-  // não conta como acoplamento.
+  // Não importa/chama a feature de e-mail acionável diretamente (só o
+  // helper genérico de redirect seguro, já validado acima) — um
+  // comentário explicando o motivo do "next" é esperado e não conta
+  // como acoplamento.
   assert(!callbackSource.includes('from "@/lib/email-actions') && !callbackSource.includes("EmailAlertAction"));
-  assert(!loginActionsSource.includes('from "@/lib/email-actions') && !loginActionsSource.includes("EmailAlertAction"));
   // A lógica de autenticação em si (não o redirect final) continua
   // exatamente a mesma.
   assert(callbackSource.includes("ALLOWED_EMAIL_DOMAIN = \"axion.com.br\""));
   assert(callbackSource.includes("exchangeCodeForSession(code)"));
   assert(callbackSource.includes("await supabase.auth.signOut()"));
-  assert(loginActionsSource.includes("signInWithPassword"));
 });
 
 check("faixa SISTEMA EM TESTE não foi alterada — layout raiz continua igual, nenhum arquivo novo a referencia", () => {

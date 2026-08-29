@@ -13,6 +13,9 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getEmailAttachmentsForEmails } from "../../email/attachments/get-email-attachments";
+import { resolveNonTrashedDocumentIds } from "../../documents/active-document-filter";
+import type { ContractualParentDocumentRow, DocumentContractualLinkContextRow } from "./map-contractual-link-context";
+import { mapContractualLinkContext } from "./map-contractual-link-context";
 import type {
   ContextClause,
   ContextConfrontationCandidate,
@@ -77,6 +80,19 @@ type DocumentRow = {
   id: string;
   kind: string;
   title: string;
+  // Presentes só depois da migration 20260829090000 estar aplicada —
+  // ver o fallback em resolveClauses() (retry sem essas colunas se o
+  // banco ainda não as tiver, nunca quebra o carregamento do contexto).
+  contractual_parent_document_id?: string | null;
+  contractual_incorporation_basis?: string | null;
+  contractual_linked_by_user_id?: string | null;
+  contractual_linked_at?: string | null;
+};
+
+type DocumentVersionForCurrentLabelRow = {
+  document_id: string;
+  version_index: number;
+  version_label: string;
 };
 
 type EmailRow = {
@@ -140,32 +156,128 @@ async function resolveClauses(
 
   const documentIds = Array.from(new Set(versions.map((v) => v.document_id)));
 
-  const { data: documentData, error: documentError } =
-    documentIds.length > 0
-      ? await supabase.from("documents").select("id,kind,title").in("id", documentIds)
-      : { data: [] as DocumentRow[], error: null };
+  const EXTENDED_DOCUMENT_COLUMNS =
+    "id,kind,title,contractual_parent_document_id,contractual_incorporation_basis,contractual_linked_by_user_id,contractual_linked_at";
 
-  if (documentError) {
-    throw new Error(`Falha ao carregar documentos do contexto: ${documentError.message}`);
+  let documentRows: DocumentRow[] = [];
+  if (documentIds.length > 0) {
+    const extended = await supabase.from("documents").select(EXTENDED_DOCUMENT_COLUMNS).in("id", documentIds);
+
+    if (extended.error) {
+      // 42703 = undefined_column: o banco ainda não tem a migration
+      // 20260829090000 aplicada (ver relatório, "Compatibilidade de
+      // deploy") — refaz a MESMA consulta só com as colunas que sempre
+      // existiram, nunca quebra o carregamento do contexto por causa
+      // disso. Qualquer OUTRO erro continua sendo lançado normalmente.
+      if (extended.error.code === "42703") {
+        const fallback = await supabase.from("documents").select("id,kind,title").in("id", documentIds);
+        if (fallback.error) {
+          throw new Error(`Falha ao carregar documentos do contexto: ${fallback.error.message}`);
+        }
+        documentRows = fallback.data as unknown as DocumentRow[];
+      } else {
+        throw new Error(`Falha ao carregar documentos do contexto: ${extended.error.message}`);
+      }
+    } else {
+      documentRows = extended.data as unknown as DocumentRow[];
+    }
   }
 
-  const documentById = new Map((documentData as unknown as DocumentRow[]).map((d) => [d.id, d]));
+  const documentById = new Map(documentRows.map((d) => [d.id, d]));
 
-  return clauses.map((clause) => {
-    const documentId = documentIdByVersionId.get(clause.document_version_id) ?? null;
-    const document = documentId ? documentById.get(documentId) : undefined;
+  // Documentos NA LIXEIRA nunca chegam ao Expert/confronto — uma
+  // cláusula cujo documento foi enviado para a lixeira é EXCLUÍDA do
+  // resultado (não só degradada para "documento não disponível", que é
+  // o comportamento já existente para um documento genuinamente não
+  // encontrado — casos diferentes, tratados diferente abaixo).
+  // Consulta separada, mesmo padrão de fallback em 42703 (migration
+  // 20260829150000 pode não estar aplicada nesse banco — nesse caso
+  // não existe lixeira possível, todo documento é tratado como ativo).
+  const nonTrashedDocumentIds = await resolveNonTrashedDocumentIds(supabase, documentIds);
 
-    return {
-      id: clause.id,
-      clauseNumber: clause.clause_number,
-      title: clause.title,
-      text: clause.text,
-      documentId: documentId ?? "",
-      documentKind: document?.kind ?? "DESCONHECIDO",
-      documentTitle: document?.title ?? "Documento não disponível",
-      relation,
-    } satisfies ContextClause;
-  });
+  // Documentos PAI (contrato-base/aditivo) referenciados pelos filhos
+  // acima — nunca presumidos a partir do lote já carregado, porque o
+  // pai de um documento nem sempre é um dos documentos das cláusulas
+  // deste lote. Ausente/erro de coluna (schema antigo) = mapa vazio,
+  // mapContractualLinkContext trata isso como "sem vínculo resolvido".
+  const parentIds = Array.from(
+    new Set(documentRows.map((d) => d.contractual_parent_document_id).filter((id): id is string => Boolean(id)))
+  );
+
+  const parentById = new Map<string, ContractualParentDocumentRow>();
+  const parentCurrentVersionLabelById = new Map<string, string>();
+
+  if (parentIds.length > 0) {
+    const { data: parentData, error: parentError } = await supabase
+      .from("documents")
+      .select("id,kind,title")
+      .in("id", parentIds);
+
+    if (parentError) {
+      throw new Error(`Falha ao carregar documentos pai do contexto: ${parentError.message}`);
+    }
+
+    // Um pai NA LIXEIRA nunca é um vínculo contratual válido para o
+    // Expert — mesmo critério de resolveClauses acima.
+    const nonTrashedParentIds = await resolveNonTrashedDocumentIds(supabase, parentIds);
+    for (const parent of parentData as unknown as { id: string; kind: string; title: string }[]) {
+      if ((parent.kind === "CONTRATO_BASE" || parent.kind === "ADITIVO") && nonTrashedParentIds.has(parent.id)) {
+        parentById.set(parent.id, { id: parent.id, kind: parent.kind, title: parent.title });
+      }
+    }
+
+    const { data: parentVersionData, error: parentVersionError } = await supabase
+      .from("document_versions")
+      .select("document_id,version_index,version_label")
+      .in("document_id", parentIds)
+      .order("version_index", { ascending: false });
+
+    if (parentVersionError) {
+      throw new Error(`Falha ao carregar versões dos documentos pai do contexto: ${parentVersionError.message}`);
+    }
+
+    // Já ordenado por version_index desc — a PRIMEIRA ocorrência de
+    // cada document_id é a versão vigente (mesmo critério de
+    // "current = versions[0]" usado em document-management.ts/DocumentCard).
+    for (const row of parentVersionData as unknown as DocumentVersionForCurrentLabelRow[]) {
+      if (!parentCurrentVersionLabelById.has(row.document_id)) {
+        parentCurrentVersionLabelById.set(row.document_id, row.version_label);
+      }
+    }
+  }
+
+  return clauses
+    .filter((clause) => {
+      const documentId = documentIdByVersionId.get(clause.document_version_id) ?? null;
+      // Documento nunca resolvido (não encontrado) continua passando —
+      // vira "DESCONHECIDO"/"Documento não disponível" abaixo, mesmo
+      // comportamento de sempre. SÓ um documento CONHECIDO e
+      // explicitamente trashed é excluído aqui.
+      return !documentId || nonTrashedDocumentIds.has(documentId);
+    })
+    .map((clause) => {
+      const documentId = documentIdByVersionId.get(clause.document_version_id) ?? null;
+      const document = documentId ? documentById.get(documentId) : undefined;
+
+      const contractualLink: DocumentContractualLinkContextRow = {
+        contractual_parent_document_id: document?.contractual_parent_document_id ?? null,
+        contractual_incorporation_basis: document?.contractual_incorporation_basis ?? null,
+        contractual_linked_by_user_id: document?.contractual_linked_by_user_id ?? null,
+        contractual_linked_at: document?.contractual_linked_at ?? null,
+      };
+
+      return {
+        id: clause.id,
+        clauseNumber: clause.clause_number,
+        title: clause.title,
+        text: clause.text,
+        documentId: documentId ?? "",
+        documentKind: document?.kind ?? "DESCONHECIDO",
+        documentTitle: document?.title ?? "Documento não disponível",
+        relation,
+        contractualLink: mapContractualLinkContext(contractualLink, parentById, parentCurrentVersionLabelById),
+      } satisfies ContextClause;
+    });
 }
 
 async function resolveEmails(supabase: SupabaseClient, emailIds: string[]): Promise<ContextEmail[]> {

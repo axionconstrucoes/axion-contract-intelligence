@@ -3,7 +3,9 @@ import { ShieldAlert } from "lucide-react";
 import { CategoryBadge, ConfrontationCandidateStatusBadge, SeverityBadge, StatusBadge } from "@/components/shared/badges";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ExpertQueryPanel } from "@/components/ai/expert-query-panel";
+import { AssessScheduleDelayButton } from "@/components/ledger/assess-schedule-delay-button";
 import { ConfrontationReviewForms } from "@/components/ledger/confrontation-review-forms";
+import { ConfrontationReviewNoteAmendForm } from "@/components/ledger/confrontation-review-note-amend-form";
 import { CrossReferenceList } from "@/components/ledger/cross-reference-list";
 import { EmailAlertActionHistoryPanel } from "@/components/email-actions/email-alert-action-history-panel";
 import { EventNotesSection } from "@/components/ledger/event-notes-section";
@@ -15,6 +17,8 @@ import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getEvent, getProjectMembers, getUser } from "@/lib/data";
 import { getEventClauseConfrontationCandidates } from "@/lib/event-clause-confrontation-review";
 import { alertRiskLevelLabels } from "@/lib/email/templates/contract-alert-template";
+import { confrontationAnchorId } from "@/lib/ledger/confrontation-anchor";
+import { validateConfrontationJustification } from "@/lib/ledger/confrontation-justification-validation";
 import {
   confrontationSeverityToAlertSeverity,
   findingTypeLabels,
@@ -44,6 +48,20 @@ export default async function EventDetailPage({
   if (!event) notFound();
 
   const canReview = permission === "ADMINISTRADOR";
+
+  // Nome do aprovador/revisor original e de quem eventualmente complementou
+  // a justificativa depois (nunca a mesma pessoa por definição — ver
+  // amend_event_clause_confrontation_review_note) — resolvidos via getUser
+  // (fonte canônica de profiles, por ID), nunca inventados.
+  const reviewerIdsToResolve = Array.from(
+    new Set(
+      confrontationCandidates
+        .flatMap((c) => [c.reviewedByUserId, c.reviewNoteAmendedByUserId])
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+  const reviewerProfiles = await Promise.all(reviewerIdsToResolve.map((id) => getUser(id)));
+  const reviewerNameById = new Map(reviewerIdsToResolve.map((id, index) => [id, reviewerProfiles[index]?.name ?? null]));
   // Mesma fonte canônica de membros usada pela tela de Usuários — só
   // usuários ACTIVE podem ser escolhidos como destinatário do alerta.
   const eligibleAlertRecipients = members
@@ -113,11 +131,14 @@ export default async function EventDetailPage({
               Confiança estimada: {Math.round(event.aiAssessment.confidence * 100)}% — sugestão sujeita a revisão humana, não substitui decisão da equipe.
             </p>
             {canReview && (
-              <SendContractAlertForm
-                projectId={projectId}
-                eventId={event.id}
-                eligibleRecipients={eligibleAlertRecipients}
-              />
+              <>
+                <AssessScheduleDelayButton projectId={projectId} eventId={event.id} />
+                <SendContractAlertForm
+                  projectId={projectId}
+                  eventId={event.id}
+                  eligibleRecipients={eligibleAlertRecipients}
+                />
+              </>
             )}
           </CardContent>
         </Card>
@@ -151,7 +172,7 @@ export default async function EventDetailPage({
         ) : (
           <div className="flex flex-col gap-4">
             {confrontationCandidates.map((candidate) => (
-              <Card key={candidate.id}>
+              <Card key={candidate.id} id={confrontationAnchorId(candidate.id)} className="scroll-mt-20">
                 <CardHeader className="gap-2">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -196,10 +217,37 @@ export default async function EventDetailPage({
                   {candidate.status !== "PENDING_REVIEW" ? (
                     <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
                       <p>
-                        {candidate.status === "APPROVED" ? "Aprovado" : "Rejeitado"} em{" "}
-                        {candidate.reviewedAt ? formatDateTime(candidate.reviewedAt) : "data não disponível"}.
+                        {candidate.status === "APPROVED" ? "Aprovado" : "Rejeitado"}
+                        {candidate.reviewedByUserId
+                          ? ` por ${reviewerNameById.get(candidate.reviewedByUserId) ?? "usuário não identificado"}`
+                          : ""}{" "}
+                        em {candidate.reviewedAt ? formatDateTime(candidate.reviewedAt) : "data não disponível"}.
                       </p>
                       {candidate.reviewNote ? <p className="mt-1">Observação: {candidate.reviewNote}</p> : null}
+                      {candidate.reviewNoteAmendedAt ? (
+                        <p className="mt-1 text-xs">
+                          Justificativa complementada
+                          {candidate.reviewNoteAmendedByUserId
+                            ? ` por ${reviewerNameById.get(candidate.reviewNoteAmendedByUserId) ?? "usuário não identificado"}`
+                            : ""}{" "}
+                          em {formatDateTime(candidate.reviewNoteAmendedAt)}.
+                        </p>
+                      ) : null}
+                      {!validateConfrontationJustification(candidate.reviewNote ?? "").valid ? (
+                        <p className="mt-2 rounded border border-severity-alta/40 bg-severity-alta/10 p-2 text-severity-alta">
+                          {candidate.status === "APPROVED"
+                            ? "Esta aprovação não tem uma justificativa específica registrada — não pode ser usada como conclusão do confronto em alertas por e-mail até ser complementada."
+                            : "Esta rejeição não tem uma justificativa específica registrada."}
+                        </p>
+                      ) : null}
+                      {canReview ? (
+                        <ConfrontationReviewNoteAmendForm
+                          projectId={projectId}
+                          eventId={event.id}
+                          candidateId={candidate.id}
+                          currentReviewNote={candidate.reviewNote ?? ""}
+                        />
+                      ) : null}
                     </div>
                   ) : canReview ? (
                     <ConfrontationReviewForms

@@ -131,6 +131,9 @@ export function DocumentMultiUploadPanel({ projectId, documents }: Props) {
                 }
                 className="h-9"
               >
+                <option value="" disabled>
+                  Selecione o tipo documental
+                </option>
                 {MULTI_UPLOAD_DOCUMENT_KINDS.map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
@@ -143,7 +146,7 @@ export function DocumentMultiUploadPanel({ projectId, documents }: Props) {
               type="button"
               variant="outline"
               size="sm"
-              disabled={!hasPending}
+              disabled={!hasPending || !batchDefaultKind}
               onClick={() => applyKindToAllPending(batchDefaultKind)}
             >
               Aplicar a todos ainda aguardando

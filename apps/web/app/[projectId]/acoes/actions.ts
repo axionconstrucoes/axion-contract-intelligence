@@ -2,9 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 
+import { createSupabaseAdminClient } from "@axion/db/admin";
 import { createSupabaseServerClient } from "@axion/db/server";
 
 import { getAppBaseUrl } from "@/lib/app-base-url";
+import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { issueEmailAlertActionButtons } from "@/lib/email-actions/issue-tokens";
 import { EmailSendError } from "@/lib/email/email-provider";
 import { sendSlaEscalationEmail } from "@/lib/email/send-sla-escalation-email";
@@ -12,6 +14,7 @@ import { getProject } from "@/lib/data";
 import { computeEscalation } from "@/lib/sla/compute-escalation";
 import { computeSlaDeadlines } from "@/lib/sla/compute-deadlines";
 import { resolveBusinessHoursConfig, resolveMatrixRule } from "@/lib/sla/resolve-matrix-rule";
+import { formatSlaMatrixRuleAuditDetail, validateSlaMatrixRuleValues } from "@/lib/sla/validate-matrix-rule";
 import { formatDurationBetween } from "@/lib/sla/format-duration";
 import { buildSlaActionUrl } from "@/lib/sla/build-action-url";
 import {
@@ -280,8 +283,17 @@ export async function reassignSlaActionAction(
   }
 }
 
-// ---------------- Configurar matriz de SLA (ADMIN) ----------------
-
+// ---------------- Configurar matriz de SLA (ADMINISTRADOR) ----------------
+//
+// Escrita já é bloqueada por RLS para quem não é ADMINISTRADOR
+// (sla_matrix_rules_write_admin_only, has_project_permission(project_id,
+// 'ADMIN'), migration 20260822054900) — mas a checagem explícita abaixo
+// dá um erro claro em vez de deixar a mensagem crua do Postgres vazar
+// para a UI, e é a "autorização revalidada no servidor" pedida (nunca
+// confia só na UI ter ocultado o formulário). Só altera
+// sla_matrix_rules — nunca sla_actions já criadas (nenhum recálculo
+// retroativo: ações existentes mantêm os prazos já computados no
+// momento em que foram criadas).
 export async function configureSlaMatrixRuleAction(
   _prevState: ConfigureSlaMatrixState,
   formData: FormData
@@ -303,9 +315,45 @@ export async function configureSlaMatrixRuleAction(
     const completeDeadlineValueRaw = optionalField(formData, "completeDeadlineValue");
     const escalation2AfterValue = Number(requiredField(formData, "escalation2AfterValue"));
     const boardAfterValue = Number(requiredField(formData, "boardAfterValue"));
+    const respondDeadlineValue = respondDeadlineValueRaw ? Number(respondDeadlineValueRaw) : null;
+    const completeDeadlineValue = completeDeadlineValueRaw ? Number(completeDeadlineValueRaw) : null;
     const notifyByEmail = formData.get("notifyByEmail") === "on";
     const requiresAcknowledgmentConfirmation = formData.get("requiresAcknowledgmentConfirmation") === "on";
     const requiresDelayJustification = formData.get("requiresDelayJustification") === "on";
+
+    // Autorização revalidada no servidor — nunca confia só em RLS
+    // devolver um erro genérico, nem em o formulário estar oculto na UI.
+    const permission = await getCurrentProjectPermission(projectId);
+    if (permission !== "ADMINISTRADOR") {
+      return { error: "Edição da Matriz de SLA exige permissão ADMINISTRADOR.", success: false };
+    }
+
+    const validation = validateSlaMatrixRuleValues({
+      assumeDeadlineValue,
+      respondDeadlineValue,
+      completeDeadlineValue,
+      escalation2AfterValue,
+      boardAfterValue,
+    });
+    if (!validation.valid) {
+      return { error: validation.error, success: false };
+    }
+
+    // "Anterior" para a auditoria — mesma linha que o upsert está prestes
+    // a sobrescrever (chave project_id+risk_level+area). Ausente na
+    // primeira configuração (era o default institucional) — tratado como
+    // "(default institucional)" no log, nunca um erro.
+    // .is("area", null) para o caso genérico (sem área) — .eq() com null
+    // nunca bate (SQL "= NULL" nunca é verdadeiro); PostgREST só aceita
+    // "is" para IS NULL.
+    const previousRowQuery = supabase
+      .from("sla_matrix_rules")
+      .select(
+        "time_unit,assume_deadline_value,respond_deadline_value,complete_deadline_value,escalation_2_after_value,board_after_value,notify_by_email,requires_acknowledgment_confirmation,requires_delay_justification"
+      )
+      .eq("project_id", projectId)
+      .eq("risk_level", riskLevel);
+    const { data: previousRow } = await (area ? previousRowQuery.eq("area", area) : previousRowQuery.is("area", null)).maybeSingle();
 
     const { error } = await supabase.from("sla_matrix_rules").upsert(
       {
@@ -314,8 +362,8 @@ export async function configureSlaMatrixRuleAction(
         area,
         time_unit: timeUnit,
         assume_deadline_value: assumeDeadlineValue,
-        respond_deadline_value: respondDeadlineValueRaw ? Number(respondDeadlineValueRaw) : null,
-        complete_deadline_value: completeDeadlineValueRaw ? Number(completeDeadlineValueRaw) : null,
+        respond_deadline_value: respondDeadlineValue,
+        complete_deadline_value: completeDeadlineValue,
         escalation_2_after_value: escalation2AfterValue,
         board_after_value: boardAfterValue,
         notify_by_email: notifyByEmail,
@@ -331,6 +379,34 @@ export async function configureSlaMatrixRuleAction(
     if (error) {
       return { error: error.message, success: false };
     }
+
+    // Auditoria com valores anteriores e novos — admin client só para
+    // este INSERT (mesmo padrão de send-contract-alert-email.ts:
+    // audit_log_entries não tem policy de INSERT para authenticated,
+    // só é gravável via RPCs SECURITY DEFINER ou, aqui, pelo admin
+    // client; a escrita em sla_matrix_rules em si continua 100% sob RLS
+    // normal, autorização já revalidada acima).
+    const admin = createSupabaseAdminClient();
+    await admin.from("audit_log_entries").insert({
+      project_id: projectId,
+      actor_type: "USER",
+      actor_user_id: authData.user.id,
+      actor_label: null,
+      action: "SLA_MATRIX_RULE_UPDATED",
+      entity_type: "SLA_MATRIX_RULE",
+      entity_id: `${projectId}:${riskLevel}:${area ?? "GLOBAL"}`,
+      detail: formatSlaMatrixRuleAuditDetail(riskLevel, previousRow, {
+        time_unit: timeUnit,
+        assume_deadline_value: assumeDeadlineValue,
+        respond_deadline_value: respondDeadlineValue,
+        complete_deadline_value: completeDeadlineValue,
+        escalation_2_after_value: escalation2AfterValue,
+        board_after_value: boardAfterValue,
+        notify_by_email: notifyByEmail,
+        requires_acknowledgment_confirmation: requiresAcknowledgmentConfirmation,
+        requires_delay_justification: requiresDelayJustification,
+      }),
+    });
 
     revalidatePath(`/${projectId}/acoes/configuracao`);
     return { error: null, success: true };

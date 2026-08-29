@@ -7,7 +7,13 @@
 // do upload múltiplo. São um SUBCONJUNTO com nomes próprios de
 // DocumentKind (@axion/types) — cada um existe na coluna real
 // documents.kind (migration 20260825130000).
+// "" representa "ainda não selecionado" — nunca um default implícito
+// (CONTRATO_BASE deixou de ser pré-selecionado: era a causa real de
+// documentos como relatórios/aditivos ficarem classificados como
+// contrato só porque o seletor não foi tocado). processItem recusa
+// (REJEITADO) qualquer item que chegue à fase de envio ainda com "".
 export type MultiUploadDocumentKind =
+  | ""
   | "CONTRATO_BASE"
   | "ADITIVO"
   | "ATA_REUNIAO"

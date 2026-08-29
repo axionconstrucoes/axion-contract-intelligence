@@ -28,6 +28,17 @@ export const EMAIL_ALERT_ACTION_LABELS: Record<EmailAlertActionType, string> = {
   RESPOND: "RESPONDER AO ACC",
 };
 
+// Explicação curta de cada botão, usada em title/aria-label e como legenda
+// sempre visível sob o rótulo no HTML do e-mail — Gmail/Outlook não
+// garantem suporte uniforme a tooltip/hover, então a explicação nunca pode
+// depender só do hover para ser lida (ver render-buttons.ts).
+export const EMAIL_ALERT_ACTION_DESCRIPTIONS: Record<EmailAlertActionType, string> = {
+  ACKNOWLEDGE: "Confirma que você tomou conhecimento deste alerta.",
+  ASSUME_RESPONSIBILITY: "Assume a responsabilidade por tratar este item.",
+  SET_DEADLINE: "Define ou ajusta o prazo de resposta para este item.",
+  RESPOND: "Abre o campo para registrar sua resposta diretamente no ACC.",
+};
+
 export const EMAIL_ALERT_KIND_LABELS: Record<EmailAlertKind, string> = {
   CONTRACT_EVENT: "Alerta de contrato",
   SLA_ACTION: "Ação de SLA",

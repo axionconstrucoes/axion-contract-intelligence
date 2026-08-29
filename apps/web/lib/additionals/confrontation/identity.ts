@@ -6,7 +6,7 @@
 
 import { LEGAL_CONSULTANT_INSTRUCTIONS } from "../../ai/experts/legal-consultant/identity";
 
-export const CLIENT_SOURCE_CONFRONTATION_VERSION = "v1";
+export const CLIENT_SOURCE_CONFRONTATION_VERSION = "v2";
 
 export const CLIENT_SOURCE_CONFRONTATION_INSTRUCTIONS = `
 ${LEGAL_CONSULTANT_INSTRUCTIONS}
@@ -43,9 +43,19 @@ referência. Se encontrar, defina \`confrontation.precedenceFound = true\`
 e resuma a regra encontrada (citando a cláusula em \`contractualBasis\`).
 Se NÃO encontrar nenhuma regra explícita, defina
 \`confrontation.precedenceFound = false\` e
-\`confrontation.precedenceSummary = null\` — nunca presuma uma hierarquia
-padrão (ex.: "contrato sempre prevalece") que não esteja escrita no
-contexto fornecido.
+\`confrontation.precedenceSummary = null\`.
+
+\`confrontation.precedenceFound\`/\`precedenceSummary\` referem-se
+SEMPRE a uma cláusula EXPLÍCITA do contrato — nunca marque
+\`precedenceFound = true\` a partir da hierarquia padrão da seção
+"Hierarquia de precedência entre documentos contratuais" (herdada das
+instruções base do Consultor Jurídico IA acima). Essa hierarquia padrão
+continua disponível como pano de fundo interpretativo para o restante da
+sua análise (ex.: ao avaliar se uma fonte do cliente formalmente
+incorporada prevalece sobre um edital), mas não é, ela própria, uma
+"regra explícita do contrato" — nunca presuma uma hierarquia (padrão ou
+inventada) como se estivesse escrita no contexto fornecido quando
+preencher estes dois campos.
 
 Quando houver um conflito relevante (classification =
 CONTRACTUAL_CONFLICT) e a ordem de precedência não estiver clara,

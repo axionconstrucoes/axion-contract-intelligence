@@ -95,9 +95,10 @@ check("logo e ícone usam a MESMA cor institucional (consistência entre os dois
 
 // ---------------- 2. Favicon / metadata raiz ----------------
 
-check("layout raiz: favicon aponta para o ícone ACC; título usa template 'ACC | %s'", () => {
+check("layout raiz: favicon aponta para o ícone ACC (SVG + derivados PNG de favicon real, substituiu o SVG único original); título usa template 'ACC | %s'", () => {
   const source = readSource("apps/web/app/layout.tsx");
-  assert(source.includes('icons: { icon: "/branding/acc-icon.svg" }'), "metadata.icons deveria apontar para o ícone ACC");
+  assert(source.includes('{ url: "/branding/acc-icon.svg", type: "image/svg+xml" }'), "metadata.icons deveria continuar apontando para o ícone SVG ACC");
+  assert(source.includes("acc-favicon-32x32.png") && source.includes("acc-favicon-16x16.png") && source.includes("acc-favicon-48x48.png"), "metadata.icons deveria incluir os favicons PNG derivados (redimensionamento do logo oficial, ver scripts/test-branding-startup-actions-sla.mjs)");
   assert(source.includes('template: "ACC | %s"'), "título deveria usar o template 'ACC | %s'");
   assert(!/axion-contract-intelligence/i.test(source), "nunca deveria expor o nome técnico do repositório no título");
 });
@@ -146,22 +147,22 @@ check("login: logo ACC presente, texto atualizado para 'AXION Controle de Contra
 
 // ---------------- 6. Download de logo/ícone ----------------
 
-check("projetos: opções de download de logotipo e ícone existem, apontam para os arquivos reais", () => {
+check("projetos: NÃO tem mais links públicos de download de logotipo/ícone/fundo — removidos intencionalmente (ACC é Google-only); os assets continuam em public/ para uso interno do app (favicon, <img>, background-image)", () => {
   const source = readSource("apps/web/app/projetos/page.tsx");
-  assert(source.includes('href="/branding/acc-logo.png"') && source.includes("download"), "deveria existir link de download do logotipo");
-  assert(source.includes('href="/branding/acc-icon.svg"') && source.includes("download"), "deveria existir link de download do ícone técnico");
+  assert(!source.includes("Baixar logotipo"), "link de download do logotipo não deveria mais existir em /projetos");
+  assert(!source.includes("Baixar ícone técnico"), "link de download do ícone técnico não deveria mais existir em /projetos");
+  assert(fileExists("apps/web/public/branding/acc-logo.png"), "acc-logo.png deveria continuar em public/branding/ mesmo sem link de download");
+  assert(fileExists("apps/web/public/branding/acc-icon.svg"), "acc-icon.svg deveria continuar em public/branding/ mesmo sem link de download");
 });
 
 // ---------------- 7. Cabeçalho padrão de todas as telas ----------------
 
 const pageHeaderSource = readSource("apps/web/components/layout/page-header.tsx");
 
-check("PageHeader: 'AXION CONTROLE DE CONTRATOS' preto/negrito, nome da aba vermelho-institucional/negrito, travessão entre os dois", () => {
-  assert(pageHeaderSource.includes("AXION CONTROLE DE CONTRATOS"));
-  assert(/text-black[\s\S]{0,40}AXION CONTROLE DE CONTRATOS/.test(pageHeaderSource), "prefixo deveria ser preto");
+check("PageHeader: NÃO repete mais 'AXION CONTROLE DE CONTRATOS — ' (a marca já aparece uma única vez, na sidebar — repeti-la em todo cabeçalho de página era redundante); só o nome da aba, vermelho-institucional/negrito, +1 corpo (text-xl)", () => {
+  assert(!pageHeaderSource.includes("AXION CONTROLE DE CONTRATOS"), "PageHeader não deveria mais repetir o nome da marca — só a sidebar mantém");
   assert(/text-red-900[\s\S]{0,20}\{title\}/.test(pageHeaderSource), "nome da aba deveria ser vermelho institucional");
-  assert(pageHeaderSource.includes("font-semibold"), "cabeçalho deveria ser negrito");
-  assert(pageHeaderSource.includes("—"), "deveria usar travessão entre o prefixo e o nome da aba");
+  assert(pageHeaderSource.includes("font-bold") && pageHeaderSource.includes("text-xl"), "cabeçalho deveria ser negrito e um corpo maior (text-xl)");
 });
 
 check("PageHeader usa a MESMA cor institucional do logo/ícone (red-900 ~ #7f1d1d, consistência de marca)", () => {
@@ -223,26 +224,49 @@ check("Project.code: mapeado de verdade a partir da linha do banco (mapProjectRo
   assert(project.code === "ARN-2025-001", `code deveria ser mapeado, obtido: ${project.code}`);
 });
 
-check("TopBar: mostra o código do projeto discretamente próximo ao seletor (quando disponível)", () => {
+// ---------------- 9b. DECISÃO FINAL DA TOPBAR (rodada "produção") ----------------
+//
+// Uma exploração anterior (não commitada) tinha testado um redesign
+// vermelho/amarelo da TopBar (bg-brand-header + título duplicado +
+// nome do projeto em amarelo) que NUNCA chegou a ser implementado nos
+// componentes reais. A decisão final aprovada pelo usuário rejeitou
+// esse redesign explicitamente: TopBar compacta, branca, com seletor
+// de projeto + código do projeto discretos, avatar/sair — exatamente o
+// texto/contraste que já existia — e SEM reintroduzir o título "AXION
+// CONTROLE DE CONTRATOS" na área branca (a marca já vive só na
+// sidebar). Estes 3 checks substituem os antigos (que validavam o
+// redesign abandonado) para validar a decisão final real.
+
+check("TopBar: compacta (h-14), fundo branco, mostra o código do projeto discretamente (mesmo texto/contraste já existente, nunca reescrito para um header vermelho)", () => {
   const source = readSource("apps/web/components/layout/top-bar.tsx");
+  assert(source.includes("h-14"), "TopBar deveria continuar compacta (h-14)");
+  assert(source.includes("bg-white"), "TopBar deveria continuar com fundo branco (decisão final — não vermelho)");
   assert(source.includes("currentProject?.code"), "TopBar deveria exibir o código do projeto quando disponível");
-  // Header institucional vermelho sólido (Dashboard Visual, seção 4): o
-  // texto discreto usa branco translúcido para permanecer legível sobre
-  // bg-brand-header, não mais muted-foreground (que presumia fundo neutro).
-  assert(source.includes("text-xs text-white/80"), "código deveria ser discreto, mas legível sobre o header vermelho");
+  assert(source.includes("text-xs text-muted-foreground"), "código do projeto deveria manter o contraste discreto já existente");
 });
 
-// ---------------- 9b. AJUSTES FINAIS APROVADOS DO DASHBOARD VISUAL ----------------
-
-check("header: 'AXION CONTROLE DE CONTRATOS' branco/negrito, um nível de corpo maior que antes (text-base, não mais text-sm)", () => {
+check("TopBar: NUNCA reintroduz o título duplicado 'AXION CONTROLE DE CONTRATOS' / 'ACC CONTROLE DE CONTRATOS' na área branca — a marca já vive só na sidebar (decisão final aprovada)", () => {
   const source = readSource("apps/web/components/layout/top-bar.tsx");
-  assert(/text-base font-bold[^"]*text-white">AXION CONTROLE DE CONTRATOS/.test(source), "título do header deveria ser text-base (um nível acima de text-sm) + font-bold + text-white");
+  assert(!/AXION CONTROLE DE CONTRATOS|ACC CONTROLE DE CONTRATOS/.test(source), "TopBar não deveria repetir o texto da marca — só a sidebar mostra isso");
+  assert(!source.includes("bg-brand-header"), "TopBar não deveria usar o token de header vermelho — fundo branco é a decisão final");
 });
 
-check("nome do projeto: amarelo + negrito, com forte contraste sobre o header vermelho (código permanece discreto)", () => {
-  const source = readSource("apps/web/components/layout/project-switcher.tsx");
-  assert(/text-yellow-\d{3}/.test(source), "seletor de projeto deveria usar uma cor amarela (text-yellow-*)");
-  assert(source.includes("font-bold"), "nome do projeto deveria ser negrito");
+check("TopBar: seletor de projeto e avatar/sair preservados, com o texto/contraste JÁ EXISTENTE (nunca amarelo — essa era a exploração abandonada)", () => {
+  const topBarSource = readSource("apps/web/components/layout/top-bar.tsx");
+  assert(topBarSource.includes("<ProjectSwitcher"), "TopBar deveria continuar com o seletor de projeto");
+  assert(topBarSource.includes("<Avatar>"), "TopBar deveria continuar com o avatar do usuário");
+  assert(topBarSource.includes("<LogoutButton"), "TopBar deveria continuar com o botão de sair");
+
+  const switcherSource = readSource("apps/web/components/layout/project-switcher.tsx");
+  assert(!/text-yellow-\d{3}/.test(switcherSource), "nome do projeto não deveria usar amarelo — exploração abandonada, nunca implementada de verdade");
+  assert(switcherSource.includes("font-bold"), "nome do projeto deveria manter o negrito já existente");
+});
+
+check("faixa global 'SISTEMA EM TESTE' continua acima de tudo (root layout), nunca duplicada dentro da TopBar", () => {
+  const rootLayoutSource = readSource("apps/web/app/layout.tsx");
+  assert(rootLayoutSource.includes("<TestModeBanner"), "a faixa deveria continuar renderizada no layout raiz, acima da TopBar");
+  const topBarSource = readSource("apps/web/components/layout/top-bar.tsx");
+  assert(!topBarSource.includes("TestModeBanner"), "a TopBar não deveria renderizar sua própria cópia da faixa");
 });
 
 check("logo ACC aparece SOMENTE na sidebar — nunca na área branca de conteúdo, ao lado de títulos de página, em cards, ou como decoração do Dashboard Visual", () => {

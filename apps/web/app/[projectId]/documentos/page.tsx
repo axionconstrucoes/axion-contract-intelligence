@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { DocumentDownloadButton } from "@/components/documents/document-download-button";
+import { ContractualDocumentGroupSection } from "@/components/documents/contractual-document-group-section";
+import { DocumentCard } from "@/components/documents/document-card";
 import { DocumentUploadForm } from "@/components/documents/document-upload-form";
 import { DocumentMultiUploadPanel } from "@/components/documents/multi-upload/document-multi-upload-panel";
 import { EmailAttachmentsPanel } from "@/components/documents/email-attachments-panel";
+import { TrashPanel } from "@/components/documents/trash-panel";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FeatureInfo } from "@/components/shared/feature-info";
@@ -24,49 +26,16 @@ import {
   getClauses,
   getScheduleActivities,
 } from "@/lib/data";
-import { getManagedDocuments } from "@/lib/document-management";
-import { getDocumentKindCardAppearance } from "@/lib/documents/document-kind-card-appearance";
+import { getManagedDocuments, getTrashedDocuments } from "@/lib/document-management";
+import {
+  groupDocumentsByContractualStructure,
+  sortAndLabelContractualPrincipals,
+} from "@/lib/documents/group-contractual-documents";
 import { getEmailAttachmentRegistryForProject } from "@/lib/email/attachments/registry/get-attachment-registry";
 import {
   formatDate,
   scheduleStatusLabels,
 } from "@/lib/labels";
-
-const PROCESSING_LABELS: Record<string, string> = {
-  NOT_UPLOADED: "Sem arquivo",
-  AWAITING_PROCESSING: "Aguardando processamento",
-  PROCESSING: "Processando",
-  PROCESSED: "Processado",
-  FAILED: "Falha no processamento",
-};
-
-// Rótulos de exibição — não são uma lista exaustiva de idiomas
-// suportados, só os mais comuns em contratos de engenharia/construção
-// deste projeto. Um código sem rótulo aqui mostra o próprio código
-// (nunca omitido, nunca traduzido silenciosamente para "Português").
-const SOURCE_LANGUAGE_LABELS: Record<string, string> = {
-  pt: "Português",
-  en: "Inglês",
-  es: "Espanhol",
-  fr: "Francês",
-  de: "Alemão",
-  it: "Italiano",
-};
-
-function formatBytes(bytes: number | null) {
-  if (!bytes) {
-    return "";
-  }
-
-  if (bytes < 1024 * 1024) {
-    return `${Math.round(bytes / 1024)} KB`;
-  }
-
-  return `${(
-    bytes /
-    (1024 * 1024)
-  ).toFixed(1)} MB`;
-}
 
 export const metadata: Metadata = { title: "Documentos" };
 
@@ -85,12 +54,14 @@ export default async function DocumentosPage({
     scheduleActivities,
     permission,
     emailAttachmentRows,
+    trashedDocuments,
   ] = await Promise.all([
     getManagedDocuments(projectId),
     getClauses(projectId),
     getScheduleActivities(projectId),
     getCurrentProjectPermission(projectId),
     getEmailAttachmentRegistryForProject(projectId),
+    getTrashedDocuments(projectId),
   ]);
 
   // Decisão de negócio (não a hierarquia global de
@@ -100,6 +71,49 @@ export default async function DocumentosPage({
   // que revalida via can_manage_project_documents no servidor.
   const canUpload =
     permission === "ADMINISTRADOR" || permission === "GESTOR";
+
+  // Decisão de negócio (não a hierarquia da RPC, que aceita
+  // ADMINISTRADOR OU GESTOR): o controle de "vincular documento como
+  // anexo contratual" só é OFERECIDO na interface ao ADMINISTRADOR —
+  // mais estrito que canUpload. Isto é só UX; a proteção definitiva
+  // continua sendo sempre a RPC (link_document_as_contractual_attachment),
+  // que revalida a permissão no servidor.
+  const canLinkContractualAttachment = permission === "ADMINISTRADOR";
+
+  // GRUPOS CONTRATUAIS: Contrato-base | Anexos, Aditivo 01 | Anexos,
+  // etc. — ver group-contractual-documents.ts. Com os dados reais de
+  // hoje (parentDocumentId sempre null, nenhuma tabela do schema
+  // representa esse vínculo ainda), cada grupo aparece honestamente com
+  // zero anexos; nenhum vínculo é fabricado na interface.
+  const { groups: contractualGroups, ungrouped: ungroupedDocuments } =
+    groupDocumentsByContractualStructure(documents);
+
+  // Candidatos a "pai contratual" para o dropdown "Vincular como anexo
+  // contratual" (DocumentCard) — mesmos rótulos exibidos nos cabeçalhos
+  // dos grupos acima (sortAndLabelContractualPrincipals é a MESMA
+  // função usada por groupDocumentsByContractualStructure, nunca uma
+  // segunda lógica de rótulo). Só um resolvido no servidor;
+  // link_document_as_contractual_attachment revalida tudo de novo a
+  // partir só do id, nunca confia neste array vindo do navegador.
+  const contractualParentOptions = sortAndLabelContractualPrincipals(documents).map(
+    ({ label, principal }) => ({
+      id: principal.id,
+      label,
+      title: principal.title,
+    })
+  );
+
+  // Candidatos para o controle REVERSO ("vincular documento existente a
+  // ESTE contrato/aditivo", oferecido dentro da área "sem anexos" de
+  // cada grupo) — sempre a lista de documentos SEM vínculo contratual
+  // (ungrouped), nunca um documento já vinculado a outro pai (evita
+  // oferecer ali um fluxo de TROCA, que tem suas próprias regras de
+  // confirmação já cobertas por LinkContractualAttachmentControl).
+  const linkableDocuments = ungroupedDocuments.map((document) => ({
+    id: document.id,
+    title: document.title,
+    kind: document.kind,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -189,166 +203,48 @@ export default async function DocumentosPage({
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {documents.map((document) => {
-                const current =
-                  document.versions[0];
+              {contractualGroups.map((group) => (
+                <ContractualDocumentGroupSection
+                  key={group.principal.id}
+                  group={group}
+                  projectId={projectId}
+                  canUpload={canUpload}
+                  canLinkContractualAttachment={canLinkContractualAttachment}
+                  linkableDocuments={linkableDocuments}
+                />
+              ))}
 
-                const nextVersionIndex =
-                  (current?.versionIndex ?? 0) + 1;
+              {ungroupedDocuments.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {contractualGroups.length > 0 ? (
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Demais documentos (sem vínculo contratual)
+                    </p>
+                  ) : null}
 
-                const kindAppearance =
-                  getDocumentKindCardAppearance(
-                    document.kind
-                  );
-
-                return (
-                  <Card
-                    key={document.id}
-                    className={kindAppearance.cardClassName}
-                  >
-                    <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
-                      <div>
-                        <CardTitle
-                          className={
-                            kindAppearance.titleClassName
-                          }
-                        >
-                          {document.title}
-                        </CardTitle>
-
-                        <p className="text-xs text-muted-foreground">
-                          {document.versions.length}{" "}
-                          {document.versions.length === 1
-                            ? "versão"
-                            : "versões"}
-                        </p>
-                      </div>
-
-                      <Badge variant="outline">
-                        {document.kind.replaceAll(
-                          "_",
-                          " "
-                        )}
-                      </Badge>
-                    </CardHeader>
-
-                    <CardContent className="flex flex-col gap-4">
-                      {document.versions.map(
-                        (version) => (
-                          <div
-                            key={version.id}
-                            className="rounded-md border p-4"
-                          >
-                            <div className="flex flex-col justify-between gap-4 md:flex-row">
-                              <div className="flex flex-col gap-1 text-sm">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <strong>
-                                    Versão{" "}
-                                    {version.versionLabel}
-                                  </strong>
-
-                                  <Badge variant="outline">
-                                    {PROCESSING_LABELS[
-                                      version.processingStatus
-                                    ] ??
-                                      version.processingStatus}
-                                  </Badge>
-
-                                  {version.sourceLanguage ? (
-                                    <Badge variant="outline">
-                                      Idioma:{" "}
-                                      {SOURCE_LANGUAGE_LABELS[
-                                        version.sourceLanguage
-                                      ] ?? version.sourceLanguage}
-                                    </Badge>
-                                  ) : null}
-
-                                  {version.requiresHumanReview ? (
-                                    <Badge variant="secondary">
-                                      Revisão humana necessária
-                                    </Badge>
-                                  ) : null}
-                                </div>
-
-                                {version.requiresHumanReview ? (
-                                  <span className="text-xs text-muted-foreground">
-                                    Extração de participantes, decisões,
-                                    responsáveis, prazos e pendências ainda
-                                    não está implementada nesta etapa.
-                                  </span>
-                                ) : null}
-
-                                <span className="text-muted-foreground">
-                                  {formatDate(
-                                    version.documentDate
-                                  )}{" "}
-                                  · {version.author}
-                                </span>
-
-                                <span>
-                                  {version.summary}
-                                </span>
-
-                                {version.originalFileName ? (
-                                  <span className="text-xs text-muted-foreground">
-                                    {version.originalFileName}
-                                    {version.fileSizeBytes
-                                      ? ` · ${formatBytes(
-                                          version.fileSizeBytes
-                                        )}`
-                                      : ""}
-                                  </span>
-                                ) : null}
-
-                                {version.processingError ? (
-                                  <span className="text-xs text-destructive">
-                                    {version.processingError}
-                                  </span>
-                                ) : null}
-                              </div>
-
-                              {version.filePath &&
-                              version.storageBucket ? (
-                                <DocumentDownloadButton
-                                  bucket={
-                                    version.storageBucket
-                                  }
-                                  filePath={
-                                    version.filePath
-                                  }
-                                originalFileName={version.originalFileName ?? "documento"}
-                                />
-                              ) : null}
-                            </div>
-                          </div>
-                        )
-                      )}
-
-                      {canUpload ? (
-                        <details className="rounded-md border p-4">
-                          <summary className="cursor-pointer text-sm font-medium">
-                            Adicionar nova versão
-                          </summary>
-
-                          <div className="pt-4">
-                            <DocumentUploadForm
-                              projectId={projectId}
-                              existingDocument={{
-                                id: document.id,
-                                kind: document.kind,
-                                title: document.title,
-                                nextVersionIndex,
-                              }}
-                            />
-                          </div>
-                        </details>
-                      ) : null}
-                    </CardContent>
-                  </Card>
-                );
-              })}
+                  {ungroupedDocuments.map((document) => (
+                    <DocumentCard
+                      key={document.id}
+                      document={document}
+                      projectId={projectId}
+                      canUpload={canUpload}
+                      contractualParentOptions={canLinkContractualAttachment ? contractualParentOptions : undefined}
+                      canTrash={canLinkContractualAttachment}
+                    />
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
+
+          {canLinkContractualAttachment ? (
+            <details className="rounded-md border p-4">
+              <summary className="cursor-pointer text-sm font-medium">Lixeira ({trashedDocuments.length})</summary>
+              <div className="pt-4">
+                <TrashPanel projectId={projectId} trashedDocuments={trashedDocuments} />
+              </div>
+            </details>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="clausulas">

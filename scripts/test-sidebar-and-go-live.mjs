@@ -103,19 +103,19 @@ check("labels renomeados presentes, rotas técnicas (href) preservadas", () => {
 
 // --- Startup oficial do ACC ---
 
-check('ACC_GO_LIVE_DATE é exatamente "2026-08-24"', () => {
-  assert(ACC_GO_LIVE_DATE === "2026-08-24", `esperado "2026-08-24", obtido "${ACC_GO_LIVE_DATE}"`);
+check('ACC_GO_LIVE_DATE é exatamente "2026-09-02" (quarta-feira — atualizado de 24/08/2026 para 02/09/2026 nesta rodada)', () => {
+  assert(ACC_GO_LIVE_DATE === "2026-09-02", `esperado "2026-09-02", obtido "${ACC_GO_LIVE_DATE}"`);
 });
 
 check("getAccGoLiveDate() retorna a data correta como Date (UTC, meia-noite)", () => {
   const date = getAccGoLiveDate();
-  assert(date.toISOString() === "2026-08-24T00:00:00.000Z");
+  assert(date.toISOString() === "2026-09-02T00:00:00.000Z");
 });
 
 check("isBeforeAccGoLive corretamente classifica datas antes/depois do marco", () => {
-  assert(isBeforeAccGoLive(new Date("2026-08-23T23:59:59.000Z")) === true);
-  assert(isBeforeAccGoLive(new Date("2026-08-24T00:00:00.000Z")) === false);
-  assert(isBeforeAccGoLive(new Date("2026-08-25T00:00:00.000Z")) === false);
+  assert(isBeforeAccGoLive(new Date("2026-09-01T23:59:59.000Z")) === true);
+  assert(isBeforeAccGoLive(new Date("2026-09-02T00:00:00.000Z")) === false);
+  assert(isBeforeAccGoLive(new Date("2026-09-03T00:00:00.000Z")) === false);
 });
 
 check("acc-go-live.ts nunca é importado por nenhum código de auditoria/migration (marco não deve tocar dados históricos)", () => {

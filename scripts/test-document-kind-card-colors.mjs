@@ -1,8 +1,9 @@
 // Cores do cartão de documento por TIPO DOCUMENTAL (Documentos) —
-// amarelo forte (contrato-base/aditivo), vermelho-claro (relatório
-// semanal), verde-claro (ata, RFI, RFP, edital), azul-claro (diário de
-// obra), neutro para o restante. A cor representa só o tipo documental
-// — nunca risco, severidade, processamento ou resultado de análise.
+// REGRA VISUAL FINAL: bordô (contrato-base/aditivo/anexo contratual),
+// verde (relatório semanal sem vínculo contratual), laranja (todos os
+// demais documentos não contratuais). A cor representa só o tipo
+// documental/vínculo contratual — nunca risco, severidade,
+// processamento ou resultado de análise.
 //
 // Cobre a função centralizada
 // apps/web/lib/documents/document-kind-card-appearance.ts (importada e
@@ -11,6 +12,12 @@
 // checagens estruturais em apps/web/app/[projectId]/documentos/page.tsx
 // e em globals.css/badges.tsx (cores de risco intocadas), mesmo padrão
 // já usado em scripts/test-risk-medium-color.mjs.
+//
+// Ver scripts/test-document-kind-card-appearance.mjs para a suíte
+// dedicada e mais completa desta regra (incluindo isContractualAttachment)
+// — as checagens abaixo cobrem o esquema de cores por igualdade exata
+// (Set.has, nunca substring) e os invariantes que não mudam com a cor
+// (risco/severidade/banner de teste).
 //
 // Uso:
 //   node scripts/test-document-kind-card-colors.mjs
@@ -57,18 +64,19 @@ const { getDocumentKindCardAppearance } = await import(
   "../apps/web/lib/documents/document-kind-card-appearance.ts"
 );
 
-// Grupos exatamente como definidos na tarefa, usando os valores reais
-// de DocumentKind (packages/types/src/index.ts) e da constraint do
-// banco (supabase/migrations/20260825130000_multi_document_upload_foundation.sql,
-// seção 1 — nomes confirmados idênticos, nenhum divergente).
-const STRONG_YELLOW_KINDS = ["CONTRATO_BASE", "ADITIVO"];
-const LIGHT_RED_KINDS = ["RELATORIO_SEMANAL"];
-const LIGHT_GREEN_KINDS = ["ATA_REUNIAO", "RFI", "RFP", "EDITAL"];
-const LIGHT_BLUE_KINDS = ["DIARIO_OBRA"];
+// Esquema ATUAL (REGRA VISUAL FINAL — substitui integralmente todos os
+// esquemas anteriores desta suíte, incluindo o de "vermelho + marrom +
+// neutro" que substituiu o esquema de 4 grupos original). Não há mais
+// caso neutro: todo DocumentKind cai em uma das três cores.
+const BORDO_KINDS = ["CONTRATO_BASE", "ADITIVO"];
+const GREEN_KINDS = ["RELATORIO_SEMANAL", "RELATORIO"];
 
-// Todos os demais valores reais de DocumentKind — devem ficar neutros
-// nesta etapa (checagem exaustiva, não uma amostra).
-const NEUTRAL_KINDS = [
+// Todos os demais valores reais de DocumentKind — checagem exaustiva,
+// não uma amostra.
+const ORANGE_KINDS = [
+  "EDITAL",
+  "RFI",
+  "RFP",
   "ESPECIFICACAO",
   "DESENHO",
   "PLANILHA",
@@ -76,85 +84,62 @@ const NEUTRAL_KINDS = [
   "CRONOGRAMA_REVISAO",
   "PROPOSTA_AXION",
   "CLARIFICACAO_CLIENTE",
+  "ATA_REUNIAO",
   "PROPOSTA_COMERCIAL",
   "PROPOSTA_TECNICA",
   "PLANILHA_CONTRATUAL",
-  "RELATORIO",
   "NOTIFICACAO",
   "ESG_SSMA",
+  "DIARIO_OBRA",
   "OUTRO",
 ];
 
-function shadeOf(className, utility, color) {
-  const match = className?.match(new RegExp(`\\b${utility}-${color}-(\\d+)\\b`));
-  return match ? Number(match[1]) : null;
-}
+// --- 1: CONTRATO_BASE e ADITIVO recebem bordô institucional (caixa inteira) ---
 
-// --- 1-3: amarelo forte para CONTRATO_BASE / ADITIVO ---
-
-for (const kind of STRONG_YELLOW_KINDS) {
-  check(`${kind} recebe amarelo forte (bg-yellow-200, border-yellow-700, border-2, text-black)`, () => {
-    const { cardClassName } = getDocumentKindCardAppearance(kind);
-    assert(typeof cardClassName === "string", `${kind} deveria ter cardClassName`);
-    assert(/\bbg-yellow-200\b/.test(cardClassName), `esperado bg-yellow-200: "${cardClassName}"`);
-    assert(/\bborder-yellow-700\b/.test(cardClassName), `esperado border-yellow-700: "${cardClassName}"`);
-    assert(/\bborder-2\b/.test(cardClassName), `esperado border-2: "${cardClassName}"`);
-    assert(/\btext-black\b/.test(cardClassName), `esperado text-black: "${cardClassName}"`);
-  });
-}
-
-// --- 4: RELATORIO_SEMANAL vermelho-claro ---
-
-check("RELATORIO_SEMANAL recebe vermelho-claro (bg-red-50, border-red-400)", () => {
-  const { cardClassName } = getDocumentKindCardAppearance("RELATORIO_SEMANAL");
-  assert(/\bbg-red-50\b/.test(cardClassName), `esperado bg-red-50: "${cardClassName}"`);
-  assert(/\bborder-red-400\b/.test(cardClassName), `esperado border-red-400: "${cardClassName}"`);
-  assert(/\btext-black\b/.test(cardClassName), `esperado text-black: "${cardClassName}"`);
-});
-
-// --- 5-8: ATA_REUNIAO, RFI, RFP, EDITAL verde-claro ---
-
-for (const kind of LIGHT_GREEN_KINDS) {
-  check(`${kind} recebe verde-claro (bg-green-50, border-green-500)`, () => {
-    const { cardClassName } = getDocumentKindCardAppearance(kind);
-    assert(/\bbg-green-50\b/.test(cardClassName), `esperado bg-green-50: "${cardClassName}"`);
-    assert(/\bborder-green-500\b/.test(cardClassName), `esperado border-green-500: "${cardClassName}"`);
-    assert(/\btext-black\b/.test(cardClassName), `esperado text-black: "${cardClassName}"`);
-  });
-}
-
-// --- 9: DIARIO_OBRA azul-claro ---
-
-check("DIARIO_OBRA recebe azul-claro (bg-blue-50, border-blue-500)", () => {
-  const { cardClassName } = getDocumentKindCardAppearance("DIARIO_OBRA");
-  assert(/\bbg-blue-50\b/.test(cardClassName), `esperado bg-blue-50: "${cardClassName}"`);
-  assert(/\bborder-blue-500\b/.test(cardClassName), `esperado border-blue-500: "${cardClassName}"`);
-  assert(/\btext-black\b/.test(cardClassName), `esperado text-black: "${cardClassName}"`);
-});
-
-// --- 10: tipos neutros não recebem nenhuma dessas cores ---
-
-check("todos os demais DocumentKind reais permanecem neutros (nenhuma cor aplicada)", () => {
-  for (const kind of NEUTRAL_KINDS) {
+check("CONTRATO_BASE e ADITIVO recebem bordô institucional na caixa inteira (border-brand-sidebar, bg-brand-sidebar, text-brand-sidebar-foreground) — nunca mais marrom para ADITIVO", () => {
+  for (const kind of BORDO_KINDS) {
     const { cardClassName, titleClassName } = getDocumentKindCardAppearance(kind);
-    assert(cardClassName === undefined, `${kind} deveria ser neutro, mas recebeu "${cardClassName}"`);
-    assert(titleClassName === undefined, `${kind} não deveria ter titleClassName`);
+    assert(/\bbg-brand-sidebar\b/.test(cardClassName), `${kind} esperado bg-brand-sidebar: "${cardClassName}"`);
+    assert(/\bborder-brand-sidebar\b/.test(cardClassName), `${kind} esperado border-brand-sidebar: "${cardClassName}"`);
+    assert(/\btext-brand-sidebar-foreground\b/.test(cardClassName), `${kind} esperado text-brand-sidebar-foreground: "${cardClassName}"`);
+    assert(titleClassName.includes("font-bold"), `${kind}: título deveria ser negrito`);
   }
 });
 
-// --- 11: valor desconhecido permanece neutro (inclui null/undefined) ---
+// --- 2: RELATORIO_SEMANAL e RELATORIO recebem verde (caixa inteira) ---
 
-check("valor de kind desconhecido, null ou undefined permanece neutro", () => {
-  for (const kind of ["VALOR_DESCONHECIDO", null, undefined, ""]) {
+check("RELATORIO_SEMANAL e RELATORIO recebem verde na caixa inteira (bg-emerald-700, text-white) — relatório semanal sem vínculo contratual", () => {
+  for (const kind of GREEN_KINDS) {
     const { cardClassName, titleClassName } = getDocumentKindCardAppearance(kind);
-    assert(cardClassName === undefined, `kind ${JSON.stringify(kind)} deveria ser neutro`);
-    assert(titleClassName === undefined, `kind ${JSON.stringify(kind)} não deveria ter titleClassName`);
+    assert(/\bbg-emerald-700\b/.test(cardClassName), `${kind} esperado bg-emerald-700: "${cardClassName}"`);
+    assert(/\btext-white\b/.test(cardClassName), `${kind} esperado text-white: "${cardClassName}"`);
+    assert(titleClassName.includes("font-bold"), `${kind}: título deveria ser negrito`);
+  }
+});
+
+// --- 3: todos os demais DocumentKind reais recebem laranja ---
+
+check("todos os demais DocumentKind reais recebem laranja (bg-orange-700, text-white) — especificações, atas, editais e demais documentos não contratuais", () => {
+  for (const kind of ORANGE_KINDS) {
+    const { cardClassName, titleClassName } = getDocumentKindCardAppearance(kind);
+    assert(/\bbg-orange-700\b/.test(cardClassName), `${kind} esperado bg-orange-700: "${cardClassName}"`);
+    assert(/\btext-white\b/.test(cardClassName), `${kind} esperado text-white: "${cardClassName}"`);
+    assert(titleClassName.includes("font-bold"), `${kind}: título deveria ser negrito`);
+  }
+});
+
+// --- valor desconhecido cai em laranja (nunca mais neutro/quebra) ---
+
+check("valor de kind desconhecido, null ou undefined cai em laranja (nunca neutro, nunca quebra)", () => {
+  for (const kind of ["VALOR_DESCONHECIDO", null, undefined, ""]) {
+    const { cardClassName } = getDocumentKindCardAppearance(kind);
+    assert(/\bbg-orange-700\b/.test(cardClassName), `kind ${JSON.stringify(kind)} deveria cair em laranja`);
   }
 });
 
 // --- 12-13: regra depende exclusivamente do kind — igualdade exata, nunca substring/título ---
 
-check("igualdade exata: valores que só CONTÊM um kind colorido como substring permanecem neutros", () => {
+check("igualdade exata: valores que só CONTÊM um kind bordô/verde como substring caem em laranja (default), nunca herdam a cor por acidente", () => {
   const substringTraps = [
     "ADITIVO_CANCELADO",
     "PRE_ADITIVO",
@@ -165,14 +150,15 @@ check("igualdade exata: valores que só CONTÊM um kind colorido como substring 
     "PRE_RFI",
     "DIARIO_OBRA_ANTIGO",
   ];
+  const laranja = getDocumentKindCardAppearance("OUTRO");
   for (const trap of substringTraps) {
     const { cardClassName } = getDocumentKindCardAppearance(trap);
-    assert(cardClassName === undefined, `"${trap}" contém a substring mas não é igual a nenhum kind — deveria ficar neutro`);
+    assert(cardClassName === laranja.cardClassName, `"${trap}" contém a substring mas não é igual a nenhum kind — deveria cair em laranja (default)`);
   }
 });
 
-check("assinatura da função não aceita título/nome de arquivo — só kind", () => {
-  assert(getDocumentKindCardAppearance.length === 1, "getDocumentKindCardAppearance deveria receber só o kind");
+check("assinatura da função aceita kind e um segundo parâmetro opcional (isContractualAttachment) — nunca título/nome de arquivo", () => {
+  assert(getDocumentKindCardAppearance.length <= 2, "getDocumentKindCardAppearance deveria receber no máximo (kind, options)");
 });
 
 const appearanceHelperSource = readSource(
@@ -234,39 +220,19 @@ check("faixa SISTEMA EM TESTE: nenhum arquivo desta feature (helper, página, sc
   );
 });
 
-// --- 16: contrato/aditivo com destaque visual mais forte que os demais grupos ---
+// --- 16: as três cores são distintas entre si ---
 
-check("amarelo forte é visualmente mais forte que vermelho/verde/azul-claro (fundo mais saturado, borda mais escura, título em negrito)", () => {
-  const strong = getDocumentKindCardAppearance("CONTRATO_BASE");
-  const red = getDocumentKindCardAppearance("RELATORIO_SEMANAL");
-  const green = getDocumentKindCardAppearance("ATA_REUNIAO");
-  const blue = getDocumentKindCardAppearance("DIARIO_OBRA");
+check("BORDÔ, VERDE e LARANJA usam cores DISTINTAS entre si (nunca a mesma classe) — todas com título em negrito", () => {
+  const bordo = getDocumentKindCardAppearance("CONTRATO_BASE");
+  const verde = getDocumentKindCardAppearance("RELATORIO_SEMANAL");
+  const laranja = getDocumentKindCardAppearance("OUTRO");
 
-  const strongBgShade = shadeOf(strong.cardClassName, "bg", "yellow");
-  const strongBorderShade = shadeOf(strong.cardClassName, "border", "yellow");
-
-  for (const [label, group] of [["vermelho-claro", red], ["verde-claro", green], ["azul-claro", blue]]) {
-    const bgUtilityColor = group.cardClassName.match(/\bbg-(red|green|blue)-(\d+)\b/);
-    const borderUtilityColor = group.cardClassName.match(/\bborder-(red|green|blue)-(\d+)\b/);
-    assert(bgUtilityColor && borderUtilityColor, `não foi possível extrair shades de ${label}`);
-
-    const groupBgShade = Number(bgUtilityColor[2]);
-    const groupBorderShade = Number(borderUtilityColor[2]);
-
-    assert(
-      strongBgShade > groupBgShade,
-      `fundo do amarelo forte (${strongBgShade}) deveria ser mais saturado que o de ${label} (${groupBgShade})`
-    );
-    assert(
-      strongBorderShade > groupBorderShade,
-      `borda do amarelo forte (${strongBorderShade}) deveria ser mais escura que a de ${label} (${groupBorderShade})`
-    );
-
-    assert(
-      strong.titleClassName?.includes("font-bold") && !group.titleClassName?.includes("font-bold"),
-      `só contrato-base/aditivo deveriam ter título em negrito — ${label} não deveria`
-    );
-  }
+  assert(bordo.cardClassName !== verde.cardClassName, "bordô e verde deveriam ter cores diferentes");
+  assert(verde.cardClassName !== laranja.cardClassName, "verde e laranja deveriam ter cores diferentes");
+  assert(bordo.cardClassName !== laranja.cardClassName, "bordô e laranja deveriam ter cores diferentes");
+  assert(bordo.titleClassName.includes("font-bold"));
+  assert(verde.titleClassName.includes("font-bold"));
+  assert(laranja.titleClassName.includes("font-bold"));
 });
 
 // --- estrutural: página usa o helper central, sem lógica antiga inline ---
@@ -275,13 +241,15 @@ const documentosPageSource = readSource(
   "apps/web/app/[projectId]/documentos/page.tsx"
 );
 
-check("documentos/page.tsx: usa o helper central getDocumentKindCardAppearance, não reimplementa a regra inline", () => {
+check("documentos/page.tsx: usa o helper central getDocumentKindCardAppearance (via DocumentCard, reaproveitado pelos grupos contratuais e pela lista sem vínculo), não reimplementa a regra inline", () => {
+  const documentCardSource = readSource("apps/web/components/documents/document-card.tsx");
+  assert(documentosPageSource.includes("DocumentCard"), "a página deveria renderizar a listagem através de DocumentCard");
   assert(
-    documentosPageSource.includes("getDocumentKindCardAppearance(") &&
-      documentosPageSource.includes(
+    documentCardSource.includes("getDocumentKindCardAppearance(") &&
+      documentCardSource.includes(
         'from "@/lib/documents/document-kind-card-appearance"'
       ),
-    "a página deveria importar e chamar getDocumentKindCardAppearance"
+    "DocumentCard deveria importar e chamar getDocumentKindCardAppearance"
   );
 });
 

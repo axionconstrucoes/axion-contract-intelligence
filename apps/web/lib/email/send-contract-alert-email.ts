@@ -8,6 +8,7 @@ import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { appendAccEmailSignature } from "./branding/acc-email-signature";
 import { loadAccLogoInlineImage } from "./branding/load-acc-logo-inline-image";
 import { EmailSendError } from "./email-provider";
+import { assertNotEmailFixtureData } from "./fixture-safety-guard";
 import { getEmailProvider } from "./get-email-provider";
 import { buildContractAlertEmail, type ContractAlertEmailInput } from "./templates/contract-alert-template";
 
@@ -22,7 +23,10 @@ export interface SendContractAlertEmailInput {
   projectId: string;
   eventId: string;
   recipientEmail: string;
-  alert: ContractAlertEmailInput;
+  // hasInlineLogo NUNCA vem do caller: é decidido aqui mesmo, a partir do
+  // resultado real de loadAccLogoInlineImage() logo abaixo — nunca
+  // adivinhado/hardcoded por quem monta o alerta (send-alert-actions.ts).
+  alert: Omit<ContractAlertEmailInput, "hasInlineLogo">;
 }
 
 export interface SendContractAlertEmailResult {
@@ -81,9 +85,23 @@ export async function sendContractAlertEmail(
     throw new NotAuthorizedError("Sessão expirada. Faça login novamente.");
   }
 
-  const { subject, html, text } = buildContractAlertEmail(input.alert);
+  // Última barreira contra dado fictício de prévia (ex.: DUX) alcançar
+  // o provider real — ver fixture-safety-guard.ts. Lança antes de
+  // qualquer I/O de envio/gravação.
+  assertNotEmailFixtureData(input.alert.projectName);
+
+  // Carregado ANTES de montar o e-mail: o template usa hasInlineLogo para
+  // decidir se o cabeçalho referencia "cid:" (Parte B) — igual à regra já
+  // existente para a assinatura, nunca duas fontes de verdade divergentes
+  // sobre "o logo está disponível nesta execução?".
   const inlineLogo = loadAccLogoInlineImage();
-  const signed = appendAccEmailSignature({ text, html }, inlineLogo !== null);
+  const hasInlineLogo = inlineLogo !== null;
+  const { subject, html, text } = buildContractAlertEmail({ ...input.alert, hasInlineLogo });
+  // includeLogoImage=false: o cabeçalho do alerta (buildHeaderHtml) já
+  // mostra o logo — a assinatura no rodapé repetiria a mesma imagem se
+  // não fosse suprimida aqui (único fluxo de e-mail com logo no
+  // cabeçalho; SLA/solicitação de ação continuam com o default true).
+  const signed = appendAccEmailSignature({ text, html }, hasInlineLogo, false);
 
   const provider = getEmailProvider();
   const correlationId = crypto.randomUUID();

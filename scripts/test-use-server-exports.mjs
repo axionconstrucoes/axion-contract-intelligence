@@ -85,7 +85,6 @@ function findInvalidUseServerExports(source) {
 // data desta varredura). Adicionar aqui qualquer novo Server Action
 // futuro para manter a proteção global.
 const ALL_USE_SERVER_FILES = [
-  "apps/web/app/login/actions.ts",
   "apps/web/app/[projectId]/acoes/actions.ts",
   "apps/web/app/[projectId]/action-requests/actions.ts",
   "apps/web/app/[projectId]/esg/actions.ts",
