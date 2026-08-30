@@ -192,9 +192,11 @@ revoke all on function public.trigger_project_email_backfill(uuid, uuid, uuid, t
 
 -- ============================================================
 -- 2. add_project_member: aciona o backfill apos incluir o membro
---    ativo (copia exata da versao ja aplicada em
---    20260825120000_rename_gestor_to_gerente_review_matrix.sql, so
---    com a chamada nova antes do RETURN).
+--    ativo (copia da versao aplicada em 20260824090000, so com o
+--    papel invalido corrigido para aceitar GESTOR e GERENTE — ver
+--    20260829200000_project_permission_gerente_compat.sql para o
+--    contexto completo da transicao — e a chamada nova antes do
+--    RETURN).
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION public.add_project_member(p_project_id uuid, p_user_id uuid, p_permission text, p_area text DEFAULT NULL::text)
@@ -221,7 +223,7 @@ begin
     raise exception 'Apenas administradores do projeto podem adicionar membros.';
   end if;
 
-  if p_permission not in ('ADMINISTRADOR', 'GERENTE', 'COLABORADOR', 'LEITURA') then
+  if p_permission not in ('ADMINISTRADOR', 'GESTOR', 'GERENTE', 'COLABORADOR', 'LEITURA') then
     raise exception 'Papel inválido: %', p_permission;
   end if;
 

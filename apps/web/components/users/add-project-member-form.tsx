@@ -29,7 +29,11 @@ import {
 } from "@/app/[projectId]/usuarios/actions-state";
 import { permissionLabels, membershipAreaLabels } from "@/lib/labels";
 
-const NEW_MEMBER_PERMISSIONS = ["ADMINISTRADOR", "GESTOR", "COLABORADOR"] as const;
+// GERENTE, não GESTOR: toda inclusão nova usa o nome atual do papel
+// (mesma autorização de GESTOR — ver ProjectPermission em @axion/types).
+// Membros existentes com GESTOR continuam intocados; ver ALL_PERMISSIONS
+// em member-row-actions.tsx para a edição de membro já existente.
+const NEW_MEMBER_PERMISSIONS = ["ADMINISTRADOR", "GERENTE", "COLABORADOR"] as const;
 const AREAS = [
   "DIRETORIA",
   "ADMINISTRATIVO",

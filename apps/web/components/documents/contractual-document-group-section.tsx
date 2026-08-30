@@ -33,10 +33,10 @@ export function ContractualDocumentGroupSection({
   // Controle de "vincular documento existente a este instrumento" (área
   // sem anexos) E controle de lixeira (principal + cada anexo) só
   // aparecem para o ADMINISTRADOR — permissão mais estrita que
-  // canUpload (que também cobre GESTOR). A RPC continua aceitando
-  // ADMINISTRADOR OU GESTOR para vínculo (ver migration) — isto é só
-  // UX, nunca a garantia real; trash_project_document é ADMINISTRADOR
-  // estrito também no servidor.
+  // canUpload (que também cobre GESTOR/GERENTE). A RPC continua
+  // aceitando ADMINISTRADOR, GESTOR OU GERENTE para vínculo (ver
+  // migration) — isto é só UX, nunca a garantia real;
+  // trash_project_document é ADMINISTRADOR estrito também no servidor.
   canLinkContractualAttachment: boolean;
   linkableDocuments: LinkableDocumentCandidate[];
 }) {

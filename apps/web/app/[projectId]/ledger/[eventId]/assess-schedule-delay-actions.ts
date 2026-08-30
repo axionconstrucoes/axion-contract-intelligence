@@ -34,8 +34,8 @@ export async function assessScheduleDelayAction(
   }
 
   const permission = await getCurrentProjectPermission(projectId);
-  if (permission !== "ADMINISTRADOR" && permission !== "GESTOR") {
-    return { error: "Avaliar risco de atraso de cronograma exige permissão GESTOR ou ADMINISTRADOR no projeto.", success: null };
+  if (permission !== "ADMINISTRADOR" && permission !== "GESTOR" && permission !== "GERENTE") {
+    return { error: "Avaliar risco de atraso de cronograma exige permissão GERENTE ou ADMINISTRADOR no projeto.", success: null };
   }
 
   const [project, event, activities] = await Promise.all([

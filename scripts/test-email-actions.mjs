@@ -419,8 +419,10 @@ check("issue-tokens.ts: usa resolveAllowedEmailActions com o e-mail de checagem 
   assert(issueTokensSourceForFilter.includes("resolveAllowedEmailActions(admin, input.projectId, permissionCheckEmail)"));
 });
 
-check("resolveAllowedEmailActions: ADMINISTRADOR/GESTOR recebem as 4 ações; COLABORADOR/LEITURA/sem membership só ACKNOWLEDGE+RESPOND (nunca bloqueia tudo)", () => {
-  assert(resolveAllowedSource.includes('"ADMINISTRADOR" || membership.permission === "GESTOR"'));
+check("resolveAllowedEmailActions: ADMINISTRADOR/GESTOR/GERENTE recebem as 4 ações; COLABORADOR/LEITURA/sem membership só ACKNOWLEDGE+RESPOND (nunca bloqueia tudo)", () => {
+  assert(resolveAllowedSource.includes('membership.permission === "ADMINISTRADOR"'));
+  assert(resolveAllowedSource.includes('membership.permission === "GESTOR"'));
+  assert(resolveAllowedSource.includes('membership.permission === "GERENTE"'), "GERENTE deveria ter a mesma autorização de GESTOR nesta checagem");
   assert(resolveAllowedSource.includes("SAFE_DEFAULT_ACTIONS"));
 });
 

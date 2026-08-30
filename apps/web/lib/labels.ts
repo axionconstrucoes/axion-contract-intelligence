@@ -103,9 +103,14 @@ export const driveTypeLabels: Record<DriveType, string> = {
   PASTA_COMPARTILHADA: "Pasta compartilhada",
 };
 
+// GESTOR e GERENTE exibem o mesmo rótulo — transição compatível de
+// nome (ver ProjectPermission em @axion/types): os dois valores têm
+// exatamente a mesma autorização, então a UI não distingue um do
+// outro visualmente.
 export const permissionLabels: Record<ProjectPermission, string> = {
   ADMINISTRADOR: "Administrador",
-  GESTOR: "Gestor",
+  GESTOR: "Gerente",
+  GERENTE: "Gerente",
   COLABORADOR: "Colaborador",
   LEITURA: "Leitura",
 };

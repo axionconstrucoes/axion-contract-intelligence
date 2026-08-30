@@ -43,7 +43,11 @@ export async function resolveAllowedEmailActions(
     return SAFE_DEFAULT_ACTIONS;
   }
 
-  if (membership.permission === "ADMINISTRADOR" || membership.permission === "GESTOR") {
+  if (
+    membership.permission === "ADMINISTRADOR" ||
+    membership.permission === "GESTOR" ||
+    membership.permission === "GERENTE"
+  ) {
     return EMAIL_ALERT_ACTION_TYPES;
   }
 

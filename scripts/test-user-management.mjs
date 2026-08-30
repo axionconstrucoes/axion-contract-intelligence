@@ -45,7 +45,10 @@ console.log("USUÁRIOS & PERMISSÕES — TESTES");
 console.log("======================================");
 console.log("");
 
-const VALID_PERMISSIONS = ["ADMINISTRADOR", "GESTOR", "COLABORADOR", "LEITURA"];
+// GERENTE (20260829200000_project_permission_gerente_compat) é
+// sinônimo de GESTOR — mesma autorização, nome atual para inclusões
+// novas. Nenhum membro real foi convertido de GESTOR para GERENTE.
+const VALID_PERMISSIONS = ["ADMINISTRADOR", "GESTOR", "GERENTE", "COLABORADOR", "LEITURA"];
 const VALID_AREAS = [
   "DIRETORIA", "ADMINISTRATIVO", "COMERCIAL", "FINANCEIRO",
   "ENGENHARIA", "ORÇAMENTO", "JURÍDICO", "PLANEJAMENTO",
@@ -266,11 +269,17 @@ check("proteção do último administrador: já garantida pelo trigger prevent_l
 
 // --- 6. Permissões reais (nunca ADMIN/EDITOR/VIEWER) ---
 
-check("tipos: ProjectPermission tem exatamente os 4 papéis reais, nunca ADMIN/EDITOR/VIEWER", () => {
+check("tipos: ProjectPermission tem exatamente os 5 papéis reais (GESTOR e GERENTE convivendo — transição compatível), nunca ADMIN/EDITOR/VIEWER", () => {
   const typesSource = readSource("packages/types/src/index.ts");
   const match = typesSource.match(/export type ProjectPermission = ([^;]+);/);
   assert(match, "ProjectPermission não encontrado");
-  assert(match[1].includes("ADMINISTRADOR") && match[1].includes("GESTOR") && match[1].includes("COLABORADOR") && match[1].includes("LEITURA"));
+  assert(
+    match[1].includes("ADMINISTRADOR") &&
+    match[1].includes("GESTOR") &&
+    match[1].includes("GERENTE") &&
+    match[1].includes("COLABORADOR") &&
+    match[1].includes("LEITURA")
+  );
   assert(!/"ADMIN"|"EDITOR"|"VIEWER"/.test(match[1]), "ProjectPermission não deveria reintroduzir os papéis antigos");
 });
 

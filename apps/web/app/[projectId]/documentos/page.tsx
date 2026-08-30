@@ -65,16 +65,18 @@ export default async function DocumentosPage({
   ]);
 
   // Decisão de negócio (não a hierarquia global de
-  // has_project_permission): ADMINISTRADOR e GESTOR podem enviar
-  // documentos. Isto é só UX — a proteção definitiva é sempre a RPC
-  // (register_project_document_upload / promote_email_attachment_to_document),
-  // que revalida via can_manage_project_documents no servidor.
+  // has_project_permission): ADMINISTRADOR, GESTOR e GERENTE podem
+  // enviar documentos (GERENTE é sinônimo de GESTOR — ver
+  // ProjectPermission em @axion/types). Isto é só UX — a proteção
+  // definitiva é sempre a RPC (register_project_document_upload /
+  // promote_email_attachment_to_document), que revalida via
+  // can_manage_project_documents no servidor.
   const canUpload =
-    permission === "ADMINISTRADOR" || permission === "GESTOR";
+    permission === "ADMINISTRADOR" || permission === "GESTOR" || permission === "GERENTE";
 
   // Decisão de negócio (não a hierarquia da RPC, que aceita
-  // ADMINISTRADOR OU GESTOR): o controle de "vincular documento como
-  // anexo contratual" só é OFERECIDO na interface ao ADMINISTRADOR —
+  // ADMINISTRADOR, GESTOR OU GERENTE): o controle de "vincular documento
+  // como anexo contratual" só é OFERECIDO na interface ao ADMINISTRADOR —
   // mais estrito que canUpload. Isto é só UX; a proteção definitiva
   // continua sendo sempre a RPC (link_document_as_contractual_attachment),
   // que revalida a permissão no servidor.

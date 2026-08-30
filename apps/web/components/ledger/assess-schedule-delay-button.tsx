@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 
 // Gatilho REAL (não o gerador de prévia) da regra do risco CRÍTICO
 // (Bloco 3/8) — só visível para quem já vê a tela do evento com
-// permissão de escrita (GESTOR/ADMINISTRADOR, checado de novo no
-// servidor pela Server Action). "IA prepara → humano dispara →
+// permissão de escrita (GESTOR/GERENTE/ADMINISTRADOR, checado de novo
+// no servidor pela Server Action). "IA prepara → humano dispara →
 // resultado gravado e rastreável", nunca automático.
 export function AssessScheduleDelayButton({ projectId, eventId }: { projectId: string; eventId: string }) {
   const [state, formAction, pending] = useActionState(assessScheduleDelayAction, initialAssessScheduleDelayState);

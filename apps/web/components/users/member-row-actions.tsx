@@ -32,7 +32,11 @@ import {
 import { permissionLabels } from "@/lib/labels";
 import type { MembershipStatus, ProjectPermission } from "@axion/types";
 
-const ALL_PERMISSIONS: ProjectPermission[] = ["ADMINISTRADOR", "GESTOR", "COLABORADOR", "LEITURA"];
+// Inclui GESTOR (papéis já atribuídos a membros existentes — nunca
+// convertidos) e GERENTE (nome atual, mesma autorização) lado a lado,
+// para que o <Select> sempre encontre uma opção igual a
+// currentPermission, seja qual for o valor já salvo.
+const ALL_PERMISSIONS: ProjectPermission[] = ["ADMINISTRADOR", "GESTOR", "GERENTE", "COLABORADOR", "LEITURA"];
 
 export function MemberRowActions({
   projectId,

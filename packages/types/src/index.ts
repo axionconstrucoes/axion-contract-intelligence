@@ -73,11 +73,17 @@ export interface User {
   avatarInitials: string;
 }
 
-// 4 papéis reais do ACC (migration 20260824090000 — "Fechamento do
+// Papéis reais do ACC (migration 20260824090000 — "Fechamento do
 // módulo Usuários e Permissões"). ADMINISTRADOR = leitura + escrita/
-// administração; GESTOR/COLABORADOR/LEITURA = somente leitura
+// administração; GESTOR/GERENTE/COLABORADOR/LEITURA = somente leitura
 // (migration 20260824232516 — enforce_admin_only_write).
-export type ProjectPermission = "ADMINISTRADOR" | "GESTOR" | "COLABORADOR" | "LEITURA";
+//
+// GERENTE (migration 20260829200000 — project_permission_gerente_compat)
+// é sinônimo de GESTOR em toda checagem de autorização — mesmo rank,
+// mesmas exceções (Documentos, ações de alerta por e-mail, avaliação
+// de risco de cronograma). Nenhum membro real foi convertido: os dois
+// valores convivem até uma decisão e migração de dados separadas.
+export type ProjectPermission = "ADMINISTRADOR" | "GESTOR" | "GERENTE" | "COLABORADOR" | "LEITURA";
 
 export type MembershipStatus = "ACTIVE" | "INACTIVE";
 
