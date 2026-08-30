@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getAdditionalProposals } from "@/lib/additionals/get-additional-proposals";
+import { isProposalDriveFixtureAllowed } from "@/lib/additionals/proposal-drive-lookup/get-proposal-drive-lookup-client";
+import { listOrcamentosProposalFolders } from "@/lib/additionals/proposal-drive-lookup/list-orcamentos-proposals";
 import { formatDate } from "@/lib/labels";
 
 export const metadata: Metadata = { title: "Adicionais" };
@@ -17,9 +19,10 @@ export const metadata: Metadata = { title: "Adicionais" };
 export default async function AdditionalProposalsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
 
-  const [proposals, permission] = await Promise.all([
+  const [proposals, permission, driveProposalFolders] = await Promise.all([
     getAdditionalProposals(await createSupabaseServerClient(), projectId),
     getCurrentProjectPermission(projectId),
+    listOrcamentosProposalFolders(),
   ]);
 
   const canCreate = permission === "ADMINISTRADOR";
@@ -77,7 +80,11 @@ export default async function AdditionalProposalsPage({ params }: { params: Prom
               Nova proposta de adicional
               <FeatureInfo helpId="adicionais-nova-proposta" />
             </h2>
-            <AdditionalProposalCreateForm projectId={projectId} />
+            <AdditionalProposalCreateForm
+              projectId={projectId}
+              driveProposalFolders={driveProposalFolders}
+              driveIntegrationConfigured={isProposalDriveFixtureAllowed()}
+            />
           </TabsContent>
         ) : null}
       </Tabs>

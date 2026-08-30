@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
+import { isMppFile } from "@/lib/documents/multi-upload/queue-core";
 import { MULTI_UPLOAD_DOCUMENT_KINDS } from "@/lib/documents/multi-upload/types";
 import type {
   MultiUploadDocumentKind,
@@ -45,7 +46,11 @@ export function QueueItemRow({
   onConfirmConflict,
   onCancelConflict,
 }: Props) {
-  const canEditKind = EDITABLE_KIND_STATUSES.has(item.status);
+  // .mpp nunca é editável — o formato do arquivo já dita o tipo
+  // documental (CRONOGRAMA_BASELINE, aplicado em addFiles); permitir
+  // trocar para outro tipo aqui seria semanticamente incoerente (um
+  // binário do MS Project não pode virar "Contrato"/"Aditivo"/etc.).
+  const canEditKind = EDITABLE_KIND_STATUSES.has(item.status) && !isMppFile(item.descriptor);
   const canRemove = REMOVABLE_STATUSES.has(item.status);
   const canRetry = RETRYABLE_STATUSES.has(item.status);
 
@@ -94,6 +99,9 @@ export function QueueItemRow({
           }
           className="h-8 w-auto text-xs"
         >
+          <option value="" disabled>
+            Selecione o tipo documental
+          </option>
           {MULTI_UPLOAD_DOCUMENT_KINDS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}

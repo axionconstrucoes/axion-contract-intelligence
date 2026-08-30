@@ -44,10 +44,23 @@ const SEVERITY_HELP_ID: Record<AlertSeverity, string> = {
  * poluir a tela") — usar `withInfo` só em legendas/explicações
  * pontuais.
  */
-export function SeverityBadge({ severity, withInfo = false }: { severity: AlertSeverity; withInfo?: boolean }) {
+export function SeverityBadge({
+  severity,
+  withInfo = false,
+  className,
+}: {
+  severity: AlertSeverity;
+  withInfo?: boolean;
+  // Override pontual de cor — usado SÓ pela página Start-up ACC para
+  // destacar BAIXO ali (amarelo forte/fonte preta), sem alterar a
+  // paleta global usada nos outros 13+ lugares que renderizam
+  // SeverityBadge (cn/twMerge resolve o conflito de utilitário,
+  // nunca os dois ao mesmo tempo).
+  className?: string;
+}) {
   return (
     <span className="inline-flex items-center gap-1">
-      <Badge className={cn(severityClasses[severity])}>{severityLabels[severity]}</Badge>
+      <Badge className={cn(severityClasses[severity], className)}>{severityLabels[severity]}</Badge>
       {withInfo ? <FeatureInfo helpId={SEVERITY_HELP_ID[severity]} /> : null}
     </span>
   );

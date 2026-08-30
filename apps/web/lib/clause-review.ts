@@ -1,6 +1,7 @@
 ﻿import "server-only";
 
 import { createSupabaseServerClient } from "@axion/db/server";
+import { withActiveDocumentFilter } from "./documents/active-document-filter";
 
 export type ClauseReviewCandidate = {
   id: string;
@@ -74,13 +75,16 @@ export async function getClauseReviewCandidates(
   const supabase =
     await createSupabaseServerClient();
 
+  // Regra CANÔNICA — candidatos de extração de um documento na lixeira
+  // nunca aparecem na revisão de cláusulas.
   const {
     data: documentData,
     error: documentError,
-  } = await supabase
-    .from("documents")
-    .select("id,title,kind")
-    .eq("project_id", projectId);
+  } = await withActiveDocumentFilter((filterActive) => {
+    let query = supabase.from("documents").select("id,title,kind").eq("project_id", projectId);
+    if (filterActive) query = query.is("deleted_at", null);
+    return query;
+  });
 
   if (documentError) {
     if (documentError.code === "22P02") {

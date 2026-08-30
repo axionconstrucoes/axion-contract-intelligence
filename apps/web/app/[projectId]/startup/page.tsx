@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { createSupabaseServerClient } from "@axion/db/server";
 import { CompleteStartupButton } from "@/components/startup/complete-startup-button";
 import { HistoricalFindingCard } from "@/components/startup/historical-finding-card";
@@ -8,6 +9,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { RiskLegend } from "@/components/shared/risk-legend";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getProjectMembers } from "@/lib/data";
 import { canCompleteProjectStartup } from "@/lib/startup/complete-startup";
@@ -43,6 +45,11 @@ export default async function StartupPage({ params }: { params: Promise<{ projec
       <PageHeader
         title="Start-up ACC"
         description="Validação dos riscos históricos antes de ativar o acompanhamento operacional — o ACC conhece todo o passado do projeto, mas nunca trata fato histórico já pacificado como ocorrência nova."
+        actions={
+          <Link href={`/${projectId}/dashboard`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+            Dashboard
+          </Link>
+        }
       />
 
       <Card>
@@ -69,7 +76,7 @@ export default async function StartupPage({ params }: { params: Promise<{ projec
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="flex flex-wrap gap-2">
             <Stat label="Findings históricos" value={summary.totalHistoricalFindings} />
             <Stat label="ALTO" value={summary.totalHigh} />
             <Stat label="CRÍTICO" value={summary.totalCritical} />
@@ -87,7 +94,7 @@ export default async function StartupPage({ params }: { params: Promise<{ projec
             Findings históricos ALTO/CRÍTICO
             <FeatureInfo helpId="finding" />
           </h2>
-          <RiskLegend />
+          <RiskLegend strongBaixaHighlight />
         </div>
         {highCriticalFindings.length === 0 ? (
           <EmptyState message="Nenhum finding histórico ALTO/CRÍTICO registrado ainda — LOW/MEDIUM permanecem pesquisáveis mas não bloqueiam o Start-up." />
@@ -103,11 +110,17 @@ export default async function StartupPage({ params }: { params: Promise<{ projec
   );
 }
 
+// Preto sólido/fonte branca (era cinza médio bg-neutral-500 — rodada
+// "produção", exclusivo desta página), algarismo e legenda +1 nível na
+// escala tipográfica cada (text-2xl -> text-3xl; text-[10px], que nem
+// é um degrau padrão da escala, -> text-xs, o próximo degrau padrão
+// real acima dele) — largura/padding continuam compactos (w-20,
+// px-1.5 py-1.5), sem crescer a caixa em si, só o texto dentro dela.
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-md border p-2 text-center">
-      <p className="text-lg font-semibold">{value}</p>
-      <p className="text-[10px] text-muted-foreground">{label}</p>
+    <div className="flex w-20 shrink-0 flex-col items-center justify-center rounded-md bg-black px-1.5 py-1.5 text-center text-white">
+      <p className="text-3xl font-semibold leading-tight">{value}</p>
+      <p className="text-xs leading-tight text-white">{label}</p>
     </div>
   );
 }

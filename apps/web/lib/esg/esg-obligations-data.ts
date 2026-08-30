@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createSupabaseServerClient } from "@axion/db/server";
+import { withActiveDocumentFilter } from "../documents/active-document-filter";
 
 import type {
   EsgDdsDetails,
@@ -157,9 +158,17 @@ export async function getEsgObligations(projectId: string): Promise<EsgObligatio
   const documentVersionRows = documentVersionData.data as unknown as DocumentVersionRow[];
   const documentIds = Array.from(new Set(documentVersionRows.map((v) => v.document_id)));
 
+  // Regra CANÔNICA — um documento fonte na lixeira nunca aparece como
+  // rótulo de uma obrigação ESG (a obrigação em si permanece, só o
+  // rótulo cai no mesmo "Documento não disponível" já usado para um
+  // documento genuinamente não encontrado, abaixo).
   const { data: documentData, error: documentError } =
     documentIds.length > 0
-      ? await supabase.from("documents").select("id,title").in("id", documentIds)
+      ? await withActiveDocumentFilter((filterActive) => {
+          let query = supabase.from("documents").select("id,title").in("id", documentIds);
+          if (filterActive) query = query.is("deleted_at", null);
+          return query;
+        })
       : { data: [] as DocumentRow[], error: null };
 
   if (documentError) throw new Error(`Falha ao carregar documentos vinculados: ${documentError.message}`);

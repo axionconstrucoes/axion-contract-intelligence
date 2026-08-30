@@ -23,6 +23,40 @@ export interface ContextEvidence {
   documentVersionId: string | null;
 }
 
+// Vínculo contratual REAL e persistido (documents.contractual_*,
+// migration 20260829090000_document_contractual_attachment_linkage.sql)
+// do documento-fonte de uma cláusula com o instrumento contratual ao
+// qual foi formalmente incorporado — "não basta alterar o prompt de
+// identidade": isto é o que faz a hierarquia de precedência do
+// Consultor Jurídico IA (legal-consultant/identity.ts) usar DADOS
+// estruturados de verdade, em vez de só prosa no prompt.
+//
+// DELIBERADAMENTE SEM nenhum campo "precedenceLevel"/conclusão de
+// precedência pré-calculada: o vínculo persistido prova só que o
+// documento foi formalmente incorporado a ESTE pai (parentDocumentKind
+// + incorporationBasis são fatos) — ele NUNCA prova, sozinho, que um
+// ADITIVO está aprovado/vigente (não existe nenhuma coluna de
+// status/aprovação em documents; inventar isso aqui seria fabricar um
+// fato que o schema não tem). Só o Expert, olhando o resto do contexto
+// (cláusulas do próprio aditivo, notas do evento, etc.), pode concluir
+// se um aditivo está vigente e qual o escopo que ele altera — e uma
+// cláusula de precedência explícita do contrato sempre prevalece sobre
+// qualquer hierarquia padrão. Ver a seção "Hierarquia de precedência"
+// em legal-consultant/identity.ts para como estes FATOS devem ser
+// usados na CONCLUSÃO (que é sempre do Expert, nunca pré-computada
+// aqui).
+export interface ContextContractualLink {
+  parentDocumentId: string;
+  /** Fato, não conclusão — só os dois valores que documents_kind_check aceita como pai (ver migration). */
+  parentDocumentKind: "CONTRATO_BASE" | "ADITIVO";
+  parentDocumentTitle: string;
+  /** Rótulo da versão mais recente do documento PAI — null se o pai não tiver nenhuma versão registrada. */
+  parentCurrentVersionLabel: string | null;
+  incorporationBasis: string;
+  linkedByUserId: string;
+  linkedAt: string;
+}
+
 export interface ContextClause {
   id: string;
   clauseNumber: string;
@@ -33,6 +67,8 @@ export interface ContextClause {
   documentTitle: string;
   /** Por que esta cláusula está no contexto: já confrontada (cross-reference) ou candidata pendente/decidida. */
   relation: "CROSS_REFERENCE" | "CONFRONTATION_CANDIDATE";
+  /** Vínculo contratual do documento-fonte desta cláusula, quando existir — null quando o documento não é um anexo contratual vinculado (inclusive: sempre null até a migration 20260829090000 ser aplicada, ver map-contractual-link-context.ts). */
+  contractualLink: ContextContractualLink | null;
 }
 
 /** Metadados leves de um anexo — nunca o conteúdo; documentVersionId só é não-nulo após promoção via linkEmailAttachmentToDocument. */

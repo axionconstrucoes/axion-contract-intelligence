@@ -77,20 +77,20 @@ export default async function SlaActionsPage({ params }: { params: Promise<{ pro
       <Tabs defaultValue="abertas">
         <TabsList>
           <span className="inline-flex items-center gap-1">
-            <TabsTrigger value="abertas">Ações abertas</TabsTrigger>
+            <TabsTrigger value="abertas" variant="prominent">Ações abertas</TabsTrigger>
             <FeatureInfo helpId="acoes-tab-abertas" />
           </span>
           <span className="inline-flex items-center gap-1">
-            <TabsTrigger value="gerencial">Visão gerencial</TabsTrigger>
+            <TabsTrigger value="gerencial" variant="prominent">Visão gerencial</TabsTrigger>
             <FeatureInfo helpId="acoes-tab-gerencial" />
           </span>
           <span className="inline-flex items-center gap-1">
-            <TabsTrigger value="historico">Histórico</TabsTrigger>
+            <TabsTrigger value="historico" variant="prominent">Histórico</TabsTrigger>
             <FeatureInfo helpId="acoes-tab-historico" />
           </span>
           {canCreate ? (
             <span className="inline-flex items-center gap-1">
-              <TabsTrigger value="nova">Nova ação</TabsTrigger>
+              <TabsTrigger value="nova" variant="prominent">Nova ação</TabsTrigger>
               <FeatureInfo helpId="acoes-tab-nova" />
             </span>
           ) : null}

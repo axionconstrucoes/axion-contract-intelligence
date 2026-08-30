@@ -21,12 +21,16 @@ import {
   buildDescriptor,
   buildImportErrorMessage,
   classifyCandidate,
+  classifyStorageUploadError,
   computeBatchSummary,
   deriveTitleFromFileName,
+  isBatchStillActive,
+  isMppFile,
   mergeNewFiles,
   nextVersionLabel,
   progressForPhase,
   sanitizeFileName,
+  suggestedKindForDescriptor,
   toExistingDocumentSnapshots,
   validateDescriptor,
 } from "@/lib/documents/multi-upload/queue-core";
@@ -65,8 +69,11 @@ export function useDocumentUploadQueue(
 ) {
   const itemsRef = useRef<QueueItem[]>([]);
   const [items, setItemsState] = useState<QueueItem[]>([]);
+  // "" (não selecionado) — nunca mais um kind pré-escolhido por
+  // padrão; ver isMppFile/suggestedKindForDescriptor abaixo para a
+  // única exceção (o próprio arquivo .mpp dita o tipo).
   const [batchDefaultKind, setBatchDefaultKindState] =
-    useState<MultiUploadDocumentKind>("CONTRATO_BASE");
+    useState<MultiUploadDocumentKind>("");
   const [isRunning, setIsRunning] = useState(false);
 
   const filesRef = useRef<Map<string, File>>(new Map());
@@ -128,7 +135,11 @@ export function useDocumentUploadQueue(
         toAdd.push({
           id,
           descriptor: entry.descriptor,
-          kind: batchDefaultKind,
+          // .mpp sempre dita o próprio tipo (CRONOGRAMA_BASELINE) —
+          // nunca herda o default do lote; qualquer outro arquivo
+          // começa em batchDefaultKind, que agora é "" até o usuário
+          // escolher (nunca mais CONTRATO_BASE implícito).
+          kind: suggestedKindForDescriptor(entry.descriptor) ?? batchDefaultKind,
           status: "PENDENTE",
           phase: "VALIDACAO",
           progressPercent: 0,
@@ -171,7 +182,13 @@ export function useDocumentUploadQueue(
     (kind: MultiUploadDocumentKind) => {
       setItems((prev) =>
         prev.map((item) =>
-          item.status === "PENDENTE" ? { ...item, kind } : item
+          // .mpp nunca é sobrescrito pela aplicação em lote — seu tipo
+          // é ditado pelo próprio formato do arquivo, nunca por uma
+          // escolha manual do usuário (mesma regra do seletor
+          // individual bloqueado em queue-item-row.tsx).
+          item.status === "PENDENTE" && !isMppFile(item.descriptor)
+            ? { ...item, kind }
+            : item
         )
       );
     },
@@ -230,11 +247,23 @@ export function useDocumentUploadQueue(
           });
 
         if (uploadError) {
+          // Mensagem/status técnico ORIGINAL do Storage sempre preservado
+          // aqui (nunca descartado) — só não é exposto ao usuário final
+          // como está (poderia incluir detalhes internos de
+          // infraestrutura). classifyStorageUploadError decide uma
+          // categoria segura e específica quando reconhece a causa (MIME
+          // recusado, tamanho, permissão, nome duplicado); cai para a
+          // mensagem genérica só quando realmente não sabe classificar.
+          console.error(
+            "[multi-upload] falha no Storage:",
+            uploadError.message,
+            "statusCode" in uploadError ? (uploadError as { statusCode?: string }).statusCode : undefined
+          );
           updateItem(itemId, {
             status: "ERRO",
             errorMessage: buildImportErrorMessage(
               file.name,
-              "falha no armazenamento"
+              classifyStorageUploadError(uploadError.message)
             ),
           });
           return;
@@ -296,13 +325,45 @@ export function useDocumentUploadQueue(
 
           const isDuplicate =
             registerError.message.includes("DUPLICATE_FILE_HASH");
+          const isSingleActiveContractBaseConflict = registerError.message.includes(
+            "SINGLE_ACTIVE_CONTRACT_BASE"
+          );
+
+          // Deduplicação x lixeira (migration 20260829160000): o mesmo
+          // hash pode já existir num documento que foi enviado para a
+          // lixeira — a RPC de upload já impede a duplicata de
+          // qualquer forma (índice único), mas o usuário merece saber
+          // QUAL documento bateu e que ele está na lixeira, em vez de
+          // só "arquivo duplicado" — nunca cria duplicata, só informa
+          // melhor o caminho (restaurar, não reenviar).
+          let duplicateInTrashTitle: string | null = null;
+          if (isDuplicate && current.sha256Hash) {
+            const { data: matchRows } = await supabase.rpc(
+              "find_document_by_sha256",
+              { p_project_id: projectId, p_sha256_hash: current.sha256Hash }
+            );
+            const match = Array.isArray(matchRows) ? matchRows[0] : matchRows;
+            if (match?.is_trashed) {
+              duplicateInTrashTitle = match.document_title ?? null;
+            }
+          }
 
           const baseMessage = isDuplicate
-            ? buildImportErrorMessage(file.name, "arquivo duplicado")
-            : buildImportErrorMessage(
-                file.name,
-                "falha ao registrar o documento"
-              );
+            ? duplicateInTrashTitle
+              ? buildImportErrorMessage(
+                  file.name,
+                  `arquivo duplicado — já existe como "${duplicateInTrashTitle}", na lixeira. Restaure-o em vez de reenviar.`
+                )
+              : buildImportErrorMessage(file.name, "arquivo duplicado")
+            : isSingleActiveContractBaseConflict
+              ? buildImportErrorMessage(
+                  file.name,
+                  'este projeto já tem um Contrato-base ativo — abra o card existente e use "Adicionar nova versão" em vez de enviar um novo Contrato-base'
+                )
+              : buildImportErrorMessage(
+                  file.name,
+                  "falha ao registrar o documento"
+                );
 
           updateItem(itemId, {
             status: isDuplicate ? "DUPLICADO" : "ERRO",
@@ -367,6 +428,17 @@ export function useDocumentUploadQueue(
 
         const requiresHumanReview = current.kind === "ATA_REUNIAO";
 
+        // .mpp: o upload/armazenamento é um sucesso completo (nunca
+        // fica preso num status de "pendente" como Ata de Reunião —
+        // não há decisão humana nenhuma pendente aqui), mas a tela
+        // nunca pode insinuar que o cronograma foi lido/extraído — não
+        // existe parser de MPP nesta etapa. Reaproveita o mesmo campo
+        // (errorMessage, renderizado em cinza para status não-ERRO) já
+        // usado pela nota informativa da Ata de Reunião.
+        const mppInfoMessage = isMppFile(current.descriptor)
+          ? "Arquivo MPP armazenado — extração ainda não realizada."
+          : null;
+
         updateItem(itemId, {
           status: requiresHumanReview ? "AGUARDANDO_ANALISE" : "CONCLUIDO",
           phase: "CONCLUIDO",
@@ -374,7 +446,7 @@ export function useDocumentUploadQueue(
           requiresHumanReview,
           errorMessage: requiresHumanReview
             ? "Upload concluído — análise/OCR pendente. Extração de participantes, decisões, responsáveis, prazos e pendências ainda não está implementada nesta etapa; revisão humana necessária."
-            : null,
+            : mppInfoMessage,
         });
       } catch (caughtError) {
         let baseMessage = buildImportErrorMessage(
@@ -431,6 +503,22 @@ export function useDocumentUploadQueue(
           errorMessage: buildImportErrorMessage(
             file.name,
             validation.reason.replace(/\.$/, "").toLowerCase()
+          ),
+          progressPercent: progressForPhase("VALIDACAO", true),
+        });
+        return;
+      }
+
+      // Seleção de tipo documental é obrigatória antes do envio — "" só
+      // é possível aqui para arquivos que não são .mpp (que já chegam
+      // com CRONOGRAMA_BASELINE sugerido, ver addFiles); nunca envia
+      // nem infere um tipo às cegas.
+      if (!current.kind) {
+        updateItem(itemId, {
+          status: "REJEITADO",
+          errorMessage: buildImportErrorMessage(
+            file.name,
+            "selecione o tipo documental antes de enviar"
           ),
           progressPercent: progressForPhase("VALIDACAO", true),
         });
@@ -526,6 +614,16 @@ export function useDocumentUploadQueue(
         activeIdsRef.current.delete(item.id);
         tickRef.current();
       });
+    }
+
+    // Reabilita o rótulo/estado do botão "Iniciar envio" no exato
+    // momento em que o lote termina de verdade (chamado tanto no
+    // startBatch() inicial quanto em toda conclusão recursiva de item
+    // acima) — nunca um useEffect observando `items` (setState
+    // síncrono dentro de efeito é evitado de propósito: aqui é reação
+    // direta a um evento, não derivação reativa de estado).
+    if (activeIdsRef.current.size === 0 && !isBatchStillActive(itemsRef.current)) {
+      setIsRunning((current) => (current ? false : current));
     }
   }, [processItem]);
 

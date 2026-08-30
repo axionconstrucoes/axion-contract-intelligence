@@ -1,6 +1,7 @@
 import type { EvidenceRef } from "@axion/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { getDocument, getDocumentVersion, getEmail } from "@/lib/data";
+import { evidenceAnchorId } from "@/lib/ledger/evidence-anchor";
 import { formatDate, sourceTypeShortLabels } from "@/lib/labels";
 
 export async function EvidenceViewer({ evidences }: { evidences: EvidenceRef[] }) {
@@ -13,7 +14,11 @@ export async function EvidenceViewer({ evidences }: { evidences: EvidenceRef[] }
       const document = documentVersion ? await getDocument(documentVersion.documentId) : null;
 
       return (
-        <Card key={evidence.id ?? `${index}-${evidence.locator}`}>
+        <Card
+          key={evidence.id ?? `${index}-${evidence.locator}`}
+          id={evidence.id ? evidenceAnchorId(evidence.id) : undefined}
+          className="scroll-mt-20"
+        >
           <CardContent className="flex flex-col gap-2 p-4">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium uppercase text-muted-foreground">

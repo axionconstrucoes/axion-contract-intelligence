@@ -17,6 +17,7 @@ import {
   type BatchSummary,
   type ClassificationResult,
   type ExistingDocumentSnapshot,
+  type MultiUploadDocumentKind,
   type QueueFileDescriptor,
   type QueueItem,
   type QueueItemStatus,
@@ -80,6 +81,24 @@ export function buildDescriptor(
     sizeBytes,
     mimeType: resolveMimeType(fileName),
   };
+}
+
+// .mpp (Microsoft Project) é, pela própria natureza do formato, sempre
+// um cronograma — nunca um contrato/aditivo/proposta. Por isso é o
+// único tipo de arquivo com sugestão automática de tipo documental
+// (CRONOGRAMA_BASELINE, o kind canônico de cronograma nesta base — não
+// existe um valor "CRONOGRAMA" solto em DocumentKind) E com o seletor
+// bloqueado nessa sugestão (ver EDITABLE_KIND_STATUSES em
+// queue-item-row.tsx) — nenhum outro tipo de arquivo (PDF incluso) é
+// classificado automaticamente só pelo nome/extensão.
+export function isMppFile(descriptor: Pick<QueueFileDescriptor, "extension">): boolean {
+  return descriptor.extension.toLowerCase() === "mpp";
+}
+
+export function suggestedKindForDescriptor(
+  descriptor: Pick<QueueFileDescriptor, "extension">
+): MultiUploadDocumentKind | null {
+  return isMppFile(descriptor) ? "CRONOGRAMA_BASELINE" : null;
 }
 
 export type ValidationResult =
@@ -300,11 +319,72 @@ export function toExistingDocumentSnapshots(
 
 // Mensagem específica exigida pelo requisito de erros — nunca "Erro
 // desconhecido" quando a causa é conhecida.
+// A mensagem genérica antiga ("falha no armazenamento") escondia a
+// causa real do erro do Storage — nunca logada, nunca diferenciada.
+// Esta função faz o oposto do que "esconder o erro" faria: quem chama
+// (use-document-upload-queue.ts) sempre loga a mensagem/statusCode
+// técnicos originais do Storage no console (nunca omitidos), e usa
+// esta classificação só para decidir uma frase segura e útil para o
+// usuário final — nunca expõe detalhes internos de infraestrutura
+// (nome de bucket, stack trace, etc.), só a CATEGORIA do problema.
+export function classifyStorageUploadError(rawMessage: string | null | undefined): string {
+  const message = (rawMessage ?? "").toLowerCase();
+
+  if (message.includes("mime type") || message.includes("not supported") || message.includes("not allowed")) {
+    return "tipo de arquivo não permitido pelo armazenamento";
+  }
+  if (message.includes("exceeded") && message.includes("size")) {
+    return "arquivo excede o tamanho máximo permitido pelo armazenamento";
+  }
+  if (message.includes("payload too large") || message.includes("413")) {
+    return "arquivo excede o tamanho máximo permitido pelo armazenamento";
+  }
+  if (message.includes("already exists") || message.includes("duplicate")) {
+    return "conflito de nome no armazenamento";
+  }
+  if (message.includes("permission") || message.includes("not authorized") || message.includes("403")) {
+    return "sem permissão para gravar no armazenamento";
+  }
+
+  return "falha no armazenamento";
+}
+
 export function buildImportErrorMessage(
   fileName: string,
   reason: string
 ): string {
   return `${fileName} não foi importado: ${reason}.`;
+}
+
+// Todo status TERMINAL (nenhum trabalho automático resta para o item,
+// com sucesso ou não) conta como 100% do PESO deste item no progresso
+// GERAL do lote — mesmo quando seu progressPercent individual (usado só
+// na barra de progresso da própria linha) ficou menor por ter falhado
+// antes da fase UPLOAD/REGISTRO terminar (ex.: DUPLICADO detectado logo
+// após o HASH, ERRO de upload). Sem isso, um lote com "1 concluído + 1
+// duplicado + 1 erro" nunca chega a 100% (a média dos progressPercent
+// brutos fica em ~47%, mesmo com todos os itens já em estado terminal)
+// — a causa exata do lote nunca sair de "Enviando lote...".
+const ALL_TERMINAL_STATUSES: readonly QueueItemStatus[] = [
+  ...TERMINAL_DONE,
+  ...TERMINAL_DUPLICATED,
+  ...TERMINAL_REJECTED,
+  ...TERMINAL_ERRORED,
+];
+
+// true enquanto o motor de fila ainda tem (ou pode vir a ter) trabalho
+// automático pendente — PENDENTE (ainda nem começou) ou qualquer fase
+// em andamento. Itens aguardando DECISÃO HUMANA (AGUARDANDO_DECISAO_*)
+// e todo status TERMINAL não contam: o motor (tick()) não avança mais
+// nenhum deles sozinho. Usado para saber quando o lote real terminou —
+// nunca deduzido por progressPercent isolado, que podia ficar preso
+// abaixo de 100% mesmo com o lote inteiro em estado terminal.
+export function isBatchStillActive(
+  items: readonly Pick<QueueItem, "status">[]
+): boolean {
+  return items.some(
+    (i) => i.status === "PENDENTE" || PROCESSING_STATUSES.includes(i.status)
+  );
 }
 
 export function computeBatchSummary(
@@ -334,7 +414,11 @@ export function computeBatchSummary(
     total === 0
       ? 0
       : Math.round(
-          items.reduce((sum, i) => sum + i.progressPercent, 0) / total
+          items.reduce(
+            (sum, i) =>
+              sum + (ALL_TERMINAL_STATUSES.includes(i.status) ? 100 : i.progressPercent),
+            0
+          ) / total
         );
 
   return {

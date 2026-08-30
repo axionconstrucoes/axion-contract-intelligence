@@ -22,14 +22,19 @@ import type {
 const AXION_EMAIL_DOMAIN = "@axion.com.br";
 
 // Papéis permitidos ao adicionar um novo membro (LEITURA deliberadamente
-// fora — o formulário só oferece ADMINISTRADOR/GESTOR/COLABORADOR, exatamente
-// como especificado). O RPC add_project_member também valida isto no
-// servidor — este allowlist é só para uma mensagem de erro mais clara
-// antes de round-trip até o banco.
-const ALLOWED_NEW_MEMBER_PERMISSIONS = ["ADMINISTRADOR", "GESTOR", "COLABORADOR"] as const;
+// fora — o formulário só oferece ADMINISTRADOR/GERENTE/COLABORADOR, exatamente
+// como especificado). GERENTE, não GESTOR: toda inclusão nova usa o nome
+// atual do papel (mesma autorização — ver ProjectPermission em @axion/types).
+// O RPC add_project_member também valida isto no servidor (aceitando
+// GESTOR e GERENTE) — este allowlist é só para uma mensagem de erro mais
+// clara antes de round-trip até o banco.
+const ALLOWED_NEW_MEMBER_PERMISSIONS = ["ADMINISTRADOR", "GERENTE", "COLABORADOR"] as const;
 
-// Os 4 papéis reais do banco (seção 6 — "não reintroduzir ADMIN/EDITOR/VIEWER").
-const ALL_PERMISSIONS = ["ADMINISTRADOR", "GESTOR", "COLABORADOR", "LEITURA"] as const;
+// Os papéis reais do banco (seção 6 — "não reintroduzir ADMIN/EDITOR/VIEWER").
+// GESTOR e GERENTE lado a lado: membros existentes com GESTOR (nunca
+// convertidos) continuam podendo ser editados para qualquer papel,
+// GERENTE incluso.
+const ALL_PERMISSIONS = ["ADMINISTRADOR", "GESTOR", "GERENTE", "COLABORADOR", "LEITURA"] as const;
 
 const ALLOWED_AREAS = [
   "DIRETORIA",

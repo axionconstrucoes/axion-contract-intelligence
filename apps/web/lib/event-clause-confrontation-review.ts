@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSupabaseServerClient } from "@axion/db/server";
 import type { AiFindingType } from "@axion/types";
+import { resolveNonTrashedDocumentIds } from "@/lib/documents/active-document-filter";
 import type { ConfrontationCandidateSeverity, ConfrontationCandidateStatus } from "@/lib/labels";
 
 export type EventClauseConfrontationCandidate = {
@@ -20,6 +21,11 @@ export type EventClauseConfrontationCandidate = {
   reviewedByUserId: string | null;
   reviewedAt: string | null;
   reviewNote: string | null;
+  // Emenda de review_note em candidato já revisado (migration
+  // 20260828150000, NÃO aplicada nesta etapa) — nunca confundida com a
+  // autoria original acima. Ambas nulas quando a nota nunca foi emendada.
+  reviewNoteAmendedByUserId: string | null;
+  reviewNoteAmendedAt: string | null;
   createdAt: string;
   clauseNumber: string;
   clauseTitle: string;
@@ -42,6 +48,8 @@ type CandidateRow = {
   reviewed_by_user_id: string | null;
   reviewed_at: string | null;
   review_note: string | null;
+  review_note_amended_by_user_id?: string | null;
+  review_note_amended_at?: string | null;
   created_at: string;
 };
 
@@ -50,6 +58,7 @@ type ClauseRow = {
   clause_number: string;
   title: string;
   text: string;
+  document_version_id: string;
 };
 
 const statusOrder: Record<ConfrontationCandidateStatus, number> = {
@@ -66,12 +75,27 @@ export async function getEventClauseConfrontationCandidates(
 ): Promise<EventClauseConfrontationCandidate[]> {
   const supabase = await createSupabaseServerClient();
 
-  const { data: candidateData, error: candidateError } = await supabase
+  const BASE_COLUMNS =
+    "id,event_id,clause_id,analyzer,analyzer_version,status,finding_type,severity,confidence,summary,event_basis,clause_basis,reviewed_by_user_id,reviewed_at,review_note,created_at";
+  // review_note_amended_by_user_id/review_note_amended_at vêm da migration
+  // 20260828150000 (RPC amend_event_clause_confrontation_review_note) —
+  // ainda NÃO aplicada em nenhum ambiente nesta etapa. 42703
+  // (undefined_column) é tratado como "nenhuma emenda ainda possível
+  // neste ambiente", nunca quebra a tela — mesmo padrão já usado por
+  // getProjectMemberInvitations (lib/data.ts) para 42P01/migration
+  // pendente.
+  const fullResult = await supabase
     .from("event_clause_confrontation_candidates")
-    .select(
-      "id,event_id,clause_id,analyzer,analyzer_version,status,finding_type,severity,confidence,summary,event_basis,clause_basis,reviewed_by_user_id,reviewed_at,review_note,created_at"
-    )
+    .select(`${BASE_COLUMNS},review_note_amended_by_user_id,review_note_amended_at`)
     .eq("event_id", eventId);
+
+  const fallbackResult =
+    fullResult.error?.code === "42703"
+      ? await supabase.from("event_clause_confrontation_candidates").select(BASE_COLUMNS).eq("event_id", eventId)
+      : null;
+
+  const candidateData: unknown = fallbackResult ? fallbackResult.data : fullResult.data;
+  const candidateError = fallbackResult ? fallbackResult.error : fullResult.error;
 
   if (candidateError) {
     if (candidateError.code === "22P02") {
@@ -94,14 +118,44 @@ export async function getEventClauseConfrontationCandidates(
 
   const { data: clauseData, error: clauseError } = await supabase
     .from("clauses")
-    .select("id,clause_number,title,text")
+    .select("id,clause_number,title,text,document_version_id")
     .in("id", clauseIds);
 
   if (clauseError) {
     throw new Error(`Falha ao carregar cláusulas do confronto: ${clauseError.message}`);
   }
 
-  const clauseById = new Map((clauseData as unknown as ClauseRow[]).map((clause) => [clause.id, clause]));
+  const fetchedClauses = clauseData as unknown as ClauseRow[];
+
+  // Regra CANÔNICA — um candidato de confronto cuja cláusula pertence a
+  // um documento na lixeira nunca aparece na revisão (mesmo caminho de
+  // "cláusula não encontrada" já usado logo abaixo, nunca uma segunda
+  // regra divergente).
+  const versionIds = Array.from(new Set(fetchedClauses.map((clause) => clause.document_version_id)));
+  let documentIdByVersionId = new Map<string, string>();
+  if (versionIds.length > 0) {
+    const { data: versionData, error: versionError } = await supabase
+      .from("document_versions")
+      .select("id,document_id")
+      .in("id", versionIds);
+    if (versionError) {
+      throw new Error(`Falha ao carregar versões de documento do confronto: ${versionError.message}`);
+    }
+    documentIdByVersionId = new Map(
+      (versionData as unknown as { id: string; document_id: string }[]).map((v) => [v.id, v.document_id])
+    );
+  }
+  const candidateDocumentIds = Array.from(new Set(Array.from(documentIdByVersionId.values())));
+  const nonTrashedDocumentIds = await resolveNonTrashedDocumentIds(supabase, candidateDocumentIds);
+
+  const clauseById = new Map(
+    fetchedClauses
+      .filter((clause) => {
+        const documentId = documentIdByVersionId.get(clause.document_version_id);
+        return documentId ? nonTrashedDocumentIds.has(documentId) : false;
+      })
+      .map((clause) => [clause.id, clause])
+  );
 
   return candidates
     .map((candidate) => {
@@ -126,6 +180,8 @@ export async function getEventClauseConfrontationCandidates(
         reviewedByUserId: candidate.reviewed_by_user_id,
         reviewedAt: candidate.reviewed_at,
         reviewNote: candidate.review_note,
+        reviewNoteAmendedByUserId: candidate.review_note_amended_by_user_id ?? null,
+        reviewNoteAmendedAt: candidate.review_note_amended_at ?? null,
         createdAt: candidate.created_at,
         clauseNumber: clause.clause_number,
         clauseTitle: clause.title,

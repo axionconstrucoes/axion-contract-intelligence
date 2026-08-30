@@ -2,8 +2,9 @@
 // tanto pelo bundler do Next.js quanto por um script Node standalone.
 //
 // Único validador de "destino interno seguro" usado no retorno pós-login
-// (proxy.ts -> /login?next=... -> auth/callback/route.ts e
-// login/actions.ts). Lista de permissão (nunca lista de bloqueio):
+// (proxy.ts -> /login?next=... -> auth/callback/route.ts, único fluxo de
+// login — Google-only, login/actions.ts por senha foi removido). Lista
+// de permissão (nunca lista de bloqueio):
 // só aceita um path relativo começando por exatamente uma "/", usando só
 // caracteres normais de URL — qualquer coisa fora desse conjunto
 // (barra dupla, "://", backslash, espaço, caractere de controle) é

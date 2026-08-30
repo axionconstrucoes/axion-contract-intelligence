@@ -222,8 +222,15 @@ check("FeatureInfo: click nunca navega/seleciona/fecha sidebar/executa ação da
 check("FeatureInfo: desktop hover/focus mostra tooltip curto; click abre popover com explicação completa", () => {
   assert(featureInfoSource.includes("shortDescription"), "tooltip deveria usar shortDescription (curto)");
   assert(featureInfoSource.includes("help.description"), "popover deveria usar description (completo)");
-  assert(featureInfoSource.includes("group-hover/feature-info:opacity-100"));
-  assert(featureInfoSource.includes("group-focus-within/feature-info:opacity-100"));
+  // O tooltip curto passou de opacity-0/opacity-100 para hidden/block
+  // (display toggle) — correção de um bug real de overflow horizontal
+  // de página: um elemento absolute com opacity-0 continua no layout e
+  // conta no "scrollable overflow" de qualquer ancestral o tempo todo,
+  // mesmo invisível; hidden (display:none) remove a caixa do layout
+  // por completo enquanto oculta. Comportamento visível ao usuário é o
+  // mesmo (aparece no hover/focus), só o mecanismo CSS mudou.
+  assert(featureInfoSource.includes("group-hover/feature-info:block"));
+  assert(featureInfoSource.includes("group-focus-within/feature-info:block"));
 });
 
 check("FeatureInfo: mobile/touch — o mesmo botão que recebe click também recebe tap (nenhum caminho hover-only para abrir o popover)", () => {

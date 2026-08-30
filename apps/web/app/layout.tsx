@@ -8,7 +8,20 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: { template: "ACC | %s", default: "ACC | AXION Controle de Contratos" },
   description: "Plataforma de inteligência contratual para obras e projetos da Axion Engenharia.",
-  icons: { icon: "/branding/acc-icon.svg" },
+  // SVG primeiro (nítido em qualquer tamanho, preferido por navegadores
+  // modernos); os PNGs são derivados só por redimensionamento do logo
+  // oficial (public/branding/acc-logo.png, sem redesenho/vetorização) —
+  // fallback para clientes que não suportam favicon SVG. Nenhum
+  // apple-touch-icon/ícone de PWA: nenhum dos dois é usado por este
+  // projeto hoje (sem manifest), então nenhum foi inventado.
+  icons: {
+    icon: [
+      { url: "/branding/acc-icon.svg", type: "image/svg+xml" },
+      { url: "/branding/acc-favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/branding/acc-favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/branding/acc-favicon-48x48.png", sizes: "48x48", type: "image/png" },
+    ],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -9,6 +9,10 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
+import { getProposalDriveLookupClient } from "@/lib/additionals/proposal-drive-lookup/get-proposal-drive-lookup-client";
+import { resolveAdditionalProposalFromDrive } from "@/lib/additionals/proposal-drive-lookup/resolve-proposal-from-drive";
+import { validateProposalCostFile } from "@/lib/additionals/manual-proposal-upload/validate-proposal-cost-file";
+import { readFechamentoEstimateFromBuffer } from "@/lib/additionals/manual-proposal-upload/read-fechamento-estimate-from-buffer";
 import { createAdditionalProposal } from "@/lib/additionals/create-additional-proposal";
 import { linkAdditionalProposalSource } from "@/lib/additionals/link-additional-proposal-source";
 import { markAdditionalProposalContracted } from "@/lib/additionals/mark-additional-proposal-contracted";
@@ -65,17 +69,100 @@ export async function createAdditionalProposalAction(
     const projectId = requiredField(formData, "projectId");
     const sourceType = requiredField(formData, "sourceType") as AdditionalProposalSourceType;
 
+    // Origem DRIVE via "Selecionar proposta em ORÇAMENTOS": o navegador
+    // só manda projectId + driveFolderId (o identificador canônico) —
+    // número, escopo (nome completo da pasta) e preço/estimativa são
+    // resolvidos de novo aqui, a partir do folderId contra a MESMA fonte
+    // canônica do dropdown, nunca a partir de proposalNumber/description/
+    // proposedValue que o cliente possa ter enviado junto (esses três
+    // campos são SEMPRE ignorados/sobrescritos neste caminho — mesmo que
+    // o navegador os tenha adulterado no DOM antes do submit).
+    const driveFolderId = sourceType === "DRIVE" ? optionalField(formData, "driveFolderId") : null;
+
+    let proposalNumber = requiredField(formData, "proposalNumber");
+    let description = optionalField(formData, "description") ?? undefined;
+    let proposedValue = optionalField(formData, "proposedValue") ? Number(optionalField(formData, "proposedValue")) : undefined;
+    let resolvedDriveFolderId: string | null = null;
+
+    if (driveFolderId) {
+      const client = getProposalDriveLookupClient();
+
+      // Fail-closed: bloqueio SERVIDOR, não só de interface — em
+      // produção (sem cliente real configurado) esta origem é recusada
+      // aqui, mesmo que driveFolderId tenha chegado por algum caminho
+      // que ignorou a UI (form adulterado, chamada direta à action).
+      if (!client) {
+        throw new Error("Integração com Google Drive ainda não configurada — não é possível criar uma proposta com essa origem.");
+      }
+
+      const folders = await client.listOrcamentosSubfolders();
+      const folder = folders.find((f) => f.id === driveFolderId);
+
+      if (!folder) {
+        throw new Error("A pasta selecionada não é uma subpasta direta de ORÇAMENTOS ou não foi encontrada.");
+      }
+
+      const resolved = await resolveAdditionalProposalFromDrive(client, folder.id, folder.name);
+      proposalNumber = resolved.proposalNumber;
+      description = resolved.folderName;
+      proposedValue = resolved.salePrice ?? undefined;
+      resolvedDriveFolderId = resolved.folderId;
+
+      if (resolved.isEstimate) {
+        // Sem coluna dedicada de "estimativa" no schema atual (nenhuma
+        // migration criada nesta etapa) — sinalizado em texto, honesto e
+        // visível, no campo já existente `note`, nunca inventado como
+        // valor definitivo.
+        const estimateNote = `[ESTIMATIVA — FECHAMENTO/B12, arquivo "${resolved.costFileName}"]`;
+        const existingNote = optionalField(formData, "note");
+        formData.set("note", existingNote ? `${estimateNote} ${existingNote}` : estimateNote);
+      }
+    }
+
+    // Origem MANUAL com planilha de custo anexada — go-live com Google
+    // Drive desabilitado (Bloco 7): reaproveita a MESMA regra de
+    // estimativa do lookup do Drive (isSingleFechamentoWorkbook/
+    // parseFechamentoCellValue via read-fechamento-estimate-from-buffer.ts),
+    // nunca uma segunda implementação, nunca consulta o Drive real,
+    // nunca usa a fixture do Drive em produção. Validação de
+    // extensão/MIME sempre no servidor, nunca só confiando no
+    // navegador. Quando o arquivo resolve um preço real, ele SEMPRE
+    // prevalece sobre um valor digitado à mão (mesmo princípio já
+    // aplicado ao ramo DRIVE acima) — nunca as duas fontes coexistindo
+    // silenciosamente.
+    const costFile = sourceType === "MANUAL" ? formData.get("costFile") : null;
+    if (costFile instanceof File && costFile.size > 0) {
+      const validation = validateProposalCostFile(costFile.name, costFile.type);
+      if (!validation.valid) {
+        throw new Error(validation.error ?? "Arquivo de planilha inválido.");
+      }
+
+      const buffer = await costFile.arrayBuffer();
+      const estimate = await readFechamentoEstimateFromBuffer(buffer);
+
+      if (estimate.isEstimate && estimate.salePrice !== null) {
+        proposedValue = estimate.salePrice;
+        const estimateNote = `[ESTIMATIVA — FECHAMENTO/B12, arquivo "${costFile.name}" (upload manual)]`;
+        const existingNote = optionalField(formData, "note");
+        formData.set("note", existingNote ? `${estimateNote} ${existingNote}` : estimateNote);
+      } else if (estimate.warning) {
+        const existingNote = optionalField(formData, "note");
+        const warningNote = `[${estimate.warning}]`;
+        formData.set("note", existingNote ? `${warningNote} ${existingNote}` : warningNote);
+      }
+    }
+
     const proposal = await createAdditionalProposal(supabase, {
       projectId,
       createdByUserId: user.id,
-      proposalNumber: requiredField(formData, "proposalNumber"),
+      proposalNumber,
       title: requiredField(formData, "title"),
-      description: optionalField(formData, "description") ?? undefined,
+      description,
       sourceType,
-      driveUrl: optionalField(formData, "driveUrl"),
-      driveFileId: optionalField(formData, "driveFileId"),
+      driveUrl: driveFolderId ? null : optionalField(formData, "driveUrl"),
+      driveFileId: driveFolderId ? resolvedDriveFolderId : optionalField(formData, "driveFileId"),
       proposalDate: optionalField(formData, "proposalDate"),
-      proposedValue: optionalField(formData, "proposedValue") ? Number(optionalField(formData, "proposedValue")) : undefined,
+      proposedValue,
       note: optionalField(formData, "note"),
       origin:
         sourceType === "EXISTING"

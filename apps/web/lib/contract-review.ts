@@ -184,7 +184,7 @@ export async function getContractReviewCandidates(
 export async function getCurrentProjectPermission(
   projectId: string
 ): Promise<
-  "ADMINISTRADOR" | "GESTOR" | "COLABORADOR" | "LEITURA" | null
+  "ADMINISTRADOR" | "GESTOR" | "GERENTE" | "COLABORADOR" | "LEITURA" | null
 > {
   const supabase =
     await createSupabaseServerClient();
@@ -225,6 +225,7 @@ export async function getCurrentProjectPermission(
     data?.permission as
       | "ADMINISTRADOR"
       | "GESTOR"
+      | "GERENTE"
       | "COLABORADOR"
       | "LEITURA"
       | undefined

@@ -342,16 +342,19 @@ check("bypass 3/4 — se SendEmailInput ganhar cc/bcc no futuro, o guard precisa
 });
 
 check("bypass 4/4 — nenhum arquivo de PRODUÇÃO fora de gmail-email-provider.ts chama buildMimeMessage (construção direta do MIME sem guard)", () => {
-  // Scripts test-*.mjs podem chamar buildMimeMessage() diretamente como
-  // teste unitário puro do construtor de MIME (ex.: test-acc-email-branding.mjs)
-  // — isso nunca envia nada (retorna só uma string) e não é um bypass real,
-  // porque o bypass 2/4 já garante que gmail.users.messages.send só existe
-  // dentro de gmail-email-provider.ts. Aqui o que importa é nenhum arquivo
-  // de código de PRODUÇÃO (fora de scripts/test-*.mjs) montar MIME sem guard.
+  // Scripts test-*.mjs (testes unitários puros do construtor de MIME, ex.:
+  // test-acc-email-branding.mjs) e generate-*.mjs (geradores de prévia
+  // estável, ex.: generate-alert-email-preview.mjs — grava só em disco,
+  // nunca chama provider.send/rede) podem chamar buildMimeMessage()
+  // diretamente — isso nunca envia nada (retorna só uma string) e não é
+  // um bypass real, porque o bypass 2/4 já garante que
+  // gmail.users.messages.send só existe dentro de gmail-email-provider.ts.
+  // Aqui o que importa é nenhum arquivo de código de PRODUÇÃO (fora de
+  // scripts/test-*.mjs e scripts/generate-*.mjs) montar MIME sem guard.
   const offenders = allSourceFiles.filter((file) => {
     const base = path.basename(file);
     if (base === "gmail-email-provider.ts" || base === "mime-message.ts") return false;
-    if (base.startsWith("test-")) return false;
+    if (base.startsWith("test-") || base.startsWith("generate-")) return false;
     return /\bbuildMimeMessage\(/.test(readFileSync(file, "utf8"));
   });
   assert(offenders.length === 0, `construção de MIME fora do provider autorizado: ${offenders.map((f) => path.relative(repoRoot, f)).join(", ")}`);

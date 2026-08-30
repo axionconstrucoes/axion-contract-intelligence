@@ -1,11 +1,12 @@
 ﻿"use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
 import { createSupabaseBrowserClient } from "@axion/db/browser";
 
 import { Button } from "@/components/ui/button";
+import { computeFileSha256Hex } from "@/lib/documents/multi-upload/sha256";
 
 const BUCKET = "project-documents";
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -100,6 +101,22 @@ export function DocumentUploadForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  // .mpp (Microsoft Project) é sempre um cronograma pela própria
+  // natureza do formato — nunca um contrato/aditivo/etc. Só este tipo
+  // de arquivo ganha sugestão automática (e seletor bloqueado nela);
+  // nenhum outro tipo (PDF incluso) é classificado só pelo nome.
+  const [isMppSelected, setIsMppSelected] = useState(false);
+  const kindSelectRef = useRef<HTMLSelectElement>(null);
+
+  function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    const extension = file?.name.split(".").pop()?.toLowerCase() ?? "";
+    const mpp = extension === "mpp";
+    setIsMppSelected(mpp);
+    if (mpp && kindSelectRef.current) {
+      kindSelectRef.current.value = "CRONOGRAMA_BASELINE";
+    }
+  }
 
   const isNewDocument = !existingDocument;
 
@@ -191,6 +208,16 @@ export function DocumentUploadForm({
         );
       }
 
+      // Este formulário (upload individual/"avançado" e "Adicionar nova
+      // versão") historicamente nunca calculava hash nem enviava
+      // p_sha256_hash — ficava de fora da proteção de deduplicação real
+      // (índice único project_id+sha256_hash, ver migration
+      // 20260825130000): dois uploads do mesmo conteúdo por AQUI nunca
+      // eram detectados como duplicados. Corrigido para usar o mesmo
+      // hash canônico do upload múltiplo — cobertura de deduplicação
+      // completa na aba Documentos, não só no painel de arrastar/soltar.
+      const sha256Hash = await computeFileSha256Hex(file);
+
       uploadedPath =
         `${projectId}/${documentId}/${documentVersionId}/${sanitizeFileName(
           file.name
@@ -244,6 +271,7 @@ export function DocumentUploadForm({
             p_mime_type: mimeType,
             p_file_size_bytes: file.size,
             p_notes: notes || null,
+            p_sha256_hash: sha256Hash,
           }
         );
 
@@ -253,6 +281,21 @@ export function DocumentUploadForm({
           .remove([uploadedPath]);
 
         uploadedPath = null;
+
+        // Mesma mensagem clara do upload múltiplo — nunca "Falha ao
+        // registrar documento: DUPLICATE_FILE_HASH: ..." cru para o
+        // usuário quando a causa real é deduplicação, não um erro.
+        if (registerError.message.includes("DUPLICATE_FILE_HASH")) {
+          throw new Error(
+            "Este arquivo já existe neste projeto (conteúdo idêntico a um documento já cadastrado) — não foi enviado de novo."
+          );
+        }
+
+        if (registerError.message.includes("SINGLE_ACTIVE_CONTRACT_BASE")) {
+          throw new Error(
+            "Este projeto já tem um Contrato-base ativo. Abra o card do Contrato-base existente e use \"Adicionar nova versão\" em vez de criar um novo documento."
+          );
+        }
 
         throw new Error(
           `Falha ao registrar documento: ${registerError.message}`
@@ -305,18 +348,33 @@ export function DocumentUploadForm({
               Tipo documental *
             </span>
 
+            {/* Nunca "disabled" aqui: este <select> é lido via
+                FormData(form) no submit — um campo disabled não é
+                enviado no FormData e quebraria o envio. Para .mpp, o
+                valor já vem pré-selecionado (handleFileChange) — o
+                usuário só altera se explicitamente escolher outro
+                valor, nunca um default silencioso. */}
             <select
+              ref={kindSelectRef}
               name="kind"
               required
-              defaultValue="CONTRATO_BASE"
+              defaultValue=""
               className="h-10 rounded-md border bg-background px-3"
             >
+              <option value="" disabled>
+                Selecione o tipo documental
+              </option>
               {DOCUMENT_KINDS.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
                 </option>
               ))}
             </select>
+            {isMppSelected ? (
+              <span className="text-xs text-muted-foreground">
+                Arquivo .mpp — tipo definido automaticamente como Cronograma baseline.
+              </span>
+            ) : null}
           </label>
 
           <label className="flex flex-col gap-1.5 text-sm">
@@ -429,6 +487,7 @@ export function DocumentUploadForm({
           name="file"
           required
           accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.xml,.mpp,.jpg,.jpeg,.png"
+          onChange={isNewDocument ? handleFileChange : undefined}
           className="rounded-md border bg-background px-3 py-2"
         />
 

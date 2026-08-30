@@ -1,6 +1,8 @@
 import "server-only";
 
 import { createSupabaseServerClient } from "@axion/db/server";
+import { withActiveDocumentFilter } from "@/lib/documents/active-document-filter";
+import { mapContractualLinkFields } from "@/lib/documents/map-contractual-link-fields";
 
 export type TranslationStatus = "NOT_TRANSLATED" | "REQUESTED" | "AVAILABLE";
 
@@ -51,6 +53,29 @@ export type ManagedDocument = {
   title: string;
   createdAt: string;
   versions: ManagedDocumentVersion[];
+  // Vínculo real com o documento pai (contrato-base ou aditivo ao qual
+  // este documento foi formalmente incorporado como anexo contratual)
+  // — usado por group-contractual-documents.ts e pela regra de cor
+  // bordô (isContractualAttachment). O SCHEMA para persistir isso já
+  // existe (migration 20260829090000_document_contractual_attachment_linkage.sql
+  // — contractual_parent_document_id/incorporation_basis/
+  // linked_by_user_id/linked_at em documents, com RPCs
+  // link_document_as_contractual_attachment/
+  // unlink_document_contractual_attachment como único caminho de
+  // escrita), mas essa migration AINDA NÃO FOI APLICADA no banco que
+  // esta aplicação usa hoje (ver relatório, "Compatibilidade de
+  // deploy") — por isso estes 5 campos continuam sempre `null` aqui,
+  // deliberadamente, até a migration ser revisada/aplicada e só então
+  // a leitura real ser ligada (troca de uma linha em
+  // getManagedDocuments, usando mapContractualLinkFields, já escrita e
+  // testada com mocks em
+  // apps/web/lib/documents/map-contractual-link-fields.ts). Nunca
+  // inferido pelo nome/título — só por esse vínculo persistido.
+  parentDocumentId: string | null;
+  contractualIncorporationBasis: string | null;
+  contractualLinkedByUserId: string | null;
+  contractualLinkedByUserName: string | null;
+  contractualLinkedAt: string | null;
 };
 
 type DocumentRow = {
@@ -59,6 +84,15 @@ type DocumentRow = {
   kind: string;
   title: string;
   created_at: string;
+  // Presentes só depois da migration 20260829090000 ser aplicada —
+  // select("*") nunca falha pela ausência deles (não é uma lista
+  // explícita de colunas), então o mapeamento abaixo trata a ausência
+  // como "sem vínculo" (undefined ?? null), nunca como erro. Ver
+  // map-contractual-link-fields.ts.
+  contractual_parent_document_id?: string | null;
+  contractual_incorporation_basis?: string | null;
+  contractual_linked_by_user_id?: string | null;
+  contractual_linked_at?: string | null;
 };
 
 type VersionRow = {
@@ -91,18 +125,21 @@ export async function getManagedDocuments(
 ): Promise<ManagedDocument[]> {
   const supabase = await createSupabaseServerClient();
 
-  const { data: documentsData, error: documentsError } =
-    await supabase
-      .from("documents")
-      .select("*")
-      .eq("project_id", projectId)
-      .order("created_at", { ascending: false });
+  // Regra CANÔNICA de "documento ativo" — ver
+  // apps/web/lib/documents/active-document-filter.ts. 42703
+  // (undefined_column) = migration 20260829150000 ainda não aplicada
+  // nesse banco: refaz a MESMA consulta sem o filtro, nunca quebra a
+  // lista; qualquer OUTRO erro é propagado.
+  const { data: documentsData, error: documentsError } = await withActiveDocumentFilter((filterActive) => {
+    let query = supabase.from("documents").select("*").eq("project_id", projectId);
+    if (filterActive) query = query.is("deleted_at", null);
+    return query.order("created_at", { ascending: false });
+  });
 
   if (documentsError) {
     if (documentsError.code === "22P02") {
       return [];
     }
-
     throw documentsError;
   }
 
@@ -169,6 +206,35 @@ export async function getManagedDocuments(
     );
   }
 
+  // Nomes de quem vinculou cada anexo contratual (join com profiles,
+  // mesmo padrão de event-notes.ts) — só resolvido para os ids
+  // realmente presentes nesta página; ausente (migration não aplicada,
+  // ou nenhum vínculo) = mapa vazio, mapContractualLinkFields trata bem
+  // os dois casos.
+  const linkedByUserIds = Array.from(
+    new Set(
+      documents
+        .map((document) => document.contractual_linked_by_user_id)
+        .filter((id): id is string => Boolean(id))
+    )
+  );
+
+  const linkedByUserNameById = new Map<string, string>();
+  if (linkedByUserIds.length > 0) {
+    const { data: profilesData, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id,name")
+      .in("id", linkedByUserIds);
+
+    if (profilesError) {
+      throw profilesError;
+    }
+
+    for (const profile of (profilesData ?? []) as unknown as { id: string; name: string }[]) {
+      linkedByUserNameById.set(profile.id, profile.name);
+    }
+  }
+
   return documents.map((document) => ({
     id: document.id,
     projectId: document.project_id,
@@ -177,5 +243,101 @@ export async function getManagedDocuments(
     createdAt: document.created_at,
     versions:
       versionsByDocument.get(document.id) ?? [],
+    ...mapContractualLinkFields(
+      {
+        contractual_parent_document_id: document.contractual_parent_document_id ?? null,
+        contractual_incorporation_basis: document.contractual_incorporation_basis ?? null,
+        contractual_linked_by_user_id: document.contractual_linked_by_user_id ?? null,
+        contractual_linked_at: document.contractual_linked_at ?? null,
+      },
+      linkedByUserNameById
+    ),
+  }));
+}
+
+export type TrashedDocument = {
+  id: string;
+  kind: string;
+  title: string;
+  deletedAt: string;
+  deletedByUserName: string | null;
+};
+
+type TrashedDocumentRow = {
+  id: string;
+  kind: string;
+  title: string;
+  deleted_at: string;
+  deleted_by_user_id: string | null;
+};
+
+// Lixeira (migration 20260829150000) — SEMPRE via a RPC
+// list_trashed_project_documents (SECURITY DEFINER), NUNCA um SELECT
+// direto em documents: "visualizar a lixeira" é ADMIN-only no
+// SERVIDOR (a RPC recusa quem não for ADMINISTRADOR ativo do
+// projeto), não só uma tela escondida na UI — mesma exigência das
+// RPCs trash/restore. page.tsx chama esta função incondicionalmente
+// (em paralelo com as outras, antes de saber a permissão do usuário),
+// então dois erros são esperados e tratados como "lixeira vazia para
+// mim", nunca como falha fatal da página inteira:
+//   - a própria RPC recusando por falta de permissão (mensagem com o
+//     prefixo estável "Somente Administrador", nunca inferido de texto
+//     livre além desse prefixo já usado por trash/restore);
+//   - 42703/PGRST202 (função ainda não existe nesse banco — migration
+//     não aplicada).
+// Qualquer OUTRO erro continua propagado (nunca escondido).
+export async function getTrashedDocuments(
+  projectId: string
+): Promise<TrashedDocument[]> {
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase.rpc("list_trashed_project_documents", {
+    p_project_id: projectId,
+  });
+
+  if (error) {
+    if (
+      error.code === "42703" ||
+      error.code === "42883" ||
+      error.code === "PGRST202" ||
+      error.code === "22P02" ||
+      error.message.startsWith("Somente Administrador")
+    ) {
+      return [];
+    }
+    throw error;
+  }
+
+  const rows = (data ?? []) as unknown as TrashedDocumentRow[];
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const deletedByUserIds = Array.from(
+    new Set(rows.map((row) => row.deleted_by_user_id).filter((id): id is string => Boolean(id)))
+  );
+
+  const nameById = new Map<string, string>();
+  if (deletedByUserIds.length > 0) {
+    const { data: profilesData, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id,name")
+      .in("id", deletedByUserIds);
+
+    if (profilesError) {
+      throw profilesError;
+    }
+
+    for (const profile of (profilesData ?? []) as unknown as { id: string; name: string }[]) {
+      nameById.set(profile.id, profile.name);
+    }
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    title: row.title,
+    deletedAt: row.deleted_at,
+    deletedByUserName: row.deleted_by_user_id ? (nameById.get(row.deleted_by_user_id) ?? null) : null,
   }));
 }

@@ -57,7 +57,7 @@ const pageSource = readSource("apps/web/app/[projectId]/ledger/[eventId]/page.ts
 // ---------- servidor: nunca confia no navegador ----------
 
 check("send-alert-actions.ts: usa getProjectMembers (fonte canônica), não uma query paralela", () => {
-  assert(actionsSource.includes('import { getEvent, getProject, getProjectMembers } from "@/lib/data";'));
+  assert(/import \{[^}]*\bgetProjectMembers\b[^}]*\} from "@\/lib\/data";/.test(actionsSource));
   assert(actionsSource.includes("getProjectMembers(projectId)"));
 });
 

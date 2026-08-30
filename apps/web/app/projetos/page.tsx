@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import {
-  InstitutionalBackground,
-  INSTITUTIONAL_BACKGROUND_PNG_PATH,
-  INSTITUTIONAL_BACKGROUND_SVG_PATH,
-} from "@/components/brand/institutional-background";
+import { InstitutionalBackground } from "@/components/brand/institutional-background";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LogoutButton } from "@/components/auth/logout-button";
@@ -55,22 +51,6 @@ export default async function ProjetosPage() {
               </Card>
             </Link>
           ))}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-4 border-t border-border pt-4 text-xs text-muted-foreground">
-          <span>Identidade visual ACC:</span>
-          <a href="/branding/acc-logo.png" download className="underline hover:text-foreground">
-            Baixar logotipo (PNG)
-          </a>
-          <a href="/branding/acc-icon.svg" download className="underline hover:text-foreground">
-            Baixar ícone técnico (SVG)
-          </a>
-          <a href={INSTITUTIONAL_BACKGROUND_SVG_PATH} download className="underline hover:text-foreground">
-            Baixar fundo institucional
-          </a>
-          <a href={INSTITUTIONAL_BACKGROUND_PNG_PATH} download className="underline hover:text-foreground">
-            Baixar fundo em PNG
-          </a>
         </div>
       </div>
     </div>

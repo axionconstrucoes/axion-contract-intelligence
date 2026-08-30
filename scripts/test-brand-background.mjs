@@ -12,7 +12,7 @@
 // Uso:
 //   node scripts/test-brand-background.mjs
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -62,46 +62,54 @@ console.log("FUNDO INSTITUCIONAL — BORDÔ + QUADRICULADO (/login, /projetos)")
 console.log("======================================");
 console.log("");
 
-const SVG_RELATIVE_PATH = "apps/web/public/brand/acc-burgundy-white-grid-background.svg";
-const PNG_RELATIVE_PATH = "apps/web/public/brand/acc-burgundy-white-grid-background-1920x1080.png";
-const SVG_PUBLIC_PATH = "/brand/acc-burgundy-white-grid-background.svg";
-const PNG_PUBLIC_PATH = "/brand/acc-burgundy-white-grid-background-1920x1080.png";
+// Fundo oficial ATUAL: um PNG real fornecido pela marca (foto/textura,
+// não um SVG gerado por código) — substituiu integralmente o SVG
+// bordô/quadriculado sintético de uma iteração anterior (arquivos
+// legados abaixo continuam em disco, órfãos, mas o componente central
+// (institutional-background.tsx) não os importa/referencia mais; ver
+// checagem explícita de ausência de dependência mais abaixo). As
+// checagens desta seção validam o comportamento ATUAL — nunca a
+// expectativa antiga do SVG sintético.
+const OFFICIAL_PNG_RELATIVE_PATH = "apps/web/public/brand/acc-background-oficial.png";
+const OFFICIAL_PNG_PUBLIC_PATH = "/brand/acc-background-oficial.png";
+// Cor predominante (extraída do PNG oficial por histograma de pixels via
+// sharp, ver institutional-background.tsx) — verificada de verdade
+// abaixo (recomputada de forma independente a partir do arquivo real,
+// não só comparada como string), não só citada aqui.
+const OFFICIAL_DOMINANT_COLOR_HEX = "#c10c10";
+const OFFICIAL_DOMINANT_COLOR_RGB = [0xc1, 0x0c, 0x10];
 
-const pngExists = existsSync(absolutePath(PNG_RELATIVE_PATH));
+const pngExists = existsSync(absolutePath(OFFICIAL_PNG_RELATIVE_PATH));
 
-// --- Asset SVG existe e é o real fundo bordô/quadriculado ---
-
-check("asset SVG do fundo institucional existe em apps/web/public/brand/", () => {
-  assert(existsSync(absolutePath(SVG_RELATIVE_PATH)), `${SVG_RELATIVE_PATH} não encontrado`);
+check("PNG oficial do fundo institucional existe em apps/web/public/brand/ e não é um arquivo vazio", () => {
+  assert(pngExists, `${OFFICIAL_PNG_RELATIVE_PATH} não encontrado`);
+  const stat = statSync(absolutePath(OFFICIAL_PNG_RELATIVE_PATH));
+  assert(stat.size > 100000, `acc-background-oficial.png parece pequeno demais (${stat.size} bytes) para uma foto/textura real`);
 });
 
-const svgSource = readSource(SVG_RELATIVE_PATH);
-
-check("SVG: base bordô institucional (#7f1d1d — mesmo tom exato de --brand-sidebar)", () => {
-  assert(/fill="#7f1d1d"/i.test(svgSource), "cor de base #7f1d1d não encontrada no SVG");
+await checkAsync("PNG oficial: formato PNG válido, dimensões esperadas (1672×941, a proporção real do arquivo fornecido pela marca)", async () => {
+  const sharp = (await import("sharp")).default;
+  const metadata = await sharp(absolutePath(OFFICIAL_PNG_RELATIVE_PATH)).metadata();
+  assert(metadata.format === "png", `formato deveria ser png, encontrado ${metadata.format}`);
+  assert(metadata.width === 1672, `largura deveria ser 1672, encontrada ${metadata.width}`);
+  assert(metadata.height === 941, `altura deveria ser 941, encontrada ${metadata.height}`);
+  // Canal alfa não é garantido — a versão do asset trocada manualmente
+  // em 2026-08-29 (linhas principais mais suaves) não tem alfa
+  // (hasAlpha=false); a versão anterior tinha. Não é uma propriedade que
+  // este teste deveria travar — a única coisa realmente exigida é que o
+  // arquivo seja um PNG válido nas dimensões esperadas.
 });
 
-check("SVG: contém padrão de grade/quadriculado branco (pattern + stroke branco)", () => {
-  assert(/<pattern[^>]*>/.test(svgSource), "nenhum <pattern> encontrado");
-  assert(/stroke="#ffffff"/i.test(svgSource), "traço branco do quadriculado não encontrado");
-});
-
-check("SVG: grade de 48×48 px preservada", () => {
-  assert(/<pattern[^>]*width="48"[^>]*height="48"/.test(svgSource), "pattern deveria continuar 48x48");
-});
-
-check("SVG: opacidade das linhas brancas ajustada para 16% (de ~7% anterior)", () => {
-  assert(/stroke-opacity="0\.16"/.test(svgSource), 'esperado stroke-opacity="0.16" — reticulado deveria estar mais forte');
-  assert(!/stroke-opacity="0\.0?7"/.test(svgSource), "opacidade antiga (0.07) não deveria mais estar presente");
-});
-
-check("SVG: sem texto, sem elementos de interface (só <svg>/<defs>/<pattern>/<path>/<rect>)", () => {
-  assert(!/<text[\s>]/i.test(svgSource), "SVG não deveria conter elementos <text>");
-  assert(!/<button|<input|<a\s/i.test(svgSource), "SVG não deveria conter elementos de interface");
-});
-
-check("SVG: proporção widescreen (16:9, 1920x1080)", () => {
-  assert(/viewBox="0 0 1920 1080"/.test(svgSource), "viewBox 1920x1080 não encontrado");
+await checkAsync("PNG oficial: cor predominante recomputada de verdade a partir do arquivo (média de pixel via sharp) bate com a constante exportada (#c10c10) — não é só uma string citada, é extração real", async () => {
+  const sharp = (await import("sharp")).default;
+  const { data } = await sharp(absolutePath(OFFICIAL_PNG_RELATIVE_PATH)).resize(1, 1).raw().toBuffer({ resolveWithObject: true });
+  const [r, g, b] = [data[0], data[1], data[2]];
+  const [er, eg, eb] = OFFICIAL_DOMINANT_COLOR_RGB;
+  const distance = Math.abs(r - er) + Math.abs(g - eg) + Math.abs(b - eb);
+  assert(
+    distance <= 45,
+    `cor média recomputada rgb(${r},${g},${b}) está longe demais de ${OFFICIAL_DOMINANT_COLOR_HEX} (soma das diferenças ${distance}, esperado <=45) — a constante pode não refletir mais o arquivo real`
+  );
 });
 
 // --- globals.css: --brand-sidebar (fonte da cor) não foi alterado ---
@@ -124,17 +132,21 @@ check("institutional-background.tsx: existe um componente central único (Instit
   assert(/export function InstitutionalBackground/.test(backgroundComponentSource), "InstitutionalBackground não exportado");
 });
 
-check("institutional-background.tsx: usa o próprio asset SVG como background-image (fundo = arquivo baixável, sem duplicar implementação)", () => {
+check("institutional-background.tsx: usa o PNG OFICIAL (acc-background-oficial.png) como background-image — comportamento atual, não o SVG sintético legado", () => {
   assert(
-    backgroundComponentSource.includes(SVG_PUBLIC_PATH),
-    `deveria referenciar ${SVG_PUBLIC_PATH} como backgroundImage`
+    backgroundComponentSource.includes(OFFICIAL_PNG_PUBLIC_PATH),
+    `deveria referenciar ${OFFICIAL_PNG_PUBLIC_PATH} como backgroundImage`
   );
   assert(/backgroundImage/.test(backgroundComponentSource), "deveria setar backgroundImage");
 });
 
-check("institutional-background.tsx: exporta os caminhos públicos do SVG e do PNG para reuso nos links de download", () => {
-  assert(backgroundComponentSource.includes("INSTITUTIONAL_BACKGROUND_SVG_PATH"), "constante do caminho SVG não exportada");
-  assert(backgroundComponentSource.includes("INSTITUTIONAL_BACKGROUND_PNG_PATH"), "constante do caminho PNG não exportada");
+check("institutional-background.tsx: exporta o caminho público do PNG oficial e a cor predominante para reuso (ex.: overlay/scrim)", () => {
+  assert(backgroundComponentSource.includes("INSTITUTIONAL_BACKGROUND_PNG_PATH"), "constante do caminho do PNG oficial não exportada");
+  assert(backgroundComponentSource.includes("INSTITUTIONAL_BACKGROUND_DOMINANT_COLOR"), "constante da cor predominante não exportada");
+});
+
+check("ausência de dependência obrigatória do SVG sintético antigo: institutional-background.tsx não importa/referencia acc-burgundy-white-grid-background(.svg|-1920x1080.png) — o .svg legado continua em disco, órfão (o .png derivado foi removido na substituição manual do asset oficial), mas nenhum dos dois é exigido pelo componente atual", () => {
+  assert(!backgroundComponentSource.includes("acc-burgundy-white-grid-background"), "institutional-background.tsx não deveria referenciar o asset sintético legado — o fundo atual é só o PNG oficial");
 });
 
 // --- /login usa o fundo institucional ---
@@ -149,23 +161,21 @@ check("/login: renderiza <InstitutionalBackground /> (componente central, não C
   );
 });
 
-check("/login: tem link de download do fundo institucional, com atributo download, apontando para o SVG real", () => {
-  const linkMatch = loginPageSource.match(/<a[^>]*href=\{INSTITUTIONAL_BACKGROUND_SVG_PATH\}[^>]*>/);
-  assert(linkMatch, "link de download do fundo institucional não encontrado em /login");
-  assert(/\bdownload\b/.test(linkMatch[0]), "link deveria ter o atributo download");
+check("/login: NÃO tem mais link de download do fundo institucional (ACC é Google-only — removido intencionalmente)", () => {
+  assert(!loginPageSource.includes("Baixar fundo institucional"), "link de download não deveria mais existir em /login");
+  assert(!loginPageSource.includes("INSTITUTIONAL_BACKGROUND_PNG_PATH"), "/login não deveria mais importar o caminho do PNG (não usa mais para link de download)");
 });
 
-check("/login: link de download não abre em nova aba nem usa URL assinada/externa (mesma origem, caminho estático em /brand/)", () => {
-  assert(!loginPageSource.includes("target=\"_blank\""), "não deveria abrir em nova aba");
-  assert(!/signedUrl|storage\.from\(|createSignedUrl/i.test(loginPageSource), "não deveria expor Storage/URL assinada");
-});
-
-check("/login: botão Google e formulário de login permanecem intactos (autenticação não alterada)", () => {
-  assert(loginPageSource.includes('from "./actions"') && loginPageSource.includes("login"), "action de login não deveria ter sido removida");
+check("/login: autenticação Google-only — sem formulário de e-mail/senha, sem divisor 'ou', login/actions.ts (Server Action de senha, sem nenhum consumidor) removido por completo — a retirada dos campos da tela sozinha não bastaria, o caminho de senha no servidor precisava deixar de existir", () => {
+  assert(!loginPageSource.includes('from "./actions"'), "/login não deveria mais importar a action de senha (form removido)");
+  assert(!/type="email"/.test(loginPageSource) && !/type="password"/.test(loginPageSource), "campos de e-mail/senha não deveriam mais existir em /login");
+  assert(!loginPageSource.includes("Entrar com email e senha"), "botão de login por senha não deveria mais existir");
+  assert(!/>\s*ou\s*</.test(loginPageSource), "divisor 'ou' não deveria mais existir");
   assert(
     loginPageSource.includes('from "./google-signin-button"') && loginPageSource.includes("GoogleSignInButton"),
-    "GoogleSignInButton deveria continuar presente"
+    "GoogleSignInButton deveria continuar presente (único método de login)"
   );
+  assert(!existsSync(path.join(repoRoot, "apps/web/app/login/actions.ts")), "login/actions.ts (signInWithPassword, sem consumidor) deveria ter sido removido — não apenas desreferenciado pela UI");
 });
 
 check("/login: logo oficial ACC continua presente", () => {
@@ -184,10 +194,11 @@ check("/projetos: renderiza <InstitutionalBackground /> — mesmo componente cen
   );
 });
 
-check("/projetos: tem link de download do fundo institucional (SVG), com atributo download", () => {
-  const linkMatch = projetosPageSource.match(/<a[^>]*href=\{INSTITUTIONAL_BACKGROUND_SVG_PATH\}[^>]*>/);
-  assert(linkMatch, "link de download do fundo institucional (SVG) não encontrado em /projetos");
-  assert(/\bdownload\b/.test(linkMatch[0]), "link deveria ter o atributo download");
+check("/projetos: NÃO tem mais links públicos de download (logotipo/ícone técnico/fundo institucional) — removidos intencionalmente, assets continuam em public/ para uso interno do app", () => {
+  assert(!projetosPageSource.includes("Baixar logotipo"), "link 'Baixar logotipo' não deveria mais existir em /projetos");
+  assert(!projetosPageSource.includes("Baixar ícone técnico"), "link 'Baixar ícone técnico' não deveria mais existir em /projetos");
+  assert(!projetosPageSource.includes("Baixar fundo institucional"), "link 'Baixar fundo institucional' não deveria mais existir em /projetos");
+  assert(!projetosPageSource.includes("INSTITUTIONAL_BACKGROUND_PNG_PATH"), "/projetos não deveria mais importar o caminho do PNG (não usa mais para link de download)");
 });
 
 check("/projetos: logo oficial ACC continua presente", () => {
@@ -198,13 +209,16 @@ check("/projetos: painel de conteúdo mantém fundo opaco/translúcido adequado 
   assert(/bg-card/.test(projetosPageSource), "deveria haver um painel com bg-card envolvendo o conteúdo");
 });
 
-if (pngExists) {
-  check("/projetos: também oferece 'Baixar fundo em PNG' apontando para o PNG real", () => {
-    const linkMatch = projetosPageSource.match(/<a[^>]*href=\{INSTITUTIONAL_BACKGROUND_PNG_PATH\}[^>]*>/);
-    assert(linkMatch, "link de download do fundo em PNG não encontrado em /projetos");
-    assert(/\bdownload\b/.test(linkMatch[0]), "link do PNG deveria ter o atributo download");
-  });
-}
+check("/projetos: botão de saída (logout) e lista de projetos continuam presentes", () => {
+  assert(projetosPageSource.includes("LogoutButton"), "LogoutButton deveria continuar presente");
+  assert(projetosPageSource.includes("getProjects"), "listagem de projetos deveria continuar presente");
+});
+
+check("assets de marca (logo/ícone técnico/fundo) continuam em apps/web/public/ mesmo sem link de download — o app ainda os usa internamente (favicon, <img>, background-image)", () => {
+  assert(existsSync(absolutePath("apps/web/public/branding/acc-logo.png")), "acc-logo.png deveria continuar em public/branding/");
+  assert(existsSync(absolutePath("apps/web/public/branding/acc-icon.svg")), "acc-icon.svg deveria continuar em public/branding/");
+  assert(existsSync(absolutePath("apps/web/public/brand/acc-background-oficial.png")), "acc-background-oficial.png deveria continuar em public/brand/");
+});
 
 // --- Nenhuma rota interna do projeto recebeu o fundo por engano ---
 
@@ -243,11 +257,9 @@ check("apps/web/app/auth/callback/route.ts: não referencia o fundo instituciona
   assert(!callbackSource.includes("InstitutionalBackground"), "callback OAuth não deveria ter sido tocado por esta feature");
 });
 
-check("apps/web/app/login/google-signin-button.tsx e login/actions.ts: não referenciam o fundo institucional", () => {
+check("apps/web/app/login/google-signin-button.tsx: não referencia o fundo institucional", () => {
   const googleButtonSource = readSource("apps/web/app/login/google-signin-button.tsx");
-  const actionsSource = readSource("apps/web/app/login/actions.ts");
   assert(!googleButtonSource.includes("InstitutionalBackground"), "google-signin-button.tsx não deveria ter sido tocado");
-  assert(!actionsSource.includes("InstitutionalBackground"), "login/actions.ts não deveria ter sido tocado");
 });
 
 // --- Faixa SISTEMA EM TESTE não foi alterada ---
@@ -263,40 +275,10 @@ check("faixa SISTEMA EM TESTE: nenhum arquivo desta feature a referencia/altera"
   }
 });
 
-// --- PNG (se existir): dimensões corretas e arquivo abre normalmente ---
-
-if (pngExists) {
-  await checkAsync("PNG do fundo institucional: 1920x1080, formato PNG válido, abre corretamente", async () => {
-    const sharp = (await import("sharp")).default;
-    const metadata = await sharp(absolutePath(PNG_RELATIVE_PATH)).metadata();
-    assert(metadata.format === "png", `formato deveria ser png, encontrado ${metadata.format}`);
-    assert(metadata.width === 1920, `largura deveria ser 1920, encontrada ${metadata.width}`);
-    assert(metadata.height === 1080, `altura deveria ser 1080, encontrada ${metadata.height}`);
-  });
-
-  await checkAsync("PNG: reticulado regenerado a partir do SVG atualizado (linha visivelmente mais forte que o 7% anterior)", async () => {
-    const sharp = (await import("sharp")).default;
-    const y = 500;
-    const { data, info } = await sharp(absolutePath(PNG_RELATIVE_PATH))
-      .extract({ left: 900, top: y, width: 200, height: 1 })
-      .raw()
-      .toBuffer({ resolveWithObject: true });
-    let peakGreen = 0;
-    for (let x = 0; x < info.width; x++) {
-      peakGreen = Math.max(peakGreen, data[x * 4 + 1]);
-    }
-    // Base bordô puro tem G=29; a 7% (versão anterior) a linha chegava a
-    // G≈37; a 16% chega a G≈47. Faixa com folga dos dois lados para não
-    // ser frágil a diferenças de 1-2 níveis entre renderizações, mas
-    // ainda incapaz de passar com a opacidade antiga.
-    assert(
-      peakGreen >= 42 && peakGreen <= 55,
-      `pico de verde na linha de grade deveria refletir ~16% de opacidade (G entre 42-55), encontrado G=${peakGreen} — PNG pode não ter sido regenerado a partir do SVG atualizado`
-    );
-  });
-} else {
-  console.log("INFO PNG não gerado nesta etapa — checagens de PNG puladas (SVG é obrigatório, PNG é opcional).");
-}
+// (Dimensões/formato/cor predominante do PNG oficial já verificados de
+// verdade, incondicionalmente, logo no início deste arquivo — o PNG
+// oficial é um asset real sempre presente no repositório, não algo
+// gerado opcionalmente numa etapa do build.)
 
 // --- PARTE 2: cinza-claro entre cartões nas páginas internas ---
 

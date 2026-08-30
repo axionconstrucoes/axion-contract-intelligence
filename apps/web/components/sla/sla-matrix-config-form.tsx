@@ -1,5 +1,7 @@
 "use client";
 
+import { useId, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,26 @@ import { initialConfigureSlaMatrixState } from "@/app/[projectId]/acoes/actions-
 
 const TIME_UNIT_OPTIONS = Object.keys(slaTimeUnitLabels) as SlaTimeUnit[];
 
+// Portais não existem durante SSR. Gate "montou no navegador?" via
+// useSyncExternalStore (nunca setState dentro de useEffect — o lint
+// deste projeto proíbe, e com razão: setState síncrono em efeito causa
+// uma renderização em cascata extra). getServerSnapshot (false) é
+// usado tanto no servidor quanto na PRIMEIRA passada de hidratação do
+// cliente — os dois batem, hidratação nunca diverge; getSnapshot
+// (true) só entra depois, como uma atualização normal subsequente.
+function subscribeNever() {
+  return () => {};
+}
+function getMountedSnapshot() {
+  return true;
+}
+function getServerSnapshot() {
+  return false;
+}
+function useHasMounted(): boolean {
+  return useSyncExternalStore(subscribeNever, getMountedSnapshot, getServerSnapshot);
+}
+
 const RISK_LABELS: Record<SlaRiskLevel, string> = {
   LOW: "Baixo",
   MEDIUM: "Médio",
@@ -20,10 +42,19 @@ const RISK_LABELS: Record<SlaRiskLevel, string> = {
   CRITICAL: "Crítico",
 };
 
-// Uma linha por risco — RISCO / PRAZO ASSUMIR / PRAZO RESPONDER / PRAZO
-// CONCLUIR / 1º ESCALÃO (tempo) / 2º ESCALÃO (tempo) / DIRETORIA (tempo),
-// exatamente a tabela pedida na seção 17. Quem ocupa cada escalão é
-// configurado separadamente (SlaAreaResponsiblesForm) — aqui só os prazos.
+// As 4 linhas de risco (Baixo/Médio/Alto/Crítico) são <tr> de UMA tabela
+// <table> real (semântica de verdade — cabeçalho <thead>/<th scope="col">
+// definido uma vez em configuracao/page.tsx, uma linha por risco aqui),
+// não mais um CSS Grid disfarçado de tabela.
+//
+// Um <form> nunca pode envolver <tr>/<td> validamente — a solução aqui é
+// exatamente a segunda opção autorizada: cada linha usa um <form id="...">
+// EXTERNO à tabela (portalado para document.body, invisível, só com os
+// hidden inputs), e cada controle dentro da <tr> (select/input/button)
+// referencia esse form pelo atributo HTML `form`, nunca aninhado nele.
+// Cada risco continua salvando/auditando de forma totalmente
+// independente (mesmo Server Action por linha, sem round-trip das
+// outras 3 linhas).
 export function SlaMatrixConfigForm({
   projectId,
   riskLevel,
@@ -34,77 +65,142 @@ export function SlaMatrixConfigForm({
   rule: ResolvedSlaMatrixRule;
 }) {
   const [state, formAction, pending] = useActionState(configureSlaMatrixRuleAction, initialConfigureSlaMatrixState);
+  const reactId = useId();
+  const formId = `sla-matrix-form-${riskLevel}-${reactId}`;
+
+  const mounted = useHasMounted();
+
+  const externalForm = mounted
+    ? createPortal(
+        <form id={formId} action={formAction} aria-hidden="true" className="hidden">
+          <input type="hidden" name="projectId" value={projectId} />
+          <input type="hidden" name="riskLevel" value={riskLevel} />
+        </form>,
+        document.body
+      )
+    : null;
 
   return (
-    <form action={formAction} className="grid gap-2 rounded-md border p-3 sm:grid-cols-8 sm:items-end">
-      <input type="hidden" name="projectId" value={projectId} />
-      <input type="hidden" name="riskLevel" value={riskLevel} />
+    <>
+      {externalForm}
+      <tr className="border-t">
+        <th scope="row" className="px-2 py-1.5 text-left text-sm font-medium">
+          {RISK_LABELS[riskLevel]}
+          {rule.isDefault ? <span className="ml-1 text-[10px] font-normal text-muted-foreground">(default)</span> : null}
+        </th>
 
-      <div className="sm:col-span-1">
-        <p className="text-sm font-medium">{RISK_LABELS[riskLevel]}</p>
-        {rule.isDefault ? <p className="text-xs text-muted-foreground">(usando default)</p> : null}
-      </div>
+        <td className="px-1 py-1.5">
+          <Select form={formId} name="timeUnit" defaultValue={rule.timeUnit} className="h-8 text-xs" aria-label={`Unidade de tempo — ${RISK_LABELS[riskLevel]}`}>
+            {TIME_UNIT_OPTIONS.map((u) => (
+              <option key={u} value={u}>
+                {slaTimeUnitLabels[u]}
+              </option>
+            ))}
+          </Select>
+        </td>
 
-      <label className="flex flex-col gap-1 text-xs sm:col-span-1">
-        Unidade
-        <Select name="timeUnit" defaultValue={rule.timeUnit}>
-          {TIME_UNIT_OPTIONS.map((u) => (
-            <option key={u} value={u}>
-              {slaTimeUnitLabels[u]}
-            </option>
-          ))}
-        </Select>
-      </label>
+        <td className="px-1 py-1.5">
+          <Input
+            form={formId}
+            type="number"
+            step="0.5"
+            min="0.5"
+            name="assumeDeadlineValue"
+            defaultValue={rule.assumeDeadlineValue}
+            required
+            aria-label={`Prazo para assumir — ${RISK_LABELS[riskLevel]}`}
+            className="h-8 w-full px-1.5 text-xs"
+          />
+        </td>
 
-      <label className="flex flex-col gap-1 text-xs sm:col-span-1">
-        Prazo assumir
-        <Input type="number" step="0.5" min="0.5" name="assumeDeadlineValue" defaultValue={rule.assumeDeadlineValue} required />
-      </label>
+        <td className="px-1 py-1.5">
+          <Input
+            form={formId}
+            type="number"
+            step="0.5"
+            name="respondDeadlineValue"
+            defaultValue={rule.respondDeadlineValue ?? ""}
+            aria-label={`Prazo para responder — ${RISK_LABELS[riskLevel]}`}
+            className="h-8 w-full px-1.5 text-xs"
+          />
+        </td>
 
-      <label className="flex flex-col gap-1 text-xs sm:col-span-1">
-        Prazo responder
-        <Input type="number" step="0.5" name="respondDeadlineValue" defaultValue={rule.respondDeadlineValue ?? ""} />
-      </label>
+        <td className="px-1 py-1.5">
+          <Input
+            form={formId}
+            type="number"
+            step="0.5"
+            name="completeDeadlineValue"
+            defaultValue={rule.completeDeadlineValue ?? ""}
+            aria-label={`Prazo para concluir — ${RISK_LABELS[riskLevel]}`}
+            className="h-8 w-full px-1.5 text-xs"
+          />
+        </td>
 
-      <label className="flex flex-col gap-1 text-xs sm:col-span-1">
-        Prazo concluir
-        <Input type="number" step="0.5" name="completeDeadlineValue" defaultValue={rule.completeDeadlineValue ?? ""} />
-      </label>
+        <td className="px-1 py-1.5">
+          <Input
+            form={formId}
+            type="number"
+            step="0.5"
+            min="0.5"
+            name="escalation2AfterValue"
+            defaultValue={rule.escalation2AfterValue}
+            required
+            aria-label={`Até 2º escalão — ${RISK_LABELS[riskLevel]}`}
+            className="h-8 w-full px-1.5 text-xs"
+          />
+        </td>
 
-      <label className="flex flex-col gap-1 text-xs sm:col-span-1">
-        Até 2º escalão
-        <Input type="number" step="0.5" min="0.5" name="escalation2AfterValue" defaultValue={rule.escalation2AfterValue} required />
-      </label>
+        <td className="px-1 py-1.5">
+          <Input
+            form={formId}
+            type="number"
+            step="0.5"
+            min="0.5"
+            name="boardAfterValue"
+            defaultValue={rule.boardAfterValue}
+            required
+            aria-label={`Até Diretoria — ${RISK_LABELS[riskLevel]}`}
+            className="h-8 w-full px-1.5 text-xs"
+          />
+        </td>
 
-      <label className="flex flex-col gap-1 text-xs sm:col-span-1">
-        Até Diretoria
-        <Input type="number" step="0.5" min="0.5" name="boardAfterValue" defaultValue={rule.boardAfterValue} required />
-      </label>
+        <td className="px-1 py-1.5">
+          <div className="flex flex-col gap-0.5 text-[10px] leading-tight">
+            <label className="flex items-center gap-1" title="Notificar por e-mail">
+              <input form={formId} type="checkbox" name="notifyByEmail" defaultChecked={rule.notifyByEmail} />
+              E-mail
+            </label>
+            <label className="flex items-center gap-1" title="Exige confirmação de recebimento">
+              <input form={formId} type="checkbox" name="requiresAcknowledgmentConfirmation" defaultChecked={rule.requiresAcknowledgmentConfirmation} />
+              Confirmação
+            </label>
+            <label className="flex items-center gap-1" title="Exige justificativa de atraso">
+              <input form={formId} type="checkbox" name="requiresDelayJustification" defaultChecked={rule.requiresDelayJustification} />
+              Justificativa
+            </label>
+          </div>
+        </td>
 
-      <div className="flex flex-col gap-1 text-xs sm:col-span-8">
-        <div className="flex flex-wrap gap-3">
-          <label className="flex items-center gap-1.5">
-            <input type="checkbox" name="notifyByEmail" defaultChecked={rule.notifyByEmail} />
-            Notificar por e-mail
-          </label>
-          <label className="flex items-center gap-1.5">
-            <input type="checkbox" name="requiresAcknowledgmentConfirmation" defaultChecked={rule.requiresAcknowledgmentConfirmation} />
-            Exige confirmação de recebimento
-          </label>
-          <label className="flex items-center gap-1.5">
-            <input type="checkbox" name="requiresDelayJustification" defaultChecked={rule.requiresDelayJustification} />
-            Exige justificativa de atraso
-          </label>
-        </div>
-      </div>
-
-      <div className="sm:col-span-8">
-        <Button type="submit" size="sm" disabled={pending}>
-          {pending ? "Salvando…" : "Salvar"}
-        </Button>
-        {state.error ? <span className="ml-2 text-xs text-destructive">{state.error}</span> : null}
-        {state.success ? <span className="ml-2 text-xs text-emerald-600">Salvo.</span> : null}
-      </div>
-    </form>
+        <td className="px-1 py-1.5">
+          <div className="flex flex-col items-start gap-1">
+            <div className="flex gap-1.5">
+              <Button form={formId} type="submit" size="sm" disabled={pending}>
+                {pending ? "Salvando…" : "Salvar"}
+              </Button>
+              {/* type="reset" nativo, mesmo form externo (atributo form
+                  também define o dono do reset, não só do submit) —
+                  descarta as edições e volta aos defaultValue/defaultChecked
+                  (o que já está salvo), sem round-trip ao servidor. */}
+              <Button form={formId} type="reset" size="sm" variant="outline" disabled={pending}>
+                Cancelar
+              </Button>
+            </div>
+            {state.error ? <span className="text-xs text-destructive">{state.error}</span> : null}
+            {state.success ? <span className="text-xs text-emerald-600">Salvo.</span> : null}
+          </div>
+        </td>
+      </tr>
+    </>
   );
 }
