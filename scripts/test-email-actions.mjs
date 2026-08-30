@@ -403,9 +403,26 @@ check("login/actions.ts (login por senha) foi removido — login é Google-only 
   assert(!existsSync(path.join(repoRoot, "apps/web/app/login/actions.ts")), "login/actions.ts (signInWithPassword) não deveria mais existir");
 });
 
-check("nenhum arquivo do fluxo de login registra o token em log/console — 'next' só é usado para montar a URL de redirect", () => {
-  for (const source of [callbackSource2, loginPageSourceForNext, googleButtonSourceForNext]) {
+check("login/page.tsx e google-signin-button.tsx nunca registram nada em log/console — 'next' só é usado para montar a URL de redirect", () => {
+  for (const source of [loginPageSourceForNext, googleButtonSourceForNext]) {
     assert(!/console\.(log|error|warn|info)\(/.test(source), "nenhum destes arquivos deveria logar nada (token/next poderiam vazar)");
+  }
+});
+
+check("auth/callback/route.ts: pode logar (sanitizado, ver scripts/test-oauth-callback-preview-fix.mjs), mas nunca 'next' nem o código OAuth dentro de um console.error", () => {
+  // Desde 2026-08-30 route.ts loga estruturado e sanitizado a falha de
+  // exchangeCodeForSession (errorCode/errorStatus/errorMessage) — a
+  // regra "nunca loga nada" virou "nunca loga nada de nextDestination/
+  // next/code" especificamente. Cobertura completa (nenhum valor
+  // sensível, diferenciação erro-vs-sessão-ausente, etc.) está em
+  // scripts/test-oauth-callback-preview-fix.mjs; aqui só a garantia
+  // específica desta feature (o 'next'/token nunca vaza em log).
+  const logCalls = [...callbackSource2.matchAll(/console\.(?:log|error|warn|info)\(([\s\S]*?)\);/g)].map((m) => m[1]);
+  assert(logCalls.length > 0, "esperava pelo menos um console.error em route.ts (log sanitizado da falha de exchangeCodeForSession)");
+  for (const call of logCalls) {
+    assert(!/\bnext\b/.test(call), `console.error não deveria referenciar 'next': ${call.trim().slice(0, 120)}`);
+    assert(!/\bnextDestination\b/.test(call), `console.error não deveria referenciar nextDestination: ${call.trim().slice(0, 120)}`);
+    assert(!/(?<!\.)\bcode\b/.test(call.replace(/error\.code/g, "")), `console.error não deveria referenciar o code OAuth: ${call.trim().slice(0, 120)}`);
   }
 });
 

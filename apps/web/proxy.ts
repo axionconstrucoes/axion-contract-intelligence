@@ -78,6 +78,11 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // /auth/callback fica de fora: a própria rota já executa
+    // exchangeCodeForSession (troca do code PKCE) e valida o domínio
+    // @axion.com.br sozinha — deixar o proxy rodar aqui faria um segundo
+    // cliente Supabase (getClaims()) tocar o mesmo jar de cookies da
+    // requisição antes do handler consumir o code_verifier do PKCE.
+    "/((?!_next/static|_next/image|favicon.ico|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
