@@ -130,6 +130,17 @@ $$;
 
 alter function public.audit_document_version_client_response_created() owner to postgres;
 
+-- ACL de menor privilégio: função de trigger de auditoria, nunca
+-- chamada diretamente (o mecanismo de trigger não depende de GRANT
+-- EXECUTE ao role que fez o INSERT). Nenhum caller real encontrado
+-- fora do próprio trigger — revogado de public/anon/authenticated/
+-- service_role; só o owner (postgres) mantém acesso, implícito por
+-- ownership, sem necessidade de GRANT explícito.
+revoke all on function public.audit_document_version_client_response_created() from public;
+revoke all on function public.audit_document_version_client_response_created() from anon;
+revoke all on function public.audit_document_version_client_response_created() from authenticated;
+revoke all on function public.audit_document_version_client_response_created() from service_role;
+
 create trigger document_version_client_responses_audit_created
   after insert on public.document_version_client_responses
   for each row

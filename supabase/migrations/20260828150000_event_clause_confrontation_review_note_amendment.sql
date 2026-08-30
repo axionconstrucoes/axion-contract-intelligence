@@ -84,7 +84,7 @@ public.amend_event_clause_confrontation_review_note(
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_user_id uuid;

@@ -57,6 +57,18 @@ $$;
 
 alter function public.enforce_single_active_contract_base() owner to postgres;
 
+-- ACL de menor privilégio: função de trigger, nunca chamada diretamente
+-- (o mecanismo de trigger não depende de GRANT EXECUTE ao role que fez
+-- o INSERT/UPDATE — dispara independentemente das permissões de função
+-- do chamador). Nenhum caller real (app nem outra function SQL) foi
+-- encontrado para esta function fora do próprio trigger — revogado de
+-- public/anon/authenticated/service_role; só o owner (postgres) mantém
+-- acesso, implícito por ownership, sem necessidade de GRANT explícito.
+revoke all on function public.enforce_single_active_contract_base() from public;
+revoke all on function public.enforce_single_active_contract_base() from anon;
+revoke all on function public.enforce_single_active_contract_base() from authenticated;
+revoke all on function public.enforce_single_active_contract_base() from service_role;
+
 drop trigger if exists documents_enforce_single_active_contract_base on public.documents;
 create trigger documents_enforce_single_active_contract_base
   before insert or update of kind, deleted_at, project_id on public.documents
