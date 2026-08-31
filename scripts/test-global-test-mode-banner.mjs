@@ -18,6 +18,15 @@ register("./ts-module-resolver.mjs", import.meta.url);
 
 const { isTestModeBannerVisible, ACC_TEST_MODE_BANNER_TEXT } = await import("../apps/web/lib/test-mode");
 
+// Instante de referência ANTES do marco de startup/go-live
+// (2026-09-07T12:00:00.000Z = 09:00 America/Sao_Paulo — ver
+// apps/web/lib/acc-go-live.ts) — usado explicitamente nos testes da
+// regra fail-safe abaixo para que continuem corretos mesmo depois que o
+// relógio real ultrapassar o marco (sem isso, os testes começariam a
+// falhar silenciosamente a partir de 07/09/2026 09:00, já que o
+// go-live passaria a desligar a etiqueta incondicionalmente).
+const BEFORE_GO_LIVE = new Date("2026-09-07T11:59:59.000Z");
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
 function readSource(relativePath) {
@@ -55,22 +64,44 @@ check('texto exato é "SISTEMA EM TESTE"', () => {
   assert(ACC_TEST_MODE_BANNER_TEXT === "SISTEMA EM TESTE", `texto obtido: "${ACC_TEST_MODE_BANNER_TEXT}"`);
 });
 
-// --- Regra fail-safe (seção 3 do requisito) ---
+// --- Regra fail-safe (seção 3 do requisito) — sempre avaliada ANTES do
+// marco de startup/go-live (ver BEFORE_GO_LIVE acima); o comportamento
+// A PARTIR do marco tem sua própria seção logo abaixo. ---
 
 check("exibição por padrão: valor ausente (undefined) mostra a etiqueta", () => {
-  assert(isTestModeBannerVisible(undefined) === true);
+  assert(isTestModeBannerVisible(undefined, BEFORE_GO_LIVE) === true);
 });
 
 check('exibição com "true": mostra a etiqueta', () => {
-  assert(isTestModeBannerVisible("true") === true);
+  assert(isTestModeBannerVisible("true", BEFORE_GO_LIVE) === true);
 });
 
 check("ocultação somente com \"false\" (exato): qualquer outro valor mostra", () => {
-  assert(isTestModeBannerVisible("false") === false, 'exatamente "false" deveria ocultar');
-  assert(isTestModeBannerVisible("") === true, "vazio deveria mostrar");
-  assert(isTestModeBannerVisible("FALSE") === true, '"FALSE" (caixa diferente) é inválido — deveria mostrar');
-  assert(isTestModeBannerVisible("0") === true, '"0" é inválido — deveria mostrar');
-  assert(isTestModeBannerVisible("nao") === true, "qualquer valor inválido deveria mostrar");
+  assert(isTestModeBannerVisible("false", BEFORE_GO_LIVE) === false, 'exatamente "false" deveria ocultar');
+  assert(isTestModeBannerVisible("", BEFORE_GO_LIVE) === true, "vazio deveria mostrar");
+  assert(isTestModeBannerVisible("FALSE", BEFORE_GO_LIVE) === true, '"FALSE" (caixa diferente) é inválido — deveria mostrar');
+  assert(isTestModeBannerVisible("0", BEFORE_GO_LIVE) === true, '"0" é inválido — deveria mostrar');
+  assert(isTestModeBannerVisible("nao", BEFORE_GO_LIVE) === true, "qualquer valor inválido deveria mostrar");
+});
+
+// --- A PARTIR do marco de startup/go-live: desligamento automático e
+// incondicional, independente do valor de NEXT_PUBLIC_ACC_TEST_MODE ---
+
+check("no instante exato do go-live (09:00 America/Sao_Paulo), a etiqueta some mesmo com valor ausente/inválido", () => {
+  const exactlyGoLive = new Date("2026-09-07T12:00:00.000Z");
+  assert(isTestModeBannerVisible(undefined, exactlyGoLive) === false);
+  assert(isTestModeBannerVisible("true", exactlyGoLive) === false);
+  assert(isTestModeBannerVisible("nao-e-um-valor-valido", exactlyGoLive) === false);
+});
+
+check("após o go-live, a etiqueta permanece oculta mesmo se NEXT_PUBLIC_ACC_TEST_MODE for reintroduzida como \"true\" (o marco de negócio já ocorrido não é reversível por env var)", () => {
+  const afterGoLive = new Date("2026-09-07T12:00:01.000Z");
+  assert(isTestModeBannerVisible("true", afterGoLive) === false);
+});
+
+check("um segundo antes do go-live, a regra fail-safe de antes do marco ainda vale integralmente", () => {
+  assert(isTestModeBannerVisible(undefined, BEFORE_GO_LIVE) === true);
+  assert(isTestModeBannerVisible("false", BEFORE_GO_LIVE) === false);
 });
 
 // --- Presença no layout global (nunca por página) ---

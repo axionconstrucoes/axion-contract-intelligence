@@ -16,7 +16,8 @@ import { fileURLToPath } from "node:url";
 
 register("./ts-module-resolver.mjs", import.meta.url);
 
-const { ACC_GO_LIVE_DATE, getAccGoLiveDate, isBeforeAccGoLive } = await import("../apps/web/lib/acc-go-live");
+const { ACC_GO_LIVE_DATE, ACC_GO_LIVE_TIME, ACC_GO_LIVE_TIMEZONE, getAccGoLiveDate, isBeforeAccGoLive, hasAccGoLiveOccurred } =
+  await import("../apps/web/lib/acc-go-live");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
@@ -103,19 +104,30 @@ check("labels renomeados presentes, rotas técnicas (href) preservadas", () => {
 
 // --- Startup oficial do ACC ---
 
-check('ACC_GO_LIVE_DATE é exatamente "2026-09-02" (quarta-feira — atualizado de 24/08/2026 para 02/09/2026 nesta rodada)', () => {
-  assert(ACC_GO_LIVE_DATE === "2026-09-02", `esperado "2026-09-02", obtido "${ACC_GO_LIVE_DATE}"`);
+check('ACC_GO_LIVE_DATE/TIME/TIMEZONE são exatamente "2026-09-07"/"09:00:00"/"America/Sao_Paulo" (segunda-feira — atualizado de 2026-09-02 00:00 UTC para 2026-09-07 09:00 America/Sao_Paulo nesta rodada)', () => {
+  assert(ACC_GO_LIVE_DATE === "2026-09-07", `esperado "2026-09-07", obtido "${ACC_GO_LIVE_DATE}"`);
+  assert(ACC_GO_LIVE_TIME === "09:00:00", `esperado "09:00:00", obtido "${ACC_GO_LIVE_TIME}"`);
+  assert(ACC_GO_LIVE_TIMEZONE === "America/Sao_Paulo", `esperado "America/Sao_Paulo", obtido "${ACC_GO_LIVE_TIMEZONE}"`);
 });
 
-check("getAccGoLiveDate() retorna a data correta como Date (UTC, meia-noite)", () => {
+check("getAccGoLiveDate() retorna o instante UTC correto (09:00 America/Sao_Paulo = 12:00 UTC, sem DST em vigor)", () => {
   const date = getAccGoLiveDate();
-  assert(date.toISOString() === "2026-09-02T00:00:00.000Z");
+  assert(date.toISOString() === "2026-09-07T12:00:00.000Z", `esperado 2026-09-07T12:00:00.000Z, obtido ${date.toISOString()}`);
 });
 
-check("isBeforeAccGoLive corretamente classifica datas antes/depois do marco", () => {
-  assert(isBeforeAccGoLive(new Date("2026-09-01T23:59:59.000Z")) === true);
-  assert(isBeforeAccGoLive(new Date("2026-09-02T00:00:00.000Z")) === false);
-  assert(isBeforeAccGoLive(new Date("2026-09-03T00:00:00.000Z")) === false);
+check("isBeforeAccGoLive/hasAccGoLiveOccurred classificam corretamente os três instantes do marco (antes / exatamente 09:00 / depois)", () => {
+  const oneSecondBefore = new Date("2026-09-07T11:59:59.000Z"); // 08:59:59 America/Sao_Paulo
+  const exactlyGoLive = new Date("2026-09-07T12:00:00.000Z"); // 09:00:00 America/Sao_Paulo
+  const oneSecondAfter = new Date("2026-09-07T12:00:01.000Z"); // 09:00:01 America/Sao_Paulo
+
+  assert(isBeforeAccGoLive(oneSecondBefore) === true, "1s antes deveria ser 'antes do go-live'");
+  assert(hasAccGoLiveOccurred(oneSecondBefore) === false, "1s antes: go-live ainda não ocorreu");
+
+  assert(isBeforeAccGoLive(exactlyGoLive) === false, "exatamente 09:00 já não é mais 'antes do go-live'");
+  assert(hasAccGoLiveOccurred(exactlyGoLive) === true, "exatamente 09:00: go-live já ocorreu (inclusivo)");
+
+  assert(isBeforeAccGoLive(oneSecondAfter) === false, "1s depois deveria ser 'não antes do go-live'");
+  assert(hasAccGoLiveOccurred(oneSecondAfter) === true, "1s depois: go-live já ocorreu");
 });
 
 check("acc-go-live.ts nunca é importado por nenhum código de auditoria/migration (marco não deve tocar dados históricos)", () => {

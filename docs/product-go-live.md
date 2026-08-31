@@ -1,30 +1,42 @@
 # Startup Oficial do ACC
 
-## Data oficial de início operacional
+## Data e hora oficiais de início operacional
 
-**02/09/2026, quarta-feira** (`2026-09-02`, America/Sao_Paulo).
+**07/09/2026, segunda-feira, 09:00** (`2026-09-07T09:00:00`,
+America/Sao_Paulo).
 
-Atualizado nesta rodada a partir de 24/08/2026. Regras associadas a
-este marco:
+Atualizado nesta rodada a partir de 02/09/2026 00:00 UTC. Regras
+associadas a este marco:
 
-- ambiente de teste/validação segue até o fim de 01/09/2026;
-- assembleia geral/apresentação, startup/go-live e liberação de
-  usuários ocorrem em 02/09/2026;
-- a remoção da etiqueta global "SISTEMA EM TESTE" (`lib/test-mode.ts`)
-  continua sendo **sempre manual** (`NEXT_PUBLIC_ACC_TEST_MODE=false` +
-  novo deploy) — deliberadamente **não** amarrada automaticamente a
-  este marco nem a relógio/data nenhuma (ver comentário em
-  `lib/test-mode.ts`).
+- até 07/09/2026 08:59:59 (America/Sao_Paulo), o sistema permanece em
+  teste;
+- a partir de 07/09/2026 09:00 (America/Sao_Paulo): início oficial da
+  operação;
+- a partir do mesmo instante, a etiqueta global "SISTEMA EM TESTE"
+  (`lib/test-mode.ts`) deixa de ser exibida **automática e
+  incondicionalmente** — diferente da fase anterior deste marco, em que
+  a remoção era deliberadamente sempre manual. Antes do marco, a regra
+  manual fail-safe (`NEXT_PUBLIC_ACC_TEST_MODE=false` + novo deploy)
+  continua valendo normalmente.
 
 ## Configuração
 
 `apps/web/lib/acc-go-live.ts` — fonte única de verdade:
 
 ```ts
-export const ACC_GO_LIVE_DATE = "2026-09-02" as const;
-export function getAccGoLiveDate(): Date;      // meia-noite UTC do marco, como Date
+export const ACC_GO_LIVE_DATE = "2026-09-07" as const;
+export const ACC_GO_LIVE_TIME = "09:00:00" as const;
+export const ACC_GO_LIVE_TIMEZONE = "America/Sao_Paulo" as const;
+export function getAccGoLiveDate(): Date;              // instante UTC exato do marco, como Date
 export function isBeforeAccGoLive(date: Date): boolean;
+export function hasAccGoLiveOccurred(date?: Date): boolean;
 ```
+
+A conversão do horário de parede (09:00, America/Sao_Paulo) para o
+instante UTC usa `Intl.DateTimeFormat` (ICU) — nunca um offset fixo
+manual nem o timezone do servidor/processo. `apps/web/lib/test-mode.ts`
+usa `hasAccGoLiveOccurred()` para decidir automaticamente se a etiqueta
+"SISTEMA EM TESTE" deve ser exibida.
 
 Qualquer funcionalidade futura que precise se referir ao início
 operacional do produto (Dashboard, relatórios, filtros, Manual,
@@ -63,7 +75,16 @@ retroativamente por causa da mudança de data acima.
 
 ## Uso nesta fase
 
-Nesta fase, a constante foi criada e documentada, mas **não foi
-conectada ao Dashboard nem a nenhuma tela** — isso é trabalho futuro,
-deliberadamente fora do escopo desta tarefa (não é necessário
-redesenhar o Dashboard agora).
+Nesta fase, a constante está conectada apenas à etiqueta global
+"SISTEMA EM TESTE" (`lib/test-mode.ts`) — ainda não foi conectada ao
+Dashboard nem a nenhuma outra tela. Isso continua sendo trabalho
+futuro, deliberadamente fora do escopo desta rodada.
+
+## Histórico
+
+- **2026-08-24 → 2026-09-02:** primeira definição do marco (data sem
+  horário, meia-noite UTC).
+- **2026-09-02 → 2026-09-07 09:00 America/Sao_Paulo:** rodada atual —
+  marco passa a incluir horário e timezone explícitos, e a etiqueta
+  "SISTEMA EM TESTE" passa a se desligar automaticamente no instante do
+  marco.
