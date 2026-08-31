@@ -8,12 +8,16 @@
 //
 // Asset oficial fornecido pela marca (public/brand/acc-background-oficial.png)
 // — validado antes de copiar (sharp: PNG real, 1672x941, com canal alfa)
-// — usado como background-image direto: a página e o arquivo baixável
-// são sempre visualmente idênticos por construção, nunca uma
-// implementação CSS paralela. Só existe em PNG (nenhum vetor foi
-// fornecido) — por isso um único formato/download, sem uma versão "SVG"
-// inventada.
+// — o PNG original nunca foi alterado/removido (outros pontos do repo
+// podem passar a referenciá-lo diretamente no futuro) e continua sendo
+// o fallback via image-set() abaixo. Um .webp irmão (mesmas dimensões,
+// mesma cor média — gerado com sharp, qualidade 82, ~44x menor) foi
+// adicionado só para reduzir a transferência em /login e /projetos;
+// navegadores sem suporte a image-set()/webp continuam recebendo o PNG
+// oficial byte-a-byte, então a aparência nunca depende do formato
+// escolhido pelo navegador.
 export const INSTITUTIONAL_BACKGROUND_PNG_PATH = "/brand/acc-background-oficial.png";
+const INSTITUTIONAL_BACKGROUND_WEBP_PATH = "/brand/acc-background-oficial.webp";
 
 // Cor vermelha predominante do PRÓPRIO arquivo acima, extraída por
 // código (histograma de pixels via sharp sobre o PNG bruto — pico de
@@ -35,7 +39,7 @@ export function InstitutionalBackground() {
         // contraste/legibilidade do card e do texto claro acima dele em
         // qualquer viewport (mobile inclusive), nunca para esconder o
         // asset em si.
-        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.35), rgba(0,0,0,0.55)), url(${INSTITUTIONAL_BACKGROUND_PNG_PATH})`,
+        backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.35), rgba(0,0,0,0.55)), image-set(url(${INSTITUTIONAL_BACKGROUND_WEBP_PATH}) type("image/webp"), url(${INSTITUTIONAL_BACKGROUND_PNG_PATH}) type("image/png"))`,
       }}
     />
   );

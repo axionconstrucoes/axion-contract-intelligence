@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { InstitutionalBackground } from "@/components/brand/institutional-background";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { sanitizeInternalRedirect } from "@/lib/safe-redirect";
@@ -39,10 +40,13 @@ export default async function LoginPage({
               (20%, apps/web/lib/email/templates/contract-alert-template.ts)
               — dois lugares, dois requisitos separados, nunca confundidos.
               Mesmo asset oficial (/branding/acc-logo.png), nenhuma cópia
-              nova criada. */}
+              nova criada — servido via next/image, que gera em runtime
+              uma variante redimensionada (166×166, 2x retina para os
+              83.2px exibidos) e comprimida a partir do PNG original de
+              1254×1254px, sem tocar no arquivo-fonte (ainda usado
+              intacto por sidebar/projetos/e-mail). */}
           <div className="mb-2 flex items-center justify-center gap-2">
-            {/* eslint-disable-next-line @next/next/no-img-element -- PNG estático em public/, sem otimização de imagem necessária */}
-            <img src="/branding/acc-logo.png" alt="ACC" className="h-[83.2px] w-auto" />
+            <Image src="/branding/acc-logo.png" alt="ACC" width={166} height={166} className="h-[83.2px] w-auto" priority />
           </div>
           <CardTitle className="text-base">AXION Controle de Contratos</CardTitle>
           <CardDescription>
