@@ -119,6 +119,15 @@ export function AppSidebar({ projectId }: { projectId: string }) {
               key={item.href}
               href={href}
               title={itemTitle}
+              // Sem prefetch automático: os ~16 itens deste menu, todos
+              // visíveis ao mesmo tempo, disparavam uma rajada de
+              // requisições RSC simultâneas a cada render (observado
+              // causando 503 intermitente em segmentos aleatórios do
+              // lote, por limite de concorrência da infraestrutura —
+              // nunca erro de aplicação). A navegação em si (clique)
+              // continua buscando os dados normalmente, só deixa de
+              // adiantar rotas que o usuário ainda não pediu.
+              prefetch={false}
               className={cn(
                 "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 collapsed && "justify-center px-0",
