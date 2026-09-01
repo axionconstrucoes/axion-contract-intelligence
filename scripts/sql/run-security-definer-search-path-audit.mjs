@@ -196,8 +196,15 @@ function main() {
 
   // register_document_version_file: ACL mínima determinada pela
   // investigação de 2026-08-30 (zero chamador legítimo em qualquer
-  // lugar) — deve manter postgres/service_role, nunca anon/authenticated.
-  check("register_document_version_file(...): sem EXECUTE para anon/authenticated", () => {
+  // lugar até então) restringiu para postgres/service_role. Em
+  // 2026-08-31 (migration 20260831210000_contract_attachments_
+  // authorization_and_delete), "Anexos do Contrato" tornou-se o
+  // primeiro chamador legítimo real — authenticated recupera EXECUTE
+  // (deliberado, justificado na própria migration). anon continua
+  // permanentemente proibido (a autorização de negócio real vive
+  // inteiramente dentro do corpo da function, ramificada por
+  // p_file_role — nunca no nível da ACL para authenticated).
+  check("register_document_version_file(...): authenticated com EXECUTE (chamador legítimo desde 2026-08-31), anon continua sem EXECUTE", () => {
     const aclRows = psql(`
       select coalesce(
         (select string_agg(distinct split_part(a.acl::text, '/', 1), ',') from unnest(p.proacl) as a(acl)),
@@ -209,9 +216,11 @@ function main() {
     `);
     const acl = aclRows[0]?.[0] ?? "";
     const grantedRoles = acl.split(",").filter(Boolean).map((r) => r.split("=")[0]);
-    const forbidden = grantedRoles.filter((r) => r === "anon" || r === "authenticated");
-    if (forbidden.length > 0) {
-      throw new Error(`EXECUTE indevido concedido a: ${forbidden.join(", ")} (ACL completa: ${acl || "<vazia>"})`);
+    if (grantedRoles.includes("anon")) {
+      throw new Error(`EXECUTE indevido concedido a anon (ACL completa: ${acl || "<vazia>"})`);
+    }
+    if (!grantedRoles.includes("authenticated")) {
+      throw new Error(`authenticated deveria ter EXECUTE desde 2026-08-31 (Anexos do Contrato) (ACL completa: ${acl || "<vazia>"})`);
     }
     if (!grantedRoles.includes("service_role")) {
       throw new Error(`service_role deveria manter EXECUTE (ACL completa: ${acl || "<vazia>"})`);

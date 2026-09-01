@@ -255,6 +255,48 @@ export async function getManagedDocuments(
   }));
 }
 
+// "Anexos do Contrato" (document_version_files, file_role =
+// 'ANEXO_CONTRATUAL' — migration 20260825010713 + 20260831210000) —
+// só a CONTAGEM por versão, para o contador do card ("Anexos do
+// contrato (N)") já aparecer no primeiro render sem esperar o usuário
+// expandir o painel. A lista completa (nome/tamanho/uploader/etc.) é
+// buscada client-side sob demanda, só quando o painel é expandido — ver
+// use-contract-attachments.ts.
+export async function getContractAttachmentCounts(
+  documentVersionIds: readonly string[]
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (documentVersionIds.length === 0) {
+    return counts;
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase
+    .from("document_version_files")
+    .select("document_version_id")
+    .in("document_version_id", documentVersionIds)
+    .eq("file_role", "ANEXO_CONTRATUAL");
+
+  if (error) {
+    // Mesma filosofia fail-safe de getTrashedDocuments: uma migration
+    // ainda não aplicada nesse banco (42P01/PGRST205, tabela ausente)
+    // nunca quebra a página inteira — o contador simplesmente aparece
+    // como 0 até a migration ser aplicada. Qualquer OUTRO erro continua
+    // propagado.
+    if (error.code === "42P01" || error.code === "PGRST205" || error.code === "42703") {
+      return counts;
+    }
+    throw error;
+  }
+
+  for (const row of (data ?? []) as unknown as { document_version_id: string }[]) {
+    counts.set(row.document_version_id, (counts.get(row.document_version_id) ?? 0) + 1);
+  }
+
+  return counts;
+}
+
 export type TrashedDocument = {
   id: string;
   kind: string;
