@@ -70,7 +70,7 @@ export default async function DashboardPage({ params }: { params: Promise<{ proj
             {highestSeverity ? (
               <SeverityBadge severity={highestSeverity} className="w-fit" />
             ) : (
-              <p className="text-sm text-muted-foreground">Nenhum achado</p>
+              <p className="text-sm text-muted-foreground">Não avaliado</p>
             )}
           </div>
         </CardContent>
