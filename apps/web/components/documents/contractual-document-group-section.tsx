@@ -26,6 +26,9 @@ export function ContractualDocumentGroupSection({
   canUpload,
   canLinkContractualAttachment,
   linkableDocuments,
+  contractAttachmentCounts,
+  canAddContractAttachment = false,
+  canDeleteContractAttachment = false,
 }: {
   group: ContractualDocumentGroup<ManagedDocument>;
   projectId: string;
@@ -39,6 +42,15 @@ export function ContractualDocumentGroupSection({
   // trash_project_document é ADMINISTRADOR estrito também no servidor.
   canLinkContractualAttachment: boolean;
   linkableDocuments: LinkableDocumentCandidate[];
+  // "Anexos do Contrato" (ver DocumentCard) — repassado sem alteração
+  // para o DocumentCard do PRINCIPAL do grupo (contrato-base/aditivo),
+  // que é o único lugar deste componente onde document.kind pode ser
+  // 'CONTRATO_BASE'. Os anexos contratuais (ContractualAttachmentRow)
+  // são um vínculo documento-a-documento diferente, sem relação com
+  // este painel.
+  contractAttachmentCounts?: Map<string, number>;
+  canAddContractAttachment?: boolean;
+  canDeleteContractAttachment?: boolean;
 }) {
   const { principalTitle, attachmentsTitle } = deriveContractualGroupTitles(group.label);
   const hasMultipleAttachments = group.attachments.length > 1;
@@ -56,6 +68,9 @@ export function ContractualDocumentGroupSection({
               projectId={projectId}
               canUpload={canUpload}
               canTrash={canLinkContractualAttachment}
+              contractAttachmentCounts={contractAttachmentCounts}
+              canAddContractAttachment={canAddContractAttachment}
+              canDeleteContractAttachment={canDeleteContractAttachment}
             />
           </div>
         </div>

@@ -26,7 +26,8 @@ import {
   getClauses,
   getScheduleActivities,
 } from "@/lib/data";
-import { getManagedDocuments, getTrashedDocuments } from "@/lib/document-management";
+import { getContractAttachmentCounts, getManagedDocuments, getTrashedDocuments } from "@/lib/document-management";
+import { isContractAttachmentEligibleKind } from "@/lib/documents/contract-attachments/is-contract-attachment-eligible-kind";
 import {
   groupDocumentsByContractualStructure,
   sortAndLabelContractualPrincipals,
@@ -81,6 +82,29 @@ export default async function DocumentosPage({
   // continua sendo sempre a RPC (link_document_as_contractual_attachment),
   // que revalida a permissão no servidor.
   const canLinkContractualAttachment = permission === "ADMINISTRADOR";
+
+  // "Anexos do Contrato" (card de CONTRATO_BASE) — matriz oficial desta
+  // rodada: ADMINISTRADOR/GESTOR/GERENTE/COLABORADOR incluem anexos
+  // (can_add_contract_attachment no servidor); exclusão continua
+  // restrita a ADMINISTRADOR/GESTOR/GERENTE (mesma regra de canUpload/
+  // can_manage_project_documents — LEITURA nunca vê nenhum dos dois
+  // controles). Isto é só UX; a RPC revalida os dois níveis no
+  // servidor.
+  const canAddContractAttachment = canUpload || permission === "COLABORADOR";
+  const canDeleteContractAttachment = canUpload;
+
+  // Contagem inicial de "Anexos do Contrato" por versão ATUAL de cada
+  // documento CONTRATO_BASE — só para o contador do card já aparecer no
+  // primeiro render (o painel em si busca a lista completa sob demanda,
+  // só quando expandido). Precisa dos documentos já carregados (para
+  // saber quais document_version_id consultar), por isso roda depois do
+  // Promise.all acima, nunca em paralelo com ele.
+  const contractAttachmentCounts = await getContractAttachmentCounts(
+    documents
+      .filter((document) => isContractAttachmentEligibleKind(document.kind))
+      .map((document) => document.versions[0]?.id)
+      .filter((id): id is string => Boolean(id))
+  );
 
   // GRUPOS CONTRATUAIS: Contrato-base | Anexos, Aditivo 01 | Anexos,
   // etc. — ver group-contractual-documents.ts. Com os dados reais de
@@ -213,6 +237,9 @@ export default async function DocumentosPage({
                   canUpload={canUpload}
                   canLinkContractualAttachment={canLinkContractualAttachment}
                   linkableDocuments={linkableDocuments}
+                  contractAttachmentCounts={contractAttachmentCounts}
+                  canAddContractAttachment={canAddContractAttachment}
+                  canDeleteContractAttachment={canDeleteContractAttachment}
                 />
               ))}
 
@@ -232,6 +259,9 @@ export default async function DocumentosPage({
                       canUpload={canUpload}
                       contractualParentOptions={canLinkContractualAttachment ? contractualParentOptions : undefined}
                       canTrash={canLinkContractualAttachment}
+                      contractAttachmentCounts={contractAttachmentCounts}
+                      canAddContractAttachment={canAddContractAttachment}
+                      canDeleteContractAttachment={canDeleteContractAttachment}
                     />
                   ))}
                 </div>

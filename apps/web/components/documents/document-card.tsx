@@ -1,4 +1,6 @@
 import { ClientResponsesSection } from "@/components/documents/client-responses-section";
+import { ContractAttachmentsPanel } from "@/components/documents/contract-attachments/contract-attachments-panel";
+import { isContractAttachmentEligibleKind } from "@/lib/documents/contract-attachments/is-contract-attachment-eligible-kind";
 import { DocumentDownloadButton } from "@/components/documents/document-download-button";
 import { DocumentUploadForm } from "@/components/documents/document-upload-form";
 import { LinkClientResponseControl } from "@/components/documents/link-client-response-control";
@@ -65,12 +67,29 @@ export function DocumentCard({
   // canLinkContractualAttachment, ver documentos/page.tsx) — ausente/
   // false = nenhum controle de lixeira é oferecido aqui.
   canTrash = false,
+  // "Anexos do Contrato" (document_version_files, file_role =
+  // 'ANEXO_CONTRATUAL') — só renderizado para document.kind ===
+  // 'CONTRATO_BASE' (ver render abaixo). contractAttachmentCounts é a
+  // contagem inicial (SSR, por documentVersionId) só para o contador
+  // aparecer sem esperar o painel expandir — ver
+  // getContractAttachmentCounts em lib/document-management.ts.
+  // canAddContractAttachment: ADMINISTRADOR/GERENTE/COLABORADOR.
+  // canDeleteContractAttachment: ADMINISTRADOR/GERENTE (mesma regra de
+  // canUpload/can_manage_project_documents — ver comentário sobre o
+  // nome legado do mesmo papel em page.tsx) — LEITURA nunca vê nenhum
+  // dos dois controles de escrita, só visualizar/baixar.
+  contractAttachmentCounts,
+  canAddContractAttachment = false,
+  canDeleteContractAttachment = false,
 }: {
   document: ManagedDocument;
   projectId: string;
   canUpload: boolean;
   contractualParentOptions?: ContractualParentOption[];
   canTrash?: boolean;
+  contractAttachmentCounts?: Map<string, number>;
+  canAddContractAttachment?: boolean;
+  canDeleteContractAttachment?: boolean;
 }) {
   const current = document.versions[0];
   const nextVersionIndex = (current?.versionIndex ?? 0) + 1;
@@ -153,6 +172,19 @@ export function DocumentCard({
                   />
                 ) : null}
               </div>
+
+              {isContractAttachmentEligibleKind(document.kind) ? (
+                <div className="pt-1.5">
+                  <ContractAttachmentsPanel
+                    projectId={projectId}
+                    documentId={document.id}
+                    documentVersionId={version.id}
+                    initialCount={contractAttachmentCounts?.get(version.id) ?? 0}
+                    canAdd={canAddContractAttachment}
+                    canDelete={canDeleteContractAttachment}
+                  />
+                </div>
+              ) : null}
             </div>
           ))}
 

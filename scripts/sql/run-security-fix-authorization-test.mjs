@@ -17,13 +17,25 @@
 //      project_id só pode vir da própria linha (a function não recebe
 //      p_project_id como parâmetro).
 //
-//   2. register_document_version_file(): ACL mínima (zero chamador
-//      legítimo encontrado em código/histórico) — anon e authenticated
-//      não têm mais EXECUTE de forma alguma (REVOKE, não só checagem de
-//      auth.uid() dentro do corpo). Testa que a chamada falha no nível
-//      do Postgres (42501 insufficient_privilege) ANTES mesmo de entrar
-//      na function, para os dois roles, e que service_role continua com
-//      EXECUTE (chega até a checagem interna de auth.uid()).
+//   2. register_document_version_file(): ACL mínima em 2026-08-30 (zero
+//      chamador legítimo encontrado em código/histórico até então) —
+//      anon e authenticated sem EXECUTE algum (REVOKE). EM 2026-08-31,
+//      "Anexos do Contrato" (migration
+//      20260831210000_contract_attachments_authorization_and_delete)
+//      tornou-se o primeiro chamador legítimo real: authenticated
+//      recupera EXECUTE (anon continua revogado). A autorização de
+//      verdade passa a viver inteiramente DENTRO do corpo da function,
+//      ramificada por p_file_role — ANEXO_CONTRATUAL aceita
+//      ADMINISTRADOR/GESTOR/GERENTE/COLABORADOR
+//      (can_add_contract_attachment); EVIDENCIA_APROVACAO/
+//      DOCUMENTO_APOIO continuam exigindo ADMINISTRADOR
+//      (has_project_permission), comportamento herdado e inalterado.
+//      Testa que anon continua barrado no nível do Postgres (42501,
+//      nunca entra na function); que authenticated como ADMINISTRADOR
+//      chega ao corpo da function para qualquer papel (inclusive
+//      DOCUMENTO_APOIO); que authenticated como COLABORADOR é recusado
+//      para DOCUMENTO_APOIO mas aceito para ANEXO_CONTRATUAL; e que
+//      service_role continua com EXECUTE.
 //
 // Diferente de run-gerente-compat-authorization-test.mjs (que só simula
 // auth.uid() via request.jwt.claim.sub rodando como postgres): aqui o
@@ -357,26 +369,55 @@ function main() {
   console.log("---- register_document_version_file (ACL) ----");
   console.log("");
 
-  const registerFileSql = `select public.register_document_version_file('${DOCUMENT_VERSION_ID}', 'DOCUMENTO_APOIO', 'x/y.pdf', 'y.pdf', 'application/pdf', 100, repeat('a',64), 'UPLOAD', null, null);`;
+  const registerFileSql = (fileRole) =>
+    `select public.register_document_version_file('${DOCUMENT_VERSION_ID}', '${fileRole}', 'x/y.pdf', 'y.pdf', 'application/pdf', 100, repeat('a',64), 'UPLOAD', null, null);`;
 
   check("register_document_version_file: anon — permission denied no nível do Postgres (42501), nunca entra na function", () => {
-    const r = callAsPgRole("anon", null, registerFileSql);
+    const r = callAsPgRole("anon", null, registerFileSql("DOCUMENTO_APOIO"));
     if (r.status === 0) throw new Error(`esperava falha, obteve sucesso: ${r.stdout}`);
     if (!r.stderr.includes("permission denied for function")) {
       throw new Error(`esperava "permission denied for function" (ACL), obtido: ${r.stderr}`);
     }
   });
 
-  check("register_document_version_file: authenticated (mesmo como ADMINISTRADOR real do projeto) — permission denied no nível do Postgres, ACL revogada por completo", () => {
-    const r = callAsPgRole("authenticated", USERS.ADMINISTRADOR, registerFileSql);
+  check("register_document_version_file: authenticated como ADMINISTRADOR — ACL concede EXECUTE (2026-08-31, chamador legítimo real); chega ao corpo da function mesmo para DOCUMENTO_APOIO (falha depois, em validação de storage_path — nunca 42501/permission denied)", () => {
+    const r = callAsPgRole("authenticated", USERS.ADMINISTRADOR, registerFileSql("DOCUMENTO_APOIO"));
+    if (r.stderr.includes("permission denied for function")) {
+      throw new Error(`ACL não deveria mais bloquear authenticated — esperava chegar ao corpo da function, obtido: ${r.stderr}`);
+    }
+    if (!r.stderr.includes("Storage path does not belong to document version")) {
+      throw new Error(`esperava falhar na validação de storage_path (prova que passou da ACL e da autorização), obtido: status=${r.status} stderr=${r.stderr}`);
+    }
+  });
+
+  check("register_document_version_file: authenticated como COLABORADOR — recusado para DOCUMENTO_APOIO (continua ADMINISTRADOR-only, comportamento herdado e inalterado)", () => {
+    const r = callAsPgRole("authenticated", USERS.COLABORADOR, registerFileSql("DOCUMENTO_APOIO"));
     if (r.status === 0) throw new Error(`esperava falha, obteve sucesso: ${r.stdout}`);
-    if (!r.stderr.includes("permission denied for function")) {
-      throw new Error(`esperava "permission denied for function" (ACL), obtido: ${r.stderr}`);
+    if (!r.stderr.includes("Insufficient permission for this file role")) {
+      throw new Error(`esperava "Insufficient permission for this file role", obtido: ${r.stderr}`);
+    }
+  });
+
+  check("register_document_version_file: authenticated como COLABORADOR — aceito para ANEXO_CONTRATUAL (decisão de negócio desta rodada: can_add_contract_attachment), chega até a validação de storage_path", () => {
+    const r = callAsPgRole("authenticated", USERS.COLABORADOR, registerFileSql("ANEXO_CONTRATUAL"));
+    if (r.stderr.includes("Insufficient permission for this file role")) {
+      throw new Error(`COLABORADOR deveria conseguir adicionar ANEXO_CONTRATUAL, obtido: ${r.stderr}`);
+    }
+    if (!r.stderr.includes("Storage path does not belong to document version")) {
+      throw new Error(`esperava falhar na validação de storage_path (prova que passou da autorização), obtido: status=${r.status} stderr=${r.stderr}`);
+    }
+  });
+
+  check("register_document_version_file: authenticated como LEITURA — recusado para ANEXO_CONTRATUAL (can_add_contract_attachment exclui LEITURA)", () => {
+    const r = callAsPgRole("authenticated", USERS.LEITURA, registerFileSql("ANEXO_CONTRATUAL"));
+    if (r.status === 0) throw new Error(`esperava falha, obteve sucesso: ${r.stdout}`);
+    if (!r.stderr.includes("Insufficient permission for this file role")) {
+      throw new Error(`esperava "Insufficient permission for this file role", obtido: ${r.stderr}`);
     }
   });
 
   check("register_document_version_file: service_role mantém EXECUTE (chega à checagem interna, não é bloqueado pela ACL)", () => {
-    const r = callAsPgRole("service_role", null, registerFileSql);
+    const r = callAsPgRole("service_role", null, registerFileSql("DOCUMENTO_APOIO"));
     if (r.stderr.includes("permission denied for function")) {
       throw new Error(`service_role deveria manter EXECUTE — bloqueado indevidamente pela ACL: ${r.stderr}`);
     }
