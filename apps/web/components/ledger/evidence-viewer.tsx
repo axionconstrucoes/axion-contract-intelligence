@@ -34,7 +34,7 @@ export async function EvidenceViewer({ evidences }: { evidences: EvidenceRef[] }
                     <p><span className="text-muted-foreground">De:</span> {email.from}</p>
                     <p><span className="text-muted-foreground">Para:</span> {email.to}</p>
                     <p><span className="text-muted-foreground">Assunto:</span> {email.subject}</p>
-                    <p className="mt-2 text-muted-foreground">{email.snippet}</p>
+                    <p className="mt-2 max-w-prose text-muted-foreground">{email.snippet}</p>
                   </>
                 ) : (
                   <p className="text-muted-foreground">E-mail não disponível</p>

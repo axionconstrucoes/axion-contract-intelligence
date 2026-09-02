@@ -88,9 +88,9 @@ export default async function EventDetailPage({
   }
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
+    <div className="flex max-w-5xl flex-col gap-5">
       {arrivedFromAlertEmail && (
-        <div className="rounded-md border border-blue-500/30 bg-blue-500/5 p-3 text-sm">
+        <div className="max-w-prose rounded-md border border-blue-500/30 bg-blue-500/5 p-3 text-sm">
           Você chegou aqui a partir de um alerta de{" "}
           {alertRiskLevel && alertRiskLevelLabels[alertRiskLevel]
             ? `risco ${alertRiskLevelLabels[alertRiskLevel]}`
@@ -109,7 +109,7 @@ export default async function EventDetailPage({
           <span>Registrado por {creatorLabel}</span>
         </div>
         <h1 className="mt-1 text-lg font-semibold">{event.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{event.description}</p>
+        <p className="mt-1 max-w-prose text-sm text-muted-foreground">{event.description}</p>
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <StatusBadge status={event.status} />
           {event.categories.map((c) => (
@@ -126,8 +126,8 @@ export default async function EventDetailPage({
             <SeverityBadge severity={event.aiAssessment.severity} />
           </CardHeader>
           <CardContent className="flex flex-col gap-3 pt-0">
-            <p className="text-sm">{event.aiAssessment.summary}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="max-w-prose text-sm">{event.aiAssessment.summary}</p>
+            <p className="max-w-prose text-xs text-muted-foreground">
               Confiança estimada: {Math.round(event.aiAssessment.confidence * 100)}% — sugestão sujeita a revisão humana, não substitui decisão da equipe.
             </p>
             {canReview && (
@@ -195,7 +195,7 @@ export default async function EventDetailPage({
                 </CardHeader>
 
                 <CardContent className="flex flex-col gap-4">
-                  <p className="text-sm">{candidate.summary}</p>
+                  <p className="max-w-prose text-sm">{candidate.summary}</p>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
