@@ -144,9 +144,9 @@ check("7. upload de anexo NUNCA usa file_role PRINCIPAL — sempre ANEXO_CONTRAT
   assert(hookSource.includes('p_file_role: "ANEXO_CONTRATUAL"'), "upload de anexo deveria sempre usar file_role ANEXO_CONTRATUAL");
 });
 
-check("7b. delete_contract_attachment recusa explicitamente qualquer file_role diferente de ANEXO_CONTRATUAL (nunca exclui o PRINCIPAL)", () => {
-  assert(migrationSource.includes("v_file_role <> 'ANEXO_CONTRATUAL'"), "checagem de file_role ausente na RPC de exclusão");
-  assert(migrationSource.includes("This RPC only deletes ANEXO_CONTRATUAL files."), "mensagem de recusa ausente");
+check("7b. delete_contract_attachment recusa explicitamente qualquer file_role diferente de ANEXO_CONTRATUAL (nunca remove o PRINCIPAL)", () => {
+  assert(migrationSource.includes("v_file_role <> 'ANEXO_CONTRATUAL'"), "checagem de file_role ausente na RPC de remoção");
+  assert(migrationSource.includes("This RPC only removes ANEXO_CONTRATUAL files."), "mensagem de recusa ausente");
 });
 
 check("7c. document_version_files_one_principal_idx (migration original) garante um único PRINCIPAL por versão — nunca tocado por esta migration", () => {
@@ -155,9 +155,24 @@ check("7c. document_version_files_one_principal_idx (migration original) garante
 
 // --- 8. Exclusão de apenas um anexo ---
 
-check("8. exclusão exige confirmação explícita antes de excluir (dois cliques: 'Excluir' -> 'Confirmar exclusão')", () => {
-  assert(panelSource.includes("Confirmar exclusão"), "confirmação explícita ausente");
+check("8. remoção exige confirmação explícita (dois cliques: 'Remover anexo do contrato' -> 'Confirmar remoção'), nunca 'Excluir definitivamente' fora de comentários explicativos", () => {
+  assert(panelSource.includes("Remover anexo do contrato"), "botão inicial 'Remover anexo do contrato' ausente");
+  assert(panelSource.includes("Confirmar remoção"), "confirmação explícita ausente");
   assert(panelSource.includes("Cancelar"), "opção de cancelar ausente");
+  // Remove comentários de bloco {/* ... */} e de linha // antes de checar —
+  // o próprio código comenta "Nunca 'Excluir definitivamente'" como
+  // explicação da decisão de design; isso não deveria contar como o
+  // texto aparecendo na interface de verdade (JSX renderizado).
+  const withoutBlockComments = panelSource.replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
+  const withoutComments = withoutBlockComments.replace(/\/\/.*$/gm, "");
+  assert(!/Excluir definitivamente/i.test(withoutComments), "não deveria usar 'Excluir definitivamente' fora de comentários (o objeto físico é preservado)");
+});
+
+check("8d. confirmação explica explicitamente que o vínculo é removido da visualização e o arquivo histórico é preservado para auditoria", () => {
+  assert(
+    panelSource.includes("O vínculo será removido da visualização. O arquivo histórico permanecerá preservado para auditoria."),
+    "texto explicativo da confirmação ausente ou alterado"
+  );
 });
 
 check("8b. delete_contract_attachment identifica o anexo SOMENTE por p_file_id (chave primária) — nunca por nome/posição, nunca em lote", () => {
@@ -176,12 +191,32 @@ check("8c. exclusão bem-sucedida remove só o item deletado do estado local (nu
 
 // --- 9. Bloqueio de anexo usado como evidência ---
 
-check("9. delete_contract_attachment bloqueia a exclusão quando a versão está referenciada em event_evidence, com mensagem explicando o motivo", () => {
+check("9. delete_contract_attachment bloqueia a remoção quando a versão está referenciada em event_evidence, com mensagem explicando o motivo", () => {
   assert(migrationSource.includes("event_evidence"), "checagem de evidência ausente");
   assert(
     migrationSource.includes("referenciada como evidência de um evento do Event Ledger"),
     "mensagem explicando o bloqueio por evidência ausente"
   );
+});
+
+check("9b. delete_contract_attachment também bloqueia por confronto/registro protegido — mesmas 4 checagens de trash_project_document (event_cross_references direto, via cláusula, e Proposta de Adicional)", () => {
+  assert(migrationSource.includes("event_cross_references ecr\n    where ecr.document_id = v_document_id"), "checagem de event_cross_references (documento) ausente");
+  assert(migrationSource.includes("existe referência direta a este documento no Event Ledger"), "mensagem de cross-reference direta ausente");
+  assert(migrationSource.includes("join public.clauses c\n      on c.id = ecr.clause_id"), "checagem de event_cross_references via cláusula ausente");
+  assert(migrationSource.includes("uma cláusula desta versão está referenciada no Event Ledger"), "mensagem de cláusula referenciada ausente");
+  assert(migrationSource.includes("project_additional_proposal_links papl"), "checagem de Proposta de Adicional ausente");
+  assert(migrationSource.includes("vinculada a uma Proposta de Adicional"), "mensagem de vínculo com Proposta de Adicional ausente");
+});
+
+check("9c. nenhuma alteração parcial: TODAS as checagens de proteção rodam ANTES do DELETE (nunca depois)", () => {
+  const deleteIndex = migrationSource.indexOf("delete from public.document_version_files\n  where id = p_file_id;");
+  const evidenceIndex = migrationSource.indexOf("from public.event_evidence ee");
+  const crossRefIndex = migrationSource.indexOf("from public.event_cross_references ecr\n    where ecr.document_id");
+  const proposalIndex = migrationSource.indexOf("from public.project_additional_proposal_links papl");
+  assert(deleteIndex > 0, "DELETE não encontrado");
+  assert(evidenceIndex > 0 && evidenceIndex < deleteIndex, "checagem de evidência deveria vir antes do DELETE");
+  assert(crossRefIndex > 0 && crossRefIndex < deleteIndex, "checagem de cross-reference deveria vir antes do DELETE");
+  assert(proposalIndex > 0 && proposalIndex < deleteIndex, "checagem de Proposta de Adicional deveria vir antes do DELETE");
 });
 
 // --- 10-13. Matriz de permissões ---
@@ -228,7 +263,7 @@ check("10-13d. page.tsx: canAddContractAttachment inclui COLABORADOR; canDeleteC
 
 check("10-13e. painel: quando canAdd=false, nenhum input de upload é oferecido; quando canDelete=false, nenhum botão de excluir é oferecido (LEITURA só visualiza/baixa)", () => {
   assert(/\{canAdd \? \(/.test(panelSource), "área de upload deveria ser condicionada a canAdd");
-  assert(/canDelete \?/.test(panelSource), "botão de excluir deveria ser condicionado a canDelete");
+  assert(/canDelete &&/.test(panelSource), "botão de remoção deveria ser condicionado a canDelete");
 });
 
 // --- 14. Acesso de usuário fora do projeto ---
@@ -288,9 +323,9 @@ check("17. adicionar anexo grava audit_log_entries (DOCUMENT_VERSION_FILE_ADDED)
   assert(migrationSource.includes("'DOCUMENT_VERSION_FILE_ADDED'"), "auditoria de inclusão ausente");
 });
 
-check("17b. excluir anexo grava audit_log_entries (DOCUMENT_VERSION_FILE_DELETED) com nome do arquivo e path de Storage preservado", () => {
-  assert(migrationSource.includes("'DOCUMENT_VERSION_FILE_DELETED'"), "auditoria de exclusão ausente");
-  assert(migrationSource.includes("Objeto de Storage preservado"), "detalhe da auditoria deveria registrar que o Storage foi preservado");
+check("17b. remover anexo grava audit_log_entries (DOCUMENT_VERSION_FILE_DELETED) com nome do arquivo e path de Storage preservado", () => {
+  assert(migrationSource.includes("'DOCUMENT_VERSION_FILE_DELETED'"), "auditoria de remoção ausente");
+  assert(migrationSource.includes("arquivo histórico permanece preservado no Storage"), "detalhe da auditoria deveria registrar que o Storage foi preservado");
 });
 
 check("17c. objeto de Storage NUNCA é apagado pela exclusão — só o metadado; mesma filosofia do bucket (sem policy de DELETE)", () => {
@@ -325,6 +360,38 @@ check("18c. cliente trata DUPLICATE_ATTACHMENT_HASH como status DUPLICADO amigá
 check("upload de anexo grava sob projectId/documentId/documentVersionId/anexos-contratuais/ — nunca fora do prefixo já validado pela RPC (v_expected_prefix)", () => {
   assert(migrationSource.includes("v_expected_prefix :="), "validação de prefixo de storage_path deveria continuar existindo");
   assert(hookSource.includes("anexos-contratuais"), "subpasta dedicada para anexos deveria existir (evita colidir com o arquivo PRINCIPAL)");
+});
+
+// --- Nomenclatura: interface exibe exclusivamente GERENTE ---
+
+check("nomenclatura: nenhum arquivo novo/alterado desta feature exibe 'GESTOR' como texto de botão/mensagem/auditoria (só permitido como valor interno de compatibilidade, dentro de comparações de permissão)", () => {
+  for (const [name, source] of [
+    ["contract-attachments-panel.tsx", panelSource],
+    ["use-contract-attachments.ts", hookSource],
+    ["document-card.tsx", cardSource],
+  ]) {
+    assert(!/GESTOR/.test(source), `${name} não deveria mencionar GESTOR de forma alguma (nem interno — nenhum destes arquivos lida com o papel do usuário diretamente)`);
+  }
+  // page.tsx e a migration PODEM conter 'GESTOR' — mas só dentro de
+  // comparação de permissão (comparação com pm.permission ou a
+  // variável `permission`) ou comentário, nunca como rótulo de botão/
+  // mensagem exibida. Checado indiretamente: nenhuma string literal
+  // teria "GESTOR" fora de um contexto de comparação/lista de papéis.
+  assert(!/>GESTOR</.test(pageSource), "page.tsx não deveria renderizar 'GESTOR' como texto visível");
+});
+
+check("nomenclatura: seletor de papel (Usuários) nunca mostra 'Gerente' duas vezes — GESTOR (legado) só ocupa a posição de GERENTE quando é o valor JÁ salvo do membro, nunca uma opção extra", () => {
+  const memberRowSource = readSource("apps/web/components/users/member-row-actions.tsx");
+  assert(!memberRowSource.includes("ALL_PERMISSIONS"), "constante antiga com as 5 permissões lado a lado (duplicava 'Gerente' no <select>) deveria ter sido substituída");
+  assert(memberRowSource.includes("buildSelectablePermissions"), "função que evita a opção duplicada deveria existir");
+  assert(
+    memberRowSource.includes('["ADMINISTRADOR", "GERENTE", "COLABORADOR", "LEITURA"]'),
+    "lista padrão (membro não-GESTOR) não deveria incluir GESTOR"
+  );
+  assert(
+    memberRowSource.includes('["ADMINISTRADOR", "GESTOR", "COLABORADOR", "LEITURA"]'),
+    "lista para membro atualmente GESTOR deveria substituir GERENTE por GESTOR na mesma posição (nunca as duas ao mesmo tempo)"
+  );
 });
 
 console.log("");

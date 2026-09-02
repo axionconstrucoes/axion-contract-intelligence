@@ -111,7 +111,7 @@ create or replace function public.register_document_version_file(
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_user_id uuid;
@@ -376,6 +376,7 @@ declare
   v_user_id uuid := auth.uid();
   v_project_id uuid;
   v_document_id uuid;
+  v_document_version_id uuid;
   v_file_role text;
   v_original_file_name text;
   v_storage_bucket text;
@@ -389,6 +390,7 @@ begin
   select
     d.project_id,
     d.id,
+    dv.id,
     f.file_role,
     f.original_file_name,
     f.storage_bucket,
@@ -396,6 +398,7 @@ begin
   into
     v_project_id,
     v_document_id,
+    v_document_version_id,
     v_file_role,
     v_original_file_name,
     v_storage_bucket,
@@ -414,33 +417,77 @@ begin
   end if;
 
   -- Mesma decisão de negócio de can_manage_project_documents
-  -- (ADMINISTRADOR/GESTOR/GERENTE) — COLABORADOR e LEITURA nunca
-  -- excluem, mesmo podendo adicionar.
+  -- (ADMINISTRADOR/GERENTE — GESTOR é o mesmo papel sob o nome legado,
+  -- membership antiga nunca convertida automaticamente: ver migration
+  -- 20260829200000_project_permission_gerente_compat.sql) —
+  -- COLABORADOR e LEITURA nunca excluem, mesmo podendo adicionar.
   if not public.can_manage_project_documents(v_project_id) then
     raise exception
-      'ADMINISTRADOR or GERENTE permission required to delete a contract attachment.';
+      'ADMINISTRADOR or GERENTE permission required to remove a contract attachment.';
   end if;
 
   -- Nunca o arquivo principal do contrato, nunca outros papéis por este
   -- caminho — esta RPC é estritamente escopada a anexos contratuais.
   if v_file_role <> 'ANEXO_CONTRATUAL' then
     raise exception
-      'This RPC only deletes ANEXO_CONTRATUAL files.';
+      'This RPC only removes ANEXO_CONTRATUAL files.';
   end if;
 
-  -- Proteção de evidência: granularidade de VERSÃO (event_evidence não
-  -- referencia document_version_files diretamente — ver cabeçalho desta
-  -- migration). Bloqueia a exclusão de QUALQUER anexo da versão quando
-  -- ela está referenciada como evidência, por segurança.
+  -- ------------------------------------------------------------
+  -- Proteção de evidência/confronto/registro protegido — MESMAS
+  -- QUATRO checagens já usadas por trash_project_document (migration
+  -- 20260829150000), aplicadas aqui a um anexo individual em vez de ao
+  -- documento inteiro. Granularidade real disponível no schema hoje:
+  --   1) event_evidence — por VERSÃO (não existe vínculo por arquivo
+  --      individual; qualquer anexo da versão referenciada como
+  --      evidência fica protegido, por segurança);
+  --   2) event_cross_references.document_id — por DOCUMENTO (a coluna
+  --      não distingue versão; qualquer cross-reference ao documento
+  --      bloqueia, mesma regra de trash_project_document);
+  --   3) event_cross_references.clause_id -> clauses.document_version_id
+  --      — por VERSÃO;
+  --   4) project_additional_proposal_links.document_version_id — por
+  --      VERSÃO (vínculo com Proposta de Adicional).
+  -- Nunca finge granularidade de arquivo que o schema não tem —
+  -- documentado aqui, não escondido.
+  -- ------------------------------------------------------------
+
   if exists (
     select 1
     from public.event_evidence ee
-    join public.document_version_files f
-      on f.document_version_id = ee.document_version_id
-    where f.id = p_file_id
+    where ee.document_version_id = v_document_version_id
   ) then
     raise exception
-      'Não é possível excluir: a versão deste documento está referenciada como evidência de um evento do Event Ledger.';
+      'Não é possível remover: a versão deste documento está referenciada como evidência de um evento do Event Ledger.';
+  end if;
+
+  if exists (
+    select 1
+    from public.event_cross_references ecr
+    where ecr.document_id = v_document_id
+  ) then
+    raise exception
+      'Não é possível remover: existe referência direta a este documento no Event Ledger.';
+  end if;
+
+  if exists (
+    select 1
+    from public.event_cross_references ecr
+    join public.clauses c
+      on c.id = ecr.clause_id
+    where c.document_version_id = v_document_version_id
+  ) then
+    raise exception
+      'Não é possível remover: uma cláusula desta versão está referenciada no Event Ledger (evento, finding ou confronto).';
+  end if;
+
+  if exists (
+    select 1
+    from public.project_additional_proposal_links papl
+    where papl.document_version_id = v_document_version_id
+  ) then
+    raise exception
+      'Não é possível remover: esta versão está vinculada a uma Proposta de Adicional.';
   end if;
 
   delete from public.document_version_files
@@ -466,7 +513,7 @@ begin
     'DOCUMENT_VERSION_FILE',
     p_file_id::text,
     format(
-      'Anexo contratual "%s" excluído (documento %s). Objeto de Storage preservado (%s/%s) — só o metadado foi removido.',
+      'Anexo contratual "%s" removido da visualização (documento %s). O arquivo histórico permanece preservado no Storage para auditoria (%s/%s) — só o vínculo/metadado foi removido, nunca o objeto físico.',
       v_original_file_name,
       v_document_id,
       v_storage_bucket,

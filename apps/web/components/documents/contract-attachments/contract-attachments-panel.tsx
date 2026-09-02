@@ -97,38 +97,45 @@ function AttachmentRow({
           <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => openSignedUrl(true)}>
             Baixar
           </Button>
-          {canDelete ? (
-            confirming ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="border-destructive text-destructive hover:bg-destructive/10"
-                  disabled={busy}
-                  onClick={handleDelete}
-                >
-                  {busy ? "Excluindo…" : "Confirmar exclusão"}
-                </Button>
-                <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming(false)}>
-                  Cancelar
-                </Button>
-              </>
-            ) : (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="border-destructive text-destructive hover:bg-destructive/10"
-                disabled={busy}
-                onClick={() => setConfirming(true)}
-              >
-                Excluir
-              </Button>
-            )
+          {canDelete && !confirming ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-destructive text-destructive hover:bg-destructive/10"
+              disabled={busy}
+              onClick={() => setConfirming(true)}
+            >
+              Remover anexo do contrato
+            </Button>
           ) : null}
         </div>
       </div>
+
+      {/* Nunca "Excluir definitivamente": o objeto de Storage é
+          deliberadamente preservado (histórico/auditoria) — só o
+          vínculo/metadado é removido. A confirmação explica isso antes
+          de qualquer ação irreversível na visualização. */}
+      {canDelete && confirming ? (
+        <div className="flex flex-col gap-1 rounded-md border border-destructive/40 bg-destructive/5 p-1.5">
+          <p>O vínculo será removido da visualização. O arquivo histórico permanecerá preservado para auditoria.</p>
+          <div className="flex gap-1">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="border-destructive text-destructive hover:bg-destructive/10"
+              disabled={busy}
+              onClick={handleDelete}
+            >
+              {busy ? "Removendo…" : "Confirmar remoção"}
+            </Button>
+            <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConfirming(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {actionError ? <span className="text-destructive">{actionError}</span> : null}
     </div>

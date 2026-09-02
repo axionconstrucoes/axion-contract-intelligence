@@ -73,10 +73,11 @@ export function DocumentCard({
   // contagem inicial (SSR, por documentVersionId) só para o contador
   // aparecer sem esperar o painel expandir — ver
   // getContractAttachmentCounts em lib/document-management.ts.
-  // canAddContractAttachment: ADMINISTRADOR/GESTOR/GERENTE/COLABORADOR.
-  // canDeleteContractAttachment: ADMINISTRADOR/GESTOR/GERENTE (mesma
-  // regra de canUpload/can_manage_project_documents) — LEITURA nunca
-  // vê nenhum dos dois controles de escrita, só visualizar/baixar.
+  // canAddContractAttachment: ADMINISTRADOR/GERENTE/COLABORADOR.
+  // canDeleteContractAttachment: ADMINISTRADOR/GERENTE (mesma regra de
+  // canUpload/can_manage_project_documents — ver comentário sobre o
+  // nome legado do mesmo papel em page.tsx) — LEITURA nunca vê nenhum
+  // dos dois controles de escrita, só visualizar/baixar.
   contractAttachmentCounts,
   canAddContractAttachment = false,
   canDeleteContractAttachment = false,

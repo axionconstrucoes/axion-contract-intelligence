@@ -32,11 +32,20 @@ import {
 import { permissionLabels } from "@/lib/labels";
 import type { MembershipStatus, ProjectPermission } from "@axion/types";
 
-// Inclui GESTOR (papéis já atribuídos a membros existentes — nunca
-// convertidos) e GERENTE (nome atual, mesma autorização) lado a lado,
-// para que o <Select> sempre encontre uma opção igual a
-// currentPermission, seja qual for o valor já salvo.
-const ALL_PERMISSIONS: ProjectPermission[] = ["ADMINISTRADOR", "GESTOR", "GERENTE", "COLABORADOR", "LEITURA"];
+// A interface exibe exclusivamente "Gerente" — GESTOR (nome legado do
+// mesmo papel, nunca convertido automaticamente: ver migration
+// 20260829200000_project_permission_gerente_compat.sql) nunca aparece
+// como uma segunda opção "Gerente" duplicada. Em vez disso, a posição
+// de GERENTE na lista é substituída por GESTOR só quando esse já é o
+// valor salvo do membro — mesmo rótulo ("Gerente", via
+// permissionLabels), mesma autorização, sem inventar uma opção extra e
+// sem reescrever o dado existente por engano (o valor só muda se o
+// Administrador escolher outra opção explicitamente).
+function buildSelectablePermissions(currentPermission: ProjectPermission): ProjectPermission[] {
+  return currentPermission === "GESTOR"
+    ? ["ADMINISTRADOR", "GESTOR", "COLABORADOR", "LEITURA"]
+    : ["ADMINISTRADOR", "GERENTE", "COLABORADOR", "LEITURA"];
+}
 
 export function MemberRowActions({
   projectId,
@@ -93,7 +102,7 @@ export function MemberRowActions({
           <input type="hidden" name="projectId" value={projectId} />
           <input type="hidden" name="userId" value={userId} />
           <Select name="newPermission" defaultValue={currentPermission} className="h-7 text-xs" disabled={permissionPending}>
-            {ALL_PERMISSIONS.map((permission) => (
+            {buildSelectablePermissions(currentPermission).map((permission) => (
               <option key={permission} value={permission}>
                 {permissionLabels[permission]}
               </option>
