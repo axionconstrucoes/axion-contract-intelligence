@@ -88,19 +88,9 @@ export function AppSidebar({ projectId }: { projectId: string }) {
         collapsed ? "w-14" : "w-60"
       )}
     >
-      <div
-        className={cn(
-          "flex h-14 items-center gap-2 border-b border-white/15 px-4",
-          collapsed && "justify-center px-0"
-        )}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element -- PNG estático em public/, sem otimização de imagem necessária. Logo ACC aparece SOMENTE aqui na sidebar — nunca duplicado na área de conteúdo/cards. */}
+      <div className="flex h-14 items-center justify-center border-b border-white/15">
+        {/* eslint-disable-next-line @next/next/no-img-element -- PNG estático em public/, sem otimização de imagem necessária. Logo ACC aparece SOMENTE aqui na sidebar — nunca duplicado na área de conteúdo/cards. O nome por extenso da marca agora vive só no cabeçalho superior (ver top-bar.tsx) — aqui fica só o símbolo, centralizado, sempre visível (expandida ou recolhida). */}
         <img src="/branding/acc-logo.png" alt="ACC" className="size-7 shrink-0 rounded" />
-        {!collapsed && (
-          <span className="text-xs font-bold uppercase leading-tight tracking-tight text-white">
-            AXION Controle de Contratos
-          </span>
-        )}
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 p-2">
