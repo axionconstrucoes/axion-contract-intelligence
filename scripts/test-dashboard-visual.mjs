@@ -635,18 +635,16 @@ check("sidebar: usa o token institucional (bg-brand-sidebar), texto branco, sem 
   assert(/w-14/.test(source), "sidebar recolhida deve permanecer em ~56px (w-14)");
 });
 
-// Substitui o check antigo, que validava um redesign vermelho/amarelo da
-// TopBar (bg-brand-header + título duplicado 'AXION CONTROLE DE
-// CONTRATOS' em branco/negrito) nunca implementado nos componentes
-// reais e explicitamente rejeitado pela decisão final do usuário — ver
-// a mesma decisão já documentada e validada em
-// test-acc-branding.mjs ("DECISÃO FINAL DA TOPBAR"): TopBar compacta,
-// branca, marca só na sidebar, nunca duplicada aqui.
-check("header (TopBar): fundo branco (decisão final institucional), nunca reintroduz o token vermelho nem o título duplicado da marca", () => {
+// Substitui o check antigo. Decisão anterior: TopBar branca, sem o
+// título da marca (ele vivia só na sidebar). Decisão atual (imagem
+// anotada por Reynaldo, ver test-acc-branding.mjs seção 9b): o INVERSO
+// — título centralizado na TopBar, símbolo sozinho na sidebar. Fundo
+// branco/token vermelho seguem a mesma decisão institucional de sempre.
+check("header (TopBar): fundo branco (decisão institucional), nunca reintroduz o token vermelho; título da marca centralizado aqui, símbolo sozinho na sidebar", () => {
   const source = readSource("apps/web/components/layout/top-bar.tsx");
-  assert(source.includes("bg-white"), "TopBar deveria continuar com fundo branco — decisão final, não vermelho");
+  assert(source.includes("bg-white"), "TopBar deveria continuar com fundo branco — decisão institucional, não vermelho");
   assert(!source.includes("bg-brand-header"), "TopBar não deveria usar o token de header vermelho — redesign abandonado, nunca implementado");
-  assert(!/AXION CONTROLE DE CONTRATOS/.test(source), "TopBar não deveria repetir o texto da marca — ele já vive só na sidebar");
+  assert(/AXION Controle de Contratos/.test(source), "TopBar deveria exibir o título da marca centralizado — decisão atual (imagem anotada)");
 });
 
 check("tokens de marca (globals.css): azul/vermelho institucionais definidos uma única vez, fixos (não redefinidos em .dark)", () => {

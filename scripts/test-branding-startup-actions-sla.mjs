@@ -101,12 +101,18 @@ check("cor predominante do fundo foi extraída por código (histograma de pixels
   assert(globalsSource.includes("--brand-sidebar: oklch(0.396 0.141 25.723)"), "--brand-sidebar (cor do logo) não deveria ter sido tocado");
 });
 
-check("cabeçalho superior (TopBar) não repete mais o nome da marca — só a sidebar mantém nome+logo", () => {
+// Decisão revisada (imagem anotada por Reynaldo — ver test-acc-branding.mjs
+// seção 9b): o nome da marca por extenso saiu da sidebar e passou a
+// viver centralizado na TopBar; a sidebar mantém só o logo/símbolo.
+check("cabeçalho superior (TopBar) mostra o nome da marca centralizado — a sidebar mantém só o símbolo (logo)", () => {
   const topBarSource = readSource("apps/web/components/layout/top-bar.tsx");
-  assert(!topBarSource.includes("AXION CONTROLE DE CONTRATOS"), "TopBar não deveria mais mostrar o nome da marca");
+  assert(topBarSource.includes("AXION Controle de Contratos"), "TopBar deveria mostrar o nome da marca, centralizado");
   assert(topBarSource.includes("ProjectSwitcher"), "seletor de projeto precisa continuar no TopBar");
   const sidebarSource = readSource("apps/web/components/layout/app-sidebar.tsx");
-  assert(sidebarSource.includes("AXION Controle de Contratos") && sidebarSource.includes('src="/branding/acc-logo.png"'));
+  assert(
+    !sidebarSource.includes("AXION Controle de Contratos") && sidebarSource.includes('src="/branding/acc-logo.png"'),
+    "a sidebar deveria manter só o logo, sem o texto do nome da marca"
+  );
 });
 
 check("PageHeader não tem mais o prefixo 'AXION CONTROLE DE CONTRATOS — ' e o título ganhou +1 corpo/negrito", () => {

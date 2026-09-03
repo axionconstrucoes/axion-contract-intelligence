@@ -118,22 +118,29 @@ check("logo AXION nunca é exibido em lugar nenhum: nenhum <img>/<svg> referenci
 });
 
 // ---------------- 4. Sidebar ----------------
+//
+// AJUSTE DE POSICIONAMENTO DO CABEÇALHO (imagem anotada por Reynaldo,
+// aprovada): o nome por extenso da marca sai da sidebar e passa a
+// viver centralizado no cabeçalho superior (ver seção 9b/TopBar
+// abaixo) — a sidebar mantém só o símbolo, sempre centralizado e
+// sempre visível (expandida OU recolhida, nunca mais condicionado a
+// !collapsed). Os 2 checks abaixo substituem os antigos, que ainda
+// validavam o texto condicional na sidebar.
 
-check("sidebar: ícone ACC sempre visível (expandida e recolhida) — fora do bloco condicional de collapsed", () => {
+check("sidebar: ícone ACC sempre visível e centralizado (expandida e recolhida) — fora de qualquer bloco condicional de collapsed", () => {
   const source = readSource("apps/web/components/layout/app-sidebar.tsx");
-  const headerBlockMatch = source.match(/flex h-14 items-center gap-2 border-b[\s\S]*?<\/div>\s*\n\s*<nav/);
-  assert(headerBlockMatch, "bloco de cabeçalho da sidebar não encontrado");
+  const headerBlockMatch = source.match(/<div className="flex h-14 items-center justify-center border-b[\s\S]*?<\/div>/);
+  assert(headerBlockMatch, "bloco de cabeçalho da sidebar (logo centralizado) não encontrado");
   const headerBlock = headerBlockMatch[0];
-  // Logo ACC oficial (PNG) — substitui o placeholder acc-icon.svg (ACC —
-  // AJUSTES FINAIS APROVADOS DO DASHBOARD VISUAL, seção 2/3: logo ACC
-  // aparece SOMENTE aqui, na sidebar).
+  // Logo ACC oficial (PNG) — logo ACC aparece SOMENTE aqui, na sidebar.
   assert(headerBlock.includes('src="/branding/acc-logo.png"'), "logo ACC deveria estar presente no cabeçalho da sidebar");
-  assert(!/\{!collapsed &&[\s\S]*?acc-logo\.png/.test(headerBlock), "o logo nunca deveria estar dentro do bloco condicional 'apenas quando expandida'");
+  assert(!/\{!collapsed/.test(headerBlock), "o logo nunca deveria estar dentro de nenhum bloco condicional de collapsed — sempre visível");
+  assert(headerBlock.includes("justify-center"), "o logo deveria estar centralizado horizontalmente na largura da sidebar");
 });
 
-check("sidebar: texto 'AXION Controle de Contratos' só aparece quando expandida (nunca na recolhida)", () => {
+check("sidebar: NUNCA mais exibe o nome por extenso da marca — ele vive só no cabeçalho superior agora (evita duplicar a mesma informação em dois lugares)", () => {
   const source = readSource("apps/web/components/layout/app-sidebar.tsx");
-  assert(/\{!collapsed &&[\s\S]{0,260}AXION Controle de Contratos/.test(source), "wordmark deveria estar condicionado a !collapsed");
+  assert(!/AXION Controle de Contratos/i.test(source), "a sidebar não deveria mais exibir o texto do nome da marca — só o símbolo");
 });
 
 // ---------------- 5. Login ----------------
@@ -224,42 +231,75 @@ check("Project.code: mapeado de verdade a partir da linha do banco (mapProjectRo
   assert(project.code === "ARN-2025-001", `code deveria ser mapeado, obtido: ${project.code}`);
 });
 
-// ---------------- 9b. DECISÃO FINAL DA TOPBAR (rodada "produção") ----------------
+// ---------------- 9b. POSICIONAMENTO DO CABEÇALHO (rodada "imagem anotada") ----------------
 //
-// Uma exploração anterior (não commitada) tinha testado um redesign
-// vermelho/amarelo da TopBar (bg-brand-header + título duplicado +
-// nome do projeto em amarelo) que NUNCA chegou a ser implementado nos
-// componentes reais. A decisão final aprovada pelo usuário rejeitou
-// esse redesign explicitamente: TopBar compacta, branca, com seletor
-// de projeto + código do projeto discretos, avatar/sair — exatamente o
-// texto/contraste que já existia — e SEM reintroduzir o título "AXION
-// CONTROLE DE CONTRATOS" na área branca (a marca já vive só na
-// sidebar). Estes 3 checks substituem os antigos (que validavam o
-// redesign abandonado) para validar a decisão final real.
+// Uma rodada anterior tinha uma decisão final que rejeitava reintroduzir
+// o título da marca na TopBar (título só na sidebar). Reynaldo revisou
+// essa decisão numa imagem anotada: agora é o INVERSO — o texto por
+// extenso "AXION Controle de Contratos" centralizado no cabeçalho
+// superior, e a sidebar mantém só o símbolo (ver seção 4 acima). Estes
+// checks substituem os antigos (que validavam a decisão anterior) para
+// validar a decisão atual real.
 
-check("TopBar: compacta (h-14), fundo branco, mostra o código do projeto discretamente (mesmo texto/contraste já existente, nunca reescrito para um header vermelho)", () => {
+check("TopBar: compacta (h-14 a partir de sm), fundo branco, mostra o código do projeto discretamente (mesmo texto/contraste já existente, nunca reescrito para um header vermelho)", () => {
   const source = readSource("apps/web/components/layout/top-bar.tsx");
-  assert(source.includes("h-14"), "TopBar deveria continuar compacta (h-14)");
-  assert(source.includes("bg-white"), "TopBar deveria continuar com fundo branco (decisão final — não vermelho)");
+  assert(source.includes("h-14"), "TopBar deveria continuar compacta (h-14) a partir de sm");
+  assert(source.includes("bg-white"), "TopBar deveria continuar com fundo branco (decisão institucional — não vermelho)");
   assert(source.includes("currentProject?.code"), "TopBar deveria exibir o código do projeto quando disponível");
   assert(source.includes("text-xs text-muted-foreground"), "código do projeto deveria manter o contraste discreto já existente");
 });
 
-check("TopBar: NUNCA reintroduz o título duplicado 'AXION CONTROLE DE CONTRATOS' / 'ACC CONTROLE DE CONTRATOS' na área branca — a marca já vive só na sidebar (decisão final aprovada)", () => {
-  const source = readSource("apps/web/components/layout/top-bar.tsx");
-  assert(!/AXION CONTROLE DE CONTRATOS|ACC CONTROLE DE CONTRATOS/.test(source), "TopBar não deveria repetir o texto da marca — só a sidebar mostra isso");
-  assert(!source.includes("bg-brand-header"), "TopBar não deveria usar o token de header vermelho — fundo branco é a decisão final");
+check("TopBar: exibe 'AXION Controle de Contratos' centralizado, em UMA única linha (truncate, nunca quebra), sem duplicar a marca em nenhum outro lugar da tela", () => {
+  const topBarSource = readSource("apps/web/components/layout/top-bar.tsx");
+  assert(/AXION Controle de Contratos/.test(topBarSource), "TopBar deveria exibir o nome da marca por extenso, centralizado");
+  assert(topBarSource.includes("text-center"), "o título deveria estar centralizado (text-center)");
+  assert(topBarSource.includes("truncate"), "o título deveria truncar em vez de quebrar linha (uma única linha em desktop)");
+  assert((topBarSource.match(/AXION Controle de Contratos/g) ?? []).length === 1, "o texto da marca deveria aparecer exatamente uma vez na TopBar — nunca duplicado");
+  assert(!topBarSource.includes("bg-brand-header"), "TopBar não deveria usar o token de header vermelho — fundo branco é a decisão institucional");
+
+  const sidebarSource = readSource("apps/web/components/layout/app-sidebar.tsx");
+  const pageHeaderSource2 = readSource("apps/web/components/layout/page-header.tsx");
+  assert(!/AXION Controle de Contratos/i.test(sidebarSource), "a marca por extenso não deveria mais aparecer na sidebar (só o símbolo)");
+  assert(!/AXION Controle de Contratos/i.test(pageHeaderSource2), "a marca por extenso não deveria aparecer no PageHeader — só na TopBar");
 });
 
-check("TopBar: seletor de projeto e avatar/sair preservados, com o texto/contraste JÁ EXISTENTE (nunca amarelo — essa era a exploração abandonada)", () => {
+check("TopBar: título realmente centralizado via CSS Grid (1fr auto 1fr) — nunca 'no meio do espaço sobrando' de um flexbox simples, que se desloca conforme a largura do grupo da direita", () => {
+  const source = readSource("apps/web/components/layout/top-bar.tsx");
+  assert(source.includes("grid-cols-[1fr_auto_1fr]"), "TopBar deveria usar grid de 3 colunas (1fr auto 1fr) para centralizar o título de verdade em telas sm+");
+});
+
+check("TopBar: canto direito na ordem aprovada — seletor de projeto, código, número do contrato (quando existir), avatar, botão de sair; seletor+código+contrato formam um único agrupamento visual compacto", () => {
   const topBarSource = readSource("apps/web/components/layout/top-bar.tsx");
   assert(topBarSource.includes("<ProjectSwitcher"), "TopBar deveria continuar com o seletor de projeto");
+  // Restaurado: a correção que removia este chip NÃO foi autorizada — o
+  // número do contrato precisa continuar visível (discreto, condicional
+  // a existir) no agrupamento da direita, entre o código e o avatar.
+  assert(topBarSource.includes("currentProject?.contractNumber"), "TopBar deveria continuar mostrando o número do contrato quando existir — remoção não autorizada");
   assert(topBarSource.includes("<Avatar>"), "TopBar deveria continuar com o avatar do usuário");
   assert(topBarSource.includes("<LogoutButton"), "TopBar deveria continuar com o botão de sair");
+
+  const switcherIndex = topBarSource.indexOf("<ProjectSwitcher");
+  const codeIndex = topBarSource.indexOf("currentProject?.code");
+  const contractIndex = topBarSource.indexOf("currentProject?.contractNumber");
+  const avatarIndex = topBarSource.indexOf("<Avatar>");
+  const logoutIndex = topBarSource.indexOf("<LogoutButton");
+  assert(
+    switcherIndex < codeIndex && codeIndex < contractIndex && contractIndex < avatarIndex && avatarIndex < logoutIndex,
+    "a ordem no markup deveria ser seletor, código, contrato, avatar, sair — a mesma ordem visual aprovada"
+  );
+
+  // Nunca "hidden"/display:none — só truncamento/quebra controlada.
+  assert(!/contractNumber[\s\S]{0,40}\bhidden\b/.test(topBarSource), "o número do contrato nunca deveria ser escondido definitivamente (classe hidden) — só truncar/quebrar");
 
   const switcherSource = readSource("apps/web/components/layout/project-switcher.tsx");
   assert(!/text-yellow-\d{3}/.test(switcherSource), "nome do projeto não deveria usar amarelo — exploração abandonada, nunca implementada de verdade");
   assert(switcherSource.includes("font-bold"), "nome do projeto deveria manter o negrito já existente");
+});
+
+check("TopBar: seletor de projeto trunca nomes longos com reticências e expõe tooltip acessível (title) com o nome completo", () => {
+  const switcherSource = readSource("apps/web/components/layout/project-switcher.tsx");
+  assert(switcherSource.includes("truncate"), "o seletor deveria truncar nomes longos (reticências) em vez de forçar overflow/rolagem horizontal");
+  assert(switcherSource.includes("title={currentProject?.name}"), "o seletor deveria expor o nome completo do projeto via title (tooltip acessível nativo) quando truncado");
 });
 
 check("faixa global 'SISTEMA EM TESTE' continua acima de tudo (root layout), nunca duplicada dentro da TopBar", () => {
