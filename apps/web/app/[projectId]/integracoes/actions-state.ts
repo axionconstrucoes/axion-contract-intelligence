@@ -16,3 +16,17 @@ export const initialStartEmailSyncState: StartEmailSyncState = { error: null, su
 
 export type SaveIntegrationOriginState = { error: string | null; success: boolean };
 export const initialSaveIntegrationOriginState: SaveIntegrationOriginState = { error: null, success: false };
+
+export type ValidateConstrumanagerConnectionState = {
+  error: string | null;
+  success: boolean;
+  status: "CONECTADO" | "PENDENTE" | "ATENCAO" | "ERRO" | null;
+  checkedAt: string | null;
+};
+
+export const initialValidateConstrumanagerConnectionState: ValidateConstrumanagerConnectionState = {
+  error: null,
+  success: false,
+  status: null,
+  checkedAt: null,
+};

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { resolveIntegrationVisualIdentity } from "./integration-visual-identity";
 import { IntegrationOriginForm } from "./integration-origin-form";
+import { ConstrumanagerConnectionCheck } from "./construmanager-connection-check";
 import { resolveGenericIntegrationDisplayStatus } from "@/lib/ui/resolve-integration-display-status";
 import { driveTypeLabels, formatDateTime } from "@/lib/labels";
 import { normalizeLegacyMojibake } from "@/lib/normalize-legacy-mojibake";
@@ -88,6 +89,14 @@ export function IntegrationCard({
             <p className="text-xs italic">Origem ainda não definida</p>
           )}
         </div>
+
+        {source.type === "CONSTRUMANAGER" && canManage ? (
+          <ConstrumanagerConnectionCheck
+            projectId={projectId}
+            lastConnectionCheckAt={config?.lastConnectionCheckAt}
+            lastConnectionError={config?.lastConnectionError}
+          />
+        ) : null}
 
         {canManage ? (
           editing ? (
