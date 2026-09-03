@@ -24,6 +24,7 @@ import {
 import { mapClauseRow, type ClauseRow, type ClauseVersionParent } from "./clause-mapper";
 import { mapContractChangeRow, type ContractChangeRow } from "./contract-change-mapper";
 import { resolveNonTrashedDocumentIds, withActiveDocumentFilter } from "./documents/active-document-filter";
+import { sortClausesNaturally } from "./documents/sort-clauses-naturally";
 import {
   mapNotificationEmailDeliveryRow,
   mapNotificationRecipientRow,
@@ -516,9 +517,16 @@ export async function getClauses(projectId: string) {
     }
   }
 
-  return (clauseRows as ClauseRow[]).map((row) =>
+  const clauses = (clauseRows as ClauseRow[]).map((row) =>
     mapClauseRow(row, parentByVersionId.get(row.document_version_id))
   );
+
+  // A query acima não tem ORDER BY: o Postgres pode escolher o índice
+  // btree (document_version_id, clause_number) para o scan e retornar
+  // ordem lexicográfica de texto ("1", "10", "2", ...). Reordenamos
+  // aqui, na fonte, para que todo consumidor (Documentos, ESG) veja a
+  // ordem natural/documental sem precisar de migration.
+  return sortClausesNaturally(clauses);
 }
 
 export async function getClause(clauseId: string) {
