@@ -11,12 +11,18 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
+import { createConstrumanagerClient } from "@/lib/integrations/construmanager/client";
+import {
+  classifyConstrumanagerConnectionFailure,
+  sanitizeIntegrationConnectionError,
+} from "@/lib/integrations/construmanager/sanitize-error";
 import type {
   DisconnectEmailAccountState,
   RegisterEmailAccountState,
   SaveEmailIngestionConfigState,
   SaveIntegrationOriginState,
   StartEmailSyncState,
+  ValidateConstrumanagerConnectionState,
 } from "./actions-state";
 
 function requiredField(formData: FormData, name: string): string {
@@ -163,6 +169,148 @@ export async function startEmailSyncAction(_prevState: StartEmailSyncState, form
       error: error instanceof Error ? error.message : "Falha ao confirmar sincronização.",
       success: false,
       syncRunId: null,
+    };
+  }
+}
+
+function parsePositiveInteger(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number(value.trim());
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseConstrumanagerWorkId(value: string | null): number | null {
+  if (!value) return null;
+  const match = value.trim().match(/^(\d+)/);
+  return match ? parsePositiveInteger(match[1]) : null;
+}
+
+export async function validateConstrumanagerConnectionAction(
+  _prevState: ValidateConstrumanagerConnectionState,
+  formData: FormData
+): Promise<ValidateConstrumanagerConnectionState> {
+  const supabase = await createSupabaseServerClient();
+  let projectId: string | null = null;
+
+  try {
+    await requireUser(supabase);
+    projectId = requiredField(formData, "projectId");
+
+    const { data: config, error: configError } = await supabase
+      .from("project_integrations")
+      .select("account_reference, external_project_reference")
+      .eq("project_id", projectId)
+      .eq("source_type", "CONSTRUMANAGER")
+      .maybeSingle();
+
+    if (configError) throw new Error(configError.message);
+
+    const companyId = parsePositiveInteger(config?.account_reference ?? null);
+    const workId = parseConstrumanagerWorkId(
+      config?.external_project_reference ?? null
+    );
+
+    if (!config || !companyId || !workId) {
+      const message =
+        "Configuração incompleta. Informe a Conta e o ID da obra do Construmanager.";
+
+      const { error: recordError } = await supabase.rpc(
+        "record_integration_connection_check",
+        {
+          p_project_id: projectId,
+          p_source_type: "CONSTRUMANAGER",
+          p_status: "PENDENTE",
+          p_error: message,
+        }
+      );
+
+      if (recordError) throw new Error(recordError.message);
+
+      revalidatePath(`/${projectId}/integracoes`);
+
+      return {
+        error: message,
+        success: false,
+        status: "PENDENTE",
+        checkedAt: new Date().toISOString(),
+      };
+    }
+
+    const client = createConstrumanagerClient();
+    const auth = await client.authenticate();
+
+    if (auth.user.companyId !== companyId) {
+      throw new Error(
+        `A conta configurada (${companyId}) não corresponde à empresa retornada pela API.`
+      );
+    }
+
+    const token = await client.getAccessToken(auth.user.token);
+
+    const works = await client.listWorks(
+      token.access_token,
+      auth.user.companyId
+    );
+
+    const configuredWork = works.listWork.find(
+      (work) => work.id === workId
+    );
+
+    if (!configuredWork) {
+      throw new Error(
+        `A obra configurada (${workId}) não está disponível para este usuário no Construmanager.`
+      );
+    }
+
+    const { error: recordError } = await supabase.rpc(
+      "record_integration_connection_check",
+      {
+        p_project_id: projectId,
+        p_source_type: "CONSTRUMANAGER",
+        p_status: "CONECTADO",
+        p_error: null,
+      }
+    );
+
+    if (recordError) throw new Error(recordError.message);
+
+    revalidatePath(`/${projectId}/integracoes`);
+    revalidatePath(`/${projectId}/dashboard`);
+    revalidatePath(`/${projectId}/dashboard/visual`);
+
+    return {
+      error: null,
+      success: true,
+      status: "CONECTADO",
+      checkedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    const message = sanitizeIntegrationConnectionError(error);
+    const status = classifyConstrumanagerConnectionFailure(message);
+
+    if (projectId) {
+      const { error: recordError } = await supabase.rpc(
+        "record_integration_connection_check",
+        {
+          p_project_id: projectId,
+          p_source_type: "CONSTRUMANAGER",
+          p_status: status,
+          p_error: message,
+        }
+      );
+
+      if (!recordError) {
+        revalidatePath(`/${projectId}/integracoes`);
+        revalidatePath(`/${projectId}/dashboard`);
+        revalidatePath(`/${projectId}/dashboard/visual`);
+      }
+    }
+
+    return {
+      error: message,
+      success: false,
+      status,
+      checkedAt: new Date().toISOString(),
     };
   }
 }
