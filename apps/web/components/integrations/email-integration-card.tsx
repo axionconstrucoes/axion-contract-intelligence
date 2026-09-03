@@ -8,6 +8,7 @@
 
 import { IntegrationStatusBadge } from "@/components/shared/badges";
 import { FeatureInfo } from "@/components/shared/feature-info";
+import { TruncatedInlineList } from "@/components/shared/truncated-inline-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { resolveIntegrationVisualIdentity } from "./integration-visual-identity";
 import { resolveEmailIntegrationDisplayStatus } from "@/lib/ui/resolve-integration-display-status";
@@ -50,12 +51,12 @@ export function EmailIntegrationCard({
       <CardContent className="flex flex-col gap-2 pt-0 text-sm text-muted-foreground">
         <p>{source.description}</p>
 
-        <div className="mt-1 flex flex-col gap-1 rounded-md border bg-background/60 p-2">
+        <div className="mt-1 flex flex-col gap-1.5 rounded-md border bg-background/60 p-2">
           <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
             Origem da fonte
             <FeatureInfo helpId="integration-origin" />
           </p>
-          <dl className="grid gap-1 text-xs">
+          <dl className="grid gap-1.5 text-xs">
             <div>
               <dt className="text-muted-foreground">Sistema:</dt>
               <dd className="text-foreground">Google Workspace</dd>
@@ -63,17 +64,33 @@ export function EmailIntegrationCard({
             <div>
               <dt className="text-muted-foreground">Caixas AXION de ingestão:</dt>
               <dd className="text-foreground">
-                {config && config.mailboxes.length > 0 ? config.mailboxes.map((mailbox) => mailbox.mailboxAddress).join(", ") : "Nenhuma configurada"}
+                <TruncatedInlineList
+                  items={config?.mailboxes.map((mailbox) => mailbox.mailboxAddress) ?? []}
+                  emptyLabel="Nenhuma configurada"
+                  moreLabel={(n) => `+ ${n} ${n === 1 ? "caixa" : "caixas"}`}
+                />
               </dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Domínio(s) cliente:</dt>
-              <dd className="text-foreground">{clientDomains.length > 0 ? clientDomains.map((domain) => domain.domain).join(", ") : "Nenhum configurado"}</dd>
+              <dd className="text-foreground">
+                <TruncatedInlineList
+                  items={clientDomains.map((domain) => domain.domain)}
+                  emptyLabel="Nenhum configurado"
+                  moreLabel={(n) => `+ ${n} ${n === 1 ? "domínio" : "domínios"}`}
+                />
+              </dd>
             </div>
             {config && config.participants.length > 0 ? (
               <div>
                 <dt className="text-muted-foreground">Participantes específicos:</dt>
-                <dd className="text-foreground">{config.participants.map((participant) => participant.emailAddress).join(", ")}</dd>
+                <dd className="text-foreground">
+                  <TruncatedInlineList
+                    items={config.participants.map((participant) => participant.emailAddress)}
+                    emptyLabel=""
+                    moreLabel={(n) => `+ ${n} ${n === 1 ? "participante" : "participantes"}`}
+                  />
+                </dd>
               </div>
             ) : null}
             <div>

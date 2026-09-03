@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClausesMasterDetail } from "@/components/documents/clauses-master-detail";
 import { ContractualDocumentGroupSection } from "@/components/documents/contractual-document-group-section";
 import { DocumentCard } from "@/components/documents/document-card";
 import { DocumentUploadForm } from "@/components/documents/document-upload-form";
@@ -280,27 +281,7 @@ export default async function DocumentosPage({
         </TabsContent>
 
         <TabsContent value="clausulas">
-          {clauses.length === 0 ? (
-            <EmptyState message="Nenhuma cláusula cadastrada." />
-          ) : (
-            <div className="flex flex-col gap-3">
-              {clauses.map((clause) => (
-                <Card key={clause.id}>
-                  <CardHeader>
-                    <CardTitle>
-                      Cláusula{" "}
-                      {clause.clauseNumber} —{" "}
-                      {clause.title}
-                    </CardTitle>
-                  </CardHeader>
-
-                  <CardContent className="text-sm text-muted-foreground">
-                    {clause.text}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+          <ClausesMasterDetail clauses={clauses} />
         </TabsContent>
 
         <TabsContent value="cronograma">
