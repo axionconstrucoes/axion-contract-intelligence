@@ -16,6 +16,31 @@ export function sanitizeIntegrationConnectionError(error: unknown): string {
     .slice(0, 500);
 }
 
+// A rota ListaMestra/List devolve, em requisição malformada, o stack
+// trace COMPLETO do SQL Server: System.Data.SqlClient.SqlException,
+// nomes de tabela/coluna, ClientConnectionId e o caminho das classes
+// internas do fornecedor. Nada disso pode chegar à UI nem ao banco.
+//
+// Além do que sanitizeIntegrationConnectionError já cobre, aqui a
+// mensagem é cortada no primeiro sinal de stack trace e substituída por
+// um texto estável e acionável.
+const SQL_LEAK_MARKERS =
+  /(System\.Data\.SqlClient|SqlException|ClientConnectionId|at System\.|at Construmanager|Error Number:\s*\d+|Entity\.Core|EntityCommandDefinition|inner exception)/i;
+
+export function sanitizeConstrumanagerApiError(error: unknown): string {
+  const base = sanitizeIntegrationConnectionError(error);
+
+  if (SQL_LEAK_MARKERS.test(base)) {
+    return "A API do Construmanager rejeitou a consulta de metadados. Detalhe técnico omitido por segurança.";
+  }
+
+  // Defesa em profundidade: qualquer quebra de linha indica resposta
+  // multi-linha do fornecedor (stack trace é sempre multi-linha).
+  const firstLine = base.split(/\r?\n/)[0].trim();
+
+  return firstLine.slice(0, 500) || "Falha ao consultar metadados do Construmanager.";
+}
+
 // ATENCAO = falha transitória (rede/infra do fornecedor) — vale nova
 // tentativa depois; ERRO = configuração/credencial errada, não some
 // sozinho.

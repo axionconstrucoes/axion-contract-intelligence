@@ -12,8 +12,10 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
 import { createConstrumanagerClient } from "@/lib/integrations/construmanager/client";
+import { collectConstrumanagerMetadata } from "@/lib/integrations/construmanager/collect-metadata";
 import {
   classifyConstrumanagerConnectionFailure,
+  sanitizeConstrumanagerApiError,
   sanitizeIntegrationConnectionError,
 } from "@/lib/integrations/construmanager/sanitize-error";
 import type {
@@ -22,6 +24,7 @@ import type {
   SaveEmailIngestionConfigState,
   SaveIntegrationOriginState,
   StartEmailSyncState,
+  SyncConstrumanagerMetadataState,
   ValidateConstrumanagerConnectionState,
 } from "./actions-state";
 
@@ -311,6 +314,129 @@ export async function validateConstrumanagerConnectionAction(
       success: false,
       status,
       checkedAt: new Date().toISOString(),
+    };
+  }
+}
+
+// Sincronização MANUAL de metadados técnicos do Construmanager
+// (Pacote B).
+//
+// Server Action é alcançável por POST direto, não só pela UI — por isso
+// a autorização é verificada em DOIS lugares: requireUser aqui e
+// has_project_permission(ADMINISTRADOR) dentro das RPCs SECURITY
+// DEFINER. Nenhuma escrita usa service-role.
+//
+// Estritamente read-only do lado do Construmanager: três rotas de
+// listagem, nenhum download.
+export async function syncConstrumanagerMetadataAction(
+  _prevState: SyncConstrumanagerMetadataState,
+  formData: FormData
+): Promise<SyncConstrumanagerMetadataState> {
+  const supabase = await createSupabaseServerClient();
+  const startedAt = new Date().toISOString();
+  let projectId: string | null = null;
+
+  try {
+    await requireUser(supabase);
+    projectId = requiredField(formData, "projectId");
+
+    const { data: config, error: configError } = await supabase
+      .from("project_integrations")
+      .select("account_reference, external_project_reference")
+      .eq("project_id", projectId)
+      .eq("source_type", "CONSTRUMANAGER")
+      .maybeSingle();
+
+    if (configError) throw new Error(configError.message);
+
+    const companyId = parsePositiveInteger(config?.account_reference ?? null);
+    const workId = parseConstrumanagerWorkId(
+      config?.external_project_reference ?? null
+    );
+
+    if (!config || !companyId || !workId) {
+      throw new Error(
+        "Configuração incompleta. Informe a Conta e o ID da obra do Construmanager."
+      );
+    }
+
+    const client = createConstrumanagerClient();
+    const metadata = await collectConstrumanagerMetadata(
+      client,
+      companyId,
+      workId
+    );
+
+    const { data, error } = await supabase
+      .rpc("sync_construmanager_metadata", {
+        p_project_id: projectId,
+        p_company_id: companyId,
+        p_work_id: workId,
+        p_started_at: startedAt,
+        p_folders: metadata.folders,
+        p_documents: metadata.documents,
+        p_versions: metadata.versions,
+      })
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    const summary = data as {
+      folders_seen: number;
+      documents_seen: number;
+      historical_versions_seen: number;
+      folders_created: number;
+      documents_created: number;
+      versions_created: number;
+      versions_orphaned: number;
+    };
+
+    revalidatePath(`/${projectId}/integracoes`);
+
+    return {
+      error: null,
+      success: true,
+      syncedAt: new Date().toISOString(),
+      foldersSeen: summary.folders_seen,
+      documentsSeen: summary.documents_seen,
+      historicalVersionsSeen: summary.historical_versions_seen,
+      documentsCreated: summary.documents_created,
+      versionsCreated: summary.versions_created,
+      versionsOrphaned: summary.versions_orphaned,
+    };
+  } catch (error) {
+    // sanitizeConstrumanagerApiError cobre o stack trace de SQL Server
+    // que a rota ListaMestra/List devolve em requisição malformada.
+    const message = sanitizeConstrumanagerApiError(error);
+
+    if (projectId) {
+      // A falha também precisa deixar rastro auditável. Se nem isso for
+      // possível (ex.: sem permissão), a mensagem ao usuário continua
+      // sendo a original — não mascaramos o erro real com o secundário.
+      const { error: recordError } = await supabase.rpc(
+        "record_construmanager_sync_failure",
+        {
+          p_project_id: projectId,
+          p_started_at: startedAt,
+          p_error: message,
+        }
+      );
+
+      if (!recordError) {
+        revalidatePath(`/${projectId}/integracoes`);
+      }
+    }
+
+    return {
+      error: message,
+      success: false,
+      syncedAt: null,
+      foldersSeen: null,
+      documentsSeen: null,
+      historicalVersionsSeen: null,
+      documentsCreated: null,
+      versionsCreated: null,
+      versionsOrphaned: null,
     };
   }
 }
