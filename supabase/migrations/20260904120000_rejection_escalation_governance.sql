@@ -97,10 +97,26 @@ alter table public.sla_action_escalations
 -- ============================================================
 -- 3. escalate_sla_action — mesma função, motivo novo aceito
 -- ============================================================
--- CREATE OR REPLACE idêntico ao original (20260822054900), só a lista
--- de motivos válidos foi estendida. Nenhuma outra linha desta função
--- foi alterada — a lógica de concorrência otimista, resolução de
--- notified_user_id e auditoria permanece exatamente a mesma.
+-- IMPORTANTE (corrigido após revisão estática pré-push): a primeira
+-- versão desta migration copiou o corpo de escalate_sla_action a
+-- partir de 20260822054900 (fundação original) e ignorou DUAS
+-- correções de segurança já aplicadas em main ANTES desta migration
+-- (20260904 é posterior a ambas):
+--   * 20260822060313_fix_system_actor_audit_label.sql — actor_label
+--     precisa ser NULL quando actor_type='SYSTEM' (constraint de
+--     audit_log_entries); a versão original usava 'sla-engine', o que
+--     violaria essa constraint se aplicada por cima da correção.
+--   * 20260830100500_restrict_sla_escalation_to_administrators.sql —
+--     restringe escalate_sla_action a ADMINISTRADOR (is_project_member
+--     permitia qualquer papel, inclusive LEITURA, escalar — risco de
+--     autorização já corrigido) e endurece search_path para '' (mesmo
+--     padrão das 38 funções SECURITY DEFINER do projeto, ver
+--     20260830100000_close_security_definer_search_path_gaps.sql),
+--     reasserindo owner/grants explicitamente.
+-- Corrigido abaixo para partir do estado REAL/atual de main (a
+-- autoridade é sempre a última migration aplicada, nunca a fundação
+-- original) — só a lista de motivos válidos é de fato nova aqui.
+-- Nenhuma outra linha de lógica foi alterada.
 
 create or replace function public.escalate_sla_action(
   p_action_id uuid,
@@ -111,7 +127,7 @@ create or replace function public.escalate_sla_action(
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_action public.sla_actions%rowtype;
@@ -131,8 +147,8 @@ begin
     raise exception 'SLA action not found';
   end if;
 
-  if not public.is_project_member(v_action.project_id) then
-    raise exception 'Not a project member';
+  if not public.has_project_permission(v_action.project_id, 'ADMINISTRADOR') then
+    raise exception 'ADMINISTRADOR permission required';
   end if;
 
   if v_action.current_escalation_level <> p_expected_current_level then
@@ -191,7 +207,7 @@ begin
     action, entity_type, entity_id, detail
   )
   values (
-    v_action.project_id, 'SYSTEM', null, 'sla-engine',
+    v_action.project_id, 'SYSTEM', null, null,
     'ACTION_ESCALATED', 'SLA_ACTION', p_action_id::text,
     format('Ação "%s" escalada de %s para %s (motivo: %s).', v_action.title, p_expected_current_level, p_new_level, p_reason)
   );
@@ -200,9 +216,14 @@ begin
 end;
 $$;
 
+-- Reasserção explícita (mesmo padrão de 20260830100500) — não apenas
+-- confiada à preservação automática do CREATE OR REPLACE acima.
+alter function public.escalate_sla_action(uuid, text, text, text) owner to postgres;
+
 revoke all on function public.escalate_sla_action(uuid, text, text, text) from public;
 revoke all on function public.escalate_sla_action(uuid, text, text, text) from anon;
 grant execute on function public.escalate_sla_action(uuid, text, text, text) to authenticated;
+grant execute on function public.escalate_sla_action(uuid, text, text, text) to service_role;
 
 -- ============================================================
 -- 4. sla_actions.related_ai_finding_id — de índice a UNIQUE parcial
@@ -213,6 +234,30 @@ grant execute on function public.escalate_sla_action(uuid, text, text, text) to 
 -- (WHERE related_ai_finding_id IS NOT NULL), sem perda de dado (é
 -- reindexação, não remoção de linha). Continua servindo ao mesmo
 -- propósito de lookup já usado por create-action-for-historical-finding.
+--
+-- Pré-voo: create-action-for-historical-finding.ts já grava
+-- related_ai_finding_id desde 20260823090000, então em tese uma
+-- instância real poderia já ter duplicatas antes desta migration
+-- existir. Falha alto e cedo com uma mensagem clara em vez de deixar o
+-- CREATE UNIQUE INDEX abortar com um erro genérico de violação.
+
+do $$
+declare
+  v_dup record;
+begin
+  for v_dup in
+    select related_ai_finding_id, count(*) as cnt
+    from public.sla_actions
+    where related_ai_finding_id is not null
+    group by related_ai_finding_id
+    having count(*) > 1
+  loop
+    raise exception
+      'Dado pré-existente impede o índice único: finding % já está vinculado a % sla_actions — resolva manualmente antes de aplicar esta migration.',
+      v_dup.related_ai_finding_id, v_dup.cnt;
+  end loop;
+end;
+$$;
 
 drop index if exists public.sla_actions_related_ai_finding_id_idx;
 create unique index sla_actions_related_ai_finding_id_key
@@ -258,7 +303,7 @@ create or replace function public.reject_relevant_finding(
 returns table (sla_action_id uuid, escalation_id uuid, already_existed boolean)
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_finding public.ai_findings%rowtype;

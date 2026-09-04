@@ -19,6 +19,14 @@
 -- Não duplica o motor de SLA, não move compute-escalation.ts, não cria
 -- segunda arquitetura de escalonamento — só fecha os dois pontos acima
 -- em cima do que já existe.
+--
+-- CORRIGIDO após revisão estática pré-push: todas as funções novas
+-- desta migration usavam `search_path = public`, defasado do padrão
+-- real do projeto (`search_path = ''`, endurecido para as 38 funções
+-- SECURITY DEFINER existentes em
+-- 20260830100000_close_security_definer_search_path_gaps.sql). Todo o
+-- corpo já era 100% qualificado com `public.` — a correção é só a
+-- declaração `set search_path`, sem mudança de lógica.
 -- ============================================================
 
 -- ============================================================
@@ -68,7 +76,7 @@ create or replace function public.assert_high_risk_rejection_has_escalation(p_fi
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_finding public.ai_findings%rowtype;
@@ -106,7 +114,7 @@ create or replace function public.enforce_high_risk_rejection_escalation()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   perform public.assert_high_risk_rejection_has_escalation(new.id);
@@ -141,7 +149,7 @@ create or replace function public.enforce_sla_action_escalation_link()
 returns trigger
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   if old.related_ai_finding_id is not null then
@@ -205,7 +213,7 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_finding public.ai_findings%rowtype;

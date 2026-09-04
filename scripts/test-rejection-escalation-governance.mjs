@@ -298,6 +298,54 @@ check("execução restrita a authenticated (revoke de public/anon), mesmo padrã
   assert(migration.includes("grant execute on function public.reject_relevant_finding") && migration.includes("to authenticated"));
 });
 
+// ---- correções da revisão estática pré-push: escalate_sla_action tinha ----
+// ---- regredido 3 correções de segurança já aplicadas em main antes ----
+// ---- desta migration (20260822060313 e 20260830100500/100000) ----
+
+check("escalate_sla_action reaproveita a correção de autorização já aplicada em main (ADMINISTRADOR, nunca is_project_member) — nunca regride para um papel mais fraco", () => {
+  const fnMatch = migration.match(/create or replace function public\.escalate_sla_action[\s\S]*?\n\$\$;/);
+  assert(fnMatch, "escalate_sla_action não encontrada");
+  const fnBody = fnMatch[0];
+  assert(fnBody.includes("has_project_permission(v_action.project_id, 'ADMINISTRADOR')"), "deveria exigir ADMINISTRADOR, mesma regra de 20260830100500");
+  assert(!fnBody.includes("is_project_member(v_action.project_id)"), "nunca deveria regredir para a checagem antiga (qualquer papel, inclusive LEITURA, conseguia escalar)");
+});
+
+check("todas as funções SECURITY DEFINER novas usam search_path = '' (nunca 'public') — mesmo padrão das 38 funções já endurecidas em main", () => {
+  for (const path of [
+    "supabase/migrations/20260904120000_rejection_escalation_governance.sql",
+    "supabase/migrations/20260904130000_rejection_escalation_governance_hardening.sql",
+    "supabase/migrations/20260904140000_rejection_escalation_target_audit.sql",
+  ]) {
+    const source = readSource(path);
+    const declarations = source.match(/set search_path\s*=\s*[^\n]+/g) ?? [];
+    assert(declarations.length > 0, `nenhuma declaração de search_path encontrada em ${path}`);
+    for (const decl of declarations) {
+      assert(/set search_path\s*=\s*''/.test(decl), `${path} tem uma declaração de search_path defasada: "${decl}"`);
+    }
+  }
+});
+
+check("actor_label é NULL (nunca 'sla-engine') no audit ACTION_ESCALATED — mesma correção de 20260822060313_fix_system_actor_audit_label.sql", () => {
+  const fnMatch = migration.match(/create or replace function public\.escalate_sla_action[\s\S]*?\n\$\$;/);
+  const fnBody = fnMatch[0];
+  assert(fnBody.includes("'ACTION_ESCALATED'"));
+  assert(!fnBody.includes("'SYSTEM', null, 'sla-engine'"), "actor_label='sla-engine' com actor_type='SYSTEM' violaria a constraint de audit_log_entries");
+  assert(fnBody.includes("'SYSTEM', null, null,"), "actor_label precisa ser NULL quando actor_type='SYSTEM'");
+});
+
+check("owner/grants de escalate_sla_action são reasserados explicitamente após o CREATE OR REPLACE (nunca só confiados à preservação automática)", () => {
+  assert(migration.includes("alter function public.escalate_sla_action(uuid, text, text, text) owner to postgres;"));
+  assert(migration.includes("grant execute on function public.escalate_sla_action(uuid, text, text, text) to service_role;"), "service_role precisa continuar podendo executar, mesmo estado de 20260830100500");
+});
+
+check("índice único: pré-voo detecta duplicatas pré-existentes ANTES do CREATE UNIQUE INDEX, com mensagem clara (nunca um erro genérico de violação)", () => {
+  const preflightIndex = migration.indexOf("group by related_ai_finding_id");
+  const indexCreateIndex = migration.indexOf("create unique index sla_actions_related_ai_finding_id_key");
+  assert(preflightIndex >= 0, "pré-voo de duplicatas não encontrado");
+  assert(indexCreateIndex >= 0);
+  assert(preflightIndex < indexCreateIndex, "o pré-voo precisa rodar ANTES de criar o índice único");
+});
+
 console.log("");
 
 // ============================================================
@@ -485,11 +533,21 @@ check("rejeição e escalonamento continuam válidos mesmo sem superior — nada
   assert(slaActionInsertIndex < escalateCallIndex && escalateCallIndex < auditInsertIndex, "ordem precisa ser: cria sla_action -> escalona -> só então audita a lacuna, nunca ao contrário");
 });
 
-check("auditoria de lacuna usa actor_type SYSTEM (mesma convenção de 'sla-engine' do motor de SLA) — nunca atribuída a um usuário", () => {
+check("auditoria de lacuna usa actor_type SYSTEM com actor_label NULL — nunca atribuída a um usuário, e nunca com um label descritivo que violaria a constraint de audit_log_entries", () => {
   const fnMatch = targetAudit.match(/create or replace function public\.reject_relevant_finding[\s\S]*?\n\$\$;/);
   const fnBody = fnMatch[0];
   const auditBlock = fnBody.slice(fnBody.indexOf("if v_target_user_id is null then"), fnBody.indexOf("'ESCALATION_TARGET_NOT_CONFIGURED'") + 40);
-  assert(auditBlock.includes("'SYSTEM'") && auditBlock.includes("'sla-engine'"));
+  assert(auditBlock.includes("'SYSTEM', null, null,"), "actor_label precisa ser NULL quando actor_type='SYSTEM' — mesma constraint corrigida em escalate_sla_action");
+  assert(!auditBlock.includes("'sla-engine'"), "actor_type='SYSTEM' + actor_label='sla-engine' violaria a constraint de audit_log_entries — isto quebraria a transação inteira do rejeição");
+});
+
+check("retry/reenvio nunca duplica ESCALATION_TARGET_NOT_CONFIGURED — o INSERT só existe no caminho de PRIMEIRA rejeição, nunca no caminho idempotente", () => {
+  const fnMatch = targetAudit.match(/create or replace function public\.reject_relevant_finding[\s\S]*?\n\$\$;/);
+  const fnBody = fnMatch[0];
+  const idempotentBranchEnd = fnBody.indexOf("return;", fnBody.indexOf("if v_finding.lifecycle_status = 'REJECTED' then"));
+  const auditInsertIndex = fnBody.indexOf("'ESCALATION_TARGET_NOT_CONFIGURED'");
+  assert(idempotentBranchEnd >= 0 && auditInsertIndex >= 0);
+  assert(auditInsertIndex > idempotentBranchEnd, "o INSERT de ESCALATION_TARGET_NOT_CONFIGURED precisa estar DEPOIS do retorno antecipado do caminho idempotente — nunca alcançado numa chamada repetida");
 });
 
 check("buildEscalationNotificationPayload: LOW/MEDIUM (sem sla_action) -> null, nunca monta payload sem escalonamento real", () => {

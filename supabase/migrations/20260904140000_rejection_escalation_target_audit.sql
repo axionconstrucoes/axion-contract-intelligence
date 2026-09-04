@@ -17,6 +17,10 @@
 -- de auditoria condicional é acrescentada ao corpo). Nenhum motor
 -- paralelo, nenhuma duplicação: a auditoria continua sendo só
 -- audit_log_entries, mesmo mecanismo de sempre.
+--
+-- CORRIGIDO após revisão estática pré-push: `search_path = ''` (não
+-- `public`) — mesmo padrão do restante do projeto, ver nota equivalente
+-- em 20260904130000.
 -- ============================================================
 
 create or replace function public.reject_relevant_finding(
@@ -36,7 +40,7 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_finding public.ai_findings%rowtype;
@@ -162,16 +166,19 @@ begin
   -- escalonamento continuam válidos e registrados (nada é revertido);
   -- esta linha só documenta, de forma legível e pesquisável em
   -- audit_log_entries, que NENHUM responsável foi de fato notificado.
-  -- actor_type='SYSTEM' (mesma convenção de 'sla-engine' já usada por
-  -- escalate_sla_action) — isto não é uma decisão humana, é o motor
-  -- constatando uma lacuna de configuração do projeto.
+  -- actor_type='SYSTEM' com actor_label=NULL (audit_log_entries exige
+  -- actor_label IS NULL quando actor_type='SYSTEM' — mesma correção já
+  -- aplicada a escalate_sla_action em 20260822060313, reaproveitada
+  -- aqui desde a primeira versão, nunca reintroduzindo aquele bug) —
+  -- isto não é uma decisão humana, é o motor constatando uma lacuna de
+  -- configuração do projeto.
   if v_target_user_id is null then
     insert into public.audit_log_entries (
       project_id, actor_type, actor_user_id, actor_label,
       action, entity_type, entity_id, detail
     )
     values (
-      v_finding.project_id, 'SYSTEM', null, 'sla-engine',
+      v_finding.project_id, 'SYSTEM', null, null,
       'ESCALATION_TARGET_NOT_CONFIGURED', 'SLA_ACTION', v_action_id::text,
       format(
         'Escalonamento da rejeição do finding %s (severidade %s, área %s) foi criado, mas NENHUM responsável está configurado em sla_area_responsibles.escalation_1_user_id para esta área — ninguém foi notificado. Configure os responsáveis do projeto em /acoes/configuracao.',
