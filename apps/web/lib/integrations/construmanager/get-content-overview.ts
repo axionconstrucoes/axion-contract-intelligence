@@ -31,7 +31,17 @@ export interface ConstrumanagerContentOverview {
   /** Blobs físicos distintos entre os itens armazenados. */
   distinctBlobs: number;
   storedBytes: number;
-  recent: ConstrumanagerContentItem[];
+  /**
+   * TODOS os vínculos do projeto.
+   *
+   * A obra piloto tem 203 alvos e o painel precisa permitir escolher UM
+   * especificamente. Devolver só os mais recentes tornaria impossível
+   * encontrar um documento pelo nome — e como o lote inteiro nasce num
+   * único INSERT, todos compartilham o mesmo created_at e nenhuma
+   * ordenação os separa. São objetos pequenos; a filtragem acontece na
+   * UI.
+   */
+  items: ConstrumanagerContentItem[];
 }
 
 type LinkRow = {
@@ -56,8 +66,6 @@ function blobOf(row: LinkRow): { sha256: string; size_bytes: number } | null {
   if (!blob) return null;
   return Array.isArray(blob) ? (blob[0] ?? null) : blob;
 }
-
-const RECENT_LIMIT = 20;
 
 export async function getConstrumanagerContentOverview(
   supabase: SupabaseClient,
@@ -84,7 +92,7 @@ export async function getConstrumanagerContentOverview(
       failed: 0,
       distinctBlobs: 0,
       storedBytes: 0,
-      recent: [],
+      items: [],
     };
   }
 
@@ -134,6 +142,6 @@ export async function getConstrumanagerContentOverview(
     failed,
     distinctBlobs: distinct.size,
     storedBytes,
-    recent: items.slice(0, RECENT_LIMIT),
+    items,
   };
 }
