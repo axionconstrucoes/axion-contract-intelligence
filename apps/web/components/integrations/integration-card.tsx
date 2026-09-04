@@ -14,7 +14,9 @@ import { resolveIntegrationVisualIdentity } from "./integration-visual-identity"
 import { IntegrationOriginForm } from "./integration-origin-form";
 import { ConstrumanagerConnectionCheck } from "./construmanager-connection-check";
 import { ConstrumanagerMetadataSync } from "./construmanager-metadata-sync";
+import { ConstrumanagerContentDownload } from "./construmanager-content-download";
 import type { ConstrumanagerMetadataOverview } from "@/lib/integrations/construmanager/get-metadata-overview";
+import type { ConstrumanagerContentOverview } from "@/lib/integrations/construmanager/get-content-overview";
 import { resolveGenericIntegrationDisplayStatus } from "@/lib/ui/resolve-integration-display-status";
 import { driveTypeLabels, formatDateTime } from "@/lib/labels";
 import { normalizeLegacyMojibake } from "@/lib/normalize-legacy-mojibake";
@@ -26,12 +28,14 @@ export function IntegrationCard({
   config,
   canManage,
   construmanagerMetadata,
+  construmanagerContent,
 }: {
   projectId: string;
   source: SourceDefinition;
   config: IntegrationConfig | undefined;
   canManage: boolean;
   construmanagerMetadata?: ConstrumanagerMetadataOverview | null;
+  construmanagerContent?: ConstrumanagerContentOverview | null;
 }) {
   const [editing, setEditing] = useState(false);
   const identity = resolveIntegrationVisualIdentity(source.type);
@@ -104,6 +108,10 @@ export function IntegrationCard({
             <ConstrumanagerMetadataSync
               projectId={projectId}
               overview={construmanagerMetadata ?? null}
+            />
+            <ConstrumanagerContentDownload
+              projectId={projectId}
+              overview={construmanagerContent ?? null}
             />
           </>
         ) : null}

@@ -57,3 +57,33 @@ export const initialSyncConstrumanagerMetadataState: SyncConstrumanagerMetadataS
   versionsCreated: null,
   versionsOrphaned: null,
 };
+
+// Download de conteúdo real do Construmanager (Pacote C).
+//
+// Só contagens, hashes abreviados e tamanhos: nenhum byte de documento
+// e nenhum caminho local trafegam para o estado do formulário.
+export type DownloadConstrumanagerContentState = {
+  error: string | null;
+  success: boolean;
+  finishedAt: string | null;
+  attempted: number | null;
+  stored: number | null;
+  failed: number | null;
+  blobsCreated: number | null;
+  blobsReused: number | null;
+  uploadsSkipped: number | null;
+  firstError: string | null;
+};
+
+export const initialDownloadConstrumanagerContentState: DownloadConstrumanagerContentState = {
+  error: null,
+  success: false,
+  finishedAt: null,
+  attempted: null,
+  stored: null,
+  failed: null,
+  blobsCreated: null,
+  blobsReused: null,
+  uploadsSkipped: null,
+  firstError: null,
+};
