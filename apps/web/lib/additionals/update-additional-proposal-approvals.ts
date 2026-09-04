@@ -2,6 +2,19 @@
 // nunca inferidos uns dos outros nem do status geral da proposta.
 // CONTRATADO nunca implica prazo aprovado; cada campo só muda quando
 // explicitamente informado.
+//
+// GAP CONHECIDO (governança de rejeição de recomendações relevantes,
+// ver apps/web/lib/governance/reject-relevant-recommendation.ts):
+// project_additional_proposals NÃO possui nenhuma coluna de severidade
+// compatível com o enum LOW/MEDIUM/HIGH/CRITICAL usado por
+// ai_findings.severity/sla_actions.risk_level (reservation_risk é texto
+// livre, não um enum controlado) — portanto a política "ALTO/CRÍTICO +
+// REJECTED exige justificativa + escalonamento" não pode ser aplicada
+// objetivamente a scopeApprovalStatus/commercialApprovalStatus/
+// scheduleExtensionStatus hoje, sem inventar uma classificação de risco
+// que não existe no schema. Nenhuma mudança de comportamento foi feita
+// aqui por esse motivo — ver relatório da implementação para o registro
+// completo da lacuna.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdditionalProposal } from "./get-additional-proposals";

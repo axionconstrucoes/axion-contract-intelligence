@@ -320,6 +320,7 @@ export const slaActionOriginLabels: Record<SlaActionOrigin, string> = {
   ESG_OBLIGATION: "Obrigação ESG/SSMA",
   EVENT: "Evento do Ledger",
   ACTION_REQUEST: "Solicitação (ActionRequest)",
+  AI_FINDING: "Rejeição de recomendação/finding de IA",
   OTHER: "Outra",
 };
 
@@ -330,6 +331,7 @@ export const slaEscalationReasonLabels: Record<SlaEscalationReason, string> = {
   CONTRACTUAL_DEADLINE_NEAR: "Prazo contratual próximo",
   CONTRACTUAL_DEADLINE_MISSED: "Prazo contratual perdido",
   NEW_EVIDENCE_INCREASED_RISK: "Nova evidência aumentou o risco",
+  RELEVANT_RECOMMENDATION_REJECTED: "Recomendação relevante rejeitada",
 };
 
 export const additionalProposalStatusLabels: Record<AdditionalProposalStatus, string> = {
