@@ -1,10 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import {
-  initialLinkClientResponseState,
-  linkClientResponseAction,
-} from "@/app/[projectId]/documentos/link-client-response-actions";
+import { linkClientResponseAction } from "@/app/[projectId]/documentos/link-client-response-actions";
+import { initialLinkClientResponseState } from "@/app/[projectId]/documentos/link-client-response-actions-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";

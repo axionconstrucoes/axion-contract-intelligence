@@ -11,14 +11,21 @@
 // apps/web/lib/ai/expert-query-state.ts (sem "use server").
 //
 // Este teste lê o código-fonte (nunca executa o Next.js) e falha se
-// algum dos módulos "use server" do fluxo dos Experts voltar a exportar
-// qualquer coisa que não seja uma função async — protege
-// especificamente contra a reintrodução deste bug.
+// QUALQUER módulo "use server" de apps/web exportar algo que não seja
+// uma função async. A varredura é AUTOMÁTICA (discoverUseServerFiles
+// caminha apps/web procurando a diretiva no topo do arquivo) — nunca
+// uma lista de arquivos mantida à mão, exatamente para não repetir o
+// que aconteceu com run-multi-expert-curation-actions.ts,
+// assess-schedule-delay-actions.ts e link-client-response-actions.ts:
+// os três chegaram a produção com este bug porque a lista manual
+// anterior nunca foi atualizada quando eles foram criados. Qualquer
+// Server Action novo já é coberto no dia em que ganha "use server",
+// sem precisar editar este arquivo.
 //
 // Uso:
 //   node scripts/test-use-server-exports.mjs
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,6 +34,50 @@ const repoRoot = path.resolve(here, "..");
 
 function readSource(relativePath) {
   return readFileSync(path.join(repoRoot, relativePath), "utf8");
+}
+
+/**
+ * Varredura AUTOMÁTICA (não uma lista mantida à mão): caminha todo
+ * apps/web procurando por módulos .ts/.tsx cuja PRIMEIRA linha real
+ * (ignorando linhas em branco) é a diretiva "use server" — nunca um
+ * arquivo que só MENCIONE a frase em comentário (por isso a checagem é
+ * sempre pela primeira linha, nunca `includes`). Isso é o que fecha a
+ * classe do erro de forma geral: nenhuma lista de arquivos conhecidos
+ * precisa ser atualizada quando um novo Server Action nascer — se ele
+ * tiver "use server" no topo, esta varredura já o encontra.
+ */
+const IGNORED_DIR_NAMES = new Set(["node_modules", ".next", ".turbo", "dist", "build"]);
+
+function findAllSourceFiles(startDir) {
+  const results = [];
+  for (const entry of readdirSync(startDir)) {
+    const full = path.join(startDir, entry);
+    const stats = statSync(full);
+    if (stats.isDirectory()) {
+      if (IGNORED_DIR_NAMES.has(entry)) continue;
+      results.push(...findAllSourceFiles(full));
+    } else if (/\.(ts|tsx)$/.test(entry) && !entry.endsWith(".d.ts")) {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
+function isUseServerDirective(source) {
+  const trimmed = source.trimStart();
+  return trimmed.startsWith('"use server"') || trimmed.startsWith("'use server'");
+}
+
+function discoverUseServerFiles() {
+  const appsWebRoot = path.join(repoRoot, "apps", "web");
+  const files = [];
+  for (const absolutePath of findAllSourceFiles(appsWebRoot)) {
+    const source = readFileSync(absolutePath, "utf8");
+    if (isUseServerDirective(source)) {
+      files.push(path.relative(repoRoot, absolutePath).split(path.sep).join("/"));
+    }
+  }
+  return files.sort();
 }
 
 let passed = 0;
@@ -80,42 +131,27 @@ function findInvalidUseServerExports(source) {
   return invalid;
 }
 
-// Todos os módulos "use server" do app (varredura registrada
-// manualmente — ver relatório da tarefa "MODO ACELERADO ACC" para a
-// data desta varredura). Adicionar aqui qualquer novo Server Action
-// futuro para manter a proteção global.
-const ALL_USE_SERVER_FILES = [
-  "apps/web/app/[projectId]/acoes/actions.ts",
-  "apps/web/app/[projectId]/action-requests/actions.ts",
-  "apps/web/app/[projectId]/esg/actions.ts",
-  "apps/web/app/[projectId]/ledger/[eventId]/actions.ts",
-  "apps/web/app/[projectId]/ledger/[eventId]/assess-schedule-delay-actions.ts",
-  "apps/web/app/[projectId]/ledger/[eventId]/event-notes-actions.ts",
-  "apps/web/app/[projectId]/ledger/[eventId]/run-multi-expert-curation-actions.ts",
-  "apps/web/app/[projectId]/ledger/[eventId]/send-alert-actions.ts",
-  "apps/web/app/[projectId]/revisao-clausulas/actions.ts",
-  "apps/web/app/[projectId]/revisao-contratual/actions.ts",
-  "apps/web/app/[projectId]/timeline/timeline-export-actions.ts",
-  "apps/web/lib/ai/esg-query-action.ts",
-  "apps/web/lib/ai/expert-query-action.ts",
-  "apps/web/lib/auth-actions.ts",
-];
-
 console.log("");
 console.log("======================================");
 console.log('"USE SERVER" EXPORT SHAPE — TESTES');
 console.log("======================================");
 console.log("");
 
-check(`todos os ${ALL_USE_SERVER_FILES.length} módulos "use server" do app exportam SOMENTE funções async (varredura global)`, () => {
-  const offenders = [];
-  for (const file of ALL_USE_SERVER_FILES) {
-    const source = readSource(file);
-    const invalid = findInvalidUseServerExports(source);
-    if (invalid.length > 0) offenders.push(`${file}: ${JSON.stringify(invalid)}`);
+const discoveredUseServerFiles = discoverUseServerFiles();
+
+check(
+  `todos os ${discoveredUseServerFiles.length} módulos "use server" descobertos por varredura automática de apps/web exportam SOMENTE funções async`,
+  () => {
+    assert(discoveredUseServerFiles.length > 0, "a varredura não encontrou nenhum módulo \"use server\" — provável erro na própria varredura, nunca um estado real do repositório");
+    const offenders = [];
+    for (const file of discoveredUseServerFiles) {
+      const source = readSource(file);
+      const invalid = findInvalidUseServerExports(source);
+      if (invalid.length > 0) offenders.push(`${file}: ${JSON.stringify(invalid)}`);
+    }
+    assert(offenders.length === 0, `arquivo(s) com export inválido: ${offenders.join(" | ")}`);
   }
-  assert(offenders.length === 0, `arquivo(s) com export inválido: ${offenders.join(" | ")}`);
-});
+);
 
 check(
   'expert-query-action.ts (Diretor Comercial IA) exporta SOMENTE funções async — nunca objeto/const/enum/schema/metadata (o bug real reportado)',
@@ -134,6 +170,17 @@ check('esg-query-action.ts (Diretor de ESG IA) exporta SOMENTE funções async �
   assert(invalid.length === 0, `exports inválidos encontrados: ${JSON.stringify(invalid)}`);
   assert(source.includes("export async function askEsgDirectorAction"), "askEsgDirectorAction deveria continuar exportada");
 });
+
+check(
+  'link-client-response-actions.ts (Documentos — vínculo manual de resposta do cliente) exporta SOMENTE funções async — mesma classe de bug encontrada fora do escopo inicial do Ledger',
+  () => {
+    const source = readSource("apps/web/app/[projectId]/documentos/link-client-response-actions.ts");
+    const invalid = findInvalidUseServerExports(source);
+    assert(invalid.length === 0, `exports inválidos encontrados: ${JSON.stringify(invalid)}`);
+    assert(source.includes("export async function linkClientResponseAction"), "linkClientResponseAction deveria continuar exportada");
+    assert(!source.includes("initialLinkClientResponseState"), "estado inicial não deveria mais viver neste arquivo — ver link-client-response-actions-state.ts");
+  }
+);
 
 check("expert-query-state.ts (novo módulo) NÃO tem a diretiva \"use server\" no topo — é seguro exportar o objeto de estado inicial ali", () => {
   const source = readSource("apps/web/lib/ai/expert-query-state.ts");
@@ -177,7 +224,7 @@ check("acoes/actions-state.ts concentra os 9 estados iniciais de Ações e Escal
   assert(!actionsSource.includes("export const initial"), "actions.ts não deveria mais exportar nenhum estado inicial");
 });
 
-check("esg/actions-state.ts, ledger/[eventId]/actions-state.ts, event-notes-actions-state.ts, send-alert-actions-state.ts, assess-schedule-delay-actions-state.ts e run-multi-expert-curation-actions-state.ts existem e não têm use server", () => {
+check("esg/actions-state.ts, ledger/[eventId]/actions-state.ts, event-notes-actions-state.ts, send-alert-actions-state.ts, assess-schedule-delay-actions-state.ts, run-multi-expert-curation-actions-state.ts e link-client-response-actions-state.ts existem e não têm use server", () => {
   for (const file of [
     "apps/web/app/[projectId]/esg/actions-state.ts",
     "apps/web/app/[projectId]/ledger/[eventId]/actions-state.ts",
@@ -185,6 +232,7 @@ check("esg/actions-state.ts, ledger/[eventId]/actions-state.ts, event-notes-acti
     "apps/web/app/[projectId]/ledger/[eventId]/event-notes-actions-state.ts",
     "apps/web/app/[projectId]/ledger/[eventId]/run-multi-expert-curation-actions-state.ts",
     "apps/web/app/[projectId]/ledger/[eventId]/send-alert-actions-state.ts",
+    "apps/web/app/[projectId]/documentos/link-client-response-actions-state.ts",
   ]) {
     const source = readSource(file);
     assert(!source.trimStart().startsWith('"use server"'), `${file} não deveria ter a diretiva use server`);

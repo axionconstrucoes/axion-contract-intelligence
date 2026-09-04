@@ -4,13 +4,11 @@ import { revalidatePath } from "next/cache";
 
 import { createSupabaseServerClient } from "@axion/db/server";
 import type { ClientResponseRelationType } from "@/lib/documents/client-responses/types";
+import type { LinkClientResponseState } from "./link-client-response-actions-state";
 
-export interface LinkClientResponseState {
-  error: string | null;
-  success: boolean;
-}
-
-export const initialLinkClientResponseState: LinkClientResponseState = { error: null, success: false };
+// Este módulo é "use server" — só pode exportar funções async (Server
+// Actions). Tipo e estado inicial vivem em
+// ./link-client-response-actions-state.ts.
 
 const VALID_RELATION_TYPES: ClientResponseRelationType[] = ["RESPONDE", "DISCORDA", "CORRIGE", "RESSALVA", "COMPLEMENTA"];
 
