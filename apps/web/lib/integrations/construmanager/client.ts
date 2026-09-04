@@ -376,6 +376,216 @@ export class ConstrumanagerClient {
 
     return response;
   }
+
+  // ============================================================
+  // Objeto/Download — ÚNICA rota do Pacote C que traz bytes.
+  //
+  // Fatos já validados do contrato (não reinventar):
+  //   - a resposta é application/octet-stream;
+  //   - o corpo é um ZIP, mesmo para um único arquivo;
+  //   - a hierarquia de pastas do Construmanager é preservada dentro
+  //     do ZIP;
+  //   - arquivos reais chegam a centenas de MB. NÃO existe limite de
+  //     50 MB aqui.
+  //
+  // O corpo segue o CONTRATO OFICIAL confirmado na documentação do
+  // fornecedor e é montado por buildObjectDownloadBody() — ver ali a
+  // forma exata e por que idEmpresa NÃO entra nesta rota. Quem chama
+  // informa `requestBody` para manter a montagem num ponto só,
+  // testável isoladamente.
+  //
+  // Nada nesta função escreve em disco, e o token nunca é logado nem
+  // devolvido: ele só existe no header desta requisição.
+  async downloadObject(
+    accessToken: string,
+    companyId: number,
+    workId: number,
+    objectId: number,
+    requestBody: Record<string, unknown>,
+    onChunk: (chunk: Uint8Array) => void | Promise<void>,
+    options: {
+      maxBytes: number;
+      timeoutMs?: number;
+    }
+  ): Promise<ConstrumanagerDownloadOutcome> {
+    this.assertWorkScopeArguments(accessToken, companyId, workId);
+
+    if (!Number.isInteger(objectId) || objectId <= 0) {
+      throw new Error("Construmanager objectId is invalid.");
+    }
+
+    if (!Number.isInteger(options.maxBytes) || options.maxBytes <= 0) {
+      throw new Error("Construmanager download maxBytes is invalid.");
+    }
+
+    const controller = new AbortController();
+
+    // Download é longo por natureza: o timeout de 15 s das rotas de
+    // metadados abortaria um arquivo grande legítimo. O AbortController
+    // continua sendo o único mecanismo de parada — nada roda solto.
+    const timeoutMs = options.timeoutMs ?? 15 * 60 * 1000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(`${this.config.baseUrl}/Objeto/Download`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          Accept: "application/octet-stream",
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Construmanager request /Objeto/Download failed with HTTP ${response.status}.`
+        );
+      }
+
+      const contentType = (
+        response.headers.get("content-type") ?? ""
+      ).toLowerCase();
+
+      // A API devolve 200 com JSON de erro em requisição malformada —
+      // o mesmo padrão que já mordeu em ListaMestra/List. Um JSON aqui
+      // NUNCA é conteúdo: é falha disfarçada de sucesso.
+      if (contentType.includes("application/json") || contentType.includes("text/")) {
+        throw new Error(
+          "Construmanager /Objeto/Download returned a textual payload instead of binary content."
+        );
+      }
+
+      if (!response.body) {
+        throw new Error(
+          "Construmanager /Objeto/Download returned an empty response body."
+        );
+      }
+
+      let bytesReceived = 0;
+
+      const declaredLength = Number(
+        response.headers.get("content-length") ?? ""
+      );
+
+      if (
+        Number.isFinite(declaredLength) &&
+        declaredLength > options.maxBytes
+      ) {
+        throw new Error(
+          `Construmanager /Objeto/Download declared ${declaredLength} bytes, above the ${options.maxBytes} byte limit.`
+        );
+      }
+
+      const reader = response.body.getReader();
+
+      // Streaming puro: o corpo nunca é materializado inteiro em
+      // memória, e o teto é aplicado ENQUANTO chega — o content-length
+      // declarado pela origem não é garantia.
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!value || value.length === 0) continue;
+
+        bytesReceived += value.length;
+
+        if (bytesReceived > options.maxBytes) {
+          await reader.cancel().catch(() => undefined);
+          controller.abort();
+          throw new Error(
+            `Construmanager /Objeto/Download exceeded the ${options.maxBytes} byte limit.`
+          );
+        }
+
+        await onChunk(value);
+      }
+
+      if (bytesReceived === 0) {
+        throw new Error(
+          "Construmanager /Objeto/Download returned zero bytes."
+        );
+      }
+
+      return { bytesReceived, contentType: contentType || null };
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error(
+          `Construmanager request /Objeto/Download timed out after ${timeoutMs} ms.`
+        );
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+export interface ConstrumanagerDownloadOutcome {
+  bytesReceived: number;
+  contentType: string | null;
+}
+
+// Montagem do corpo de Objeto/Download — CONTRATO OFICIAL confirmado
+// na documentação do Construmanager:
+//
+//   {
+//     "idObjetos": [ <int>, ... ],   obrigatório, 1..100 itens
+//     "idObra": <int>,               obrigatório
+//     "markup": <bool>,
+//     "markupOculto": <bool>
+//   }
+//
+// Três armadilhas que esta rota NÃO compartilha com as de metadados:
+//   1. NÃO existe idEmpresa/empresaId aqui. A obra já identifica o
+//      escopo; mandar empresa é campo estranho ao contrato.
+//   2. É idObjetos (PLURAL, array de INTEGER) — não idObjeto string,
+//      e não a lista separada por vírgula que ListaMestra/List exige.
+//   3. markup/markupOculto são do contrato e vão explicitamente em
+//      false: o ACC preserva o documento como está, sem anotação
+//      sobreposta. Omiti-los deixaria o comportamento a critério do
+//      fornecedor.
+export const OBJECT_DOWNLOAD_MAX_IDS = 100;
+
+export function buildObjectDownloadBody(
+  workId: number,
+  objectIds: number | number[]
+): Record<string, unknown> {
+  const ids = Array.isArray(objectIds) ? objectIds : [objectIds];
+
+  if (ids.length === 0) {
+    throw new Error(
+      "Construmanager /Objeto/Download requires at least one object id."
+    );
+  }
+
+  // Teto oficial de 100. Aplicado aqui, e não só na camada de lote,
+  // para que nenhum caminho futuro consiga montar uma requisição
+  // fora do contrato.
+  if (ids.length > OBJECT_DOWNLOAD_MAX_IDS) {
+    throw new Error(
+      `Construmanager /Objeto/Download accepts at most ${OBJECT_DOWNLOAD_MAX_IDS} object ids per request.`
+    );
+  }
+
+  if (!ids.every((id) => Number.isInteger(id) && id > 0)) {
+    throw new Error(
+      "Construmanager /Objeto/Download received an invalid object id."
+    );
+  }
+
+  if (!Number.isInteger(workId) || workId <= 0) {
+    throw new Error("Construmanager workId is invalid.");
+  }
+
+  return {
+    idObjetos: ids,
+    idObra: workId,
+    markup: false,
+    markupOculto: false,
+  };
 }
 
 export function createConstrumanagerClient(): ConstrumanagerClient {

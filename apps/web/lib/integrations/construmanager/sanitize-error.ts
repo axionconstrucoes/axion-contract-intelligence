@@ -41,6 +41,28 @@ export function sanitizeConstrumanagerApiError(error: unknown): string {
   return firstLine.slice(0, 500) || "Falha ao consultar metadados do Construmanager.";
 }
 
+// Pacote C: o download real manipula arquivos temporários locais, e um
+// erro de sistema de arquivos (ENOENT, EACCES, EBUSY) carrega o caminho
+// absoluto na mensagem. Esse caminho não é segredo, mas expõe layout de
+// infraestrutura e polui download_error — a migration exige que ele
+// nunca seja gravado.
+//
+// Aditiva de propósito: envolve o sanitizador da API em vez de alterá-lo,
+// para não mexer no comportamento já testado dos Pacotes A e B.
+const FILESYSTEM_PATH_MARKERS =
+  /(?:[A-Za-z]:\\[^\s'"]+|\/(?:tmp|var|home|users|private)\/[^\s'"]+)/gi;
+
+export function sanitizeConstrumanagerContentError(error: unknown): string {
+  const base = sanitizeConstrumanagerApiError(error);
+
+  const withoutPaths = base.replace(FILESYSTEM_PATH_MARKERS, "[caminho local omitido]");
+
+  return (
+    withoutPaths.slice(0, 500) ||
+    "Falha ao baixar o conteúdo do Construmanager."
+  );
+}
+
 // ATENCAO = falha transitória (rede/infra do fornecedor) — vale nova
 // tentativa depois; ERRO = configuração/credencial errada, não some
 // sozinho.

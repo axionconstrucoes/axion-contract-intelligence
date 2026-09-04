@@ -16,10 +16,14 @@ import { collectConstrumanagerMetadata } from "@/lib/integrations/construmanager
 import {
   classifyConstrumanagerConnectionFailure,
   sanitizeConstrumanagerApiError,
+  sanitizeConstrumanagerContentError,
   sanitizeIntegrationConnectionError,
 } from "@/lib/integrations/construmanager/sanitize-error";
+import { storeConstrumanagerContent } from "@/lib/integrations/construmanager/store-content";
+import { initialDownloadConstrumanagerContentState } from "./actions-state";
 import type {
   DisconnectEmailAccountState,
+  DownloadConstrumanagerContentState,
   RegisterEmailAccountState,
   SaveEmailIngestionConfigState,
   SaveIntegrationOriginState,
@@ -437,6 +441,202 @@ export async function syncConstrumanagerMetadataAction(
       documentsCreated: null,
       versionsCreated: null,
       versionsOrphaned: null,
+    };
+  }
+}
+
+// ============================================================
+// Download MANUAL de conteúdo real do Construmanager (Pacote C).
+//
+// Estritamente por lote pequeno e explícito: a obra piloto tem 203
+// alvos e baixar tudo de uma vez não é o que este pacote autoriza.
+// CONTENT_DOWNLOAD_MAX_BATCH é um teto duro — o valor vindo do
+// formulário nunca o ultrapassa, mesmo em POST direto.
+//
+// Autorização em dois lugares, como no Pacote B: requireUser aqui e
+// has_project_permission(ADMINISTRADOR) dentro de cada RPC SECURITY
+// DEFINER. O service-role só aparece na escrita física do bucket
+// content-addressed (ver store-content.ts), nunca na decisão de
+// permissão.
+// ============================================================
+
+const CONTENT_DOWNLOAD_MAX_BATCH = 10;
+const CONTENT_DOWNLOAD_DEFAULT_BATCH = 2;
+
+type ContentLinkRow = {
+  id: string;
+  construmanager_object_id: number;
+  source_name: string;
+  document_id: string | null;
+  version_id: string | null;
+  construmanager_documents: { extension_normalized: string } | { extension_normalized: string }[] | null;
+  construmanager_document_versions: { extension_normalized: string } | { extension_normalized: string }[] | null;
+};
+
+function extensionOf(row: ContentLinkRow): string | null {
+  const source = row.version_id
+    ? row.construmanager_document_versions
+    : row.construmanager_documents;
+  if (!source) return null;
+  const record = Array.isArray(source) ? source[0] : source;
+  return record?.extension_normalized ?? null;
+}
+
+export async function downloadConstrumanagerContentAction(
+  _prevState: DownloadConstrumanagerContentState,
+  formData: FormData
+): Promise<DownloadConstrumanagerContentState> {
+  const supabase = await createSupabaseServerClient();
+
+  try {
+    await requireUser(supabase);
+    const projectId = requiredField(formData, "projectId");
+    const requestedLinkId = optionalField(formData, "linkId");
+
+    const requestedBatch =
+      parsePositiveInteger(optionalField(formData, "batchSize")) ??
+      CONTENT_DOWNLOAD_DEFAULT_BATCH;
+
+    // Ternário em vez de Math.min de propósito: o guard do Pacote B
+    // (test-construmanager-metadata-identity) proíbe Math.min/Math.max
+    // neste arquivo para impedir que alguém volte a eleger "cabeça =
+    // menor id". A regra vale mesmo quando o uso é inofensivo — não se
+    // afrouxa um guard de identidade para caber um limite de lote.
+    const batchSize =
+      requestedBatch > CONTENT_DOWNLOAD_MAX_BATCH
+        ? CONTENT_DOWNLOAD_MAX_BATCH
+        : requestedBatch;
+
+    const { data: config, error: configError } = await supabase
+      .from("project_integrations")
+      .select("account_reference, external_project_reference")
+      .eq("project_id", projectId)
+      .eq("source_type", "CONSTRUMANAGER")
+      .maybeSingle();
+
+    if (configError) throw new Error(configError.message);
+
+    const companyId = parsePositiveInteger(config?.account_reference ?? null);
+    const workId = parseConstrumanagerWorkId(
+      config?.external_project_reference ?? null
+    );
+
+    if (!config || !companyId || !workId) {
+      throw new Error(
+        "Configuração incompleta. Informe a Conta e o ID da obra do Construmanager."
+      );
+    }
+
+    // Cria os vínculos que ainda faltam. Idempotente: roda a cada
+    // acionamento e só insere o que o sync de metadados trouxe de novo.
+    const { error: ensureError } = await supabase.rpc(
+      "ensure_construmanager_content_links",
+      { p_project_id: projectId }
+    );
+
+    if (ensureError) throw new Error(ensureError.message);
+
+    let query = supabase
+      .from("construmanager_content_links")
+      .select(
+        "id, construmanager_object_id, source_name, document_id, version_id, construmanager_documents (extension_normalized), construmanager_document_versions (extension_normalized)"
+      )
+      .eq("project_id", projectId);
+
+    query = requestedLinkId
+      ? query.eq("id", requestedLinkId)
+      : query
+          .in("download_status", ["PENDENTE", "ERRO"])
+          .order("created_at", { ascending: true })
+          .limit(batchSize);
+
+    const { data: linkRows, error: linksError } = await query;
+
+    if (linksError) throw new Error(linksError.message);
+
+    const targets = ((linkRows ?? []) as unknown as ContentLinkRow[]).map((row) => ({
+      linkId: row.id,
+      objectId: row.construmanager_object_id,
+      name: row.source_name,
+      extensionNormalized: extensionOf(row),
+    }));
+
+    if (targets.length === 0) {
+      return {
+        ...initialDownloadConstrumanagerContentState,
+        success: true,
+        finishedAt: new Date().toISOString(),
+        attempted: 0,
+        stored: 0,
+        failed: 0,
+        blobsCreated: 0,
+        blobsReused: 0,
+        uploadsSkipped: 0,
+      };
+    }
+
+    // Autentica UMA vez para o lote: o token de acesso vale ~24 h e
+    // reautenticar por arquivo só multiplicaria a exposição.
+    const client = createConstrumanagerClient();
+    const auth = await client.authenticate();
+
+    if (auth.user.companyId !== companyId) {
+      throw new Error(
+        `A conta configurada (${companyId}) não corresponde à empresa retornada pela API.`
+      );
+    }
+
+    const token = await client.getAccessToken(auth.user.token);
+
+    let stored = 0;
+    let failed = 0;
+    let blobsCreated = 0;
+    let blobsReused = 0;
+    let uploadsSkipped = 0;
+    let firstError: string | null = null;
+
+    // Sequencial de propósito: downloads de centenas de MB em paralelo
+    // multiplicariam disco temporário e banda sem ganho real nesta fase.
+    for (const target of targets) {
+      const result = await storeConstrumanagerContent(
+        supabase,
+        projectId,
+        target,
+        client,
+        token.access_token,
+        companyId,
+        workId
+      );
+
+      if (result.status === "ARMAZENADO") {
+        stored += 1;
+        if (result.blobReused) blobsReused += 1;
+        else blobsCreated += 1;
+        if (result.uploadSkipped) uploadsSkipped += 1;
+      } else {
+        failed += 1;
+        if (!firstError) firstError = result.error;
+      }
+    }
+
+    revalidatePath(`/${projectId}/integracoes`);
+
+    return {
+      error: null,
+      success: true,
+      finishedAt: new Date().toISOString(),
+      attempted: targets.length,
+      stored,
+      failed,
+      blobsCreated,
+      blobsReused,
+      uploadsSkipped,
+      firstError,
+    };
+  } catch (error) {
+    return {
+      ...initialDownloadConstrumanagerContentState,
+      error: sanitizeConstrumanagerContentError(error),
     };
   }
 }
