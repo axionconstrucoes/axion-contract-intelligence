@@ -16,8 +16,19 @@
 --
 -- 1. cad_objects_id e' identidade ESTAVEL do documento. Ele NAO muda
 --    quando ha revisao: o cabeca retem o id de criacao e cada revisao
---    arquiva o conteudo anterior numa linha nova. Verificado em 11/11
---    versoes (id do cabeca < id de toda versao filha).
+--    arquiva o conteudo anterior numa linha nova.
+--
+--    O vinculo versao -> cabeca vem SEMPRE de cad_objects_super
+--    (fato 2 abaixo), NUNCA da magnitude do id. Na obra piloto WEG o
+--    id do cabeca ficou menor que o de todas as 11 versoes, mas isso
+--    e' OBSERVACAO DO PILOTO, NAO regra da API: nada garante essa
+--    ordem em outra obra, outro tenant ou outra versao da API, e
+--    nenhum codigo depende dela.
+--
+--    Pelo mesmo motivo, cad_objects_id NAO ordena cronologicamente:
+--    a revisao mais nova retem o id ANTIGO do cabeca e o conteudo
+--    anterior e' arquivado num id NOVO. Cronologia vem das datas de
+--    origem; sequencia de revisao vem de cad_objects_versoes.
 --
 -- 2. cad_objects_super e' POLIMORFICO:
 --       documento vigente -> id da PASTA

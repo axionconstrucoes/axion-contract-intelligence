@@ -32,7 +32,7 @@
     "cadeia WEG-AXN-LISTAMESTRA R00 -> R06 completa (6 versoes)",
     "divergencia revisao API x nome: PRJ_HIDRO_FIOS_01-18_ESG_TER_R03..dwg tem cad_objects_versoes 00",
     "extensao .PDF maiuscula e .pdf minuscula na mesma obra",
-    "ids de versao NAO sao cronologicos: id do cabeca e sempre menor que o de suas versoes"
+    "ids de versao NAO sao cronologicos: nesta obra piloto o id do cabeca ficou menor que o de suas versoes — OBSERVACAO do piloto, NAO regra da API; o vinculo vem de cad_objects_super"
   ],
   "guid": "<removido: identificador de sessao>",
   "empresaID": 1645,
