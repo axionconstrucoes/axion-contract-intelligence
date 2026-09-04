@@ -2,6 +2,8 @@
 // IA nunca chama esta função; ela só faz INSERT (persist-finding.ts).
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { rejectAiFinding } from "../../governance/reject-relevant-recommendation";
+import type { SlaArea } from "../../sla/types";
 import { getFinding } from "./get-findings";
 import type { AiFinding } from "./types";
 
@@ -10,9 +12,35 @@ export interface UpdateFindingLifecycleInput {
   lifecycleStatus: Extract<AiFinding["lifecycleStatus"], "ACKNOWLEDGED" | "REJECTED" | "RESOLVED">;
   reviewedByUserId: string;
   reviewerNote?: string | null;
+  /**
+   * Só relevante quando lifecycleStatus = 'REJECTED' e a severidade do
+   * finding é HIGH/CRITICAL — ver rejectAiFinding para o porquê (área
+   * organizacional que recebe o escalonamento).
+   */
+  area?: SlaArea | null;
 }
 
+/**
+ * ACKNOWLEDGED/RESOLVED: update direto, comportamento inalterado.
+ *
+ * REJECTED: delega inteiramente a rejectAiFinding (governança de
+ * rejeição de recomendações relevantes) — único caminho de domínio para
+ * rejeitar um finding, nunca duplicado aqui. Para REJECTED,
+ * `reviewedByUserId` é ignorado: o revisor real é sempre `auth.uid()`
+ * da sessão autenticada, garantido pela função de banco
+ * reject_relevant_finding() — nunca um valor arbitrário informado pelo
+ * chamador.
+ */
 export async function updateFindingLifecycle(supabase: SupabaseClient, input: UpdateFindingLifecycleInput): Promise<AiFinding> {
+  if (input.lifecycleStatus === "REJECTED") {
+    const result = await rejectAiFinding(supabase, {
+      findingId: input.findingId,
+      reviewerNote: input.reviewerNote ?? null,
+      area: input.area,
+    });
+    return result.finding;
+  }
+
   const { error } = await supabase
     .from("ai_findings")
     .update({

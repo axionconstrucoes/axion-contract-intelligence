@@ -46,6 +46,7 @@ export type SlaActionOrigin =
   | "ESG_OBLIGATION"
   | "EVENT"
   | "ACTION_REQUEST"
+  | "AI_FINDING"
   | "OTHER";
 
 export type SlaEscalationReason =
@@ -54,7 +55,8 @@ export type SlaEscalationReason =
   | "NOT_COMPLETED"
   | "CONTRACTUAL_DEADLINE_NEAR"
   | "CONTRACTUAL_DEADLINE_MISSED"
-  | "NEW_EVIDENCE_INCREASED_RISK";
+  | "NEW_EVIDENCE_INCREASED_RISK"
+  | "RELEVANT_RECOMMENDATION_REJECTED";
 
 /** Responsáveis por área e escalão (seção 4) — cada nível é opcional. */
 export interface SlaAreaResponsibles {
@@ -117,6 +119,8 @@ export interface SlaAction {
   relatedDocumentVersionId: string | null;
   relatedEsgObligationSubmissionId: string | null;
   relatedActionRequestId: string | null;
+  /** Preenchido quando origin = 'AI_FINDING' — nunca inventado para outra origem (ver constraint no banco). */
+  relatedAiFindingId: string | null;
   createdByType: "SYSTEM" | "USER";
   createdByUserId: string | null;
   createdAt: string;

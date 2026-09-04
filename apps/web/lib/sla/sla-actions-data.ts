@@ -72,6 +72,7 @@ type ActionRow = {
   related_document_version_id: string | null;
   related_esg_obligation_submission_id: string | null;
   related_action_request_id: string | null;
+  related_ai_finding_id: string | null;
   created_by_type: string;
   created_by_user_id: string | null;
   created_at: string;
@@ -206,6 +207,7 @@ function mapActionRow(row: ActionRow, namesByUserId: Map<string, string>): SlaAc
     relatedDocumentVersionId: row.related_document_version_id,
     relatedEsgObligationSubmissionId: row.related_esg_obligation_submission_id,
     relatedActionRequestId: row.related_action_request_id,
+    relatedAiFindingId: row.related_ai_finding_id,
     createdByType: row.created_by_type as SlaAction["createdByType"],
     createdByUserId: row.created_by_user_id,
     createdAt: row.created_at,
