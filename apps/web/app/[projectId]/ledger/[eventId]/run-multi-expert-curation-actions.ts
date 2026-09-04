@@ -10,13 +10,11 @@ import { getEvent, getUser } from "@/lib/data";
 import { persistCurationAudit } from "@/lib/ai/curation/persist-curation-audit";
 import { runMultiExpertCuration } from "@/lib/ai/curation/run-multi-expert-curation";
 import type { MultiExpertCuration } from "@/lib/ai/curation/types";
+import type { RunMultiExpertCurationState } from "./run-multi-expert-curation-actions-state";
 
-export interface RunMultiExpertCurationState {
-  error: string | null;
-  success: MultiExpertCuration | null;
-}
-
-export const initialRunMultiExpertCurationState: RunMultiExpertCurationState = { error: null, success: null };
+// Este módulo é "use server" — só pode exportar funções async (Server
+// Actions). Tipo e estado inicial vivem em
+// ./run-multi-expert-curation-actions-state.ts.
 
 // Gatilho MANUAL (nunca automático) da curadoria multiagente já
 // existente (apps/web/lib/ai/curation/run-multi-expert-curation.ts) —

@@ -89,7 +89,9 @@ const ALL_USE_SERVER_FILES = [
   "apps/web/app/[projectId]/action-requests/actions.ts",
   "apps/web/app/[projectId]/esg/actions.ts",
   "apps/web/app/[projectId]/ledger/[eventId]/actions.ts",
+  "apps/web/app/[projectId]/ledger/[eventId]/assess-schedule-delay-actions.ts",
   "apps/web/app/[projectId]/ledger/[eventId]/event-notes-actions.ts",
+  "apps/web/app/[projectId]/ledger/[eventId]/run-multi-expert-curation-actions.ts",
   "apps/web/app/[projectId]/ledger/[eventId]/send-alert-actions.ts",
   "apps/web/app/[projectId]/revisao-clausulas/actions.ts",
   "apps/web/app/[projectId]/revisao-contratual/actions.ts",
@@ -175,11 +177,13 @@ check("acoes/actions-state.ts concentra os 9 estados iniciais de Ações e Escal
   assert(!actionsSource.includes("export const initial"), "actions.ts não deveria mais exportar nenhum estado inicial");
 });
 
-check("esg/actions-state.ts, ledger/[eventId]/actions-state.ts, event-notes-actions-state.ts e send-alert-actions-state.ts existem e não têm use server", () => {
+check("esg/actions-state.ts, ledger/[eventId]/actions-state.ts, event-notes-actions-state.ts, send-alert-actions-state.ts, assess-schedule-delay-actions-state.ts e run-multi-expert-curation-actions-state.ts existem e não têm use server", () => {
   for (const file of [
     "apps/web/app/[projectId]/esg/actions-state.ts",
     "apps/web/app/[projectId]/ledger/[eventId]/actions-state.ts",
+    "apps/web/app/[projectId]/ledger/[eventId]/assess-schedule-delay-actions-state.ts",
     "apps/web/app/[projectId]/ledger/[eventId]/event-notes-actions-state.ts",
+    "apps/web/app/[projectId]/ledger/[eventId]/run-multi-expert-curation-actions-state.ts",
     "apps/web/app/[projectId]/ledger/[eventId]/send-alert-actions-state.ts",
   ]) {
     const source = readSource(file);

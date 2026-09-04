@@ -7,13 +7,11 @@ import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getEvent, getProject, getScheduleActivities } from "@/lib/data";
 import { applyScheduleDelayAssessmentToEvent } from "@/lib/ai/experts/planning-director/apply-schedule-delay-assessment";
 import { generateScheduleRecoverabilityAssessment } from "@/lib/ai/experts/planning-director/generate-schedule-recoverability-assessment";
+import type { AssessScheduleDelayState } from "./assess-schedule-delay-actions-state";
 
-export interface AssessScheduleDelayState {
-  error: string | null;
-  success: { previousSeverity: string | null; newSeverity: string; requiresHumanDecision: boolean } | null;
-}
-
-export const initialAssessScheduleDelayState: AssessScheduleDelayState = { error: null, success: null };
+// Este módulo é "use server" — só pode exportar funções async (Server
+// Actions). Tipo e estado inicial vivem em
+// ./assess-schedule-delay-actions-state.ts.
 
 // Ponto de entrada REAL (não o gerador de prévia) que conecta o
 // resultado estruturado do Diretor de Planejamento IA
