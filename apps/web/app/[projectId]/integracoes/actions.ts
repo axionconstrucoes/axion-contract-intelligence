@@ -20,6 +20,7 @@ import {
   sanitizeIntegrationConnectionError,
 } from "@/lib/integrations/construmanager/sanitize-error";
 import { storeConstrumanagerContent } from "@/lib/integrations/construmanager/store-content";
+import { applyContentTargetSelection } from "@/lib/integrations/construmanager/select-content-targets";
 import { initialDownloadConstrumanagerContentState } from "./actions-state";
 import type {
   DisconnectEmailAccountState,
@@ -543,12 +544,12 @@ export async function downloadConstrumanagerContentAction(
       )
       .eq("project_id", projectId);
 
-    query = requestedLinkId
-      ? query.eq("id", requestedLinkId)
-      : query
-          .in("download_status", ["PENDENTE", "ERRO"])
-          .order("created_at", { ascending: true })
-          .limit(batchSize);
+    // linkId presente => SOMENTE aquele alvo, nunca o lote automático.
+    // A regra vive em select-content-targets.ts para poder ser testada.
+    query = applyContentTargetSelection(query, {
+      linkId: requestedLinkId,
+      batchSize,
+    });
 
     const { data: linkRows, error: linksError } = await query;
 
