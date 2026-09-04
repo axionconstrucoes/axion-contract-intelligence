@@ -91,6 +91,21 @@ export interface RejectAiFindingResult {
   escalationId: string | null;
   /** true quando o finding já estava REJECTED e esta chamada só devolveu o vínculo já existente (idempotência). */
   alreadyExisted: boolean;
+  /**
+   * Superior resolvido em sla_area_responsibles para a área informada —
+   * nunca inventado. NULL quando não houve escalonamento OU quando a
+   * área não tem escalation_1_user_id configurado (ver
+   * escalationTargetResolved para o sinal explícito).
+   */
+  escalationTargetUserId: string | null;
+  /**
+   * true SOMENTE quando escalationTargetUserId foi de fato resolvido a
+   * partir de dados reais do sistema — nunca leia escalationTargetUserId
+   * sozinho para decidir se alguém foi identificado: quando este campo
+   * é false, o sistema NUNCA deve afirmar que um superior foi
+   * encontrado/avisado, mesmo que a sla_action/escalonamento existam.
+   */
+  escalationTargetResolved: boolean;
 }
 
 /**
@@ -154,7 +169,15 @@ export async function rejectAiFinding(supabase: SupabaseClient, input: RejectAiF
     throw new Error(`Falha ao rejeitar finding: ${error.message}`);
   }
 
-  const row = (data as { sla_action_id: string | null; escalation_id: string | null; already_existed: boolean }[])[0];
+  const row = (
+    data as {
+      sla_action_id: string | null;
+      escalation_id: string | null;
+      already_existed: boolean;
+      escalation_target_user_id: string | null;
+      escalation_target_resolved: boolean;
+    }[]
+  )[0];
 
   const updatedFinding = await getFinding(supabase, input.findingId);
   if (!updatedFinding) {
@@ -166,5 +189,7 @@ export async function rejectAiFinding(supabase: SupabaseClient, input: RejectAiF
     slaActionId: row?.sla_action_id ?? null,
     escalationId: row?.escalation_id ?? null,
     alreadyExisted: row?.already_existed ?? false,
+    escalationTargetUserId: row?.escalation_target_user_id ?? null,
+    escalationTargetResolved: row?.escalation_target_resolved ?? false,
   };
 }

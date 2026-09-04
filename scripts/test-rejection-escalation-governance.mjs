@@ -3,7 +3,7 @@
 // recomenda, o humano decide, mas rejeitar ALTO/CRÍTICO nunca pode ser
 // silencioso.
 //
-// Duas partes, deliberadamente separadas:
+// Três partes, deliberadamente separadas:
 //
 // PARTE A — lógica pura executada de verdade (validação de
 // justificativa, compatibilidade de severidade inferior, e verificação
@@ -11,13 +11,20 @@
 // Nenhuma chamada a Supabase — mesmo princípio de todo o resto da
 // suíte quando a lógica é pura.
 //
-// PARTE B — checagem ESTRUTURAL da migration
-// (20260904120000_rejection_escalation_governance.sql) contra o texto
+// PARTE B — checagem ESTRUTURAL da migration original (checkpoint 1,
+// 20260904120000_rejection_escalation_governance.sql) contra o texto
 // SQL real: existência e forma exatas da constraint, do índice único,
 // do motivo de escalonamento novo e da função reject_relevant_finding —
 // mesmo padrão já usado por outras suítes deste projeto para validar
 // schema/migração antes de aplicação real (ex.:
 // test-construmanager-content-targeting.mjs para o Pacote C).
+//
+// PARTE C — checkpoint 2 (fechamento de lacunas):
+// 20260904130000_rejection_escalation_governance_hardening.sql —
+// invariante de banco (constraint triggers DEFERRABLE) e transparência
+// do superior hierárquico (escalation_target_user_id/_resolved). Mesma
+// checagem estrutural; ver a nota de honestidade ao final do arquivo
+// para o que NÃO pôde ser exercitado contra Postgres real nesta sessão.
 //
 // IMPORTANTE — o que este arquivo NÃO faz: esta migration não foi
 // aplicada em nenhum Supabase remoto nesta etapa (restrição explícita
@@ -284,10 +291,152 @@ check("execução restrita a authenticated (revoke de public/anon), mesmo padrã
 });
 
 console.log("");
-console.log("--- honestidade sobre o que NÃO foi verificado nesta sessão ---");
-console.log("NOTA (não é falha): idempotência sob concorrência real, disparo efetivo dos");
-console.log("triggers de auditoria e atomicidade da transação em Postgres real dependem");
-console.log("de aplicar esta migration a um Supabase — fora do escopo autorizado agora.");
+
+// ============================================================
+// PARTE C — checkpoint 2: hardening (invariante de banco + transparência
+// do superior hierárquico), migration
+// 20260904130000_rejection_escalation_governance_hardening.sql
+// ============================================================
+
+const hardeningPath = "supabase/migrations/20260904130000_rejection_escalation_governance_hardening.sql";
+const hardening = readSource(hardeningPath);
+
+check("hardening é aditiva: nenhum DROP TABLE/COLUMN, nenhum TRUNCATE/DELETE de dado existente", () => {
+  assert(!/drop\s+table/i.test(hardening));
+  assert(!/drop\s+column/i.test(hardening));
+  assert(!/truncate/i.test(hardening));
+  assert(!/delete\s+from/i.test(hardening));
+  assert(!/create\s+type/i.test(hardening), "nenhum novo enum de banco deveria ser criado");
+});
+
+check("pré-voo: migration falha alto e cedo se dado pré-existente já violar o invariante, antes de criar os triggers", () => {
+  const preflightIndex = hardening.indexOf("do $$");
+  const triggerIndex = hardening.indexOf("create constraint trigger");
+  assert(preflightIndex >= 0, "bloco DO de pré-voo não encontrado");
+  assert(triggerIndex >= 0, "nenhum constraint trigger encontrado");
+  assert(preflightIndex < triggerIndex, "o pré-voo precisa rodar ANTES de instalar os triggers");
+  assert(hardening.includes("ai_findings f") && hardening.includes("not exists (select 1 from public.sla_actions sa where sa.related_ai_finding_id = f.id)"));
+});
+
+check("invariante é DEFERRABLE INITIALLY DEFERRED nos dois lados — nunca um AFTER trigger imediato", () => {
+  const triggerBlocks = hardening.match(/create constraint trigger[\s\S]*?execute function[^;]*;/g) ?? [];
+  assert(triggerBlocks.length === 2, `esperados 2 constraint triggers, encontrados ${triggerBlocks.length}`);
+  for (const block of triggerBlocks) {
+    assert(block.includes("deferrable initially deferred"), `constraint trigger sem DEFERRABLE INITIALLY DEFERRED: ${block.slice(0, 80)}...`);
+  }
+});
+
+check("trigger de ai_findings dispara em INSERT OR UPDATE (cobre também um INSERT direto já REJECTED)", () => {
+  assert(/create constraint trigger ai_findings_enforce_rejection_escalation\s*\nafter insert or update on public\.ai_findings/.test(hardening));
+});
+
+check("trigger de sla_actions só dispara em DELETE ou UPDATE OF related_ai_finding_id — nunca em todo UPDATE (não penaliza assumir/concluir/escalonar)", () => {
+  assert(/create constraint trigger sla_actions_enforce_rejection_escalation_link\s*\nafter delete or update of related_ai_finding_id on public\.sla_actions/.test(hardening));
+});
+
+check("os dois triggers chamam o MESMO helper único — nenhuma regra duplicada entre ai_findings e sla_actions", () => {
+  const helperCalls = (hardening.match(/perform public\.assert_high_risk_rejection_has_escalation\(/g) ?? []).length;
+  assert(helperCalls === 2, `esperadas exatamente 2 chamadas ao helper (uma por trigger function), encontradas ${helperCalls}`);
+});
+
+check("helper função nunca inventa/cria dado — só SELECT/EXISTS, nunca INSERT/UPDATE/DELETE", () => {
+  const fnMatch = hardening.match(/create or replace function public\.assert_high_risk_rejection_has_escalation[\s\S]*?\$\$;/);
+  assert(fnMatch, "função helper não encontrada");
+  const body = fnMatch[0];
+  assert(!/insert into|update public\.|delete from/i.test(body));
+});
+
+check("reject_relevant_finding (v2): DROP + CREATE (mudança de retorno), reutiliza escalate_sla_action sem tocar current_escalation_level diretamente", () => {
+  assert(hardening.includes("drop function if exists public.reject_relevant_finding(uuid, text, text, timestamptz, timestamptz, timestamptz);"));
+  const fnMatch = hardening.match(/create or replace function public\.reject_relevant_finding[\s\S]*?\n\$\$;/);
+  assert(fnMatch, "reject_relevant_finding (v2) não encontrada");
+  const fnBody = fnMatch[0];
+  assert(fnBody.includes("public.escalate_sla_action("));
+  assert(!fnBody.includes("current_escalation_level ="), "não deveria mudar o nível de escalonamento diretamente — só via escalate_sla_action()");
+  const insertCount = (fnBody.match(/insert into public\.sla_actions/g) ?? []).length;
+  assert(insertCount === 1, `esperado exatamente 1 INSERT em sla_actions, encontrado ${insertCount}`);
+});
+
+check("retorno da RPC agora distingue explicitamente superior encontrado x não configurado (escalation_target_user_id/escalation_target_resolved)", () => {
+  assert(hardening.includes("escalation_target_user_id uuid"));
+  assert(hardening.includes("escalation_target_resolved boolean"));
+  const fnMatch = hardening.match(/create or replace function public\.reject_relevant_finding[\s\S]*?\n\$\$;/);
+  const fnBody = fnMatch[0];
+  // Resolvido lendo de volta sla_action_escalations.notified_user_id —
+  // nunca uma segunda lógica de resolução de responsável.
+  assert(fnBody.includes("sae.notified_user_id"));
+  assert(fnBody.includes("v_target_user_id is not null"), "escalation_target_resolved precisa ser derivado do valor real resolvido, nunca hardcoded true/false");
+});
+
+check("caminho idempotente (finding já REJECTED) TAMBÉM devolve o superior já resolvido, não só sla_action_id", () => {
+  const fnMatch = hardening.match(/create or replace function public\.reject_relevant_finding[\s\S]*?\n\$\$;/);
+  const fnBody = fnMatch[0];
+  assert(fnBody.includes("v_existing_target_user_id"));
+});
+
+check("caminho LOW/MEDIUM (sem escalonamento) devolve escalation_target_resolved=false explicitamente, nunca omitido", () => {
+  const fnMatch = hardening.match(/create or replace function public\.reject_relevant_finding[\s\S]*?\n\$\$;/);
+  const fnBody = fnMatch[0];
+  assert(fnBody.includes("return query select null::uuid, null::uuid, false, null::uuid, false;"));
+});
+
+check("nenhuma pessoa é inventada: target vem sempre de sla_area_responsibles via escalate_sla_action, nunca um literal de e-mail/endereço", () => {
+  const fnMatch = hardening.match(/create or replace function public\.reject_relevant_finding[\s\S]*?\n\$\$;/);
+  const fnBody = fnMatch[0];
+  // Procura só por um e-mail literal de verdade (usuario@dominio) fora de
+  // comentário — nunca a palavra "hardcoded" em si, que aparece
+  // legitimamente em comentários explicando que o valor NUNCA é fixo.
+  const withoutComments = fnBody.replace(/--.*$/gm, "");
+  assert(!/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(withoutComments), "não deveria haver nenhum e-mail literal no código executável");
+});
+
+check("funções novas (helper + triggers) revogadas de public/anon/authenticated — mesmo padrão de outras trigger functions do projeto", () => {
+  assert(hardening.includes("revoke all on function public.assert_high_risk_rejection_has_escalation(uuid) from authenticated;"));
+  assert(hardening.includes("revoke all on function public.enforce_high_risk_rejection_escalation() from authenticated;"));
+  assert(hardening.includes("revoke all on function public.enforce_sla_action_escalation_link() from authenticated;"));
+});
+
+check("TS: RejectAiFindingResult expõe escalationTargetUserId/escalationTargetResolved, consumidos do retorno da RPC (não recalculados em TS)", () => {
+  const tsSource = readSource("apps/web/lib/governance/reject-relevant-recommendation.ts");
+  assert(tsSource.includes("escalationTargetUserId: string | null"));
+  assert(tsSource.includes("escalationTargetResolved: boolean"));
+  assert(tsSource.includes("row?.escalation_target_user_id"));
+  assert(tsSource.includes("row?.escalation_target_resolved"));
+});
+
+// ---- Priority 3 (reconfirmação com evidência) ----
+
+check("Additional Proposals: investigação de fonte canônica de severidade documentada com evidência concreta (não presumida)", () => {
+  const source = readSource("apps/web/lib/additionals/update-additional-proposal-approvals.ts");
+  assert(source.includes("project_additional_proposal_links"), "deveria registrar a relação com contract_events investigada e descartada");
+  assert(source.includes("schedule-formalization-alert.ts") || source.includes("computeScheduleFormalizationAlert"));
+  assert(source.includes("closing-gate.ts") || source.includes("computeClosingGateAssessment"));
+  assert(source.includes("Evolução mínima de schema"), "deveria propor a evolução mínima sem implementá-la");
+  // Garantia negativa: a evolução proposta não foi implementada nesta etapa.
+  const functionBody = source.slice(source.indexOf("export async function"));
+  assert(!functionBody.includes("risk_severity"), "a coluna proposta não deveria ter sido criada/usada nesta etapa");
+});
+
+check("EXPERT_RECOMMENDATION: reconfirmado N/A — formulário manual de criação de sla_actions continua sem lifecycle de rejeição próprio", () => {
+  const actionsSource = readSource("apps/web/app/[projectId]/acoes/actions.ts");
+  assert(actionsSource.includes('"EXPERT_RECOMMENDATION"'), "origin EXPERT_RECOMMENDATION deveria continuar existindo como etiqueta manual");
+  assert(!actionsSource.includes("rejectAiFinding") && !actionsSource.includes("reject_relevant_finding"), "criação manual de sla_actions nunca deveria ganhar um lifecycle de rejeição — não é o mesmo conceito de ai_findings");
+});
+
+console.log("");
+console.log("--- honestidade: itens que dependem de Postgres real e NÃO foram exercitados ---");
+console.log("Docker Desktop não está com o daemon ativo nesta máquina (`docker ps` falha) —");
+console.log("`supabase start` (banco local efêmero) não está disponível nesta sessão. Aplicar");
+console.log("a migration num Supabase remoto está fora do escopo autorizado. Os itens abaixo");
+console.log("foram verificados apenas ESTRUTURALMENTE (leitura do SQL/lógica), NUNCA exercitados");
+console.log("contra um Postgres de verdade — não fabricar evidência de execução real:");
+console.log("  1/2. UPDATE direto HIGH/CRITICAL->REJECTED sem sla_action falhar no COMMIT");
+console.log("  3.   transação legítima da RPC (v2) ser aceita de fato");
+console.log("  4.   retry sob concorrência real continuar com exatamente 1 sla_action");
+console.log("  5.   DELETE/desvincular sla_action de um finding ainda REJECTED ser bloqueado");
+console.log("  6/7. retorno real da RPC com/sem superior configurado (só a FORMA foi provada)");
+console.log("Próximo passo manual: `supabase start` (requer Docker rodando) + aplicar as duas");
+console.log("migrations num banco local efêmero + rodar as consultas SQL diretas acima.");
 console.log("");
 
 console.log("======================================");

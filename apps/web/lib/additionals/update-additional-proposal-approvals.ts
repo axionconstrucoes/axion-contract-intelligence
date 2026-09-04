@@ -4,17 +4,44 @@
 // explicitamente informado.
 //
 // GAP CONHECIDO (governança de rejeição de recomendações relevantes,
-// ver apps/web/lib/governance/reject-relevant-recommendation.ts):
+// ver apps/web/lib/governance/reject-relevant-recommendation.ts) —
+// investigado a fundo, não presumido:
+//
 // project_additional_proposals NÃO possui nenhuma coluna de severidade
 // compatível com o enum LOW/MEDIUM/HIGH/CRITICAL usado por
 // ai_findings.severity/sla_actions.risk_level (reservation_risk é texto
-// livre, não um enum controlado) — portanto a política "ALTO/CRÍTICO +
-// REJECTED exige justificativa + escalonamento" não pode ser aplicada
+// livre, não um enum controlado). Relações reais verificadas e
+// descartadas como fonte canônica:
+//   - project_additional_proposal_links pode apontar a um contract_event
+//     (link_role='ORIGIN_SOURCE') cujo aiAssessment.severity existe —
+//     mas o vínculo é opcional, esparso (só quando source_type=
+//     'EXISTING'), e aiAssessment em si é nullable; não é uma
+//     classificação da PROPOSTA, é uma classificação eventual de uma
+//     fonte de origem que a proposta pode ou não ter.
+//   - computeScheduleFormalizationAlert (schedule-formalization-alert.ts)
+//     e computeClosingGateAssessment (closing-gate.ts) calculam
+//     indicadores próprios (severity/cumulativeImpactStatus), mas
+//     disparados por condições completamente diferentes (CONTRATADO +
+//     prazo pendente; risco cumulativo de OUTRAS propostas do projeto) —
+//     nunca representam "a severidade desta rejeição".
+//   - Nenhuma FK liga project_additional_proposals a ai_findings ou
+//     sla_actions como classificação própria.
+//
+// Conclusão: NÃO existe fonte canônica de severidade para esta
+// entidade — a política ALTO/CRÍTICO não pode ser aplicada
 // objetivamente a scopeApprovalStatus/commercialApprovalStatus/
-// scheduleExtensionStatus hoje, sem inventar uma classificação de risco
-// que não existe no schema. Nenhuma mudança de comportamento foi feita
-// aqui por esse motivo — ver relatório da implementação para o registro
-// completo da lacuna.
+// scheduleExtensionStatus sem inventar uma classificação de risco que
+// não existe no schema. Nenhuma mudança de comportamento foi feita
+// aqui por esse motivo.
+//
+// Evolução mínima de schema que resolveria isto (NÃO implementada
+// nesta etapa, sem necessidade demonstrada): uma coluna própria, ex.
+// `risk_severity text check (risk_severity in ('LOW','MEDIUM','HIGH',
+// 'CRITICAL'))`, nullable, preenchida por decisão humana explícita (ou
+// por um futuro Expert) no momento da rejeição — só então
+// updateAdditionalProposalApprovals poderia rotear REJECTED de
+// severidade ALTO/CRÍTICO para o mesmo reject_relevant_finding()/
+// mecanismo central, sem duplicar a regra.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAdditionalProposal } from "./get-additional-proposals";
