@@ -1,10 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import {
-  assessScheduleDelayAction,
-  initialAssessScheduleDelayState,
-} from "@/app/[projectId]/ledger/[eventId]/assess-schedule-delay-actions";
+import { assessScheduleDelayAction } from "@/app/[projectId]/ledger/[eventId]/assess-schedule-delay-actions";
+import { initialAssessScheduleDelayState } from "@/app/[projectId]/ledger/[eventId]/assess-schedule-delay-actions-state";
 import { Button } from "@/components/ui/button";
 
 // Gatilho REAL (não o gerador de prévia) da regra do risco CRÍTICO

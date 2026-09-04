@@ -6,10 +6,8 @@ import { SeverityBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { confrontationSeverityToAlertSeverity } from "@/lib/labels";
-import {
-  initialRunMultiExpertCurationState,
-  runMultiExpertCurationAction,
-} from "@/app/[projectId]/ledger/[eventId]/run-multi-expert-curation-actions";
+import { runMultiExpertCurationAction } from "@/app/[projectId]/ledger/[eventId]/run-multi-expert-curation-actions";
+import { initialRunMultiExpertCurationState } from "@/app/[projectId]/ledger/[eventId]/run-multi-expert-curation-actions-state";
 
 /**
  * Gatilho MANUAL (nunca automático) da curadoria multiagente já
