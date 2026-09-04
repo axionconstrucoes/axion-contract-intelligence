@@ -12,34 +12,37 @@ O código-fonte desta especificação vive em
 linguagem natural; em caso de divergência, **o código é a fonte de
 verdade**.
 
-> Esta fase define apenas o CATÁLOGO — missão, fontes, capacidades,
-> saídas, limites, escalonamento, colaboração e versionamento. Nenhum
-> LLM real foi conectado para CEO IA, Consultor Jurídico IA ou Diretor
-> de Planejamento IA nesta fase, e nenhuma UI nova foi criada. Diretor
-> Comercial IA e Diretor de ESG IA já são operacionais (ver
-> `docs/ai/experts.md` e `docs/esg-obligations.md`) e mantêm essa
-> operação inalterada — este documento apenas formaliza o que eles já
-> fazem.
+> Os cinco Experts (CEO IA, Diretor Comercial IA, Consultor Jurídico IA,
+> Diretor de Planejamento IA, Diretor de ESG IA) têm hoje
+> `identity.ts`/`query.ts`/`index.ts` reais e `status: "IMPLEMENTED"` em
+> `expert-definitions/definitions.ts` (introduzidos junto com a
+> fundação de curadoria multiagente — ver `docs/ai/experts.md` seção
+> 20). Diretor Comercial IA e Diretor de ESG IA continuam sendo os
+> únicos com uma tela dedicada própria (Dashboard/ESG-SSMA); os outros
+> três são alcançados hoje pela consulta conversacional (seção 8) e
+> pela curadoria multiagente com gatilho manual no Event Ledger — não
+> têm tela dedicada própria ainda.
 
 ## 1. Experts oficiais registrados
 
 | # | Expert | ID técnico | Status | Versão |
 | - | ------ | ----------- | ------ | ------ |
-| 1 | CEO IA | `ceo` | Planejado | v1 |
+| 1 | CEO IA | `ceo` | **Implementado** | v1 |
 | 2 | Diretor Comercial IA | `commercial-director` | **Implementado** | v2 |
-| 3 | Consultor Jurídico IA | `legal-consultant` | Planejado | v1 |
-| 4 | Diretor de Planejamento IA | `planning-director` | Planejado | v1 |
+| 3 | Consultor Jurídico IA | `legal-consultant` | **Implementado** | v1 |
+| 4 | Diretor de Planejamento IA | `planning-director` | **Implementado** | v1 |
 | 5 | Diretor de ESG IA | `esg-director` | **Implementado** | v1 |
 
 `contract-lawyer` ("Advogado Especialista em Contratos") foi rejeitado
 em decisão de produto anterior e **não** faz parte deste catálogo, sob
 nenhum ID.
 
-Este catálogo (`OfficialExpertId`, 5 valores) é deliberadamente
-separado da união operacional `ExpertId`
-(`apps/web/lib/ai/types.ts`, hoje só `"commercial-director" |
-"esg-director"`) — registrar um Expert aqui nunca implica que ele já
-tem `generateAssessment`/`answerQuery` reais ligados.
+Este catálogo (`OfficialExpertId`, 5 valores) coincide hoje com a união
+operacional `ExpertId` (`apps/web/lib/ai/types.ts`) — os cinco têm
+`generateAssessment`/`answerQuery` reais ligados. "Registrado aqui" e
+"operacional" deixaram de divergir para os cinco Experts oficiais;
+seguem distintos apenas conceitualmente (este catálogo nunca aceitaria
+um sexto ID sem implementação real, mas hoje não há nenhum caso disso).
 
 ## 2. Estrutura padrão de uma definição de Expert
 
@@ -227,9 +230,15 @@ recomenda. `requiresHumanReview = true` sempre.
 
 Todos os cinco Experts suportam consultas conversacionais (uma pergunta
 livre sobre um evento/projeto), com a mesma pergunta de exemplo listada
-nas seções 3–7. Diretor Comercial IA e Diretor de ESG IA já respondem
-de fato (`answerCommercialDirectorQuery`/`answerEsgDirectorQuery`); os
-demais têm a pergunta registrada no catálogo, sem execução real ainda.
+nas seções 3–7. Os cinco já respondem de fato hoje —
+`answerCommercialDirectorQuery`/`answerEsgDirectorQuery`/
+`answerLegalConsultantQuery`/`answerPlanningDirectorQuery`/consulta do
+CEO IA (`experts/ceo/query.ts`) — introduzidos junto com a fundação de
+curadoria multiagente (`apps/web/lib/ai/curation/`, ver
+`docs/ai/experts.md` seção 20). Diretor Comercial IA e Diretor de ESG IA
+continuam sendo os únicos com tela dedicada própria (Dashboard/ESG-SSMA);
+os outros três são alcançados hoje pela curadoria multiagente com
+gatilho manual no Event Ledger, sem tela de consulta avulsa própria.
 
 ## 9. Catálogo de fontes autorizadas
 
@@ -370,6 +379,9 @@ docs/ai/grounding-and-citation-guardrails.md).
 
 ## 17. O que esta fase deliberadamente NÃO fez
 
+Registro histórico da fase que introduziu ESTE documento (catálogo
+formal) — ver a nota abaixo para o que uma fase posterior implementou.
+
 - Não conectou nenhum provider real de LLM (Anthropic/OpenAI/Gemini) —
   `AXION_AI_PROVIDER` continua fail-closed por padrão.
 - Não implementou CEO IA, Consultor Jurídico IA nem Diretor de
@@ -380,3 +392,13 @@ docs/ai/grounding-and-citation-guardrails.md).
 - Não alterou o comportamento real do Diretor Comercial IA nem do
   Diretor de ESG IA — apenas formalizou, em catálogo, o que eles já
   fazem.
+
+> **Atualização (fase posterior — curadoria multiagente):** os três
+> Experts citados acima (CEO IA, Consultor Jurídico IA, Diretor de
+> Planejamento IA) foram implementados de forma operacional junto com
+> `apps/web/lib/ai/curation/` — ver seção 1 (tabela) e
+> `docs/ai/experts.md` seção 20. `AnthropicAiProvider` também já está
+> autorizado para os cinco (`ANTHROPIC_ALLOWED_EXPERT_IDS`). A única UI
+> nova é o gatilho manual de curadoria multiagente no Event Ledger
+> (botão "Executar análise multiagente") — nenhuma tela dedicada nova
+> por Expert foi criada além disso.

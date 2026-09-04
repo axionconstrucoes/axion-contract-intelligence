@@ -10,6 +10,7 @@ import { CrossReferenceList } from "@/components/ledger/cross-reference-list";
 import { EmailAlertActionHistoryPanel } from "@/components/email-actions/email-alert-action-history-panel";
 import { EventNotesSection } from "@/components/ledger/event-notes-section";
 import { EvidenceViewer } from "@/components/ledger/evidence-viewer";
+import { RunMultiExpertCurationButton } from "@/components/ledger/run-multi-expert-curation-button";
 import { SendContractAlertForm } from "@/components/ledger/send-contract-alert-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,6 +49,9 @@ export default async function EventDetailPage({
   if (!event) notFound();
 
   const canReview = permission === "ADMINISTRADOR";
+  // Mesmo nível já exigido por AssessScheduleDelayButton (dispara
+  // Experts de IA reais — não é uma leitura trivial).
+  const canTriggerCuration = permission === "ADMINISTRADOR" || permission === "GESTOR" || permission === "GERENTE";
 
   // Nome do aprovador/revisor original e de quem eventualmente complementou
   // a justificativa depois (nunca a mesma pessoa por definição — ver
@@ -266,6 +270,14 @@ export default async function EventDetailPage({
           </div>
         )}
       </div>
+
+      {canTriggerCuration ? (
+        <RunMultiExpertCurationButton projectId={projectId} eventId={event.id} />
+      ) : (
+        <p className="rounded-md border bg-muted p-3 text-sm text-muted-foreground">
+          Executar a curadoria multiagente exige permissão GERENTE ou ADMINISTRADOR neste projeto.
+        </p>
+      )}
 
       <ExpertQueryPanel projectId={projectId} eventId={event.id} scope="EVENT" />
     </div>

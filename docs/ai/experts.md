@@ -17,18 +17,21 @@ não as repete, apenas descreve como elas são aplicadas em código.
 
 | # | Expert | ID técnico | Status |
 | - | ------ | ----------- | ------ |
-| 1 | CEO IA | `ceo` (sugerido) | Planejado — definição formal em `docs/ai/expert-capabilities.md` |
+| 1 | CEO IA | `ceo` | **Implementado** — consolidação executiva (`experts/ceo/consolidate.ts`) e consulta conversacional (`experts/ceo/query.ts`) |
 | 2 | **Diretor Comercial IA** | `commercial-director` | **Implementado (v2)** |
-| 3 | Consultor Jurídico IA | `legal-consultant` (sugerido) | Planejado — definição formal em `docs/ai/expert-capabilities.md` |
-| 4 | Diretor de Planejamento IA | `planning-director` (sugerido) | Planejado — definição formal em `docs/ai/expert-capabilities.md` |
+| 3 | Consultor Jurídico IA | `legal-consultant` | **Implementado** — `answerLegalConsultantQuery` (`experts/legal-consultant/query.ts`) |
+| 4 | Diretor de Planejamento IA | `planning-director` | **Implementado** — `answerPlanningDirectorQuery` (`experts/planning-director/query.ts`) |
 | 5 | **Diretor de ESG IA** | `esg-director` | **Implementado (v1)** — ver `docs/esg-obligations.md` |
 
-Um ID técnico "sugerido" existe apenas no catálogo formal
-(`apps/web/lib/ai/expert-definitions/`, tipo `OfficialExpertId`) —
-nenhum dos três Experts planejados entra em `ExpertId`
-(`apps/web/lib/ai/types.ts`, a união operacional) até ter
-`generateAssessment`/`answerQuery` realmente implementados, para nunca
-sugerir que algo existe antes de existir.
+Os cinco Experts oficiais estão todos em `ExpertId`
+(`apps/web/lib/ai/types.ts`, a união operacional) e têm
+`identity.ts`/`query.ts`/`index.ts` reais — nenhum é mais "sugerido"
+apenas no catálogo formal (introduzidos no commit "feat: add Claude
+multi-expert curation", junto com a fundação de curadoria multiagente da
+seção 20). O que ainda não existe para os quatro além do Diretor
+Comercial IA é uma tela dedicada de consulta em lote na UI — a consulta
+conversacional (seção 13) e a curadoria multiagente (seção 20) já os
+alcançam de fato.
 
 > Um Expert chamado "Advogado Especialista em Contratos"
 > (`contract-lawyer`) chegou a ser implementado e foi **removido por
@@ -366,13 +369,27 @@ foi feita nesta fase.
    14, "Seleção de contexto") — item 17 de `docs/ai/anthropic-provider.md`
    documenta a metadata de tokens já capturada, sem um sistema
    financeiro completo ainda.
-7. Conectar o `AnthropicAiProvider` aos próximos Experts oficiais
-   (Consultor Jurídico IA, Diretor de Planejamento IA, CEO IA) e ao
-   Diretor de ESG IA — hoje deliberadamente bloqueado em runtime
-   (`ANTHROPIC_ALLOWED_EXPERT_IDS`, ver `docs/ai/anthropic-provider.md`).
-8. Implementar escopos DOCUMENT, EMAIL e MULTI_EXPERT (ver seção 13) —
-   hoje falham fechado explicitamente.
+7. ~~Conectar o `AnthropicAiProvider` aos próximos Experts oficiais~~ —
+   feito: `ANTHROPIC_ALLOWED_EXPERT_IDS`
+   (`apps/web/lib/ai/providers/anthropic-provider.ts`) já autoriza os
+   cinco Experts oficiais (`commercial-director`, `esg-director`,
+   `legal-consultant`, `planning-director`, `ceo`) — cada um só é
+   efetivamente ativado quando sua própria variável de provider resolve
+   para `"anthropic"` (nunca em bloco).
+8. Implementar escopos DOCUMENT e EMAIL do `ExpertQueryScope`
+   por-Expert (ver seção 13) — continuam falhando fechado
+   explicitamente. `MULTI_EXPERT` como *valor de escopo passado a um
+   único Expert* também continua não implementado — mas a síntese
+   multiagente em si (vários Experts + CEO IA) já existe por outro
+   caminho: a curadoria multiagente (`apps/web/lib/ai/curation/`, ver
+   seção 20), que nunca passa `scope: "MULTI_EXPERT"` a nenhum Expert —
+   ela chama cada um com `PROJECT`/`EVENT` normalmente e consolida as
+   respostas ela mesma.
 9. Ingerir um corpus normativo real (ver seção 16, "Base legal").
+10. Conectar a curadoria multiagente (seção 20) a um gatilho automático
+    (hoje só manual, a partir do Event Ledger) e a fontes além de EVENT
+    (EMAIL/PROJECT já são aceitas por `CurationInput.sourceType`, mas só
+    EVENT tem um gatilho de UI real).
 
 ## 13. Consulta conversacional aos Experts ("Perguntar ao Diretor Comercial IA")
 
@@ -585,30 +602,68 @@ alterações de projeto como uma nova categoria de contexto) fica para uma
 fase futura, quando `ContractChange` estiver integrado ao Event Ledger
 de forma mais rica.
 
-## 20. Preparação multi-Expert (não implementado)
+## 20. Curadoria multiagente — implementada, com gatilho manual no Event Ledger
 
-`ExpertQueryScope` inclui `"MULTI_EXPERT"` como contrato de tipo — o
-orquestrador falha fechado para ele nesta fase (seção 13). Nenhum Expert
-além do Diretor Comercial IA foi implementado.
-
-Fluxo futuro documentado (não codificado):
+A síntese multi-Expert descrita nesta seção **já existe** —
+`apps/web/lib/ai/curation/` (introduzida no commit "feat: add Claude
+multi-expert curation", junto com os cinco Experts oficiais completos).
+Não usa `scope: "MULTI_EXPERT"` (esse valor de `ExpertQueryScope`
+continua não implementado por-Expert, ver seção 13) — em vez disso, o
+orquestrador chama cada Expert roteado individualmente com escopo
+`PROJECT`/`EVENT` normal e consolida as respostas ele mesmo:
 
 ```
-PERGUNTA
+SOURCE (evento/e-mail/projeto)
   ↓
-vários Experts (CEO IA, Diretor Comercial IA, Consultor Jurídico IA,
-Diretor de Planejamento IA, Diretor de ESG IA)
+ROUTER determinístico (route-experts.ts, nunca IA decidindo quem consultar)
   ↓
-respostas especializadas (ExpertQueryResponse por Expert)
+SPECIALIST(S) roteados (answerXQuery de cada Expert — reaproveitado,
+nunca reimplementado; "ceo" nunca entra aqui como especialista)
   ↓
-CEO IA
+normalização das posições (AiProviderExpertPosition)
   ↓
-síntese executiva
+CEO IA consolida (runExecutiveCuration → ExecutiveCuration)
   ↓
-revisão humana
+revisão humana (requiresHumanReview sempre true)
 ```
 
-Quando implementado, a síntese do CEO IA deve reutilizar
-`ExpertQueryResponse` de cada Expert como entrada — nunca reprocessar o
-contexto do zero por Expert sem necessidade, e nunca perder a
-rastreabilidade de qual Expert disse o quê.
+Máximo uma rodada de especialistas + uma consolidação CEO por execução
+(`run-multi-expert-curation.ts`) — nunca uma conversa infinita
+agente↔agente. `expertResults` reflete exatamente quem o roteador
+selecionou, nunca inclui um Expert não consultado.
+
+### Gatilho manual (Event Ledger)
+
+A única forma de disparar isto em produção hoje é **manual e
+controlada**: o botão "Executar análise multiagente" na página do
+evento (`RunMultiExpertCurationButton` +
+`runMultiExpertCurationAction`,
+`apps/web/app/[projectId]/ledger/[eventId]/run-multi-expert-curation-actions.ts`),
+visível e autorizado só para GERENTE/GESTOR/ADMINISTRADOR (revalidado no
+servidor, nunca só escondido na UI). `CurationInput.description` é
+sempre o título+descrição REAIS já registrados no evento — nunca um
+texto inventado só para este gatilho. Nenhuma execução automática:
+sem scheduler, sem gatilho por criação de evento, sem reexecução.
+
+Cada execução grava **uma** linha em `audit_log_entries`
+(`persistCurationAudit`, `action: "AI_MULTI_EXPERT_CURATION_CREATED"`,
+`entity_type: "CONTRACT_EVENT"`) com projeto, evento, usuário que
+iniciou (`actor_user_id`), data/hora (`occurred_at`), tema roteado,
+Experts consultados, severidade consolidada, situação, divergências,
+recomendação do CEO IA e as decisões humanas necessárias — tudo dentro
+de `detail` (nenhuma tabela nova foi criada; `audit_log_entries.detail`
+já suporta isso, mesmo padrão já usado por
+`apps/web/lib/ai/experts/planning-director/apply-schedule-delay-assessment.ts`
+para resultado de Expert sem coluna dedicada). O resultado nunca é
+tratado como decisão — é sempre exibido como análise sujeita a revisão
+humana, e nenhuma ação (SLA, evento, e-mail) é criada automaticamente a
+partir dele.
+
+### O que ainda não existe
+
+- Gatilho automático (por criação de evento, por e-mail recebido, por
+  agendamento) — continua deliberadamente fora de escopo.
+- Fontes além de EVENT com UI real — `CurationInput.sourceType` aceita
+  `EMAIL`/`PROJECT`, mas só EVENT tem um botão de disparo hoje.
+- Conexão a qualquer execução automática de recomendação — o resultado
+  nunca cria `sla_actions`/eventos/e-mails sozinho.

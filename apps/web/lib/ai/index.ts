@@ -141,7 +141,8 @@ export type {
 } from "./experts/ceo";
 
 export type { CurationInput, CurationSourceType, ExpertCurationResult, ExpertRoutingDecision, MultiExpertCuration } from "./curation";
-export { decideExpertRouting, runMultiExpertCuration } from "./curation";
+export { decideExpertRouting, runMultiExpertCuration, persistCurationAudit } from "./curation";
+export type { PersistCurationAuditInput } from "./curation";
 
 export type {
   ClaimCategory,
