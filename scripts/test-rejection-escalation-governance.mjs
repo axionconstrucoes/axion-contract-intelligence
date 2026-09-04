@@ -26,6 +26,13 @@
 // checagem estrutural; ver a nota de honestidade ao final do arquivo
 // para o que NÃO pôde ser exercitado contra Postgres real nesta sessão.
 //
+// PARTE D — checkpoint 3 (Fase 4/5 do trabalho de escalonamento
+// hierárquico): 20260904140000_rejection_escalation_target_audit.sql —
+// evidência de auditoria explícita quando nenhum superior está
+// configurado (ESCALATION_TARGET_NOT_CONFIGURED), e
+// buildEscalationNotificationPayload (infraestrutura de representação
+// para uma notificação futura — nunca envia nada).
+//
 // IMPORTANTE — o que este arquivo NÃO faz: esta migration não foi
 // aplicada em nenhum Supabase remoto nesta etapa (restrição explícita
 // do pedido). Portanto nenhum teste aqui exercita reject_relevant_finding
@@ -49,6 +56,7 @@ register("./ts-module-resolver.mjs", import.meta.url);
 const { isRelevantRecommendationSeverity, validateRejectionJustification, RELEVANT_RECOMMENDATION_SEVERITIES } = await import(
   "../apps/web/lib/governance/reject-relevant-recommendation"
 );
+const { buildEscalationNotificationPayload } = await import("../apps/web/lib/governance/escalation-notification-payload");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
@@ -424,6 +432,148 @@ check("EXPERT_RECOMMENDATION: reconfirmado N/A — formulário manual de criaç�
 });
 
 console.log("");
+
+// ============================================================
+// PARTE D — checkpoint 3: evidência auditável explícita da falha de
+// configuração (Fase 4) + infraestrutura de notificação (Fase 5),
+// migration 20260904140000_rejection_escalation_target_audit.sql
+// ============================================================
+
+const targetAuditPath = "supabase/migrations/20260904140000_rejection_escalation_target_audit.sql";
+const targetAudit = readSource(targetAuditPath);
+
+check("checkpoint 3 é aditivo: nenhum DROP TABLE/COLUMN/TRIGGER, nenhum TRUNCATE/DELETE, nenhum enum novo", () => {
+  assert(!/drop\s+table/i.test(targetAudit));
+  assert(!/drop\s+column/i.test(targetAudit));
+  assert(!/drop\s+trigger/i.test(targetAudit));
+  assert(!/truncate/i.test(targetAudit));
+  assert(!/delete\s+from/i.test(targetAudit));
+  assert(!/create\s+type/i.test(targetAudit));
+});
+
+check("reject_relevant_finding (v3): mesma assinatura/retorno de v2 — só CREATE OR REPLACE do corpo, nunca DROP+CREATE desnecessário", () => {
+  assert(!targetAudit.includes("drop function"), "assinatura não mudou nesta migration — não precisa dropar");
+  assert(targetAudit.includes("returns table (") && targetAudit.includes("escalation_target_resolved boolean"));
+});
+
+check("ausência de superior gera evidência de auditoria EXPLÍCITA (ESCALATION_TARGET_NOT_CONFIGURED), condicionada a v_target_user_id is null", () => {
+  const fnMatch = targetAudit.match(/create or replace function public\.reject_relevant_finding[\s\S]*?\n\$\$;/);
+  assert(fnMatch, "reject_relevant_finding (v3) não encontrada");
+  const fnBody = fnMatch[0];
+  const conditionIndex = fnBody.indexOf("if v_target_user_id is null then");
+  const insertIndex = fnBody.indexOf("'ESCALATION_TARGET_NOT_CONFIGURED'");
+  assert(conditionIndex >= 0 && insertIndex >= 0 && conditionIndex < insertIndex, "o INSERT de auditoria precisa estar dentro do IF que checa ausência de superior");
+});
+
+check("mensagem de auditoria nunca afirma que alguém foi notificado quando não há superior configurado", () => {
+  const fnMatch = targetAudit.match(/create or replace function public\.reject_relevant_finding[\s\S]*?\n\$\$;/);
+  const fnBody = fnMatch[0];
+  // A string de detail precisa negar explicitamente que alguém foi
+  // avisado — nunca uma frase tipo "responsável X foi notificado".
+  assert(fnBody.includes("ninguém foi notificado"), "detail precisa negar explicitamente que alguém foi avisado");
+});
+
+check("rejeição e escalonamento continuam válidos mesmo sem superior — nada é revertido/bloqueado por causa disso", () => {
+  const fnMatch = targetAudit.match(/create or replace function public\.reject_relevant_finding[\s\S]*?\n\$\$;/);
+  const fnBody = fnMatch[0];
+  // O INSERT de auditoria vem DEPOIS do INSERT em sla_actions e da
+  // chamada a escalate_sla_action — nunca impede/desfaz nenhum dos dois.
+  const slaActionInsertIndex = fnBody.indexOf("insert into public.sla_actions");
+  const escalateCallIndex = fnBody.indexOf("public.escalate_sla_action(");
+  const auditInsertIndex = fnBody.indexOf("'ESCALATION_TARGET_NOT_CONFIGURED'");
+  assert(slaActionInsertIndex >= 0 && escalateCallIndex >= 0 && auditInsertIndex >= 0);
+  assert(slaActionInsertIndex < escalateCallIndex && escalateCallIndex < auditInsertIndex, "ordem precisa ser: cria sla_action -> escalona -> só então audita a lacuna, nunca ao contrário");
+});
+
+check("auditoria de lacuna usa actor_type SYSTEM (mesma convenção de 'sla-engine' do motor de SLA) — nunca atribuída a um usuário", () => {
+  const fnMatch = targetAudit.match(/create or replace function public\.reject_relevant_finding[\s\S]*?\n\$\$;/);
+  const fnBody = fnMatch[0];
+  const auditBlock = fnBody.slice(fnBody.indexOf("if v_target_user_id is null then"), fnBody.indexOf("'ESCALATION_TARGET_NOT_CONFIGURED'") + 40);
+  assert(auditBlock.includes("'SYSTEM'") && auditBlock.includes("'sla-engine'"));
+});
+
+check("buildEscalationNotificationPayload: LOW/MEDIUM (sem sla_action) -> null, nunca monta payload sem escalonamento real", () => {
+  const fakeResult = {
+    finding: { id: "f1", projectId: "p1", findingType: "DESVIO", severity: "LOW", recommendation: "x", interpretation: "y", reviewerNote: "ok", reviewedByUserId: "u1", reviewedAt: new Date().toISOString() },
+    slaActionId: null,
+    escalationId: null,
+    alreadyExisted: false,
+    escalationTargetUserId: null,
+    escalationTargetResolved: false,
+  };
+  assert(buildEscalationNotificationPayload(fakeResult) === null);
+});
+
+check("buildEscalationNotificationPayload: HIGH/CRITICAL com superior resolvido -> payload completo e fiel ao resultado (nunca recalcula severidade/decisão)", () => {
+  const fakeResult = {
+    finding: {
+      id: "f2",
+      projectId: "p1",
+      findingType: "DESVIO",
+      severity: "CRITICAL",
+      recommendation: "Notificar o cliente formalmente.",
+      interpretation: "Cláusula 4.2 exige comunicação em 48h.",
+      reviewerNote: "Risco já mitigado por aditivo assinado.",
+      reviewedByUserId: "u1",
+      reviewedAt: "2026-09-04T12:00:00.000Z",
+    },
+    slaActionId: "sa1",
+    escalationId: "esc1",
+    alreadyExisted: false,
+    escalationTargetUserId: "u2",
+    escalationTargetResolved: true,
+  };
+  const payload = buildEscalationNotificationPayload(fakeResult);
+  assert(payload !== null);
+  assert(payload.severity === "CRITICAL");
+  assert(payload.humanDecision === "REJECTED");
+  assert(payload.reviewerNote === "Risco já mitigado por aditivo assinado.");
+  assert(payload.escalationTargetUserId === "u2");
+  assert(payload.escalationTargetResolved === true);
+  assert(payload.slaActionId === "sa1" && payload.escalationId === "esc1");
+});
+
+check("buildEscalationNotificationPayload: superior NÃO resolvido -> payload nunca esconde isso (escalationTargetResolved=false, escalationTargetUserId=null)", () => {
+  const fakeResult = {
+    finding: {
+      id: "f3",
+      projectId: "p1",
+      findingType: "CONFLITO",
+      severity: "HIGH",
+      recommendation: "x",
+      interpretation: "y",
+      reviewerNote: "Justificativa válida.",
+      reviewedByUserId: "u1",
+      reviewedAt: "2026-09-04T12:00:00.000Z",
+    },
+    slaActionId: "sa2",
+    escalationId: "esc2",
+    alreadyExisted: false,
+    escalationTargetUserId: null,
+    escalationTargetResolved: false,
+  };
+  const payload = buildEscalationNotificationPayload(fakeResult);
+  assert(payload !== null);
+  assert(payload.escalationTargetUserId === null);
+  assert(payload.escalationTargetResolved === false, "nunca deveria afirmar resolvido quando não foi");
+});
+
+check("buildEscalationNotificationPayload nunca envia nada — só monta um objeto em memória (nenhuma chamada de rede/e-mail)", () => {
+  const source = readSource("apps/web/lib/governance/escalation-notification-payload.ts");
+  assert(!/fetch\(|sendEmail|EmailProvider|nodemailer|smtp/i.test(source));
+  assert(source.includes("NUNCA envia nada"));
+});
+
+check("nenhuma interferência no PR #12 / motor de curadoria multiagente: arquivos da curadoria não referenciam nada deste trabalho", () => {
+  const curationEngine = readSource("apps/web/lib/ai/curation/run-multi-expert-curation.ts");
+  const curationAudit = readSource("apps/web/lib/ai/curation/persist-curation-audit.ts");
+  for (const forbidden of ["reject_relevant_finding", "rejectAiFinding", "ESCALATION_TARGET_NOT_CONFIGURED", "sla_area_responsibles", "escalate_sla_action"]) {
+    assert(!curationEngine.includes(forbidden), `run-multi-expert-curation.ts não deveria referenciar ${forbidden}`);
+    assert(!curationAudit.includes(forbidden), `persist-curation-audit.ts não deveria referenciar ${forbidden}`);
+  }
+});
+
+console.log("");
 console.log("--- honestidade: itens que dependem de Postgres real e NÃO foram exercitados ---");
 console.log("Docker Desktop não está com o daemon ativo nesta máquina (`docker ps` falha) —");
 console.log("`supabase start` (banco local efêmero) não está disponível nesta sessão. Aplicar");
@@ -435,7 +585,9 @@ console.log("  3.   transação legítima da RPC (v2) ser aceita de fato");
 console.log("  4.   retry sob concorrência real continuar com exatamente 1 sla_action");
 console.log("  5.   DELETE/desvincular sla_action de um finding ainda REJECTED ser bloqueado");
 console.log("  6/7. retorno real da RPC com/sem superior configurado (só a FORMA foi provada)");
-console.log("Próximo passo manual: `supabase start` (requer Docker rodando) + aplicar as duas");
+console.log("  8.   INSERT real de ESCALATION_TARGET_NOT_CONFIGURED em audit_log_entries quando");
+console.log("       nenhum responsável está configurado (só a FORMA/posição no código foi provada)");
+console.log("Próximo passo manual: `supabase start` (requer Docker rodando) + aplicar as três");
 console.log("migrations num banco local efêmero + rodar as consultas SQL diretas acima.");
 console.log("");
 

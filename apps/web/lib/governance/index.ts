@@ -10,3 +10,6 @@ export type {
   RejectAiFindingResult,
   RelevantRecommendationSeverity,
 } from "./reject-relevant-recommendation";
+
+export { buildEscalationNotificationPayload } from "./escalation-notification-payload";
+export type { EscalationNotificationPayload } from "./escalation-notification-payload";
