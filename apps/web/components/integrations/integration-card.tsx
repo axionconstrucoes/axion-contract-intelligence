@@ -13,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { resolveIntegrationVisualIdentity } from "./integration-visual-identity";
 import { IntegrationOriginForm } from "./integration-origin-form";
 import { ConstrumanagerConnectionCheck } from "./construmanager-connection-check";
+import { ConstrumanagerMetadataSync } from "./construmanager-metadata-sync";
+import type { ConstrumanagerMetadataOverview } from "@/lib/integrations/construmanager/get-metadata-overview";
 import { resolveGenericIntegrationDisplayStatus } from "@/lib/ui/resolve-integration-display-status";
 import { driveTypeLabels, formatDateTime } from "@/lib/labels";
 import { normalizeLegacyMojibake } from "@/lib/normalize-legacy-mojibake";
@@ -23,11 +25,13 @@ export function IntegrationCard({
   source,
   config,
   canManage,
+  construmanagerMetadata,
 }: {
   projectId: string;
   source: SourceDefinition;
   config: IntegrationConfig | undefined;
   canManage: boolean;
+  construmanagerMetadata?: ConstrumanagerMetadataOverview | null;
 }) {
   const [editing, setEditing] = useState(false);
   const identity = resolveIntegrationVisualIdentity(source.type);
@@ -91,11 +95,17 @@ export function IntegrationCard({
         </div>
 
         {source.type === "CONSTRUMANAGER" && canManage ? (
-          <ConstrumanagerConnectionCheck
-            projectId={projectId}
-            lastConnectionCheckAt={config?.lastConnectionCheckAt}
-            lastConnectionError={config?.lastConnectionError}
-          />
+          <>
+            <ConstrumanagerConnectionCheck
+              projectId={projectId}
+              lastConnectionCheckAt={config?.lastConnectionCheckAt}
+              lastConnectionError={config?.lastConnectionError}
+            />
+            <ConstrumanagerMetadataSync
+              projectId={projectId}
+              overview={construmanagerMetadata ?? null}
+            />
+          </>
         ) : null}
 
         {canManage ? (

@@ -30,3 +30,30 @@ export const initialValidateConstrumanagerConnectionState: ValidateConstrumanage
   status: null,
   checkedAt: null,
 };
+
+// Sincronização MANUAL de metadados do Construmanager (Pacote B).
+// Somente contagens: nenhum documento, nome de arquivo ou conteúdo
+// trafega para o estado do formulário.
+export type SyncConstrumanagerMetadataState = {
+  error: string | null;
+  success: boolean;
+  syncedAt: string | null;
+  foldersSeen: number | null;
+  documentsSeen: number | null;
+  historicalVersionsSeen: number | null;
+  documentsCreated: number | null;
+  versionsCreated: number | null;
+  versionsOrphaned: number | null;
+};
+
+export const initialSyncConstrumanagerMetadataState: SyncConstrumanagerMetadataState = {
+  error: null,
+  success: false,
+  syncedAt: null,
+  foldersSeen: null,
+  documentsSeen: null,
+  historicalVersionsSeen: null,
+  documentsCreated: null,
+  versionsCreated: null,
+  versionsOrphaned: null,
+};

@@ -1,0 +1,220 @@
+{
+  "_fixture": "Pasta/List",
+  "_origem": "Resposta REAL da obra 34164 (WEG Linhares ES - Fabrica de Fios), empresa 1645.",
+  "_request": {
+    "empresaId": 1645,
+    "obraId": 34164
+  },
+  "_casos": [
+    "arvore completa de 25 pastas em 3 niveis",
+    "parentId vem como STRING nesta rota",
+    "raiz (id 37271646) aponta para um pai que NAO existe na resposta -> parent_folder_id null",
+    "campo path com separador irregular (duplo apos a raiz, simples depois)"
+  ],
+  "listFolder": [
+    {
+      "id": 37271646,
+      "parentId": "26168122",
+      "name": "WEG Linhares ES - Fábrica de Fios",
+      "text": "WEG Linhares ES - Fábrica de Fios",
+      "level": 1,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios"
+    },
+    {
+      "id": 37272102,
+      "parentId": "37271646",
+      "name": "PROJETOS - AEOLUS",
+      "text": "PROJETOS - AEOLUS",
+      "level": 2,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - AEOLUS"
+    },
+    {
+      "id": 38350655,
+      "parentId": "37272102",
+      "name": "1 - LISTA MESTRA",
+      "text": "1 - LISTA MESTRA",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - AEOLUS\\1 - LISTA MESTRA"
+    },
+    {
+      "id": 38350663,
+      "parentId": "37272102",
+      "name": "2 -GALPÃO",
+      "text": "2 -GALPÃO",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - AEOLUS\\2 -GALPÃO"
+    },
+    {
+      "id": 38350665,
+      "parentId": "37272102",
+      "name": "3 - TANQUE",
+      "text": "3 - TANQUE",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - AEOLUS\\3 - TANQUE"
+    },
+    {
+      "id": 37272157,
+      "parentId": "37271646",
+      "name": "PROJETOS - FEBRUCE (A3)",
+      "text": "PROJETOS - FEBRUCE (A3)",
+      "level": 2,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - FEBRUCE (A3)"
+    },
+    {
+      "id": 38350719,
+      "parentId": "37272157",
+      "name": "1 - LISTA MESTRA",
+      "text": "1 - LISTA MESTRA",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - FEBRUCE (A3)\\1 - LISTA MESTRA"
+    },
+    {
+      "id": 38350732,
+      "parentId": "37272157",
+      "name": "2 - GALPÃO ",
+      "text": "2 - GALPÃO ",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - FEBRUCE (A3)\\2 - GALPÃO "
+    },
+    {
+      "id": 37272184,
+      "parentId": "37271646",
+      "name": "PROJETOS - PRECON",
+      "text": "PROJETOS - PRECON",
+      "level": 2,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - PRECON"
+    },
+    {
+      "id": 38007525,
+      "parentId": "37272184",
+      "name": "1 - LISTA MESTRA",
+      "text": "1 - LISTA MESTRA",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - PRECON\\1 - LISTA MESTRA"
+    },
+    {
+      "id": 38007526,
+      "parentId": "37272184",
+      "name": "2 - GALPÃO PRE MOLDADO",
+      "text": "2 - GALPÃO PRE MOLDADO",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - PRECON\\2 - GALPÃO PRE MOLDADO"
+    },
+    {
+      "id": 37271649,
+      "parentId": "37271646",
+      "name": "PROJETOS - WEG",
+      "text": "PROJETOS - WEG",
+      "level": 2,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG"
+    },
+    {
+      "id": 37271789,
+      "parentId": "37271649",
+      "name": "1 - PROJETO ARQUITETÔNICO",
+      "text": "1 - PROJETO ARQUITETÔNICO",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\1 - PROJETO ARQUITETÔNICO"
+    },
+    {
+      "id": 37271945,
+      "parentId": "37271649",
+      "name": "10 - PROJETO MECÂNICO - GALERIAS E PIPERACK",
+      "text": "10 - PROJETO MECÂNICO - GALERIAS E PIPERACK",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\10 - PROJETO MECÂNICO - GALERIAS E PIPERACK"
+    },
+    {
+      "id": 37271953,
+      "parentId": "37271649",
+      "name": "11 - PROJETO PPCI - EM REVISÃO",
+      "text": "11 - PROJETO PPCI - EM REVISÃO",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\11 - PROJETO PPCI - EM REVISÃO"
+    },
+    {
+      "id": 37271962,
+      "parentId": "37271649",
+      "name": "12 - SONDAGEM EXISTENTE ",
+      "text": "12 - SONDAGEM EXISTENTE ",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\12 - SONDAGEM EXISTENTE "
+    },
+    {
+      "id": 37271798,
+      "parentId": "37271649",
+      "name": "2 - PROJETO ARRUAMENTO",
+      "text": "2 - PROJETO ARRUAMENTO",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\2 - PROJETO ARRUAMENTO"
+    },
+    {
+      "id": 37271806,
+      "parentId": "37271649",
+      "name": "3 - PROJETO APROVEITAMENTO PLUVIAL ",
+      "text": "3 - PROJETO APROVEITAMENTO PLUVIAL ",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\3 - PROJETO APROVEITAMENTO PLUVIAL "
+    },
+    {
+      "id": 37271828,
+      "parentId": "37271649",
+      "name": "4 - PROJETO DE DRENAGEM ",
+      "text": "4 - PROJETO DE DRENAGEM ",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\4 - PROJETO DE DRENAGEM "
+    },
+    {
+      "id": 37271842,
+      "parentId": "37271649",
+      "name": "5 - PROJETO DE SPDA (PARA DESCIDAS ESTRUTURAIS)",
+      "text": "5 - PROJETO DE SPDA (PARA DESCIDAS ESTRUTURAIS)",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\5 - PROJETO DE SPDA (PARA DESCIDAS ESTRUTURAIS)"
+    },
+    {
+      "id": 37271850,
+      "parentId": "37271649",
+      "name": "6 - PROJETO DOCA ",
+      "text": "6 - PROJETO DOCA ",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\6 - PROJETO DOCA "
+    },
+    {
+      "id": 37271918,
+      "parentId": "37271649",
+      "name": "7 - PROJETO ELEVATÓRIA E CAIXA DE UTILIDADES ",
+      "text": "7 - PROJETO ELEVATÓRIA E CAIXA DE UTILIDADES ",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\7 - PROJETO ELEVATÓRIA E CAIXA DE UTILIDADES "
+    },
+    {
+      "id": 37271924,
+      "parentId": "37271649",
+      "name": "8 - PROJETO GALERIAS ELÉTRICAS - EM PROJETO",
+      "text": "8 - PROJETO GALERIAS ELÉTRICAS - EM PROJETO",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\8 - PROJETO GALERIAS ELÉTRICAS - EM PROJETO"
+    },
+    {
+      "id": 37271930,
+      "parentId": "37271649",
+      "name": "9 - PROJETO HIDROSSANITÁRIO ",
+      "text": "9 - PROJETO HIDROSSANITÁRIO ",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\9 - PROJETO HIDROSSANITÁRIO "
+    },
+    {
+      "id": 37272074,
+      "parentId": "37271649",
+      "name": "LISTA MESTRA - WEG",
+      "text": "LISTA MESTRA - WEG",
+      "level": 3,
+      "path": "WEG Linhares ES - Fábrica de Fios\\\\WEG Linhares ES - Fábrica de Fios\\PROJETOS - WEG\\LISTA MESTRA - WEG"
+    }
+  ],
+  "status": {
+    "id": 0,
+    "description": "OK"
+  }
+}
