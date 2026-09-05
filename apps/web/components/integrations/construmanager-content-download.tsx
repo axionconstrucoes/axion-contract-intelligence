@@ -36,6 +36,11 @@ import {
   prepareConstrumanagerContentAction,
 } from "@/app/[projectId]/integracoes/actions";
 import { ConstrumanagerContentStatusBadge } from "./construmanager-status-badge";
+import {
+  CONSTRUMANAGER_DOWNLOADING_LABEL,
+  CONSTRUMANAGER_DOWNLOAD_BUTTON_CLASS,
+  CONSTRUMANAGER_SEARCH_INPUT_CLASS,
+} from "./construmanager-panel-styles";
 import { formatDateTime } from "@/lib/labels";
 import type {
   ConstrumanagerContentItem,
@@ -226,7 +231,7 @@ export function ConstrumanagerContentDownload({
             onChange={(event) => setFilter(event.target.value)}
             placeholder="Filtrar por nome do arquivo…"
             aria-label="Filtrar conteúdos do Construmanager por nome"
-            className="h-7 text-xs"
+            className={`h-7 text-xs ${CONSTRUMANAGER_SEARCH_INPUT_CLASS}`}
           />
 
           <ul className="flex flex-col gap-0.5 text-xs">
@@ -245,13 +250,12 @@ export function ConstrumanagerContentDownload({
                     <Button
                       type="submit"
                       size="sm"
-                      variant="outline"
-                      className="h-6 px-2 text-xs"
+                      className={`h-6 px-2 text-xs ${CONSTRUMANAGER_DOWNLOAD_BUTTON_CLASS}`}
                       disabled={busy}
                       onClick={() => setActiveLinkId(item.linkId)}
                     >
                       {pending && activeLinkId === item.linkId
-                        ? "Baixando…"
+                        ? CONSTRUMANAGER_DOWNLOADING_LABEL
                         : "Baixar"}
                     </Button>
                   </form>
