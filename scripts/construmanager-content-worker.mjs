@@ -197,7 +197,6 @@ let reused = 0;
 let failed = 0;
 let humanDecision = 0;
 let externalReferences = 0;
-let versionTransitions = 0;
 let bytesDownloaded = 0;
 let bytesStored = 0;
 let firstError = null;
@@ -225,30 +224,20 @@ try {
       `${prep?.pending_total ?? 0} aguardando download`
   );
 
-  // 2. NOVA VERSAO VIGENTE — o requisito central da automacao.
+  // A DETECCAO DE NOVA VERSAO VIGENTE NAO ACONTECE AQUI.
   //
-  //    Roda ANTES de qualquer download e nao depende de nenhum: compara
-  //    a revisao vigente recem-sincronizada com a ultima observada. Um
-  //    arquivo grande, que nunca sera baixado, tem sua troca de revisao
-  //    detectada exatamente como os pequenos.
+  // Ela e um processo separado, com interruptor proprio
+  // (CONSTRUMANAGER_VERSION_MONITORING_ENABLED) e worker proprio
+  // (scripts/construmanager-version-monitor.mjs), e roda logo apos a
+  // sincronizacao de metadados. Motivo: saber que um projeto mudou de
+  // revisao nao pode depender de ter a copia binaria do arquivo — o IFC
+  // de 262,9 MiB nunca sera baixado e precisa ser monitorado do mesmo
+  // jeito. Se a deteccao vivesse aqui, desligar downloads apagaria o
+  // monitoramento junto.
   //
-  //    Idempotente: a segunda execucao sobre a mesma sincronizacao
-  //    devolve 0 transicoes e nao repete alerta.
-  const vigencia = firstRow(
-    await rpc("detect_construmanager_version_transitions", {
-      p_project_id: PROJECT_ID,
-    })
-  );
-
-  versionTransitions = Number(vigencia?.transitions ?? 0);
-
-  log(
-    `vigencia: ${vigencia?.first_observations ?? 0} primeira(s) observacao(oes) | ` +
-      `${versionTransitions} NOVA(S) VERSAO(OES) VIGENTE(S) | ` +
-      `${vigencia?.unchanged ?? 0} sem mudanca`
-  );
-
-  // 3. Classificacao de armazenamento, ANTES de qualquer transferencia.
+  // Este worker trabalha SOMENTE sobre o estado ja sincronizado e ja
+  // classificado. Ele nao descobre revisao nova.
+  // 2. Classificacao de armazenamento, ANTES de qualquer transferencia.
   //    Acima do limite => REFERENCIA_EXTERNA: o arquivo fica no
   //    Construmanager. Nao e erro, nao e pendencia, nao consome
   //    tentativa e nao bloqueia os menores. Idempotente e reversivel:
@@ -268,7 +257,7 @@ try {
       `${externalReferences} referencia(s) externa(s) no total`
   );
 
-  // 4. Anomalia real: tamanho ausente nos metadados. Nao da para
+  // 3. Anomalia real: tamanho ausente nos metadados. Nao da para
   //    classificar nem estimar custo — isso sim precisa de gente.
   const { data: semTamanho, error: semTamErr } = await supabase
     .from("construmanager_content_links")
@@ -305,7 +294,7 @@ try {
     log(`decisao humana: #${row.construmanager_object_id} ${row.source_name} — ${verdict.reason}`);
   }
 
-  // 5. Autentica UMA vez para a rodada. O token vale ~24 h; reautenticar
+  // 4. Autentica UMA vez para a rodada. O token vale ~24 h; reautenticar
   //    por arquivo so multiplicaria a exposicao da credencial.
   const { data: integ, error: integErr } = await supabase
     .from("project_integrations")
@@ -335,7 +324,7 @@ try {
 
   const token = await client.getAccessToken(auth.user.token);
 
-  // 6. Aquisicao + processamento, SEQUENCIAL de proposito: downloads de
+  // 5. Aquisicao + processamento, SEQUENCIAL de proposito: downloads de
   //    centenas de MB em paralelo multiplicariam disco temporario e banda
   //    sem ganho nesta fase.
   const alvos = await rpc("claim_construmanager_content_targets", {
@@ -459,7 +448,7 @@ try {
     }
   }
 
-  // 7. Devolve o que foi adquirido e nao processado.
+  // 6. Devolve o que foi adquirido e nao processado.
   for (const linkId of naoProcessados) {
     await rpc("release_construmanager_content_lease", {
       p_project_id: PROJECT_ID,
@@ -488,7 +477,7 @@ try {
   log(
     `rodada ${status} | selecionados=${selected} armazenados=${stored} ` +
       `reaproveitados=${reused} erros=${failed} decisaoHumana=${humanDecision} ` +
-      `referenciaExterna=${externalReferences} novaVersaoVigente=${versionTransitions} | ` +
+      `referenciaExterna=${externalReferences} | ` +
       `baixados=${bytesDownloaded}B armazenados=${bytesStored}B | ${Date.now() - inicio}ms`
   );
 

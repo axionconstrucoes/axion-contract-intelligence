@@ -620,8 +620,28 @@ check(
 );
 
 check(
-  "nenhuma funcao nova concede execucao a authenticated",
-  !/grant execute on function[^;]*to authenticated/.test(migrationBody)
+  "nenhuma RPC de CONTEUDO concede execucao a authenticated",
+  (() => {
+    // O bloco de grants das RPCs de conteudo (service_role apenas).
+    const blocos = migrationBody.split("foreach fn in array array[");
+    const conteudo = blocos.find((b) =>
+      b.slice(0, 400).includes("claim_construmanager_content_targets")
+    );
+    return Boolean(conteudo) && !/grant execute on function[^;]*to authenticated/.test(conteudo);
+  })()
+);
+
+check(
+  "o detector de versao E concedido a authenticated, de proposito (caminho pos-sync na UI)",
+  (() => {
+    const blocos = migrationBody.split("foreach fn in array array[");
+    // O bloco certo e aquele cuja LISTA (primeiras linhas) nomeia o
+    // detector — nao qualquer bloco que o mencione mais adiante.
+    const detector = blocos.find((b) =>
+      b.slice(0, 200).includes("detect_construmanager_version_transitions")
+    );
+    return Boolean(detector) && /grant execute on function[^;]*to authenticated/.test(detector);
+  })()
 );
 
 check(

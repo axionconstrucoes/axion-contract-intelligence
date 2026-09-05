@@ -474,13 +474,18 @@ check(
 );
 
 check(
-  "uma transicao por (integracao, documento, revisao nova)",
-  /unique \(integration_id, construmanager_object_id, new_revision\)/.test(migrationBody)
+  "uma transicao por (integracao, documento, OBSERVACAO)",
+  /unique \(integration_id, construmanager_object_id, sync_run_id\)/.test(migrationBody)
 );
 
 check(
-  "conflito na transicao e descartado (nao duplica alerta)",
-  /on conflict \(integration_id, construmanager_object_id, new_revision\) do nothing/.test(
+  "a identidade NAO e mais (documento, revisao nova) — isso proibiria uma revisao de voltar a ser vigente",
+  !/unique \(integration_id, construmanager_object_id, new_revision\)/.test(migrationBody)
+);
+
+check(
+  "conflito na mesma observacao e descartado (nao duplica alerta)",
+  /on conflict \(integration_id, construmanager_object_id, sync_run_id\) do nothing/.test(
     migrationBody
   )
 );
@@ -504,9 +509,8 @@ check(
 );
 
 check(
-  "a deteccao roda ANTES de qualquer download no worker",
-  worker.indexOf("detect_construmanager_version_transitions") <
-    worker.indexOf("downloadConstrumanagerContent(")
+  "o worker de conteudo NAO contem o detector (processo separado)",
+  !worker.includes("detect_construmanager_version_transitions")
 );
 
 check(
@@ -551,6 +555,397 @@ check(
     /item\.revision/.test(componente) &&
     /item\.extension/.test(componente)
 );
+
+// ---------------------------------------------------------------------
+// 12. DESACOPLAMENTO: tres processos, tres interruptores
+// ---------------------------------------------------------------------
+
+const {
+  resolveMetadataSyncEnabled,
+  resolveVersionMonitoringEnabled,
+  resolveAutomationConfig,
+} = await import("../apps/web/lib/integrations/construmanager/automation-policy.ts");
+
+console.log("");
+console.log("-- 12. controles independentes e fail-closed --");
+
+check(
+  "ambiente vazio: metadata sync DESLIGADO",
+  resolveMetadataSyncEnabled({}).enabled === false
+);
+check(
+  "ambiente vazio: monitoramento de versao DESLIGADO",
+  resolveVersionMonitoringEnabled({}).enabled === false
+);
+check(
+  "ambiente vazio: download DESLIGADO",
+  resolveAutomationConfig({}).enabled === false
+);
+
+check(
+  "AUTO_DOWNLOAD_ENABLED=true NAO habilita monitoramento de versao",
+  resolveVersionMonitoringEnabled({ CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED: "true" })
+    .enabled === false
+);
+
+check(
+  "AUTO_DOWNLOAD_ENABLED=true NAO habilita metadata sync",
+  resolveMetadataSyncEnabled({ CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED: "true" })
+    .enabled === false
+);
+
+check(
+  "VERSION_MONITORING=true NAO habilita download",
+  resolveAutomationConfig({ CONSTRUMANAGER_VERSION_MONITORING_ENABLED: "true" })
+    .enabled === false
+);
+
+check(
+  "METADATA_SYNC=true NAO habilita download",
+  resolveAutomationConfig({ CONSTRUMANAGER_METADATA_SYNC_ENABLED: "true" }).enabled === false
+);
+
+check(
+  "METADATA_SYNC=true NAO habilita monitoramento",
+  resolveVersionMonitoringEnabled({ CONSTRUMANAGER_METADATA_SYNC_ENABLED: "true" })
+    .enabled === false
+);
+
+check(
+  "CENARIO CENTRAL: monitoramento LIGADO com download DESLIGADO",
+  (() => {
+    const env = {
+      CONSTRUMANAGER_VERSION_MONITORING_ENABLED: "true",
+      CONSTRUMANAGER_METADATA_SYNC_ENABLED: "true",
+    };
+    return (
+      resolveVersionMonitoringEnabled(env).enabled === true &&
+      resolveMetadataSyncEnabled(env).enabled === true &&
+      resolveAutomationConfig(env).enabled === false
+    );
+  })()
+);
+
+check(
+  "kill switch derruba os TRES de uma vez",
+  (() => {
+    const env = {
+      CONSTRUMANAGER_METADATA_SYNC_ENABLED: "true",
+      CONSTRUMANAGER_VERSION_MONITORING_ENABLED: "true",
+      CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED: "true",
+      CONSTRUMANAGER_AUTO_MAX_ITEMS: "2",
+      CONSTRUMANAGER_AUTO_MAX_FILE_BYTES: "52428800",
+      CONSTRUMANAGER_AUTO_TIME_BUDGET_MS: "600000",
+      CONSTRUMANAGER_AUTO_KILL_SWITCH: "true",
+    };
+    return (
+      resolveMetadataSyncEnabled(env).enabled === false &&
+      resolveVersionMonitoringEnabled(env).enabled === false &&
+      resolveAutomationConfig(env).enabled === false
+    );
+  })()
+);
+
+for (const valor of ["TRUE", "1", "yes", " ", "false"]) {
+  check(
+    `metadata sync: ${JSON.stringify(valor)} nao liga (so "true" exato)`,
+    resolveMetadataSyncEnabled({ CONSTRUMANAGER_METADATA_SYNC_ENABLED: valor })
+      .enabled === false
+  );
+  check(
+    `monitoramento: ${JSON.stringify(valor)} nao liga (so "true" exato)`,
+    resolveVersionMonitoringEnabled({
+      CONSTRUMANAGER_VERSION_MONITORING_ENABLED: valor,
+    }).enabled === false
+  );
+}
+
+// ---------------------------------------------------------------------
+// 13. IDENTIDADE DA TRANSICAO: R04 -> R05 -> R04 -> R05
+// ---------------------------------------------------------------------
+
+console.log("");
+console.log("-- 13. ciclo R04 -> R05 -> R04 -> R05 --");
+
+{
+  // Ledger com a identidade NOVA: (documento, sync_run_id).
+  const ledger = [];
+  const auditoria = [];
+  let ponteiro = null;
+
+  function detectar(revisao, syncRunId) {
+    const atual = { objectId: 38350763, revision: revisao, name: "356-WEG-MET-3D-001.ifc" };
+
+    if (ponteiro === null) {
+      ponteiro = { ...atual };
+      return "PRIMEIRA_OBSERVACAO";
+    }
+
+    const v = evaluateVigency(ponteiro, atual);
+    if (v.outcome !== "NOVA_VERSAO_VIGENTE") return v.outcome;
+
+    const duplicada = ledger.some(
+      (t) => t.objectId === atual.objectId && t.syncRunId === syncRunId
+    );
+
+    if (!duplicada) {
+      ledger.push({
+        objectId: atual.objectId,
+        previousRevision: ponteiro.revision,
+        newRevision: revisao,
+        syncRunId,
+      });
+      auditoria.push({ de: ponteiro.revision, para: revisao });
+    }
+
+    ponteiro = { ...atual };
+    return "NOVA_VERSAO_VIGENTE";
+  }
+
+  detectar("04", "run-1");
+  check("R04 inicial: primeira observacao, sem evento", ledger.length === 0);
+
+  detectar("05", "run-2");
+  check("R04 -> R05: primeira transicao", ledger.length === 1);
+
+  detectar("05", "run-3");
+  check("R05 repetida em nova execucao: NENHUM evento novo", ledger.length === 1);
+
+  detectar("04", "run-4");
+  check("R05 -> R04 (REVERSAO): gera evento", ledger.length === 2);
+  check(
+    "a reversao registra o sentido correto",
+    ledger[1].previousRevision === "05" && ledger[1].newRevision === "04"
+  );
+
+  detectar("05", "run-5");
+  check("R04 -> R05 DE NOVO: gera evento (nao e suprimido)", ledger.length === 3);
+  check(
+    "a quarta transicao aponta 04 -> 05",
+    ledger[2].previousRevision === "04" && ledger[2].newRevision === "05"
+  );
+
+  check(
+    "duas linhas distintas com a MESMA revisao nova coexistem",
+    ledger.filter((t) => t.newRevision === "05").length === 2
+  );
+
+  check("uma auditoria por transicao, tres no total", auditoria.length === 3);
+
+  // A mesma observacao reprocessada nao duplica.
+  ponteiro = { objectId: 38350763, revision: "04" };
+  detectar("05", "run-5");
+  check("reprocessar a MESMA execucao (run-5) nao duplica", ledger.length === 3);
+}
+
+// ---------------------------------------------------------------------
+// 14. CONCORRENCIA
+// ---------------------------------------------------------------------
+
+console.log("");
+console.log("-- 14. duas deteccoes concorrentes --");
+
+{
+  // Reproduz FOR UPDATE: quem espera o bloqueio RELE a linha ja
+  // atualizada pelo vencedor, em READ COMMITTED.
+  const ledger = [];
+  const auditoria = [];
+  const ponteiro = { objectId: 1, revision: "04" };
+
+  function detectorConcorrente(runId, esperouBloqueio) {
+    // Quem esperou o bloqueio le o estado JA commitado pelo vencedor.
+    const v = evaluateVigency(ponteiro, { objectId: 1, revision: "05" });
+
+    if (v.outcome !== "NOVA_VERSAO_VIGENTE") return v.outcome;
+
+    // insert + update do ponteiro na MESMA transacao
+    ledger.push({ objectId: 1, previousRevision: ponteiro.revision, newRevision: "05", runId });
+    auditoria.push({ runId });
+    ponteiro.revision = "05";
+
+    return v.outcome;
+  }
+
+  const a = detectorConcorrente("run-A", false);
+  const b = detectorConcorrente("run-B", true);
+
+  check("o primeiro detector registra a transicao", a === "NOVA_VERSAO_VIGENTE");
+  check("o segundo encontra o ponteiro ja movido", b === "SEM_MUDANCA");
+  check("UMA transicao, nao duas", ledger.length === 1);
+  check("UMA auditoria, nao duas", auditoria.length === 1);
+  check("a revisao anterior nao se perdeu", ledger[0].previousRevision === "04");
+  check("o ponteiro terminou correto", ponteiro.revision === "05");
+}
+
+// ---------------------------------------------------------------------
+// 15. FALHA DE SINCRONIZACAO NAO GERA TRANSICAO PARCIAL
+// ---------------------------------------------------------------------
+
+console.log("");
+console.log("-- 15. sincronizacao que falha --");
+
+{
+  const actions = readFileSync("apps/web/app/[projectId]/integracoes/actions.ts", "utf8");
+  const i = actions.indexOf("sync_construmanager_metadata");
+  const bloco = actions.slice(i, i + 4000);
+
+  check(
+    "o throw da sincronizacao vem ANTES da deteccao",
+    bloco.indexOf("if (error) throw new Error(error.message)") <
+      bloco.indexOf("detect_construmanager_version_transitions")
+  );
+
+  check(
+    "a deteccao recebe o sync_run_id da sincronizacao",
+    /p_sync_run_id: summary\.sync_run_id/.test(bloco)
+  );
+
+  check(
+    "falha na deteccao NAO derruba a sincronizacao ja persistida",
+    /if \(detectError\)[\s\S]{0,240}console\.error/.test(bloco)
+  );
+
+  check(
+    "a ordem obrigatoria esta documentada no proprio codigo",
+    /ORDEM OBRIGATORIA/.test(bloco)
+  );
+}
+
+// ---------------------------------------------------------------------
+// 16. O WORKER DE CONTEUDO NAO DESCOBRE REVISAO
+// ---------------------------------------------------------------------
+
+console.log("");
+console.log("-- 16. worker de conteudo x monitor de versao --");
+
+{
+  const contentWorker = readFileSync("scripts/construmanager-content-worker.mjs", "utf8");
+  const monitor = readFileSync("scripts/construmanager-version-monitor.mjs", "utf8");
+  const workflow = readFileSync(
+    ".github/workflows/construmanager-content-ingestion.yml",
+    "utf8"
+  );
+
+  check(
+    "o worker de conteudo NAO chama o detector de versao",
+    !contentWorker.includes("detect_construmanager_version_transitions")
+  );
+
+  check(
+    "existe um monitor de versao SEPARADO",
+    monitor.includes("detect_construmanager_version_transitions")
+  );
+
+  check(
+    "o monitor NAO le a variavel de download",
+    (() => {
+      // Comentario que explica os tres processos nao conta como leitura.
+      const codigo = monitor
+        .split("\n")
+        .filter((linha) => !linha.trim().startsWith("//"))
+        .join("\n");
+      return (
+        !codigo.includes("CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED") &&
+        !codigo.includes("resolveAutomationConfig")
+      );
+    })()
+  );
+
+  check(
+    "o monitor usa o proprio interruptor",
+    monitor.includes("resolveVersionMonitoringEnabled")
+  );
+
+  check(
+    "o monitor NAO baixa nada (sem cliente, sem ZIP, sem SHA, sem Storage)",
+    !/createConstrumanagerClient|downloadConstrumanagerContent|openAsBlob/.test(
+      monitor.replace(/^\s*\/\/.*$/gm, " ")
+    )
+  );
+
+  check(
+    "o monitor nao adquire lease",
+    !monitor.includes("claim_construmanager_content_targets")
+  );
+
+  check(
+    "o workflow roda o monitor como step SEPARADO",
+    /construmanager-version-monitor\.mjs/.test(workflow)
+  );
+
+  check(
+    "o step do monitor roda mesmo se o de download nao fizer nada",
+    /Monitor Construmanager version vigency[\s\S]{0,200}if: always\(\)/.test(workflow)
+  );
+
+  check(
+    "o step do monitor NAO recebe a variavel de download",
+    (() => {
+      const i = workflow.indexOf("Monitor Construmanager version vigency");
+      return !workflow.slice(i).includes("CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED");
+    })()
+  );
+
+  check(
+    "o worker de conteudo continua desligado sem AUTO_DOWNLOAD_ENABLED",
+    /if \(!decision\.enabled\)[\s\S]{0,260}process\.exit\(0\)/.test(contentWorker)
+  );
+}
+
+// ---------------------------------------------------------------------
+// 17. IDENTIDADE E CONCORRENCIA NO SQL REAL
+// ---------------------------------------------------------------------
+
+console.log("");
+console.log("-- 17. migration: identidade e bloqueio --");
+
+{
+  const mig = readFileSync(
+    "supabase/migrations/20260905180000_construmanager_content_automation.sql",
+    "utf8"
+  ).replace(/^\s*--.*$/gm, " ");
+
+  check(
+    "a identidade da transicao usa sync_run_id, nao a revisao nova",
+    /unique \(integration_id, construmanager_object_id, sync_run_id\)/.test(mig) &&
+      !/unique \(integration_id, construmanager_object_id, new_revision\)/.test(mig)
+  );
+
+  check("sync_run_id e obrigatorio no ledger", /sync_run_id uuid not null/.test(mig));
+
+  check(
+    "o ponteiro de vigencia e bloqueado com FOR UPDATE",
+    /from public\.construmanager_document_vigency v[\s\S]{0,300}?for update;/.test(mig)
+  );
+
+  check(
+    "o detector aceita o sync_run_id da sincronizacao",
+    /detect_construmanager_version_transitions\(\s*p_project_id uuid,\s*p_sync_run_id uuid default null\s*\)/.test(
+      mig
+    )
+  );
+
+  check(
+    "sem sync_run_id informado, a execucao gera o proprio (nao usa relogio)",
+    /coalesce\(p_sync_run_id, gen_random_uuid\(\)\)/.test(mig)
+  );
+
+  check(
+    "com sessao presente, o detector exige ADMINISTRADOR",
+    /auth\.uid\(\) is not null[\s\S]{0,140}has_project_permission\(p_project_id, 'ADMINISTRADOR'\)/.test(
+      mig
+    )
+  );
+
+  check(
+    "REFERENCIA_EXTERNA nunca entra na fila do claim",
+    (() => {
+      const claim =
+        mig.match(/function public\.claim_construmanager_content_targets[\s\S]*?\$\$;/)?.[0] ?? "";
+      return claim.length > 0 && !/REFERENCIA_EXTERNA/.test(claim);
+    })()
+  );
+}
 
 console.log("");
 console.log("=====================================================================");

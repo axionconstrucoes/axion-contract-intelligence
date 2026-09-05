@@ -835,7 +835,7 @@ begin
     execute format('grant execute on function %s to service_role', fn);
   end loop;
 end;
-$$;
+$;
 
 -- ---------------------------------------------------------------------
 -- 5. NOVA VERSAO VIGENTE — deteccao por metadados, sem download
@@ -928,14 +928,28 @@ create table if not exists public.construmanager_version_transitions (
   content_availability text not null
     check (content_availability in ('ARMAZENADO_NO_ACC', 'SOMENTE_NO_CONSTRUMANAGER')),
 
+  -- Identificador IMUTAVEL da observacao que produziu esta transicao.
+  -- Vem de construmanager_sync_runs.id quando a deteccao roda logo apos
+  -- uma sincronizacao; caso contrario a propria deteccao gera um.
+  sync_run_id uuid not null,
+
   detected_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
 
-  -- UM alerta por transicao. Se a mesma transicao for reprocessada numa
-  -- sincronizacao posterior, o ON CONFLICT DO NOTHING a descarta e o
-  -- alerta nao se repete.
+  -- Identidade da transicao.
+  --
+  -- NAO e (documento, revisao nova): isso proibiria PERMANENTEMENTE que
+  -- uma revisao voltasse a ser vigente. O ciclo real R04 -> R05 -> R04
+  -- -> R05 tem QUATRO transicoes operacionais legitimas, e a quarta
+  -- seria silenciosamente suprimida — justamente a que mais importa,
+  -- porque significa que alguem reverteu e depois reaplicou.
+  --
+  -- A identidade correta e a OBSERVACAO: dentro de uma mesma execucao um
+  -- documento produz no maximo uma transicao. Execucoes diferentes sem
+  -- mudanca nao geram evento porque o ponteiro de vigencia ja coincide —
+  -- a idempotencia vem do ponteiro, nao de proibir a revisao.
   constraint construmanager_version_transitions_unique
-    unique (integration_id, construmanager_object_id, new_revision)
+    unique (integration_id, construmanager_object_id, sync_run_id)
 );
 
 create index if not exists construmanager_version_transitions_project_idx
@@ -976,7 +990,8 @@ $$;
 --
 -- Rodar duas vezes seguidas produz zero alertas na segunda.
 create or replace function public.detect_construmanager_version_transitions(
-  p_project_id uuid
+  p_project_id uuid,
+  p_sync_run_id uuid default null
 )
 returns table (
   first_observations integer,
@@ -996,7 +1011,17 @@ declare
   v_previous public.construmanager_document_vigency%rowtype;
   v_availability text;
   v_transition_id uuid;
+  -- Uma execucao = um identificador de observacao. Quando a deteccao roda
+  -- logo apos uma sincronizacao, recebe o sync_run_id dela; senao gera o
+  -- proprio. Nunca depende de timestamp local como protecao.
+  v_run_id uuid := coalesce(p_sync_run_id, gen_random_uuid());
 begin
+  -- Sessao presente => exige ADMINISTRADOR. Sessao ausente => so
+  -- service_role chega aqui (ver grants). As duas portas, uma checagem.
+  if auth.uid() is not null
+     and not public.has_project_permission(p_project_id, 'ADMINISTRADOR') then
+    raise exception 'Permissao ADMINISTRADOR e necessaria para detectar transicoes de versao.';
+  end if;
   select pi.id into v_integration_id
     from public.project_integrations pi
    where pi.project_id = p_project_id
@@ -1013,10 +1038,17 @@ begin
      where d.project_id = p_project_id
        and d.integration_id = v_integration_id
   loop
+    -- FOR UPDATE: serializa detectores concorrentes POR DOCUMENTO.
+    -- Em READ COMMITTED, quem espera o bloqueio RELE a linha ja
+    -- atualizada pelo vencedor — entao o segundo detector encontra o
+    -- ponteiro ja em R05 e conclui SEM_MUDANCA, em vez de gravar uma
+    -- segunda transicao. O ponteiro, a transicao e a auditoria vivem na
+    -- mesma transacao da funcao: ou tudo acontece, ou nada.
     select * into v_previous
       from public.construmanager_document_vigency v
      where v.integration_id = v_integration_id
-       and v.construmanager_object_id = r.construmanager_object_id;
+       and v.construmanager_object_id = r.construmanager_object_id
+     for update;
 
     -- Primeira observacao: linha de base, sem alerta. Alertar aqui
     -- encheria a caixa de entrada com 192 "novidades" que sao apenas o
@@ -1077,15 +1109,15 @@ begin
       project_id, integration_id, construmanager_object_id, document_name,
       previous_revision, new_revision, previous_object_id, new_object_id,
       source_created_at, author_name, size_bytes, folder_path,
-      content_availability
+      content_availability, sync_run_id
     ) values (
       p_project_id, v_integration_id, r.construmanager_object_id, r.name,
       v_previous.current_revision, r.revision,
       v_previous.construmanager_object_id, r.construmanager_object_id,
       r.source_created_at, r.author_name, r.size_bytes, r.folder_path,
-      v_availability
+      v_availability, v_run_id
     )
-    on conflict (integration_id, construmanager_object_id, new_revision) do nothing
+    on conflict (integration_id, construmanager_object_id, sync_run_id) do nothing
     returning id into v_transition_id;
 
     update public.construmanager_document_vigency
@@ -1136,14 +1168,23 @@ declare
   fn text;
 begin
   foreach fn in array array[
-    'public.detect_construmanager_version_transitions(uuid)',
+    'public.detect_construmanager_version_transitions(uuid, uuid)',
     'public.normalize_construmanager_revision(text)'
   ]
   loop
     execute format('revoke all on function %s from public', fn);
     execute format('revoke all on function %s from anon', fn);
-    execute format('revoke all on function %s from authenticated', fn);
     execute format('grant execute on function %s to service_role', fn);
+    -- Excecao deliberada ao padrao das demais RPCs deste arquivo: a
+    -- deteccao de vigencia tem DUAS portas legitimas —
+    --   1. logo apos a sincronizacao de metadados feita pelo
+    --      ADMINISTRADOR na UI (sessao presente);
+    --   2. o monitor agendado, sem sessao (service_role).
+    -- A funcao exige ADMINISTRADOR quando ha sessao, entao conceder a
+    -- `authenticated` nao afrouxa nada: um LEITURA que a chamasse
+    -- receberia excecao. Ela tambem nao baixa nada — so le metadados e
+    -- grava transicao/auditoria.
+    execute format('grant execute on function %s to authenticated', fn);
   end loop;
 end;
 $$;

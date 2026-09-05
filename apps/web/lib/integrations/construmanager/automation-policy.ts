@@ -68,6 +68,8 @@ export interface AutomationDecision {
 }
 
 export interface AutomationEnv {
+  CONSTRUMANAGER_METADATA_SYNC_ENABLED?: string;
+  CONSTRUMANAGER_VERSION_MONITORING_ENABLED?: string;
   CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED?: string;
   CONSTRUMANAGER_AUTO_DRY_RUN?: string;
   CONSTRUMANAGER_AUTO_MAX_ITEMS?: string;
@@ -295,3 +297,71 @@ export function hasTimeBudgetFor(
 
 /** Reserva padrao por item: o piloto levou ~14 s; 3 min cobre folga larga. */
 export const DEFAULT_ITEM_RESERVE_MS = 3 * 60 * 1000;
+
+// ---------------------------------------------------------------------
+// TRES PROCESSOS, TRES INTERRUPTORES INDEPENDENTES
+// ---------------------------------------------------------------------
+//
+//   A. sincronizacao de metadados  -> CONSTRUMANAGER_METADATA_SYNC_ENABLED
+//   B. deteccao de vigencia        -> CONSTRUMANAGER_VERSION_MONITORING_ENABLED
+//   C. download de conteudo        -> CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED
+//
+// Nenhum habilita o outro, nem por omissao nem por heranca. Monitorar
+// versoes com downloads DESLIGADOS e o modo de operacao esperado: saber
+// que um projeto mudou de revisao nao exige — e nao deve exigir — ter a
+// copia binaria do arquivo.
+//
+// O kill switch continua valendo para os tres: e a parada de emergencia
+// que nao exige entender qual processo esta fazendo o que.
+
+export interface ProcessDecision {
+  enabled: boolean;
+  reason: string | null;
+}
+
+function resolveIndependentSwitch(
+  env: Record<string, string | undefined>,
+  variable: string
+): ProcessDecision {
+  if ((env.CONSTRUMANAGER_AUTO_KILL_SWITCH ?? "").trim() === KILL_SWITCH_VALUE) {
+    return {
+      enabled: false,
+      reason: "Kill switch acionado (CONSTRUMANAGER_AUTO_KILL_SWITCH=true).",
+    };
+  }
+
+  const raw = (env[variable] ?? "").trim();
+
+  if (raw !== ENABLED_VALUE) {
+    return {
+      enabled: false,
+      reason:
+        raw === ""
+          ? `${variable} ausente — processo desligado (fail-closed).`
+          : `${variable} diferente de "true" — processo desligado.`,
+    };
+  }
+
+  return { enabled: true, reason: null };
+}
+
+/** A. Sincronizacao de metadados. Independente de B e de C. */
+export function resolveMetadataSyncEnabled(
+  env: Record<string, string | undefined>
+): ProcessDecision {
+  return resolveIndependentSwitch(env, "CONSTRUMANAGER_METADATA_SYNC_ENABLED");
+}
+
+/**
+ * B. Monitoramento de versao vigente. Independente de A e de C.
+ *
+ * Em especial: NAO le CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED. Com os
+ * downloads desligados, o monitoramento continua funcionando — que e
+ * exatamente o cenario do IFC de 262,9 MiB, que nunca sera baixado e
+ * mesmo assim precisa ser monitorado.
+ */
+export function resolveVersionMonitoringEnabled(
+  env: Record<string, string | undefined>
+): ProcessDecision {
+  return resolveIndependentSwitch(env, "CONSTRUMANAGER_VERSION_MONITORING_ENABLED");
+}

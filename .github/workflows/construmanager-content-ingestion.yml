@@ -79,3 +79,17 @@ jobs:
           CONSTRUMANAGER_AUTO_MAX_FILE_BYTES: ${{ vars.CONSTRUMANAGER_AUTO_MAX_FILE_BYTES }}
           CONSTRUMANAGER_AUTO_TIME_BUDGET_MS: ${{ vars.CONSTRUMANAGER_AUTO_TIME_BUDGET_MS }}
           CONSTRUMANAGER_AUTO_KILL_SWITCH: ${{ vars.CONSTRUMANAGER_AUTO_KILL_SWITCH }}
+
+      # Processo B — monitoramento de versao vigente. Roda como STEP
+      # SEPARADO e com interruptor proprio: se os downloads estiverem
+      # desligados, o step acima encerra sem fazer nada e ESTE ainda
+      # executa. Nao recebe CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED — nao
+      # existe caminho para um habilitar o outro.
+      - name: Monitor Construmanager version vigency
+        if: always()
+        run: node scripts/construmanager-version-monitor.mjs "${{ inputs.project_id }}"
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          CONSTRUMANAGER_VERSION_MONITORING_ENABLED: ${{ vars.CONSTRUMANAGER_VERSION_MONITORING_ENABLED }}
+          CONSTRUMANAGER_AUTO_KILL_SWITCH: ${{ vars.CONSTRUMANAGER_AUTO_KILL_SWITCH }}
