@@ -224,7 +224,12 @@ check(
 
 check(
   "botões ficam desabilitados enquanto há download em curso (um por vez)",
-  (componentSource.match(/disabled=\{pending\}/g) ?? []).length >= 1
+  // A trava passou a ser `busy`, que cobre download E preparação. A
+  // garantia original (nenhum segundo download enquanto um roda)
+  // continua valendo — `busy` inclui `pending` —, e agora vale também
+  // durante a preparação, que escreve na mesma tabela de vínculos.
+  /const busy = pending \|\| preparing;/.test(componentSource) &&
+    (componentSource.match(/disabled=\{busy\}/g) ?? []).length >= 1
 );
 
 check(

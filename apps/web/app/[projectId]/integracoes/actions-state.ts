@@ -87,3 +87,29 @@ export const initialDownloadConstrumanagerContentState: DownloadConstrumanagerCo
   uploadsSkipped: null,
   firstError: null,
 };
+
+// Preparação da lista de conteúdo do Construmanager (Pacote C).
+//
+// Estado próprio, separado do download: preparar cria vínculos e não
+// baixa nada, então não faz sentido reaproveitar contadores de bytes,
+// blobs ou uploads — um estado compartilhado convidaria a UI a exibir
+// "0 armazenados" depois de uma preparação bem-sucedida.
+export type PrepareConstrumanagerContentState = {
+  error: string | null;
+  success: boolean;
+  finishedAt: string | null;
+  linksCreated: number | null;
+  documentsTotal: number | null;
+  versionsTotal: number | null;
+  pendingTotal: number | null;
+};
+
+export const initialPrepareConstrumanagerContentState: PrepareConstrumanagerContentState = {
+  error: null,
+  success: false,
+  finishedAt: null,
+  linksCreated: null,
+  documentsTotal: null,
+  versionsTotal: null,
+  pendingTotal: null,
+};

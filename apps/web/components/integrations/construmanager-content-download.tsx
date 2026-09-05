@@ -7,6 +7,18 @@
 // download para o navegador — o bucket é privado e o conteúdo não
 // trafega para o cliente neste pacote.
 //
+// Duas operações distintas, dois gatilhos distintos:
+//
+//   PREPARAR  cria os vínculos (documento/versão -> alvo de download) a
+//             partir dos metadados já sincronizados. Não baixa nada.
+//   BAIXAR    transfere o conteúdo de UM alvo escolhido a dedo.
+//
+// Elas ficaram acopladas por um tempo — só a ação de download chamava o
+// RPC de preparação — e, com o botão de lote oculto para o piloto, o
+// painel travava em zero: sem vínculos não há botão por item, e sem
+// botão não havia como criar vínculos. Separá-las desfaz o impasse sem
+// reexpor o download em lote.
+//
 // O SHA-256 aparece abreviado (12 caracteres) apenas para conferência
 // visual. Nada aqui compara revisões nem classifica mudança: isso é
 // Pacote D.
@@ -15,8 +27,15 @@ import { useActionState, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { initialDownloadConstrumanagerContentState } from "@/app/[projectId]/integracoes/actions-state";
-import { downloadConstrumanagerContentAction } from "@/app/[projectId]/integracoes/actions";
+import {
+  initialDownloadConstrumanagerContentState,
+  initialPrepareConstrumanagerContentState,
+} from "@/app/[projectId]/integracoes/actions-state";
+import {
+  downloadConstrumanagerContentAction,
+  prepareConstrumanagerContentAction,
+} from "@/app/[projectId]/integracoes/actions";
+import { ConstrumanagerContentStatusBadge } from "./construmanager-status-badge";
 import { formatDateTime } from "@/lib/labels";
 import type {
   ConstrumanagerContentItem,
@@ -36,13 +55,6 @@ const SHOW_BATCH_DOWNLOAD = false;
 // grande sem ganho: o filtro por nome resolve a busca, e o teto mantém
 // a lista curta.
 const VISIBLE_LIMIT = 15;
-
-const STATUS_LABEL: Record<string, string> = {
-  PENDENTE: "Pendente",
-  BAIXANDO: "Baixando",
-  ARMAZENADO: "Armazenado",
-  ERRO: "Erro",
-};
 
 // Só alvo ainda não armazenado é baixável: PENDENTE nunca foi buscado e
 // ERRO é a nova tentativa manual. BAIXANDO está em curso e ARMAZENADO já
@@ -85,6 +97,11 @@ export function ConstrumanagerContentDownload({
     initialDownloadConstrumanagerContentState
   );
 
+  const [prepareState, prepareAction, preparing] = useActionState(
+    prepareConstrumanagerContentAction,
+    initialPrepareConstrumanagerContentState
+  );
+
   // Só sincroniza com o roteador. activeLinkId NÃO é zerado aqui de
   // propósito: ele é escrito no clique (event handler) e só é lido
   // junto com `pending`, então um valor remanescente depois que a ação
@@ -95,6 +112,15 @@ export function ConstrumanagerContentDownload({
       router.refresh();
     }
   }, [router, state.finishedAt]);
+
+  // Recarrega após a preparação para que os vínculos recém-criados
+  // apareçam. Nenhum download é disparado por este efeito — ele só
+  // pede ao servidor os dados novos da página.
+  useEffect(() => {
+    if (prepareState.finishedAt) {
+      router.refresh();
+    }
+  }, [router, prepareState.finishedAt]);
 
   const items = useMemo(() => overview?.items ?? [], [overview]);
 
@@ -115,6 +141,10 @@ export function ConstrumanagerContentDownload({
 
   const visible = filtered.slice(0, VISIBLE_LIMIT);
 
+  // Um download em curso também bloqueia a preparação, e vice-versa:
+  // as duas escrevem na mesma tabela de vínculos.
+  const busy = pending || preparing;
+
   return (
     <div className="flex flex-col gap-1.5 rounded-md border bg-background/60 p-2">
       {SHOW_BATCH_DOWNLOAD ? (
@@ -128,7 +158,7 @@ export function ConstrumanagerContentDownload({
             type="submit"
             size="sm"
             variant="outline"
-            disabled={pending}
+            disabled={busy}
             onClick={() => setActiveLinkId(null)}
           >
             {pending && !activeLinkId ? "Baixando…" : "Baixar conteúdos pendentes"}
@@ -138,11 +168,35 @@ export function ConstrumanagerContentDownload({
 
       <p className="text-xs">
         {total === 0
-          ? "Conteúdo ainda não preparado. Sincronize os metadados primeiro."
+          ? "Metadados sincronizados. Prepare a lista de conteúdo para habilitar os downloads individuais."
           : `${stored} de ${total} armazenados · ${pendingCount} pendentes`}
         {downloading > 0 ? ` · ${downloading} baixando` : null}
         {failed > 0 ? ` · ${failed} com erro` : null}
       </p>
+
+      {/* Preparação: só faz sentido enquanto não há vínculo nenhum.
+          Cria os alvos a partir dos metadados já sincronizados e NÃO
+          baixa arquivo algum. */}
+      {total === 0 ? (
+        <form action={prepareAction} className="flex items-center gap-2">
+          <input type="hidden" name="projectId" value={projectId} />
+          <Button type="submit" size="sm" variant="outline" disabled={busy}>
+            {preparing ? "Preparando…" : "Preparar conteúdo para download"}
+          </Button>
+        </form>
+      ) : null}
+
+      {prepareState.success && prepareState.linksCreated !== null ? (
+        <p className="text-xs text-muted-foreground">
+          Preparação: {prepareState.linksCreated} vínculo(s) criado(s) ·{" "}
+          {prepareState.documentsTotal ?? 0} documento(s) ·{" "}
+          {prepareState.versionsTotal ?? 0} versão(ões) ·{" "}
+          {prepareState.pendingTotal ?? 0} aguardando download
+          {prepareState.finishedAt
+            ? ` · ${formatDateTime(prepareState.finishedAt)}`
+            : null}
+        </p>
+      ) : null}
 
       {stored > 0 ? (
         <p className="text-xs text-muted-foreground">
@@ -193,7 +247,7 @@ export function ConstrumanagerContentDownload({
                       size="sm"
                       variant="outline"
                       className="h-6 px-2 text-xs"
-                      disabled={pending}
+                      disabled={busy}
                       onClick={() => setActiveLinkId(item.linkId)}
                     >
                       {pending && activeLinkId === item.linkId
@@ -210,9 +264,7 @@ export function ConstrumanagerContentDownload({
                 <span className="text-muted-foreground">
                   #{item.objectId}
                 </span>
-                <span className="text-muted-foreground">
-                  {STATUS_LABEL[item.status] ?? item.status}
-                </span>
+                <ConstrumanagerContentStatusBadge status={item.status} />
                 {item.sizeBytes !== null ? (
                   <span className="text-muted-foreground">
                     {formatBytes(item.sizeBytes)}
@@ -245,6 +297,10 @@ export function ConstrumanagerContentDownload({
             </p>
           ) : null}
         </>
+      ) : null}
+
+      {prepareState.error ? (
+        <p className="text-xs text-destructive">{prepareState.error}</p>
       ) : null}
 
       {state.firstError ? (
