@@ -583,6 +583,51 @@ check(
 );
 
 console.log("");
+console.log("-- 10. integridade sintatica do SQL (guard) --");
+
+{
+  // Defeito real encontrado por banco local: um terminador $$; virou $;
+  // por causa de escaping de shell numa edicao. Os testes por regex
+  // passaram todos — nenhum deles analisa SQL. Este guard existe para
+  // que essa classe de bug nao volte em silencio.
+  const ocorrencias = (MIGRATION.match(/\$\$/g) ?? []).length;
+
+  check(
+    `delimitadores $$ balanceados (${ocorrencias} ocorrencias, deve ser par)`,
+    ocorrencias % 2 === 0
+  );
+
+  check(
+    "nenhum terminador corrompido ($ sozinho em linha)",
+    !/^\s*\$\s*;\s*$/m.test(MIGRATION)
+  );
+
+  // Alias `r` em subconsulta dentro de funcao plpgsql que declara `r
+  // record`: o PL/pgSQL resolve r.coluna para a VARIAVEL, nao para a
+  // tabela, e a funcao falha em runtime com "record r is not assigned
+  // yet". Outro defeito que so o banco real pegou.
+  check(
+    "detector nao usa alias `r` colidindo com a variavel de registro",
+    (() => {
+      const i = MIGRATION.indexOf(
+        "function public.detect_construmanager_version_transitions"
+      );
+      const corpo = MIGRATION.slice(i, MIGRATION.indexOf("$$;", i));
+      const declaraR = /^\s*r record;/m.test(corpo);
+      const usaAliasR = /from public\.\w+ r\b/.test(corpo);
+      return declaraR && !usaAliasR;
+    })()
+  );
+
+  check(
+    "toda funcao criada tem um $$ de abertura e um de fechamento",
+    (MIGRATION.match(/^as \$\$/gm) ?? []).length +
+      (MIGRATION.match(/^do \$\$/gm) ?? []).length ===
+      (MIGRATION.match(/^\$\$;/gm) ?? []).length
+  );
+}
+
+console.log("");
 console.log("=====================================================================");
 console.log(`Resultado: ${passed} passaram, ${failed} falharam.`);
 

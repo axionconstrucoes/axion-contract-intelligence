@@ -835,7 +835,7 @@ begin
     execute format('grant execute on function %s to service_role', fn);
   end loop;
 end;
-$;
+$$;
 
 -- ---------------------------------------------------------------------
 -- 5. NOVA VERSAO VIGENTE — deteccao por metadados, sem download
@@ -1050,9 +1050,12 @@ begin
 
   -- A observacao precisa existir E pertencer a este projeto. Um id
   -- vindo de fora nunca e aceito por confianca.
+  -- Alias `sr`, nao `r`: `r` e o nome da variavel de registro do loop
+  -- abaixo, e o PL/pgSQL resolve `r.id` para a VARIAVEL antes da tabela.
+  -- Com `r` aqui, a funcao falhava com "record r is not assigned yet".
   if not exists (
-    select 1 from public.construmanager_sync_runs r
-     where r.id = v_run_id and r.project_id = p_project_id
+    select 1 from public.construmanager_sync_runs sr
+     where sr.id = v_run_id and sr.project_id = p_project_id
   ) then
     raise exception 'Execucao de sincronizacao inexistente ou de outro projeto.';
   end if;
