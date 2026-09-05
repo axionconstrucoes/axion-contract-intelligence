@@ -396,6 +396,7 @@ export async function syncConstrumanagerMetadataAction(
     if (error) throw new Error(error.message);
 
     const summary = data as {
+      sync_run_id: string;
       folders_seen: number;
       documents_seen: number;
       historical_versions_seen: number;
@@ -404,6 +405,48 @@ export async function syncConstrumanagerMetadataAction(
       versions_created: number;
       versions_orphaned: number;
     };
+
+    // ORDEM OBRIGATORIA — a deteccao de vigencia vem DEPOIS da
+    // sincronizacao ter terminado consistentemente, e nunca antes:
+    //
+    //   1. autenticar            (createConstrumanagerClient acima)
+    //   2. coletar metadados     (collectConstrumanagerMetadata)
+    //   3. persistir             (sync_construmanager_metadata)
+    //   4. confirmar consistencia (o throw acima; se a RPC falhou, nao
+    //      chegamos aqui e NENHUMA transicao parcial e registrada)
+    //   5. detectar transicoes   <- aqui
+    //   6. auditoria/alerta      (dentro da RPC de deteccao)
+    //   7. downloads             — processo separado, nao acontece aqui
+    //
+    // Recebe o sync_run_id desta sincronizacao: a transicao fica ancorada
+    // na observacao que a produziu, e reprocessar a mesma observacao nao
+    // duplica evento.
+    //
+    // Falha aqui NAO invalida a sincronizacao: os metadados ja estao
+    // persistidos e corretos. A deteccao roda de novo na proxima
+    // sincronizacao ou pelo monitor agendado.
+    const { error: detectError } = await supabase.rpc(
+      "detect_construmanager_version_transitions",
+      { p_project_id: projectId, p_sync_run_id: summary.sync_run_id }
+    );
+
+    // Falha aqui NÃO desfaz os metadados já persistidos e NÃO fabrica
+    // transição — mas também não pode virar só um console.error. Sem
+    // sinal visível, a UI diria "Concluída" e a pessoa iria embora
+    // achando que o monitoramento rodou. O resultado é PARCIAL, e a tela
+    // precisa dizer isso.
+    const versionMonitoringFailed = Boolean(detectError);
+
+    if (detectError) {
+      console.error(
+        "[construmanager] Deteccao de versao vigente falhou apos sincronizacao bem-sucedida.",
+        JSON.stringify({
+          projectId,
+          syncRunId: summary.sync_run_id,
+          message: detectError.message.slice(0, 300),
+        })
+      );
+    }
 
     revalidatePath(`/${projectId}/integracoes`);
 
@@ -417,6 +460,7 @@ export async function syncConstrumanagerMetadataAction(
       documentsCreated: summary.documents_created,
       versionsCreated: summary.versions_created,
       versionsOrphaned: summary.versions_orphaned,
+      versionMonitoringFailed,
     };
   } catch (error) {
     // sanitizeConstrumanagerApiError cobre o stack trace de SQL Server
@@ -451,6 +495,9 @@ export async function syncConstrumanagerMetadataAction(
       documentsCreated: null,
       versionsCreated: null,
       versionsOrphaned: null,
+      // A sincronização inteira falhou; não faz sentido reportar falha
+      // parcial do monitoramento, que sequer chegou a ser tentado.
+      versionMonitoringFailed: false,
     };
   }
 }
