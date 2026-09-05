@@ -430,10 +430,21 @@ export async function syncConstrumanagerMetadataAction(
       { p_project_id: projectId, p_sync_run_id: summary.sync_run_id }
     );
 
+    // Falha aqui NÃO desfaz os metadados já persistidos e NÃO fabrica
+    // transição — mas também não pode virar só um console.error. Sem
+    // sinal visível, a UI diria "Concluída" e a pessoa iria embora
+    // achando que o monitoramento rodou. O resultado é PARCIAL, e a tela
+    // precisa dizer isso.
+    const versionMonitoringFailed = Boolean(detectError);
+
     if (detectError) {
       console.error(
-        "Deteccao de versao vigente falhou apos sincronizacao bem-sucedida:",
-        detectError.message
+        "[construmanager] Deteccao de versao vigente falhou apos sincronizacao bem-sucedida.",
+        JSON.stringify({
+          projectId,
+          syncRunId: summary.sync_run_id,
+          message: detectError.message.slice(0, 300),
+        })
       );
     }
 
@@ -449,6 +460,7 @@ export async function syncConstrumanagerMetadataAction(
       documentsCreated: summary.documents_created,
       versionsCreated: summary.versions_created,
       versionsOrphaned: summary.versions_orphaned,
+      versionMonitoringFailed,
     };
   } catch (error) {
     // sanitizeConstrumanagerApiError cobre o stack trace de SQL Server
@@ -483,6 +495,9 @@ export async function syncConstrumanagerMetadataAction(
       documentsCreated: null,
       versionsCreated: null,
       versionsOrphaned: null,
+      // A sincronização inteira falhou; não faz sentido reportar falha
+      // parcial do monitoramento, que sequer chegou a ser tentado.
+      versionMonitoringFailed: false,
     };
   }
 }

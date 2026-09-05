@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/labels";
 import type {
   ConstrumanagerVersionTransition,
-  ConstrumanagerVersionTransitionsOverview,
+  ConstrumanagerVersionTransitionsResult,
   TransitionContentStatus,
 } from "@/lib/integrations/construmanager/get-version-transitions";
 
@@ -33,6 +33,17 @@ import type {
  */
 export const VERSION_TRANSITION_BADGE_CLASS =
   "border-transparent bg-amber-600 text-white font-bold";
+
+/**
+ * Aviso de indisponibilidade: vermelho sólido, branco, negrito.
+ *
+ * Vermelho de propósito, e não âmbar: a novidade é um acontecimento a
+ * ler; a indisponibilidade é uma falha a corrigir. Confundir as duas
+ * cores faria a equipe tratar um problema de infraestrutura como se
+ * fosse notícia de obra.
+ */
+export const VERSION_MONITORING_UNAVAILABLE_CLASS =
+  "border-transparent bg-red-600 text-white font-bold";
 
 const CONTENT_STATUS_LABEL: Record<TransitionContentStatus, string> = {
   ARMAZENADO_NO_ACC: "Armazenado no ACC",
@@ -103,14 +114,33 @@ function TransitionRow({ item }: { item: ConstrumanagerVersionTransition }) {
 }
 
 export function ConstrumanagerVersionTransitions({
-  overview,
+  result,
 }: {
-  overview: ConstrumanagerVersionTransitionsOverview | null;
+  result: ConstrumanagerVersionTransitionsResult | null;
 }) {
-  const items = overview?.items ?? [];
+  // ESTADO C — a consulta falhou. Nunca fingir lista vazia: num
+  // monitoramento, silêncio significa "está tudo bem", e é exatamente
+  // essa a mentira que uma falha escondida contaria.
+  if (result === null || result.status === "INDISPONIVEL") {
+    return (
+      <div className="flex flex-col gap-1.5 rounded-md border bg-background/60 p-2">
+        <Badge className={cn(VERSION_MONITORING_UNAVAILABLE_CLASS)}>
+          MONITORAMENTO DE VERSÕES INDISPONÍVEL
+        </Badge>
+        <p className="text-xs text-muted-foreground">
+          Não foi possível verificar novas versões vigentes agora. Isto não
+          significa que não existam. O detalhe técnico foi registrado no
+          servidor.
+        </p>
+      </div>
+    );
+  }
 
-  // Sem transições, a área some. Um bloco vazio permanente ensinaria a
-  // equipe a ignorar a região da tela onde a novidade vai aparecer.
+  const items = result.items;
+
+  // ESTADO B — sucesso sem itens: a área some. Um bloco vazio permanente
+  // ensinaria a equipe a ignorar a região da tela onde a novidade vai
+  // aparecer.
   if (items.length === 0) return null;
 
   return (

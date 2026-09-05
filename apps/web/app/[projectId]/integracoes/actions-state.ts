@@ -44,6 +44,15 @@ export type SyncConstrumanagerMetadataState = {
   documentsCreated: number | null;
   versionsCreated: number | null;
   versionsOrphaned: number | null;
+  /**
+   * A sincronização gravou os metadados, mas a verificação de novas
+   * versões não concluiu.
+   *
+   * Não é erro da sincronização — é um resultado PARCIAL. Sem este
+   * campo, a UI dizia "Concluída" e a pessoa ia embora achando que o
+   * monitoramento tinha rodado.
+   */
+  versionMonitoringFailed: boolean;
 };
 
 export const initialSyncConstrumanagerMetadataState: SyncConstrumanagerMetadataState = {
@@ -56,6 +65,7 @@ export const initialSyncConstrumanagerMetadataState: SyncConstrumanagerMetadataS
   documentsCreated: null,
   versionsCreated: null,
   versionsOrphaned: null,
+  versionMonitoringFailed: false,
 };
 
 // Download de conteúdo real do Construmanager (Pacote C).

@@ -627,6 +627,325 @@ console.log("-- 10. integridade sintatica do SQL (guard) --");
   );
 }
 
+
+// ---------------------------------------------------------------------
+// 11. TRES ESTADOS DA CONSULTA DE TRANSICOES
+// ---------------------------------------------------------------------
+
+const { getConstrumanagerVersionTransitions } = await import(
+  "../apps/web/lib/integrations/construmanager/get-version-transitions.ts"
+);
+
+console.log("");
+console.log("-- 11. consulta: sucesso com itens, sucesso vazio, falha --");
+
+// Dublê do construtor do supabase-js: encadeia e resolve no fim.
+function fakeQuery(resposta, registro) {
+  const b = {
+    select() { return b; },
+    eq(col, val) { if (registro) registro.eq = { col, val }; return b; },
+    order(col, opt) { if (registro) registro.order = { col, opt }; return b; },
+    limit(n) { if (registro) registro.limit = n; return Promise.resolve(resposta); },
+  };
+  return b;
+}
+
+function fakeSupabase(resposta, registro) {
+  return { from(tabela) { if (registro) registro.from = tabela; return fakeQuery(resposta, registro); } };
+}
+
+const LINHA = {
+  id: "t1",
+  construmanager_object_id: 38350763,
+  document_name: "356-WEG-MET-3D-001-R05.ifc",
+  previous_revision: "04",
+  new_revision: "05",
+  detected_at: "2026-09-10T12:00:00Z",
+  source_created_at: "2026-09-10T09:00:00",
+  author_name: "Equipe WEG",
+  size_bytes: 275687647,
+  folder_path: "\\PASTA",
+  content_status: "SOMENTE_NO_CONSTRUMANAGER",
+};
+
+// Silencia o console.error das falhas, mas guarda o que foi registrado
+// para poder auditar o conteudo.
+const registrados = [];
+const erroOriginal = console.error;
+console.error = (...args) => registrados.push(args.join(" "));
+
+{
+  // A. SUCESSO COM ITENS
+  const reg = {};
+  const r = await getConstrumanagerVersionTransitions(
+    fakeSupabase({ data: [LINHA], error: null }, reg),
+    "proj-1"
+  );
+
+  check("A. sucesso com itens => status OK", r.status === "OK");
+  check("A. total e itens corretos", r.total === 1 && r.items.length === 1);
+  check("A. revisao anterior e nova preservadas",
+    r.items[0].previousRevision === "04" && r.items[0].newRevision === "05");
+  check("A. situacao do conteudo normalizada",
+    r.items[0].contentStatus === "SOMENTE_NO_CONSTRUMANAGER");
+  check("A. filtra pelo projeto", reg.eq?.col === "project_id" && reg.eq?.val === "proj-1");
+  check("A. ordena pelas mais recentes",
+    reg.order?.col === "detected_at" && reg.order?.opt?.ascending === false);
+  check("A. aplica limite", reg.limit === 10);
+}
+
+{
+  // B. SUCESSO SEM ITENS
+  const r = await getConstrumanagerVersionTransitions(
+    fakeSupabase({ data: [], error: null }),
+    "proj-1"
+  );
+
+  check("B. sucesso vazio => status OK (NAO indisponivel)", r.status === "OK");
+  check("B. total zero", r.status === "OK" && r.total === 0);
+  check("B. nao registra erro no servidor", registrados.length === 0);
+}
+
+{
+  // C1. VIEW AUSENTE — condicao temporaria, identificada
+  registrados.length = 0;
+  const r = await getConstrumanagerVersionTransitions(
+    fakeSupabase({ data: null, error: { code: "42P01", message: 'relation "x" does not exist' } }),
+    "proj-1"
+  );
+
+  check("C1. view ausente => INDISPONIVEL", r.status === "INDISPONIVEL");
+  check("C1. motivo identificado como VIEW_AUSENTE", r.reason === "VIEW_AUSENTE");
+  check("C1. NAO finge lista vazia", r.status !== "OK");
+  check("C1. registra no servidor", registrados.length === 1);
+}
+
+{
+  // C1b. PostgREST tem codigo proprio para relacao ausente
+  const r = await getConstrumanagerVersionTransitions(
+    fakeSupabase({ data: null, error: { code: "PGRST205", message: "not found in schema cache" } }),
+    "proj-1"
+  );
+  check("C1b. PGRST205 tambem e VIEW_AUSENTE", r.reason === "VIEW_AUSENTE");
+}
+
+{
+  // C2. PERMISSAO
+  const r = await getConstrumanagerVersionTransitions(
+    fakeSupabase({ data: null, error: { code: "42501", message: "permission denied for view" } }),
+    "proj-1"
+  );
+
+  check("C2. permissao negada => INDISPONIVEL", r.status === "INDISPONIVEL");
+  check("C2. NAO e confundida com view ausente", r.reason === "ERRO_DE_CONSULTA");
+}
+
+{
+  // C3. CONEXAO
+  const r = await getConstrumanagerVersionTransitions(
+    fakeSupabase({ data: null, error: { message: "fetch failed" } }),
+    "proj-1"
+  );
+  check("C3. erro de conexao => ERRO_DE_CONSULTA", r.reason === "ERRO_DE_CONSULTA");
+}
+
+{
+  // C4. data nulo sem erro nao pode virar lista vazia
+  const r = await getConstrumanagerVersionTransitions(
+    fakeSupabase({ data: null, error: null }),
+    "proj-1"
+  );
+  check("C4. data nulo sem erro => INDISPONIVEL, nao vazio", r.status === "INDISPONIVEL");
+}
+
+{
+  // C5. O erro registrado nao vaza segredo nem SQL ao usuario
+  registrados.length = 0;
+  await getConstrumanagerVersionTransitions(
+    fakeSupabase({
+      data: null,
+      error: {
+        code: "42501",
+        message: "permission denied; Authorization: Bearer eyJhbGciOi.SEGREDO.xyz; select * from t",
+      },
+    }),
+    "proj-1"
+  );
+
+  const r = await getConstrumanagerVersionTransitions(
+    fakeSupabase({ data: null, error: { code: "42501", message: "x" } }),
+    "proj-1"
+  );
+
+  check(
+    "C5. o RESULTADO devolvido a UI nao carrega mensagem tecnica",
+    !JSON.stringify(r).toLowerCase().includes("bearer") &&
+      !JSON.stringify(r).toLowerCase().includes("select") &&
+      Object.keys(r).sort().join(",") === "reason,status"
+  );
+
+  check(
+    "C5. o log do servidor identifica projeto e codigo",
+    registrados[0].includes("proj-1") && registrados[0].includes("42501")
+  );
+}
+
+console.error = erroOriginal;
+
+console.log("");
+console.log("-- 12. painel: MONITORAMENTO DE VERSOES INDISPONIVEL --");
+
+const PANEL = readFileSync(
+  "apps/web/components/integrations/construmanager-version-transitions.tsx",
+  "utf8"
+);
+
+check(
+  "o painel avisa quando a consulta falha",
+  /MONITORAMENTO DE VERSÕES INDISPONÍVEL/.test(PANEL)
+);
+
+check(
+  "o aviso e vermelho, branco e negrito",
+  /VERSION_MONITORING_UNAVAILABLE_CLASS =\s*"border-transparent bg-red-600 text-white font-bold"/.test(
+    PANEL
+  )
+);
+
+check(
+  "falha e estado vazio sao caminhos DISTINTOS",
+  /result\.status === "INDISPONIVEL"/.test(PANEL) &&
+    /items\.length === 0\) return null/.test(PANEL)
+);
+
+check(
+  "o aviso nao revela SQL, token ou detalhe interno",
+  (() => {
+    const i = PANEL.indexOf("INDISPONIVEL");
+    const bloco = PANEL.slice(i, i + 900);
+    return !/select |bearer|token|sqlstate|\.message/i.test(bloco);
+  })()
+);
+
+check(
+  "o aviso diz explicitamente que ausencia nao significa ausencia de versoes",
+  /Isto não\s*\n?\s*significa que não existam/.test(PANEL)
+);
+
+console.log("");
+console.log("-- 13. sincronizacao parcial na interface --");
+
+const SYNC_UI = readFileSync(
+  "apps/web/components/integrations/construmanager-metadata-sync.tsx",
+  "utf8"
+);
+const ACTIONS = readFileSync("apps/web/app/[projectId]/integracoes/actions.ts", "utf8");
+const STATE = readFileSync("apps/web/app/[projectId]/integracoes/actions-state.ts", "utf8");
+
+check(
+  "o estado carrega o aviso de monitoramento",
+  /versionMonitoringFailed: boolean;/.test(STATE) &&
+    /versionMonitoringFailed: false,/.test(STATE)
+);
+
+check(
+  "a action marca o resultado parcial quando o detector falha",
+  /const versionMonitoringFailed = Boolean\(detectError\);/.test(ACTIONS) &&
+    /versionMonitoringFailed,\s*\};/.test(ACTIONS)
+);
+
+check(
+  "a falha do detector NAO desfaz os metadados (nao ha throw nem rollback)",
+  (() => {
+    const i = ACTIONS.indexOf("const versionMonitoringFailed");
+    const bloco = ACTIONS.slice(i, i + 700);
+    return !/throw/.test(bloco) && /revalidatePath/.test(bloco);
+  })()
+);
+
+check(
+  "a action NAO fabrica transicao em caso de falha",
+  !/insert into construmanager_version_transitions/i.test(ACTIONS)
+);
+
+check(
+  "o log do servidor traz o sync_run para reprocessamento",
+  /syncRunId: summary\.sync_run_id/.test(ACTIONS)
+);
+
+check(
+  'a UI NAO mostra "Concluída" quando o monitoramento falha',
+  /versionMonitoringFailed\s*\?\s*"Concluída parcialmente"/.test(SYNC_UI)
+);
+
+check(
+  "a UI mostra a mensagem exigida, em negrito",
+  /font-bold[^>]*>\s*\n?\s*METADADOS SINCRONIZADOS, MAS O MONITORAMENTO DE VERSÕES FALHOU/.test(
+    SYNC_UI
+  )
+);
+
+check(
+  "a mensagem da UI nao carrega detalhe tecnico",
+  (() => {
+    const i = SYNC_UI.indexOf("METADADOS SINCRONIZADOS");
+    const bloco = SYNC_UI.slice(i - 200, i + 200);
+    return !/\.message|error\.|sqlstate/i.test(bloco);
+  })()
+);
+
+console.log("");
+console.log("-- 14. workers: exit code coerente com a falha --");
+
+check(
+  "metadata worker: falha do detector lanca (leva a exit 1)",
+  /if \(detectError\) \{[\s\S]{0,600}?throw new Error\(detectError\.message\)/.test(
+    METADATA_WORKER
+  )
+);
+
+check(
+  "metadata worker: o catch encerra com exit code 1",
+  /catch \(error\)[\s\S]{0,300}process\.exit\(1\)/.test(METADATA_WORKER)
+);
+
+check(
+  "metadata worker: avisa que o sync_run segue reprocessavel",
+  /permanece disponivel para reprocessamento/.test(METADATA_WORKER)
+);
+
+check(
+  "metadata worker: declara que nenhuma ingestao comeca pela falha",
+  /Nenhuma ingestao de conteudo e iniciada por esta falha/.test(METADATA_WORKER)
+);
+
+check(
+  "metadata worker: a falha nao dispara o content worker",
+  !/construmanager-content-worker|storeConstrumanagerContent/.test(METADATA_WORKER)
+);
+
+check(
+  "version monitor: sem execucao pendente e SUCESSO (exit 0)",
+  /if \(primeiras === 0 && transicoes === 0 && semMudanca === 0\)[\s\S]{0,220}process\.exit\(0\)/.test(
+    MONITOR
+  )
+);
+
+check(
+  "version monitor: erro real encerra com exit code 1",
+  /catch \(error\)[\s\S]{0,200}process\.exit\(1\)/.test(MONITOR)
+);
+
+check(
+  "version monitor: erro e sanitizado antes de logar",
+  /sanitizeConstrumanagerContentError\(error\)/.test(MONITOR)
+);
+
+check(
+  "o workflow deixa o step de metadados falhar (sem continue-on-error)",
+  !/continue-on-error/.test(WORKFLOW)
+);
+
 console.log("");
 console.log("=====================================================================");
 console.log(`Resultado: ${passed} passaram, ${failed} falharam.`);

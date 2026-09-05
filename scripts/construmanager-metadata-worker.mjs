@@ -161,7 +161,19 @@ try {
     { p_project_id: PROJECT_ID, p_sync_run_id: syncRunId }
   );
 
-  if (detectError) throw new Error(detectError.message);
+  // Falha do detector NAO desfaz os metadados — eles ja estao gravados e
+  // corretos, e o sync_run continua disponivel para reprocessamento.
+  //
+  // Mas a rodada nao pode terminar verde: um workflow verde com o
+  // monitoramento quebrado e pior que um vermelho, porque ninguem vai
+  // olhar. O throw abaixo leva ao exit 1 do catch, e a proxima execucao
+  // reprocessa esta mesma observacao (o ponteiro nao se moveu).
+  if (detectError) {
+    log(`Metadados sincronizados (sync_run ${syncRunId}), mas a DETECCAO DE VERSOES FALHOU.`);
+    log("O sync_run permanece disponivel para reprocessamento na proxima execucao.");
+    log("Nenhuma ingestao de conteudo e iniciada por esta falha.");
+    throw new Error(detectError.message);
+  }
 
   const d = Array.isArray(detectData) ? detectData[0] : detectData;
 

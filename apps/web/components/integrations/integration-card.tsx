@@ -19,7 +19,7 @@ import { ConstrumanagerIntegrationStatusBadge } from "./construmanager-status-ba
 import { ConstrumanagerVersionTransitions } from "./construmanager-version-transitions";
 import type { ConstrumanagerMetadataOverview } from "@/lib/integrations/construmanager/get-metadata-overview";
 import type { ConstrumanagerContentOverview } from "@/lib/integrations/construmanager/get-content-overview";
-import type { ConstrumanagerVersionTransitionsOverview } from "@/lib/integrations/construmanager/get-version-transitions";
+import type { ConstrumanagerVersionTransitionsResult } from "@/lib/integrations/construmanager/get-version-transitions";
 import { resolveGenericIntegrationDisplayStatus } from "@/lib/ui/resolve-integration-display-status";
 import { driveTypeLabels, formatDateTime } from "@/lib/labels";
 import { normalizeLegacyMojibake } from "@/lib/normalize-legacy-mojibake";
@@ -40,7 +40,7 @@ export function IntegrationCard({
   canManage: boolean;
   construmanagerMetadata?: ConstrumanagerMetadataOverview | null;
   construmanagerContent?: ConstrumanagerContentOverview | null;
-  construmanagerTransitions?: ConstrumanagerVersionTransitionsOverview | null;
+  construmanagerTransitions?: ConstrumanagerVersionTransitionsResult | null;
 }) {
   const [editing, setEditing] = useState(false);
   const identity = resolveIntegrationVisualIdentity(source.type);
@@ -124,7 +124,7 @@ export function IntegrationCard({
             {/* NOVAS VERSÕES VIGENTES vem ANTES do painel de download:
                 a novidade é a informação mais perecível da tela. */}
             <ConstrumanagerVersionTransitions
-              overview={construmanagerTransitions ?? null}
+              result={construmanagerTransitions ?? null}
             />
             <ConstrumanagerContentDownload
               projectId={projectId}

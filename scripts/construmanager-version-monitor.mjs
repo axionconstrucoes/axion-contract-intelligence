@@ -75,10 +75,24 @@ try {
 
   const r = Array.isArray(data) ? data[0] : data;
 
+  const primeiras = Number(r?.first_observations ?? 0);
+  const transicoes = Number(r?.transitions ?? 0);
+  const semMudanca = Number(r?.unchanged ?? 0);
+
+  // (0,0,0) significa "nao havia execucao de sincronizacao pendente para
+  // comparar". Isso e SUCESSO, nao erro: nada mudou porque nada foi
+  // sincronizado desde a ultima verificacao. Tratar como falha encheria
+  // o historico do agendador de vermelho em situacao normal — e vermelho
+  // que aparece sempre para de significar alguma coisa.
+  if (primeiras === 0 && transicoes === 0 && semMudanca === 0) {
+    log("Nenhuma execucao de sincronizacao pendente de comparacao. Nada a fazer.");
+    process.exit(0);
+  }
+
   log(
-    `primeiras observacoes: ${r?.first_observations ?? 0} | ` +
-      `NOVAS VERSOES VIGENTES: ${r?.transitions ?? 0} | ` +
-      `sem mudanca: ${r?.unchanged ?? 0}`
+    `primeiras observacoes: ${primeiras} | ` +
+      `NOVAS VERSOES VIGENTES: ${transicoes} | ` +
+      `sem mudanca: ${semMudanca}`
   );
 
   if ((r?.transitions ?? 0) > 0) {
