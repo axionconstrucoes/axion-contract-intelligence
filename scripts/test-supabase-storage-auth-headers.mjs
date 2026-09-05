@@ -1,10 +1,30 @@
-// ETAPA 1 — prova da causa do "Invalid Compact JWS" no upload ao Storage.
+// Cabeçalhos de autenticação do Storage no cliente Supabase instalado.
 //
-// Registra, de forma verificável e permanente, o que foi apurado sobre a
-// versão instalada de @supabase/supabase-js: o cliente envia a chave
-// secreta de formato novo (sb_secret_...) SIMULTANEAMENTE em `apikey` e
-// em `Authorization: Bearer`. O Storage tenta ler o Authorization como
-// JWT compacto e falha antes de qualquer verificação de assinatura.
+// Registra, de forma verificável e permanente, que @supabase/supabase-js
+// envia a chave secreta de formato novo (sb_secret_...) SIMULTANEAMENTE
+// em `apikey` e em `Authorization: Bearer` no caminho do Storage — a
+// supressão do Bearer (omitApiKeyAsBearer) só é aplicada ao fetch de
+// Functions.
+//
+// ATENÇÃO — o que este comportamento NÃO é:
+//
+// Ele NÃO é a causa do "Invalid Compact JWS" observado em produção.
+// Prova feita contra o projeto real, somente GET, com chave sb_secret
+// VÁLIDA obtida da CLI e nunca impressa:
+//
+//   chave VÁLIDA, só apikey ................. HTTP 200
+//   chave VÁLIDA, apikey + Bearer ........... HTTP 200   <- o caminho do SDK
+//   chave sb_secret ESTRANHA, só apikey ..... HTTP 400 "authorization obrigatório"
+//   chave sb_secret ESTRANHA, apikey+Bearer . HTTP 403 "Invalid Compact JWS"
+//
+// Ou seja: o gateway reconhece a chave pelo `apikey` e a traduz via
+// secret_jwt_template (role=service_role); quando reconhece, o Bearer
+// extra é inofensivo. O erro de produção é a assinatura de uma chave
+// NÃO RECONHECIDA pelo projeto — problema de configuração da variável
+// SUPABASE_SECRET_KEY, não de cabeçalho e não de código.
+//
+// Este arquivo é mantido porque o comportamento de cabeçalhos do SDK
+// segue sendo verdadeiro e vale documentar; só não é o culpado.
 //
 // Não usa credencial real, não faz rede e não toca no Supabase: lê o
 // código realmente instalado em node_modules e exercita a mesma lógica
@@ -130,7 +150,7 @@ check(
 );
 
 check(
-  "caminho ATUAL do Storage: Authorization TAMBÉM recebe a chave secreta — esta é a causa",
+  "caminho ATUAL do Storage: Authorization TAMBÉM recebe a chave secreta",
   storageHeaders.get("authorization") === `Bearer ${FAKE_SECRET}`
 );
 
