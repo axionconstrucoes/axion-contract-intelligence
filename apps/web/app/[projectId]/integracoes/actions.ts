@@ -21,10 +21,19 @@ import {
 } from "@/lib/integrations/construmanager/sanitize-error";
 import { storeConstrumanagerContent } from "@/lib/integrations/construmanager/store-content";
 import { applyContentTargetSelection } from "@/lib/integrations/construmanager/select-content-targets";
-import { initialDownloadConstrumanagerContentState } from "./actions-state";
+import {
+  PREPARE_CONTENT_RPC,
+  isValidProjectId,
+  summarizeContentPreparation,
+} from "@/lib/integrations/construmanager/prepare-content";
+import {
+  initialDownloadConstrumanagerContentState,
+  initialPrepareConstrumanagerContentState,
+} from "./actions-state";
 import type {
   DisconnectEmailAccountState,
   DownloadConstrumanagerContentState,
+  PrepareConstrumanagerContentState,
   RegisterEmailAccountState,
   SaveEmailIngestionConfigState,
   SaveIntegrationOriginState,
@@ -637,6 +646,68 @@ export async function downloadConstrumanagerContentAction(
   } catch (error) {
     return {
       ...initialDownloadConstrumanagerContentState,
+      error: sanitizeConstrumanagerContentError(error),
+    };
+  }
+}
+
+// Preparação da lista de conteúdo — cria vínculos, NÃO baixa nada.
+//
+// Deliberadamente separada de downloadConstrumanagerContentAction. Aquela
+// ação prepara e, na sequência, baixa: qualquer acionamento dela transfere
+// pelo menos um arquivo, e no piloto controlado seria um alvo arbitrário.
+// Esta aqui termina onde a outra começa.
+//
+// O que esta ação NÃO faz, por construção (não há código para isso no
+// caminho): não instancia o cliente Construmanager, não autentica, não
+// pede token, não chama Objeto/Download, não seleciona alvo, não cria
+// blob e não escreve no Storage. Também não toca nas tabelas do Pacote B
+// — o RPC apenas as lê.
+//
+// Autorização: ADMINISTRADOR é exigido dentro do próprio RPC
+// (auth.uid() + has_project_permission(..., 'ADMINISTRADOR')), que roda
+// SECURITY DEFINER com search_path vazio. A checagem é do banco e não
+// pode ser contornada pela UI; aqui só garantimos sessão e formato do
+// projectId antes de gastar uma ida ao banco.
+//
+// Idempotente: o RPC insere com ON CONFLICT DO NOTHING, então a segunda
+// execução devolve links_created = 0 e não duplica nada.
+export async function prepareConstrumanagerContentAction(
+  _prevState: PrepareConstrumanagerContentState,
+  formData: FormData
+): Promise<PrepareConstrumanagerContentState> {
+  const supabase = await createSupabaseServerClient();
+
+  try {
+    await requireUser(supabase);
+    const projectId = requiredField(formData, "projectId");
+
+    if (!isValidProjectId(projectId)) {
+      throw new Error("Projeto inválido.");
+    }
+
+    const { data, error } = await supabase.rpc(PREPARE_CONTENT_RPC, {
+      p_project_id: projectId,
+    });
+
+    if (error) throw new Error(error.message);
+
+    const summary = summarizeContentPreparation(data);
+
+    revalidatePath(`/${projectId}/integracoes`);
+
+    return {
+      error: null,
+      success: true,
+      finishedAt: new Date().toISOString(),
+      linksCreated: summary.linksCreated,
+      documentsTotal: summary.documentsTotal,
+      versionsTotal: summary.versionsTotal,
+      pendingTotal: summary.pendingTotal,
+    };
+  } catch (error) {
+    return {
+      ...initialPrepareConstrumanagerContentState,
       error: sanitizeConstrumanagerContentError(error),
     };
   }

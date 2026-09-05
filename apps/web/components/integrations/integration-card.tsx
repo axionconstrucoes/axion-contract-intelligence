@@ -15,6 +15,7 @@ import { IntegrationOriginForm } from "./integration-origin-form";
 import { ConstrumanagerConnectionCheck } from "./construmanager-connection-check";
 import { ConstrumanagerMetadataSync } from "./construmanager-metadata-sync";
 import { ConstrumanagerContentDownload } from "./construmanager-content-download";
+import { ConstrumanagerIntegrationStatusBadge } from "./construmanager-status-badge";
 import type { ConstrumanagerMetadataOverview } from "@/lib/integrations/construmanager/get-metadata-overview";
 import type { ConstrumanagerContentOverview } from "@/lib/integrations/construmanager/get-content-overview";
 import { resolveGenericIntegrationDisplayStatus } from "@/lib/ui/resolve-integration-display-status";
@@ -64,7 +65,14 @@ export function IntegrationCard({
             {source.type === "ESG_SSMA" ? <FeatureInfo helpId="esg-ssma-source" /> : null}
           </CardTitle>
         </div>
-        <IntegrationStatusBadge status={status} />
+        {/* Badge de alto contraste só no Construmanager. As demais
+            fontes seguem com IntegrationStatusBadge — repintá-las seria
+            mexer em área que ninguém pediu. */}
+        {source.type === "CONSTRUMANAGER" ? (
+          <ConstrumanagerIntegrationStatusBadge status={status} />
+        ) : (
+          <IntegrationStatusBadge status={status} />
+        )}
       </CardHeader>
 
       <CardContent className="flex flex-col gap-2 pt-0 text-sm text-muted-foreground">
