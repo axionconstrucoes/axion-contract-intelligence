@@ -1014,7 +1014,12 @@ declare
   -- Uma execucao = um identificador de observacao. Quando a deteccao roda
   -- logo apos uma sincronizacao, recebe o sync_run_id dela; senao gera o
   -- proprio. Nunca depende de timestamp local como protecao.
-  v_run_id uuid := coalesce(p_sync_run_id, gen_random_uuid());
+  -- NUNCA fabricado. Uma transicao precisa apontar para uma observacao
+  -- que existiu de fato: sem isso vira registro orfao, impossivel de
+  -- auditar depois. Sem sync_run_id informado, a funcao procura a ultima
+  -- execucao de sincronizacao ainda nao comparada; nao havendo nenhuma,
+  -- encerra sem escrever nada.
+  v_run_id uuid;
 begin
   -- Sessao presente => exige ADMINISTRADOR. Sessao ausente => so
   -- service_role chega aqui (ver grants). As duas portas, uma checagem.
@@ -1029,6 +1034,27 @@ begin
 
   if v_integration_id is null then
     raise exception 'Integracao Construmanager nao configurada para este projeto.';
+  end if;
+
+  v_run_id := coalesce(
+    p_sync_run_id,
+    public.pending_construmanager_sync_run(p_project_id)
+  );
+
+  -- Sem observacao real para ancorar, nao ha o que detectar. Encerrar
+  -- em silencio e o correto: nao houve sincronizacao nova.
+  if v_run_id is null then
+    return query select 0, 0, 0;
+    return;
+  end if;
+
+  -- A observacao precisa existir E pertencer a este projeto. Um id
+  -- vindo de fora nunca e aceito por confianca.
+  if not exists (
+    select 1 from public.construmanager_sync_runs r
+     where r.id = v_run_id and r.project_id = p_project_id
+  ) then
+    raise exception 'Execucao de sincronizacao inexistente ou de outro projeto.';
   end if;
 
   for r in
@@ -1188,3 +1214,540 @@ begin
   end loop;
 end;
 $$;
+
+-- ---------------------------------------------------------------------
+-- 6. NUCLEO COMPARTILHADO DA SINCRONIZACAO (movido do Pacote B)
+-- ---------------------------------------------------------------------
+--
+-- Este e o corpo do Pacote B, MOVIDO — nao copiado. As checagens de
+-- sessao e permissao sairam daqui e foram para as portas; o ator e a
+-- origem viraram parametros. Nenhuma outra linha mudou.
+
+create or replace function public.sync_construmanager_metadata_core(
+  p_project_id uuid,
+  p_company_id bigint,
+  p_work_id bigint,
+  p_started_at timestamptz,
+  p_folders jsonb,
+  p_documents jsonb,
+  p_versions jsonb,
+  -- Ator e origem chegam PRONTOS dos wrappers. O nucleo nao decide quem
+  -- e o chamador nem se ele pode: quem decide isso e a porta.
+  p_actor_user_id uuid,
+  p_source text
+)
+returns table (
+  sync_run_id uuid,
+  folders_seen integer,
+  documents_seen integer,
+  historical_versions_seen integer,
+  folders_created integer,
+  documents_created integer,
+  versions_created integer,
+  versions_orphaned integer
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_integration_id uuid;
+  v_now timestamptz := now();
+
+  v_folders_seen integer := 0;
+  v_documents_seen integer := 0;
+  v_versions_seen integer := 0;
+  v_folders_created integer := 0;
+  v_documents_created integer := 0;
+  v_versions_created integer := 0;
+  v_versions_orphaned integer := 0;
+  v_sync_run_id uuid;
+begin
+  -- SEM checagem de sessao/permissao aqui, de proposito: este nucleo nao
+  -- tem grant para ninguem e so e alcancavel pelos dois wrappers, que ja
+  -- decidiram a autorizacao. Repetir a checagem aqui obrigaria o wrapper
+  -- de sistema (que roda sem sessao) a burlar a propria regra.
+  if p_source is null or p_source not in ('MANUAL', 'AUTOMATICO') then
+    raise exception 'Origem de sincronizacao invalida.';
+  end if;
+
+  if p_company_id is null or p_company_id <= 0
+     or p_work_id is null or p_work_id <= 0 then
+    raise exception 'Empresa/obra do Construmanager invalidas.';
+  end if;
+
+  select pi.id
+    into v_integration_id
+    from public.project_integrations pi
+   where pi.project_id = p_project_id
+     and pi.source_type = 'CONSTRUMANAGER';
+
+  if v_integration_id is null then
+    raise exception 'Integracao Construmanager nao configurada para este projeto.';
+  end if;
+
+  -- ---------- Pastas ----------
+  with incoming as (
+    select *
+      from jsonb_to_recordset(coalesce(p_folders, '[]'::jsonb)) as x(
+        construmanager_folder_id bigint,
+        parent_folder_id bigint,
+        name text,
+        path text,
+        level integer
+      )
+  ),
+  upserted as (
+    insert into public.construmanager_folders (
+      project_id, integration_id,
+      construmanager_company_id, construmanager_work_id,
+      construmanager_folder_id, parent_folder_id,
+      name, path, level,
+      first_seen_at, last_seen_at, created_at, updated_at
+    )
+    select
+      p_project_id, v_integration_id,
+      p_company_id, p_work_id,
+      i.construmanager_folder_id, i.parent_folder_id,
+      i.name, i.path, i.level,
+      v_now, v_now, v_now, v_now
+      from incoming i
+    on conflict (integration_id, construmanager_folder_id) do update
+      set parent_folder_id = excluded.parent_folder_id,
+          name = excluded.name,
+          path = excluded.path,
+          level = excluded.level,
+          last_seen_at = v_now,
+          updated_at = v_now
+    returning (xmax = 0) as inserted
+  )
+  select count(*)::integer, count(*) filter (where inserted)::integer
+    into v_folders_seen, v_folders_created
+    from upserted;
+
+  -- ---------- Documentos vigentes ----------
+  with incoming as (
+    select *
+      from jsonb_to_recordset(coalesce(p_documents, '[]'::jsonb)) as x(
+        construmanager_object_id bigint,
+        construmanager_folder_id bigint,
+        name text,
+        extension text,
+        extension_normalized text,
+        revision text,
+        revision_from_name text,
+        revision_conflict boolean,
+        has_versions boolean,
+        author_id bigint,
+        author_name text,
+        source_created_at_raw text,
+        source_created_at timestamptz,
+        source_approved_at_raw text,
+        source_approved_at timestamptz,
+        size_bytes bigint,
+        folder_path text,
+        status_label text
+      )
+  ),
+  upserted as (
+    insert into public.construmanager_documents (
+      project_id, integration_id,
+      construmanager_company_id, construmanager_work_id,
+      construmanager_object_id, construmanager_folder_id,
+      name, extension, extension_normalized,
+      revision, revision_from_name, revision_conflict,
+      has_versions, author_id, author_name,
+      source_created_at_raw, source_created_at,
+      source_approved_at_raw, source_approved_at,
+      size_bytes, folder_path, status_label,
+      first_seen_at, last_seen_at, created_at, updated_at
+    )
+    select
+      p_project_id, v_integration_id,
+      p_company_id, p_work_id,
+      i.construmanager_object_id, i.construmanager_folder_id,
+      i.name, i.extension, i.extension_normalized,
+      i.revision, i.revision_from_name, coalesce(i.revision_conflict, false),
+      coalesce(i.has_versions, false), i.author_id, i.author_name,
+      i.source_created_at_raw, i.source_created_at,
+      i.source_approved_at_raw, i.source_approved_at,
+      i.size_bytes, i.folder_path, i.status_label,
+      v_now, v_now, v_now, v_now
+      from incoming i
+    on conflict (integration_id, construmanager_object_id) do update
+      set construmanager_folder_id = excluded.construmanager_folder_id,
+          name = excluded.name,
+          extension = excluded.extension,
+          extension_normalized = excluded.extension_normalized,
+          revision = excluded.revision,
+          revision_from_name = excluded.revision_from_name,
+          revision_conflict = excluded.revision_conflict,
+          has_versions = excluded.has_versions,
+          author_id = excluded.author_id,
+          author_name = excluded.author_name,
+          source_created_at_raw = excluded.source_created_at_raw,
+          source_created_at = excluded.source_created_at,
+          source_approved_at_raw = excluded.source_approved_at_raw,
+          source_approved_at = excluded.source_approved_at,
+          size_bytes = excluded.size_bytes,
+          folder_path = excluded.folder_path,
+          status_label = excluded.status_label,
+          last_seen_at = v_now,
+          updated_at = v_now
+    returning (xmax = 0) as inserted
+  )
+  select count(*)::integer, count(*) filter (where inserted)::integer
+    into v_documents_seen, v_documents_created
+    from upserted;
+
+  -- ---------- Versoes historicas ----------
+  -- O vinculo e' resolvido por JOIN com o cabeca ja persistido. Versao
+  -- cujo cabeca nao existe NAO e' inserida com vinculo inventado: fica
+  -- de fora e e' contada em versions_orphaned.
+  with incoming as (
+    select *
+      from jsonb_to_recordset(coalesce(p_versions, '[]'::jsonb)) as x(
+        construmanager_version_object_id bigint,
+        construmanager_head_object_id bigint,
+        revision text,
+        revision_from_name text,
+        revision_conflict boolean,
+        name text,
+        extension text,
+        extension_normalized text,
+        author_id bigint,
+        author_name text,
+        source_created_at_raw text,
+        source_created_at timestamptz,
+        source_approved_at_raw text,
+        source_approved_at timestamptz,
+        size_bytes bigint,
+        folder_path text,
+        status_label text
+      )
+  ),
+  resolved as (
+    select i.*, d.id as document_id
+      from incoming i
+      left join public.construmanager_documents d
+        on d.integration_id = v_integration_id
+       and d.construmanager_object_id = i.construmanager_head_object_id
+  ),
+  upserted as (
+    insert into public.construmanager_document_versions (
+      project_id, integration_id, document_id,
+      construmanager_version_object_id, construmanager_head_object_id,
+      revision, revision_from_name, revision_conflict,
+      name, extension, extension_normalized,
+      author_id, author_name,
+      source_created_at_raw, source_created_at,
+      source_approved_at_raw, source_approved_at,
+      size_bytes, folder_path, status_label,
+      first_seen_at, last_seen_at, created_at
+    )
+    select
+      p_project_id, v_integration_id, r.document_id,
+      r.construmanager_version_object_id, r.construmanager_head_object_id,
+      r.revision, r.revision_from_name, coalesce(r.revision_conflict, false),
+      r.name, r.extension, r.extension_normalized,
+      r.author_id, r.author_name,
+      r.source_created_at_raw, r.source_created_at,
+      r.source_approved_at_raw, r.source_approved_at,
+      r.size_bytes, r.folder_path, r.status_label,
+      v_now, v_now, v_now
+      from resolved r
+     where r.document_id is not null
+    -- Versao historica e' IMUTAVEL: so a observacao muda.
+    on conflict (integration_id, construmanager_version_object_id) do update
+      set last_seen_at = v_now
+    returning (xmax = 0) as inserted
+  )
+  select count(*)::integer, count(*) filter (where inserted)::integer
+    into v_versions_seen, v_versions_created
+    from upserted;
+
+  select count(*)::integer
+    into v_versions_orphaned
+    from jsonb_to_recordset(coalesce(p_versions, '[]'::jsonb)) as x(
+      construmanager_head_object_id bigint
+    )
+   where not exists (
+     select 1
+       from public.construmanager_documents d
+      where d.integration_id = v_integration_id
+        and d.construmanager_object_id = x.construmanager_head_object_id
+   );
+
+  -- ---------- Registro da execucao ----------
+  insert into public.construmanager_sync_runs (
+    project_id, integration_id,
+    started_at, completed_at, status,
+    folders_seen, documents_seen, historical_versions_seen,
+    folders_created, documents_created, versions_created,
+    versions_orphaned, error, triggered_by_user_id, source
+  )
+  values (
+    p_project_id, v_integration_id,
+    p_started_at, v_now,
+    case when v_versions_orphaned > 0 then 'PARCIAL' else 'SUCESSO' end,
+    v_folders_seen, v_documents_seen, v_versions_seen + v_versions_orphaned,
+    v_folders_created, v_documents_created, v_versions_created,
+    v_versions_orphaned,
+    case
+      when v_versions_orphaned > 0
+      then v_versions_orphaned || ' versao(oes) historica(s) sem documento-cabeca correspondente foram ignoradas.'
+      else null
+    end,
+    p_actor_user_id, p_source
+  )
+  returning id into v_sync_run_id;
+
+  update public.project_integrations
+     set last_sync_at = v_now,
+         updated_at = v_now
+   where id = v_integration_id;
+
+  return query
+    select
+      v_sync_run_id,
+      v_folders_seen,
+      v_documents_seen,
+      v_versions_seen + v_versions_orphaned,
+      v_folders_created,
+      v_documents_created,
+      v_versions_created,
+      v_versions_orphaned;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- 7. CICLO HEADLESS — nucleo compartilhado + duas portas
+-- ---------------------------------------------------------------------
+--
+-- PROBLEMA: o monitor de vigencia so compara o que ja esta no banco.
+-- Sem um fetch novo a API, uma R05 recem-publicada no Construmanager
+-- jamais seria descoberta — o ciclo automatico dependia de alguem clicar
+-- em "Sincronizar metadados".
+--
+-- SOLUCAO: a sincronizacao passa a ter duas portas para o MESMO nucleo.
+-- O corpo do Pacote B nao foi duplicado: ele foi movido inteiro para
+-- sync_construmanager_metadata_core, e as duas portas apenas decidem
+-- QUEM pode entrar e com que ator o registro e gravado.
+--
+--   nucleo   sem grant algum      — inalcancavel diretamente
+--   manual   authenticated        — exige auth.uid() + ADMINISTRADOR
+--   system   service_role         — sem sessao, ator SYSTEM
+--
+-- A porta manual NAO recebe parametro de ator. Se recebesse, um usuario
+-- poderia se declarar SYSTEM e a auditoria viraria ficcao.
+
+-- A origem 'AUTOMATICO' passa a ser valida em construmanager_sync_runs.
+-- O CHECK do Pacote B so admitia 'MANUAL' porque, naquele momento, nao
+-- existia agendador — a restricao registrava um fato da epoca, nao uma
+-- invariante permanente.
+alter table public.construmanager_sync_runs
+  drop constraint if exists construmanager_sync_runs_source_check;
+
+alter table public.construmanager_sync_runs
+  add constraint construmanager_sync_runs_source_check
+  check (source in ('MANUAL', 'AUTOMATICO'));
+
+-- Integridade referencial do sync_run_id das transicoes.
+--
+-- Antes o detector podia inventar um uuid quando nao recebia um. Isso
+-- produzia referencia orfa: uma transicao apontando para uma execucao
+-- que nunca existiu, impossivel de auditar depois. Agora a coluna e uma
+-- FK de verdade e o detector NAO fabrica mais nada.
+alter table public.construmanager_version_transitions
+  drop constraint if exists construmanager_version_transitions_sync_run_fk;
+
+alter table public.construmanager_version_transitions
+  add constraint construmanager_version_transitions_sync_run_fk
+  foreign key (sync_run_id)
+  references public.construmanager_sync_runs(id)
+  on delete restrict;
+
+-- PORTA MANUAL — mesma assinatura e mesmo comportamento de sempre.
+-- A UI nao percebe diferenca: continua chamando sync_construmanager_metadata.
+create or replace function public.sync_construmanager_metadata(
+  p_project_id uuid,
+  p_company_id bigint,
+  p_work_id bigint,
+  p_started_at timestamptz,
+  p_folders jsonb,
+  p_documents jsonb,
+  p_versions jsonb
+)
+returns table (
+  sync_run_id uuid,
+  folders_seen integer,
+  documents_seen integer,
+  historical_versions_seen integer,
+  folders_created integer,
+  documents_created integer,
+  versions_created integer,
+  versions_orphaned integer
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_actor_user_id uuid;
+begin
+  v_actor_user_id := auth.uid();
+
+  if v_actor_user_id is null then
+    raise exception 'Sessao nao autenticada.';
+  end if;
+
+  if not public.has_project_permission(p_project_id, 'ADMINISTRADOR') then
+    raise exception 'Permissao ADMINISTRADOR e necessaria para sincronizar metadados do Construmanager.';
+  end if;
+
+  -- Ator e origem sao FIXADOS aqui. Nao ha parametro para o chamador
+  -- escolher: quem entra por esta porta e um usuario, e o registro diz
+  -- isso.
+  return query
+    select * from public.sync_construmanager_metadata_core(
+      p_project_id, p_company_id, p_work_id, p_started_at,
+      p_folders, p_documents, p_versions,
+      v_actor_user_id, 'MANUAL'
+    );
+end;
+$$;
+
+-- PORTA AUTOMATICA — worker agendado, sem sessao.
+create or replace function public.sync_construmanager_metadata_system(
+  p_project_id uuid,
+  p_company_id bigint,
+  p_work_id bigint,
+  p_started_at timestamptz,
+  p_folders jsonb,
+  p_documents jsonb,
+  p_versions jsonb
+)
+returns table (
+  sync_run_id uuid,
+  folders_seen integer,
+  documents_seen integer,
+  historical_versions_seen integer,
+  folders_created integer,
+  documents_created integer,
+  versions_created integer,
+  versions_orphaned integer
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- Ator NULO + origem AUTOMATICO: o registro em construmanager_sync_runs
+  -- fica com triggered_by_user_id nulo, coerente com actor_type SYSTEM do
+  -- audit log. Nenhum usuario e creditado por algo que ele nao fez.
+  return query
+    select * from public.sync_construmanager_metadata_core(
+      p_project_id, p_company_id, p_work_id, p_started_at,
+      p_folders, p_documents, p_versions,
+      null, 'AUTOMATICO'
+    );
+end;
+$$;
+
+-- Grants das tres pecas.
+do $$
+begin
+  -- NUCLEO: sem grant para ninguem. So os wrappers (SECURITY DEFINER,
+  -- donos da funcao) o alcancam.
+  execute 'revoke all on function public.sync_construmanager_metadata_core(uuid, bigint, bigint, timestamptz, jsonb, jsonb, jsonb, uuid, text) from public';
+  execute 'revoke all on function public.sync_construmanager_metadata_core(uuid, bigint, bigint, timestamptz, jsonb, jsonb, jsonb, uuid, text) from anon';
+  execute 'revoke all on function public.sync_construmanager_metadata_core(uuid, bigint, bigint, timestamptz, jsonb, jsonb, jsonb, uuid, text) from authenticated';
+  execute 'revoke all on function public.sync_construmanager_metadata_core(uuid, bigint, bigint, timestamptz, jsonb, jsonb, jsonb, uuid, text) from service_role';
+
+  -- PORTA MANUAL: exatamente como o Pacote B a deixou.
+  execute 'revoke all on function public.sync_construmanager_metadata(uuid, bigint, bigint, timestamptz, jsonb, jsonb, jsonb) from public';
+  execute 'revoke all on function public.sync_construmanager_metadata(uuid, bigint, bigint, timestamptz, jsonb, jsonb, jsonb) from anon';
+  execute 'grant execute on function public.sync_construmanager_metadata(uuid, bigint, bigint, timestamptz, jsonb, jsonb, jsonb) to authenticated';
+
+  -- PORTA AUTOMATICA: service_role e mais ninguem.
+  execute 'revoke all on function public.sync_construmanager_metadata_system(uuid, bigint, bigint, timestamptz, jsonb, jsonb, jsonb) from public';
+  execute 'revoke all on function public.sync_construmanager_metadata_system(uuid, bigint, bigint, timestamptz, jsonb, jsonb, jsonb) from anon';
+  execute 'revoke all on function public.sync_construmanager_metadata_system(uuid, bigint, bigint, timestamptz, jsonb, jsonb, jsonb) from authenticated';
+  execute 'grant execute on function public.sync_construmanager_metadata_system(uuid, bigint, bigint, timestamptz, jsonb, jsonb, jsonb) to service_role';
+end;
+$$;
+
+-- Ultima execucao de sincronizacao que ainda nao teve deteccao.
+--
+-- Existe para o monitor independente NUNCA fabricar um sync_run_id: ele
+-- pergunta qual observacao real ainda precisa ser comparada. Se nao ha
+-- nenhuma, devolve nulo e o monitor encerra sem escrever nada.
+create or replace function public.pending_construmanager_sync_run(
+  p_project_id uuid
+)
+returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select r.id
+    from public.construmanager_sync_runs r
+   where r.project_id = p_project_id
+     and r.status in ('SUCESSO', 'PARCIAL')
+     and not exists (
+       select 1
+         from public.construmanager_version_transitions t
+        where t.sync_run_id = r.id
+     )
+   order by r.started_at desc
+   limit 1;
+$$;
+
+do $$
+begin
+  execute 'revoke all on function public.pending_construmanager_sync_run(uuid) from public';
+  execute 'revoke all on function public.pending_construmanager_sync_run(uuid) from anon';
+  execute 'revoke all on function public.pending_construmanager_sync_run(uuid) from authenticated';
+  execute 'grant execute on function public.pending_construmanager_sync_run(uuid) to service_role';
+end;
+$$;
+
+-- Transicoes recentes para o painel do ACC.
+--
+-- Gravar so em audit_log_entries nao atende "sabermos que uma nova versao
+-- esta vigente": ninguem abre o log de auditoria todo dia. Esta view
+-- alimenta a area NOVAS VERSOES VIGENTES do painel.
+--
+-- A situacao do conteudo e derivada do vinculo, nunca de download.
+create or replace view public.construmanager_recent_version_transitions
+with (security_invoker = true)
+as
+  select
+    t.id,
+    t.project_id,
+    t.construmanager_object_id,
+    t.document_name,
+    t.previous_revision,
+    t.new_revision,
+    t.source_created_at,
+    t.author_name,
+    t.size_bytes,
+    t.folder_path,
+    t.detected_at,
+    case
+      when l.download_status = 'ARMAZENADO' then 'ARMAZENADO_NO_ACC'
+      when l.download_status = 'REFERENCIA_EXTERNA' then 'SOMENTE_NO_CONSTRUMANAGER'
+      when l.id is null then t.content_availability
+      else 'PENDENTE'
+    end as content_status
+  from public.construmanager_version_transitions t
+  left join public.construmanager_content_links l
+    on l.integration_id = t.integration_id
+   and l.construmanager_object_id = t.construmanager_object_id
+   and l.document_id is not null;
+
+-- security_invoker: a view roda com os privilegios de quem consulta,
+-- entao a RLS de construmanager_version_transitions (membros do projeto)
+-- continua valendo. Sem isso a view furaria a RLS.
+grant select on public.construmanager_recent_version_transitions to authenticated;

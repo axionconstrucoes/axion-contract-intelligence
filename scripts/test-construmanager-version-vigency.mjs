@@ -926,8 +926,13 @@ console.log("-- 17. migration: identidade e bloqueio --");
   );
 
   check(
-    "sem sync_run_id informado, a execucao gera o proprio (nao usa relogio)",
-    /coalesce\(p_sync_run_id, gen_random_uuid\(\)\)/.test(mig)
+    "sem sync_run_id informado, a execucao busca uma observacao REAL pendente",
+    // Antes a funcao gerava um uuid proprio. Isso produzia referencia
+    // orfa: transicao apontando para uma execucao que nunca existiu.
+    // Agora ela pergunta qual sincronizacao ainda precisa ser comparada.
+    /coalesce\(\s*p_sync_run_id,\s*public\.pending_construmanager_sync_run\(p_project_id\)\s*\)/.test(
+      mig
+    ) && !/coalesce\(p_sync_run_id, gen_random_uuid\(\)\)/.test(mig)
   );
 
   check(

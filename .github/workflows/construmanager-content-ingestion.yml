@@ -64,7 +64,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Processo A — sincronizacao de metadados. E o step que descobre
+      # uma revisao nova na API. Roda PRIMEIRO e com interruptor proprio.
+      - name: Sync Construmanager metadata
+        run: node scripts/construmanager-metadata-worker.mjs "${{ inputs.project_id }}"
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          CONSTRUMANAGER_LOGIN: ${{ secrets.CONSTRUMANAGER_LOGIN }}
+          CONSTRUMANAGER_PASSWORD: ${{ secrets.CONSTRUMANAGER_PASSWORD }}
+          CONSTRUMANAGER_BASE_URL: ${{ secrets.CONSTRUMANAGER_BASE_URL }}
+          CONSTRUMANAGER_METADATA_SYNC_ENABLED: ${{ vars.CONSTRUMANAGER_METADATA_SYNC_ENABLED }}
+          CONSTRUMANAGER_VERSION_MONITORING_ENABLED: ${{ vars.CONSTRUMANAGER_VERSION_MONITORING_ENABLED }}
+          CONSTRUMANAGER_AUTO_KILL_SWITCH: ${{ vars.CONSTRUMANAGER_AUTO_KILL_SWITCH }}
+
+      # Processo C — ingestao de conteudo. `if: always()` para que uma
+      # falha na sincronizacao nao impeca o resto, e vice-versa: falha no
+      # download nunca bloqueia a proxima sincronizacao de metadados.
       - name: Ingest Construmanager content
+        if: always()
         run: node scripts/construmanager-content-worker.mjs "${{ inputs.project_id }}"
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
