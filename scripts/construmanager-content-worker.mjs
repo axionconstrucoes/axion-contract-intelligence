@@ -126,7 +126,8 @@ if (config.dryRun) {
 
   const agora = Date.now();
   const candidatos = [];
-  const foraPorTamanho = [];
+  const referenciaExterna = [];
+  const decisaoHumana = [];
   const foraPorBackoff = [];
 
   for (const row of data ?? []) {
@@ -141,8 +142,14 @@ if (config.dryRun) {
     }
 
     const verdict = evaluateSizePolicy(size, config.maxFileBytes);
-    if (!verdict.eligible) {
-      foraPorTamanho.push({ row, verdict });
+
+    if (verdict.classification === "REFERENCIA_EXTERNA") {
+      referenciaExterna.push({ row, size });
+      continue;
+    }
+
+    if (verdict.classification === "DECISAO_HUMANA") {
+      decisaoHumana.push({ row, verdict });
       continue;
     }
 
@@ -154,19 +161,26 @@ if (config.dryRun) {
   log(`elegiveis agora .............. ${candidatos.length}`);
   log(`seriam selecionados .......... ${selecionados.length} (teto ${config.maxItems})`);
   log(`fora por backoff ............. ${foraPorBackoff.length}`);
-  log(`fora por tamanho/desconhecido  ${foraPorTamanho.length}`);
+  log(`viram referencia externa ..... ${referenciaExterna.length}`);
+  log(`anomalia (decisao humana) .... ${decisaoHumana.length}`);
 
   for (const item of selecionados) {
-    log(`  SELECIONARIA #${item.row.construmanager_object_id} ${item.row.source_name} (${item.size} bytes)`);
+    log(`  BAIXARIA #${item.row.construmanager_object_id} ${item.row.source_name} (${item.size} bytes)`);
   }
 
-  for (const item of foraPorTamanho) {
+  for (const item of referenciaExterna) {
+    log(
+      `  SOMENTE NO CONSTRUMANAGER #${item.row.construmanager_object_id} ${item.row.source_name} (${item.size} bytes) — nao seria baixado`
+    );
+  }
+
+  for (const item of decisaoHumana) {
     log(
       `  DECISAO HUMANA #${item.row.construmanager_object_id} ${item.row.source_name} — ${item.verdict.reason}`
     );
   }
 
-  log("DRY-RUN concluido. Zero escritas, zero downloads.");
+  log("DRY-RUN concluido. Zero escritas, zero downloads, zero classificacoes gravadas.");
   process.exit(0);
 }
 
@@ -182,6 +196,8 @@ let stored = 0;
 let reused = 0;
 let failed = 0;
 let humanDecision = 0;
+let externalReferences = 0;
+let versionTransitions = 0;
 let bytesDownloaded = 0;
 let bytesStored = 0;
 let firstError = null;
@@ -209,11 +225,52 @@ try {
       `${prep?.pending_total ?? 0} aguardando download`
   );
 
-  // 2. Separa, ANTES de baixar qualquer coisa, os itens que a politica
-  //    de tamanho exclui da automacao. Sinalizados para decisao humana,
-  //    saem da fila e param de ser reagendados — sem virar ciclo de erro
-  //    e sem bloquear os menores.
-  const { data: bloqueaveis, error: bloqErr } = await supabase
+  // 2. NOVA VERSAO VIGENTE — o requisito central da automacao.
+  //
+  //    Roda ANTES de qualquer download e nao depende de nenhum: compara
+  //    a revisao vigente recem-sincronizada com a ultima observada. Um
+  //    arquivo grande, que nunca sera baixado, tem sua troca de revisao
+  //    detectada exatamente como os pequenos.
+  //
+  //    Idempotente: a segunda execucao sobre a mesma sincronizacao
+  //    devolve 0 transicoes e nao repete alerta.
+  const vigencia = firstRow(
+    await rpc("detect_construmanager_version_transitions", {
+      p_project_id: PROJECT_ID,
+    })
+  );
+
+  versionTransitions = Number(vigencia?.transitions ?? 0);
+
+  log(
+    `vigencia: ${vigencia?.first_observations ?? 0} primeira(s) observacao(oes) | ` +
+      `${versionTransitions} NOVA(S) VERSAO(OES) VIGENTE(S) | ` +
+      `${vigencia?.unchanged ?? 0} sem mudanca`
+  );
+
+  // 3. Classificacao de armazenamento, ANTES de qualquer transferencia.
+  //    Acima do limite => REFERENCIA_EXTERNA: o arquivo fica no
+  //    Construmanager. Nao e erro, nao e pendencia, nao consome
+  //    tentativa e nao bloqueia os menores. Idempotente e reversivel:
+  //    se o limite subir, a mesma RPC devolve os itens a fila.
+  const classificacao = firstRow(
+    await rpc("classify_construmanager_external_references", {
+      p_project_id: PROJECT_ID,
+      p_max_bytes: config.maxFileBytes,
+    })
+  );
+
+  externalReferences = Number(classificacao?.external_total ?? 0);
+
+  log(
+    `classificacao: ${classificacao?.classified ?? 0} novo(s) como referencia externa | ` +
+      `${classificacao?.reverted ?? 0} devolvido(s) a fila | ` +
+      `${externalReferences} referencia(s) externa(s) no total`
+  );
+
+  // 4. Anomalia real: tamanho ausente nos metadados. Nao da para
+  //    classificar nem estimar custo — isso sim precisa de gente.
+  const { data: semTamanho, error: semTamErr } = await supabase
     .from("construmanager_content_links")
     .select(
       "id, construmanager_object_id, source_name, construmanager_documents (size_bytes), construmanager_document_versions (size_bytes)"
@@ -223,16 +280,19 @@ try {
     .eq("requires_human_decision", false)
     .limit(500);
 
-  if (bloqErr) throw new Error(bloqErr.message);
+  if (semTamErr) throw new Error(semTamErr.message);
 
-  for (const row of bloqueaveis ?? []) {
+  for (const row of semTamanho ?? []) {
     const size =
       row.construmanager_documents?.size_bytes ??
       row.construmanager_document_versions?.size_bytes ??
       null;
 
     const verdict = evaluateSizePolicy(size, config.maxFileBytes);
-    if (verdict.eligible) continue;
+
+    // REFERENCIA_EXTERNA ja foi tratada pela RPC acima; aqui so resta
+    // anomalia de verdade.
+    if (verdict.classification !== "DECISAO_HUMANA") continue;
 
     await rpc("flag_construmanager_content_human_decision", {
       p_project_id: PROJECT_ID,
@@ -245,7 +305,7 @@ try {
     log(`decisao humana: #${row.construmanager_object_id} ${row.source_name} — ${verdict.reason}`);
   }
 
-  // 3. Autentica UMA vez para a rodada. O token vale ~24 h; reautenticar
+  // 5. Autentica UMA vez para a rodada. O token vale ~24 h; reautenticar
   //    por arquivo so multiplicaria a exposicao da credencial.
   const { data: integ, error: integErr } = await supabase
     .from("project_integrations")
@@ -275,7 +335,7 @@ try {
 
   const token = await client.getAccessToken(auth.user.token);
 
-  // 4. Aquisicao + processamento, SEQUENCIAL de proposito: downloads de
+  // 6. Aquisicao + processamento, SEQUENCIAL de proposito: downloads de
   //    centenas de MB em paralelo multiplicariam disco temporario e banda
   //    sem ganho nesta fase.
   const alvos = await rpc("claim_construmanager_content_targets", {
@@ -399,7 +459,7 @@ try {
     }
   }
 
-  // 5. Devolve o que foi adquirido e nao processado.
+  // 7. Devolve o que foi adquirido e nao processado.
   for (const linkId of naoProcessados) {
     await rpc("release_construmanager_content_lease", {
       p_project_id: PROJECT_ID,
@@ -418,6 +478,7 @@ try {
     p_reused: reused,
     p_failed: failed,
     p_human_decision_count: humanDecision,
+    p_external_references: externalReferences,
     p_bytes_downloaded: bytesDownloaded,
     p_bytes_stored: bytesStored,
     p_duration_ms: Date.now() - inicio,
@@ -426,7 +487,8 @@ try {
 
   log(
     `rodada ${status} | selecionados=${selected} armazenados=${stored} ` +
-      `reaproveitados=${reused} erros=${failed} decisaoHumana=${humanDecision} | ` +
+      `reaproveitados=${reused} erros=${failed} decisaoHumana=${humanDecision} ` +
+      `referenciaExterna=${externalReferences} novaVersaoVigente=${versionTransitions} | ` +
       `baixados=${bytesDownloaded}B armazenados=${bytesStored}B | ${Date.now() - inicio}ms`
   );
 
@@ -453,6 +515,7 @@ try {
       p_reused: reused,
       p_failed: failed,
       p_human_decision_count: humanDecision,
+    p_external_references: externalReferences,
       p_bytes_downloaded: bytesDownloaded,
       p_bytes_stored: bytesStored,
       p_duration_ms: Date.now() - inicio,

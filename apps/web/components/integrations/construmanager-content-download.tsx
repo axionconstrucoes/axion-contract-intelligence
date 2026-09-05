@@ -40,6 +40,7 @@ import {
   CONSTRUMANAGER_DOWNLOADING_LABEL,
   CONSTRUMANAGER_DOWNLOAD_BUTTON_CLASS,
   CONSTRUMANAGER_SEARCH_INPUT_CLASS,
+  CONSTRUMANAGER_COPY_ID_BUTTON_CLASS,
 } from "./construmanager-panel-styles";
 import { formatDateTime } from "@/lib/labels";
 import type {
@@ -97,6 +98,20 @@ export function ConstrumanagerContentDownload({
   // todos os botões: um download por vez, por construção.
   const [activeLinkId, setActiveLinkId] = useState<string | null>(null);
 
+  // Feedback do "Copiar ID". Local e efemero: nao vale estado global
+  // nem persistencia para uma confirmacao de dois segundos.
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+
+  function copyObjectId(objectId: number) {
+    // navigator.clipboard nao existe em contexto inseguro nem em alguns
+    // navegadores antigos; falhar em silencio e melhor que quebrar a
+    // linha inteira por uma conveniencia.
+    void navigator.clipboard
+      ?.writeText(String(objectId))
+      .then(() => setCopiedId(objectId))
+      .catch(() => undefined);
+  }
+
   const [state, formAction, pending] = useActionState(
     downloadConstrumanagerContentAction,
     initialDownloadConstrumanagerContentState
@@ -142,6 +157,7 @@ export function ConstrumanagerContentDownload({
   const stored = overview?.stored ?? 0;
   const failed = overview?.failed ?? 0;
   const downloading = overview?.downloading ?? 0;
+  const externalReferences = overview?.externalReferences ?? 0;
   const distinctBlobs = overview?.distinctBlobs ?? 0;
 
   const visible = filtered.slice(0, VISIBLE_LIMIT);
@@ -177,6 +193,9 @@ export function ConstrumanagerContentDownload({
           : `${stored} de ${total} armazenados · ${pendingCount} pendentes`}
         {downloading > 0 ? ` · ${downloading} baixando` : null}
         {failed > 0 ? ` · ${failed} com erro` : null}
+        {externalReferences > 0
+          ? ` · ${externalReferences} somente no Construmanager`
+          : null}
       </p>
 
       {/* Preparação: só faz sentido enquanto não há vínculo nenhum.
@@ -269,6 +288,48 @@ export function ConstrumanagerContentDownload({
                   #{item.objectId}
                 </span>
                 <ConstrumanagerContentStatusBadge status={item.status} />
+
+                {/* Referência externa: o arquivo fica no Construmanager,
+                    então a linha mostra o que permite localizá-lo lá.
+                    Nenhum link é oferecido — a API não expõe URL de
+                    documento, e deduzir uma levaria a um 404. */}
+                {item.status === "REFERENCIA_EXTERNA" ? (
+                  <>
+                    {item.extension ? (
+                      <span className="text-muted-foreground">
+                        .{item.extension}
+                      </span>
+                    ) : null}
+                    {item.revision ? (
+                      <span className="text-muted-foreground">
+                        rev {item.revision}
+                      </span>
+                    ) : null}
+                    {item.sourceSizeBytes !== null ? (
+                      <span className="text-muted-foreground">
+                        {formatBytes(item.sourceSizeBytes)}
+                      </span>
+                    ) : null}
+                    {item.folderPath ? (
+                      <span
+                        className="text-muted-foreground"
+                        title={item.folderPath}
+                      >
+                        {item.folderPath}
+                      </span>
+                    ) : null}
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      className={`h-6 px-2 text-xs ${CONSTRUMANAGER_COPY_ID_BUTTON_CLASS}`}
+                      onClick={() => copyObjectId(item.objectId)}
+                    >
+                      {copiedId === item.objectId ? "ID copiado" : "Copiar ID"}
+                    </Button>
+                  </>
+                ) : null}
+
                 {item.sizeBytes !== null ? (
                   <span className="text-muted-foreground">
                     {formatBytes(item.sizeBytes)}

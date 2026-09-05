@@ -8,9 +8,12 @@
 --   2. BACKOFF — impede reprocessamento imediato e infinito.
 --   3. TETO DE TENTATIVAS — depois de 3 falhas automaticas o item para de
 --      ser reagendado e passa a exigir decisao humana.
---   4. DECISAO HUMANA — sinalizacao explicita e auditavel, usada tambem
---      para arquivos acima do limite automatico.
---   5. METRICAS POR EXECUCAO — uma linha por rodada do worker.
+--   4. REFERENCIA_EXTERNA — arquivo acima do limite de armazenamento
+--      fica no Construmanager. Nao e erro, nao e pendencia: e politica.
+--   5. DECISAO HUMANA — reservada a ANOMALIA REAL (tamanho ausente,
+--      metadados inconsistentes, tentativas esgotadas em item elegivel).
+--      Tamanho grande, sozinho, NUNCA gera decisao humana.
+--   6. METRICAS POR EXECUCAO — uma linha por rodada do worker.
 --
 -- O que esta migration NAO faz, de proposito:
 --
@@ -42,6 +45,34 @@
 -- ---------------------------------------------------------------------
 -- 1. Estado de automacao nos vinculos
 -- ---------------------------------------------------------------------
+
+-- REFERENCIA_EXTERNA — arquivo que fica no Construmanager, por politica.
+--
+-- Nao e erro e nao e decisao humana. E uma decisao de ARMAZENAMENTO:
+-- acima do limite configurado, o ACC preserva a referencia documental e
+-- nao a copia binaria. O arquivo continua existindo e acessivel na
+-- plataforma de origem.
+--
+-- Misturar isso com ERRO seria mentir sobre o estado do acervo e
+-- encheria a fila de itens que nunca deveriam ser tentados; misturar com
+-- requires_human_decision produziria uma caixa de entrada de "pendencias"
+-- que ninguem consegue resolver, porque nao ha nada a decidir.
+alter table public.construmanager_content_links
+  drop constraint if exists construmanager_content_links_status_check;
+
+alter table public.construmanager_content_links
+  add constraint construmanager_content_links_status_check
+  check (download_status in ('PENDENTE', 'BAIXANDO', 'ARMAZENADO', 'ERRO', 'REFERENCIA_EXTERNA'));
+
+alter table public.construmanager_content_links
+  -- Rastreabilidade da classificacao: por que, contra qual limite, com
+  -- que tamanho e quando. Sem isso, mudar o limite depois viraria uma
+  -- reclassificacao cega — nao daria para saber se um item e referencia
+  -- externa por politica antiga ou atual.
+  add column if not exists external_reference_reason text,
+  add column if not exists external_reference_limit_bytes bigint,
+  add column if not exists external_reference_size_bytes bigint,
+  add column if not exists external_reference_at timestamptz;
 
 alter table public.construmanager_content_links
   -- Identificador do worker que detem o lease. Texto livre e nao um FK:
@@ -95,6 +126,30 @@ alter table public.construmanager_content_links
   add constraint construmanager_content_links_lease_check
   check (num_nonnulls(lease_owner, lease_expires_at) <> 1);
 
+-- Invariante da referencia externa, imposta pelo banco e nao por
+-- convencao de codigo: quem esta em REFERENCIA_EXTERNA carrega os quatro
+-- campos de rastreabilidade, NAO tem conteudo binario e NAO ocupa a fila.
+alter table public.construmanager_content_links
+  drop constraint if exists construmanager_content_links_external_reference_check;
+
+alter table public.construmanager_content_links
+  add constraint construmanager_content_links_external_reference_check
+  check (
+    download_status <> 'REFERENCIA_EXTERNA'
+    or (
+      external_reference_reason is not null
+      and external_reference_limit_bytes is not null
+      and external_reference_size_bytes is not null
+      and external_reference_at is not null
+      and content_blob_id is null
+      and downloaded_at is null
+      and download_error is null
+      and requires_human_decision = false
+      and lease_owner is null
+      and next_attempt_at is null
+    )
+  );
+
 -- Indice da fila: o worker pergunta sempre a mesma coisa — o que esta
 -- elegivel agora, neste projeto. Parcial para nao indexar os 200+
 -- ARMAZENADO que nunca mais voltam a fila.
@@ -146,6 +201,9 @@ create table if not exists public.construmanager_content_runs (
   reused integer not null default 0,
   failed integer not null default 0,
   human_decision_count integer not null default 0,
+  -- Quantos itens do projeto estao como REFERENCIA_EXTERNA ao fim da
+  -- rodada. Metrica de acervo, nao de falha.
+  external_references integer not null default 0,
 
   -- Bytes que sairam do Construmanager vs. bytes que de fato ocuparam
   -- disco. A diferenca entre os dois E a deduplicacao, medida.
@@ -162,7 +220,7 @@ create table if not exists public.construmanager_content_runs (
 
   constraint construmanager_content_runs_counters_check check (
     selected >= 0 and stored >= 0 and reused >= 0 and failed >= 0
-    and human_decision_count >= 0
+    and human_decision_count >= 0 and external_references >= 0
     and bytes_downloaded >= 0 and bytes_stored >= 0
   ),
 
@@ -264,6 +322,116 @@ begin
         where l.project_id = p_project_id
           and l.download_status in ('PENDENTE', 'ERRO')
           and l.requires_human_decision = false);
+end;
+$$;
+
+-- Classificacao de referencia externa — roda ANTES de qualquer download.
+--
+-- Decide exclusivamente pelo size_bytes ja presente nos metadados do
+-- Pacote B. Nenhum byte trafega para descobrir tamanho: o item grande e
+-- separado antes de existir qualquer conexao com a API.
+--
+-- Idempotente e REVERSIVEL nos dois sentidos:
+--
+--   acima do limite  -> vira REFERENCIA_EXTERNA (se ainda nao for)
+--   abaixo do limite -> volta para PENDENTE (se era referencia externa)
+--
+-- O segundo caso e o que torna o limite uma politica de verdade, e nao
+-- uma porta de mao unica: aumentar CONSTRUMANAGER_AUTO_MAX_FILE_BYTES
+-- devolve os itens a fila na proxima execucao, sem intervencao manual e
+-- sem download imediato — eles voltam como PENDENTE e esperam a vez.
+--
+-- Itens ja ARMAZENADOS nunca sao tocados: conteudo preservado nao vira
+-- referencia externa por mudanca de politica.
+create or replace function public.classify_construmanager_external_references(
+  p_project_id uuid,
+  p_max_bytes bigint
+)
+returns table (
+  classified integer,
+  reverted integer,
+  external_total integer
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_classified integer := 0;
+  v_reverted integer := 0;
+begin
+  if p_max_bytes is null or p_max_bytes <= 0 then
+    raise exception 'Limite de tamanho invalido para classificacao.';
+  end if;
+
+  -- 1. Acima do limite => referencia externa.
+  with alvos as (
+    select l.id, coalesce(d.size_bytes, v.size_bytes) as size_bytes
+      from public.construmanager_content_links l
+      left join public.construmanager_documents d on d.id = l.document_id
+      left join public.construmanager_document_versions v on v.id = l.version_id
+     where l.project_id = p_project_id
+       and l.download_status in ('PENDENTE', 'ERRO')
+       and coalesce(d.size_bytes, v.size_bytes) is not null
+       and coalesce(d.size_bytes, v.size_bytes) > p_max_bytes
+  ),
+  atualizados as (
+    update public.construmanager_content_links l
+       set download_status = 'REFERENCIA_EXTERNA',
+           external_reference_reason = 'ACIMA_DO_LIMITE_DE_ARMAZENAMENTO',
+           external_reference_limit_bytes = p_max_bytes,
+           external_reference_size_bytes = a.size_bytes,
+           external_reference_at = now(),
+           -- Limpa qualquer residuo de tentativa anterior: o item sai da
+           -- fila por politica, nao por falha.
+           download_error = null,
+           next_attempt_at = null,
+           lease_owner = null,
+           lease_expires_at = null,
+           auto_attempts = 0,
+           requires_human_decision = false,
+           human_decision_reason = null,
+           human_decision_at = null,
+           updated_at = now()
+      from alvos a
+     where l.id = a.id
+    returning 1
+  )
+  select count(*) into v_classified from atualizados;
+
+  -- 2. Abaixo do limite atual => volta para a fila.
+  with devolvidos as (
+    update public.construmanager_content_links l
+       set download_status = 'PENDENTE',
+           external_reference_reason = null,
+           external_reference_limit_bytes = null,
+           external_reference_size_bytes = null,
+           external_reference_at = null,
+           auto_attempts = 0,
+           next_attempt_at = null,
+           updated_at = now()
+      from (
+        select l2.id
+          from public.construmanager_content_links l2
+          left join public.construmanager_documents d on d.id = l2.document_id
+          left join public.construmanager_document_versions v on v.id = l2.version_id
+         where l2.project_id = p_project_id
+           and l2.download_status = 'REFERENCIA_EXTERNA'
+           and coalesce(d.size_bytes, v.size_bytes) is not null
+           and coalesce(d.size_bytes, v.size_bytes) <= p_max_bytes
+      ) a
+     where l.id = a.id
+    returning 1
+  )
+  select count(*) into v_reverted from devolvidos;
+
+  return query
+    select
+      v_classified,
+      v_reverted,
+      (select count(*)::integer from public.construmanager_content_links l
+        where l.project_id = p_project_id
+          and l.download_status = 'REFERENCIA_EXTERNA');
 end;
 $$;
 
@@ -612,6 +780,7 @@ create or replace function public.finish_construmanager_content_run(
   p_reused integer,
   p_failed integer,
   p_human_decision_count integer,
+  p_external_references integer,
   p_bytes_downloaded bigint,
   p_bytes_stored bigint,
   p_duration_ms integer,
@@ -631,6 +800,7 @@ begin
          reused = coalesce(p_reused, 0),
          failed = coalesce(p_failed, 0),
          human_decision_count = coalesce(p_human_decision_count, 0),
+         external_references = coalesce(p_external_references, 0),
          bytes_downloaded = coalesce(p_bytes_downloaded, 0),
          bytes_stored = coalesce(p_bytes_stored, 0),
          duration_ms = p_duration_ms,
@@ -649,13 +819,325 @@ declare
 begin
   foreach fn in array array[
     'public.ensure_construmanager_content_links_system(uuid)',
+    'public.classify_construmanager_external_references(uuid, bigint)',
     'public.claim_construmanager_content_targets(uuid, text, integer, bigint, integer)',
     'public.complete_construmanager_content_download_system(uuid, uuid, text, bigint, text, text, text, text, text)',
     'public.fail_construmanager_content_download_system(uuid, uuid, text, integer, integer)',
     'public.flag_construmanager_content_human_decision(uuid, uuid, text, text)',
     'public.release_construmanager_content_lease(uuid, uuid, text)',
     'public.start_construmanager_content_run(uuid, text, text, boolean)',
-    'public.finish_construmanager_content_run(uuid, text, integer, integer, integer, integer, integer, bigint, bigint, integer, text)'
+    'public.finish_construmanager_content_run(uuid, text, integer, integer, integer, integer, integer, integer, bigint, bigint, integer, text)'
+  ]
+  loop
+    execute format('revoke all on function %s from public', fn);
+    execute format('revoke all on function %s from anon', fn);
+    execute format('revoke all on function %s from authenticated', fn);
+    execute format('grant execute on function %s to service_role', fn);
+  end loop;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- 5. NOVA VERSAO VIGENTE — deteccao por metadados, sem download
+-- ---------------------------------------------------------------------
+--
+-- A REGRA (derivada do payload real; ver version-vigency.ts):
+--
+--   vigente    = linha com isVersao = 0 (nossa tabela de documentos)
+--   revisao    = cad_objects_versoes    (coluna `revision`)
+--   identidade = cad_objects_id         (`construmanager_object_id`),
+--                ESTAVEL entre revisoes
+--   historico  = isVersao = 1, apontando a cabeca por cad_objects_super
+--
+-- Logo, "nova versao vigente" e' MUDANCA DE `revision` no MESMO
+-- `construmanager_object_id`. Nao e' id novo, nao e' nome, nao e' data.
+--
+-- Por que uma tabela de vigencia separada: construmanager_documents e'
+-- atualizada por upsert a cada sincronizacao, entao a revisao anterior
+-- seria sobrescrita antes de qualquer comparacao. O ponteiro de vigencia
+-- guarda o ultimo estado OBSERVADO — e e' o unico jeito de saber o que
+-- mudou sem alterar as tabelas do Pacote B.
+--
+-- INDEPENDENCIA TOTAL DE CONTEUDO: nada aqui le blob, SHA-256, Storage
+-- ou hiperlink. Um arquivo grande, que nunca sera baixado, tem sua troca
+-- de revisao detectada e alertada exatamente como os pequenos.
+
+create table if not exists public.construmanager_document_vigency (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  integration_id uuid not null references public.project_integrations(id) on delete cascade,
+
+  -- Identidade documental estavel. E a chave do monitoramento.
+  construmanager_object_id bigint not null,
+
+  current_revision text,
+  current_name text,
+  current_source_created_at timestamptz,
+  current_author_name text,
+  current_size_bytes bigint,
+  current_folder_path text,
+
+  -- Quando a vigencia ATUAL passou a valer, segundo o ACC.
+  vigency_detected_at timestamptz not null default now(),
+  -- Ultima vez que este documento foi visto numa sincronizacao.
+  last_seen_at timestamptz not null default now(),
+
+  first_seen_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+
+  constraint construmanager_document_vigency_object_key
+    unique (integration_id, construmanager_object_id)
+);
+
+create index if not exists construmanager_document_vigency_project_idx
+  on public.construmanager_document_vigency (project_id, vigency_detected_at desc);
+
+alter table public.construmanager_document_vigency enable row level security;
+
+drop policy if exists construmanager_document_vigency_select_members
+  on public.construmanager_document_vigency;
+
+create policy construmanager_document_vigency_select_members
+  on public.construmanager_document_vigency
+  for select
+  to authenticated
+  using (public.is_project_member(project_id));
+
+-- Ledger IMUTAVEL das transicoes. Nenhuma linha e' sobrescrita ou
+-- apagada: o historico de vigencia e' evidencia contratual.
+create table if not exists public.construmanager_version_transitions (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects(id) on delete cascade,
+  integration_id uuid not null references public.project_integrations(id) on delete cascade,
+
+  construmanager_object_id bigint not null,
+  document_name text,
+
+  previous_revision text,
+  new_revision text not null,
+  previous_object_id bigint,
+  new_object_id bigint not null,
+
+  source_created_at timestamptz,
+  author_name text,
+  size_bytes bigint,
+  folder_path text,
+
+  -- ARMAZENADO_NO_ACC | SOMENTE_NO_CONSTRUMANAGER no momento da deteccao.
+  content_availability text not null
+    check (content_availability in ('ARMAZENADO_NO_ACC', 'SOMENTE_NO_CONSTRUMANAGER')),
+
+  detected_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+
+  -- UM alerta por transicao. Se a mesma transicao for reprocessada numa
+  -- sincronizacao posterior, o ON CONFLICT DO NOTHING a descarta e o
+  -- alerta nao se repete.
+  constraint construmanager_version_transitions_unique
+    unique (integration_id, construmanager_object_id, new_revision)
+);
+
+create index if not exists construmanager_version_transitions_project_idx
+  on public.construmanager_version_transitions (project_id, detected_at desc);
+
+alter table public.construmanager_version_transitions enable row level security;
+
+drop policy if exists construmanager_version_transitions_select_members
+  on public.construmanager_version_transitions;
+
+create policy construmanager_version_transitions_select_members
+  on public.construmanager_version_transitions
+  for select
+  to authenticated
+  using (public.is_project_member(project_id));
+
+-- Normalizacao da revisao para COMPARACAO (nunca para exibicao).
+-- "01", "1" e " 01 " sao a mesma revisao: sem isso, uma mudanca de
+-- formatacao viraria alerta falso a cada sincronizacao.
+create or replace function public.normalize_construmanager_revision(
+  p_revision text
+)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select coalesce(
+    upper(regexp_replace(btrim(coalesce(p_revision, '')), '^0+([0-9])', '\1')),
+    ''
+  );
+$$;
+
+-- Deteccao. Idempotente por construcao:
+--   documento novo -> registra vigencia, NAO alerta (e a carga inicial)
+--   revisao igual  -> so atualiza last_seen_at
+--   revisao mudou  -> grava transicao + auditoria e move o ponteiro
+--
+-- Rodar duas vezes seguidas produz zero alertas na segunda.
+create or replace function public.detect_construmanager_version_transitions(
+  p_project_id uuid
+)
+returns table (
+  first_observations integer,
+  transitions integer,
+  unchanged integer
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_integration_id uuid;
+  v_first integer := 0;
+  v_trans integer := 0;
+  v_same integer := 0;
+  r record;
+  v_previous public.construmanager_document_vigency%rowtype;
+  v_availability text;
+  v_transition_id uuid;
+begin
+  select pi.id into v_integration_id
+    from public.project_integrations pi
+   where pi.project_id = p_project_id
+     and pi.source_type = 'CONSTRUMANAGER';
+
+  if v_integration_id is null then
+    raise exception 'Integracao Construmanager nao configurada para este projeto.';
+  end if;
+
+  for r in
+    select d.construmanager_object_id, d.revision, d.name,
+           d.source_created_at, d.author_name, d.size_bytes, d.folder_path
+      from public.construmanager_documents d
+     where d.project_id = p_project_id
+       and d.integration_id = v_integration_id
+  loop
+    select * into v_previous
+      from public.construmanager_document_vigency v
+     where v.integration_id = v_integration_id
+       and v.construmanager_object_id = r.construmanager_object_id;
+
+    -- Primeira observacao: linha de base, sem alerta. Alertar aqui
+    -- encheria a caixa de entrada com 192 "novidades" que sao apenas o
+    -- acervo que ja existia.
+    if not found then
+      insert into public.construmanager_document_vigency (
+        project_id, integration_id, construmanager_object_id,
+        current_revision, current_name, current_source_created_at,
+        current_author_name, current_size_bytes, current_folder_path
+      ) values (
+        p_project_id, v_integration_id, r.construmanager_object_id,
+        r.revision, r.name, r.source_created_at,
+        r.author_name, r.size_bytes, r.folder_path
+      )
+      on conflict (integration_id, construmanager_object_id) do nothing;
+
+      v_first := v_first + 1;
+      continue;
+    end if;
+
+    if public.normalize_construmanager_revision(v_previous.current_revision)
+       = public.normalize_construmanager_revision(r.revision) then
+      update public.construmanager_document_vigency
+         set last_seen_at = now(), updated_at = now()
+       where id = v_previous.id;
+
+      v_same := v_same + 1;
+      continue;
+    end if;
+
+    -- Revisao ausente nos dados novos nao sustenta afirmar transicao:
+    -- ausencia nao e evidencia de mudanca.
+    if public.normalize_construmanager_revision(r.revision) = '' then
+      update public.construmanager_document_vigency
+         set last_seen_at = now(), updated_at = now()
+       where id = v_previous.id;
+
+      v_same := v_same + 1;
+      continue;
+    end if;
+
+    -- O conteudo esta no ACC ou so no Construmanager? A resposta entra
+    -- no alerta e vem do vinculo de conteudo, nunca de um download.
+    select case
+             when exists (
+               select 1 from public.construmanager_content_links l
+                where l.integration_id = v_integration_id
+                  and l.construmanager_object_id = r.construmanager_object_id
+                  and l.download_status = 'ARMAZENADO'
+             ) then 'ARMAZENADO_NO_ACC'
+             else 'SOMENTE_NO_CONSTRUMANAGER'
+           end
+      into v_availability;
+
+    v_transition_id := null;
+
+    insert into public.construmanager_version_transitions (
+      project_id, integration_id, construmanager_object_id, document_name,
+      previous_revision, new_revision, previous_object_id, new_object_id,
+      source_created_at, author_name, size_bytes, folder_path,
+      content_availability
+    ) values (
+      p_project_id, v_integration_id, r.construmanager_object_id, r.name,
+      v_previous.current_revision, r.revision,
+      v_previous.construmanager_object_id, r.construmanager_object_id,
+      r.source_created_at, r.author_name, r.size_bytes, r.folder_path,
+      v_availability
+    )
+    on conflict (integration_id, construmanager_object_id, new_revision) do nothing
+    returning id into v_transition_id;
+
+    update public.construmanager_document_vigency
+       set current_revision = r.revision,
+           current_name = r.name,
+           current_source_created_at = r.source_created_at,
+           current_author_name = r.author_name,
+           current_size_bytes = r.size_bytes,
+           current_folder_path = r.folder_path,
+           vigency_detected_at = now(),
+           last_seen_at = now(),
+           updated_at = now()
+     where id = v_previous.id;
+
+    -- Auditoria SOMENTE quando a transicao e nova. Reprocessar a mesma
+    -- sincronizacao nao gera um segundo registro.
+    if v_transition_id is not null then
+      insert into public.audit_log_entries (
+        project_id, actor_type, actor_user_id, actor_label,
+        action, entity_type, entity_id, detail
+      ) values (
+        p_project_id, 'SYSTEM', null, null,
+        'CONSTRUMANAGER_NOVA_VERSAO_VIGENTE',
+        'CONSTRUMANAGER_DOCUMENT', r.construmanager_object_id::text,
+        format(
+          'Nova versao vigente | Documento: %s | Revisao: %s -> %s | Identificador: %s | Pasta: %s | %s | Mudanca de VERSAO DOCUMENTAL segundo os metadados oficiais do Construmanager; sem download nao e possivel afirmar se o conteudo binario difere. Requer analise humana de impacto.',
+          coalesce(r.name, '(sem nome)'),
+          coalesce(v_previous.current_revision, '(sem revisao anterior)'),
+          r.revision,
+          r.construmanager_object_id,
+          coalesce(r.folder_path, '(sem pasta)'),
+          case when v_availability = 'ARMAZENADO_NO_ACC'
+               then 'Conteudo armazenado no ACC.'
+               else 'Conteudo somente no Construmanager.' end
+        )
+      );
+
+      v_trans := v_trans + 1;
+    end if;
+  end loop;
+
+  return query select v_first, v_trans, v_same;
+end;
+$$;
+
+do $$
+declare
+  fn text;
+begin
+  foreach fn in array array[
+    'public.detect_construmanager_version_transitions(uuid)',
+    'public.normalize_construmanager_revision(text)'
   ]
   loop
     execute format('revoke all on function %s from public', fn);

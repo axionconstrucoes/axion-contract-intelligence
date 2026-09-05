@@ -189,18 +189,36 @@ check(
 );
 
 check(
-  "IFC de 263 MiB NAO entra na automacao",
+  "um byte acima do limite ja NAO e elegivel",
+  evaluateSizePolicy(LIMITE + 1, LIMITE).eligible === false
+);
+
+check(
+  "IFC #38350763 (262,9 MiB) NAO entra na fila de download",
   evaluateSizePolicy(275687647, LIMITE).eligible === false
 );
 
 check(
-  "IFC recebe o motivo ACIMA_DO_LIMITE_AUTOMATICO",
-  evaluateSizePolicy(275687647, LIMITE).reason === "ACIMA_DO_LIMITE_AUTOMATICO"
+  "IFC vira REFERENCIA_EXTERNA, nao decisao humana",
+  evaluateSizePolicy(275687647, LIMITE).classification === "REFERENCIA_EXTERNA"
 );
 
 check(
-  "tamanho desconhecido nao e baixado as cegas",
-  evaluateSizePolicy(null, LIMITE).reason === "TAMANHO_DESCONHECIDO"
+  "IFC recebe o motivo de POLITICA DE ARMAZENAMENTO",
+  evaluateSizePolicy(275687647, LIMITE).reason === "ACIMA_DO_LIMITE_DE_ARMAZENAMENTO"
+);
+
+check(
+  "tamanho grande NUNCA e classificado como decisao humana",
+  evaluateSizePolicy(275687647, LIMITE).classification !== "DECISAO_HUMANA"
+);
+
+check(
+  "tamanho desconhecido e ANOMALIA (decisao humana), nao referencia externa",
+  (() => {
+    const v = evaluateSizePolicy(null, LIMITE);
+    return v.classification === "DECISAO_HUMANA" && v.reason === "TAMANHO_DESCONHECIDO";
+  })()
 );
 
 check(
@@ -209,13 +227,20 @@ check(
 );
 
 check(
+  "arquivo pequeno segue ELEGIVEL (fluxo normal de ingestao)",
+  evaluateSizePolicy(1363238, LIMITE).classification === "ELEGIVEL"
+);
+
+check(
   "o motivo sempre acompanha um detalhe legivel",
-  ["ACIMA_DO_LIMITE_AUTOMATICO", "TAMANHO_DESCONHECIDO"].every((r) => {
-    const v = r === "TAMANHO_DESCONHECIDO"
-      ? evaluateSizePolicy(null, LIMITE)
-      : evaluateSizePolicy(275687647, LIMITE);
-    return typeof v.detail === "string" && v.detail.length > 0;
-  })
+  [evaluateSizePolicy(null, LIMITE), evaluateSizePolicy(275687647, LIMITE)].every(
+    (v) => typeof v.detail === "string" && v.detail.length > 0
+  )
+);
+
+check(
+  "mudanca controlada do limite reclassifica: com teto de 500 MB o IFC volta a ser elegivel",
+  evaluateSizePolicy(275687647, 524288000).classification === "ELEGIVEL"
 );
 
 console.log("");
@@ -562,13 +587,26 @@ console.log("");
 console.log("-- 14. migration: seguranca e escopo --");
 
 check(
-  "todas as funcoes novas sao SECURITY DEFINER",
+  "toda funcao que toca tabela e SECURITY DEFINER",
+  // normalize_construmanager_revision e a unica excecao, e de proposito:
+  // e uma funcao pura (language sql immutable) que so normaliza texto.
+  // Dar privilegio elevado a ela seria conceder poder sem necessidade.
   (migrationBody.match(/security definer/g) ?? []).length ===
-    (migrationBody.match(/create or replace function/g) ?? []).length
+    (migrationBody.match(/create or replace function/g) ?? []).length - 1
 );
 
 check(
-  "todas usam search_path vazio",
+  "a unica funcao sem SECURITY DEFINER e a normalizadora pura",
+  /create or replace function public\.normalize_construmanager_revision[\s\S]{0,400}?language sql[\s\S]{0,80}?immutable/.test(
+    migrationBody
+  ) &&
+    !/create or replace function public\.normalize_construmanager_revision[\s\S]{0,400}?security definer/.test(
+      migrationBody
+    )
+);
+
+check(
+  "TODAS as funcoes usam search_path vazio, inclusive a pura",
   (migrationBody.match(/set search_path = ''/g) ?? []).length ===
     (migrationBody.match(/create or replace function/g) ?? []).length
 );

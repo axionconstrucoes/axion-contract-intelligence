@@ -201,24 +201,55 @@ export function computeBackoffSeconds(attempt: number): number {
   return 2 * 60 * 60;
 }
 
+/**
+ * Motivos de DECISAO HUMANA — reservados a anomalia real.
+ *
+ * Tamanho grande NAO esta aqui, e isso e deliberado: arquivo grande e
+ * uma decisao de armazenamento ja tomada (fica no Construmanager), nao
+ * uma pendencia que alguem precise resolver. Trata-lo como pendencia
+ * produziria uma caixa de entrada permanentemente cheia de itens sem
+ * acao possivel — o tipo de alerta que ensina a equipe a ignorar
+ * alertas.
+ */
 export type HumanDecisionReason =
-  | "ACIMA_DO_LIMITE_AUTOMATICO"
   | "TAMANHO_DESCONHECIDO"
+  | "METADADOS_INCONSISTENTES"
   | "TENTATIVAS_AUTOMATICAS_ESGOTADAS";
 
+/** Motivo da classificacao como referencia externa. */
+export const EXTERNAL_REFERENCE_REASON = "ACIMA_DO_LIMITE_DE_ARMAZENAMENTO";
+
+/**
+ * Tres destinos possiveis, e apenas tres:
+ *
+ *   ELEGIVEL           entra na fila de download
+ *   REFERENCIA_EXTERNA fica no Construmanager, por politica
+ *   DECISAO_HUMANA     anomalia real, precisa de gente
+ */
+export type SizeClassification =
+  | "ELEGIVEL"
+  | "REFERENCIA_EXTERNA"
+  | "DECISAO_HUMANA";
+
 export interface SizePolicyVerdict {
+  classification: SizeClassification;
+  /** Atalho: true somente para ELEGIVEL. */
   eligible: boolean;
-  reason: HumanDecisionReason | null;
+  reason: HumanDecisionReason | typeof EXTERNAL_REFERENCE_REASON | null;
   detail: string | null;
 }
 
 /**
- * Decide se um item pode entrar na fila automatica pelo tamanho.
+ * Classifica um item pelo tamanho, a partir dos METADADOS ja
+ * sincronizados — nunca de um download exploratorio.
  *
- * Roda sobre os METADADOS ja sincronizados — nunca sobre um download
- * exploratorio. Um arquivo grande e separado antes de qualquer byte
- * trafegar, e sinalizado para decisao humana em vez de virar um ciclo
- * de erro que bloquearia a fila.
+ * O arquivo grande e separado antes de qualquer byte trafegar: nao entra
+ * na fila, nao consome tentativa, nao entra em backoff e nao bloqueia os
+ * menores. Ele nao "falhou" — ele nao deve ser copiado.
+ *
+ * A comparacao e estritamente `>`: um arquivo com exatamente o tamanho
+ * do limite ainda e elegivel. O limite e o maior tamanho aceito, nao o
+ * primeiro rejeitado.
  */
 export function evaluateSizePolicy(
   sizeBytes: number | null,
@@ -226,22 +257,24 @@ export function evaluateSizePolicy(
 ): SizePolicyVerdict {
   if (sizeBytes === null || !Number.isFinite(sizeBytes) || sizeBytes < 0) {
     return {
+      classification: "DECISAO_HUMANA",
       eligible: false,
       reason: "TAMANHO_DESCONHECIDO",
       detail:
-        "Tamanho ausente nos metadados: baixar as cegas poderia estourar disco ou tempo da rodada.",
+        "Tamanho ausente ou invalido nos metadados: sem ele nao da para classificar nem estimar custo de disco e tempo.",
     };
   }
 
   if (sizeBytes > maxFileBytes) {
     return {
+      classification: "REFERENCIA_EXTERNA",
       eligible: false,
-      reason: "ACIMA_DO_LIMITE_AUTOMATICO",
-      detail: `${sizeBytes} bytes excede o limite automatico de ${maxFileBytes} bytes.`,
+      reason: EXTERNAL_REFERENCE_REASON,
+      detail: `${sizeBytes} bytes excede o limite de armazenamento de ${maxFileBytes} bytes — o arquivo permanece no Construmanager.`,
     };
   }
 
-  return { eligible: true, reason: null, detail: null };
+  return { classification: "ELEGIVEL", eligible: true, reason: null, detail: null };
 }
 
 /**
