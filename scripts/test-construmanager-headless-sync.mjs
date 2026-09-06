@@ -36,10 +36,14 @@ function check(name, condition) {
   }
 }
 
+// CRLF normalizado na leitura: as asserções falam da ESTRUTURA do SQL,
+// não do fim de linha que o git materializa no Windows. Sem isto, o
+// mesmo arquivo passa numa branch e falha noutra só porque o checkout
+// converteu as quebras de linha.
 const MIGRATION = readFileSync(
   "supabase/migrations/20260905180000_construmanager_content_automation.sql",
   "utf8"
-);
+).replace(/\r\n/g, "\n");
 const MIG = MIGRATION.replace(/^\s*--.*$/gm, " ");
 
 const METADATA_WORKER = readFileSync("scripts/construmanager-metadata-worker.mjs", "utf8");
