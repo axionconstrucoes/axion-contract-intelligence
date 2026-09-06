@@ -50,7 +50,17 @@ export type ConstrumanagerContentStatus =
   | "PENDENTE"
   | "BAIXANDO"
   | "ARMAZENADO"
-  | "ERRO";
+  | "ERRO"
+  /**
+   * Fica no Construmanager por política de tamanho.
+   *
+   * Não é erro e não é pendência — é uma decisão de armazenamento já
+   * tomada. Por isso ganha família de cor própria (azul-escuro), longe
+   * do vermelho de ERRO e do amarelo de PENDENTE: quem bate o olho no
+   * painel precisa entender de imediato que não há nada a fazer com
+   * este item.
+   */
+  | "REFERENCIA_EXTERNA";
 
 /**
  * Status de CONTEÚDO de cada item da lista de download.
@@ -67,6 +77,9 @@ export const CONSTRUMANAGER_CONTENT_STATUS_CLASSES: Record<
   BAIXANDO: "border-transparent bg-blue-600 text-white font-bold",
   ARMAZENADO: "border-transparent bg-green-600 text-white font-bold",
   ERRO: "border-transparent bg-red-600 text-white font-bold",
+  // Azul-escuro solido: familia de cor propria, longe do vermelho de
+  // ERRO e do amarelo de PENDENTE.
+  REFERENCIA_EXTERNA: "border-transparent bg-blue-900 text-white font-bold",
 };
 
 export const CONSTRUMANAGER_CONTENT_STATUS_LABELS: Record<
@@ -76,6 +89,7 @@ export const CONSTRUMANAGER_CONTENT_STATUS_LABELS: Record<
   PENDENTE: "Pendente",
   BAIXANDO: "Baixando",
   ARMAZENADO: "Armazenado",
+  REFERENCIA_EXTERNA: "SOMENTE NO CONSTRUMANAGER",
   ERRO: "Erro",
 };
 

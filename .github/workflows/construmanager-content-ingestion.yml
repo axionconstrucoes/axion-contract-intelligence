@@ -1,0 +1,113 @@
+# Pacote D — ingestao automatica de conteudo do Construmanager.
+#
+# ESTE WORKFLOW NASCE DESATIVADO.
+#
+# Nao ha gatilho `schedule` — apenas `workflow_dispatch` (disparo manual
+# pela aba Actions). Ativar a automacao periodica e descomentar o bloco
+# `schedule` abaixo, em commit proprio e revisado. Ate la, nada roda
+# sozinho.
+#
+# Mesmo disparado a mao, o worker so age se as variaveis de ambiente
+# autorizarem: CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED precisa valer
+# exatamente "true" e CONSTRUMANAGER_AUTO_DRY_RUN precisa valer
+# exatamente "false" para sair do modo de simulacao. Ausentes, a rodada
+# termina sem tocar em nada (fail-closed).
+#
+# POR QUE GITHUB ACTIONS E NAO VERCEL CRON
+#
+#   1. Precedente do proprio projeto: gmail-inbound-sync.yml ja usa
+#      exatamente este padrao (workflow + script standalone + secret key).
+#   2. apps/web/proxy.ts exige sessao Supabase em todas as rotas exceto
+#      /login e /auth/callback. Uma rota de cron sem cookie levaria 307
+#      para /login — ativa-la exigiria abrir o perimetro de autenticacao.
+#   3. Disco: um arquivo de 263 MiB precisa de ZIP + extraido (~526 MiB)
+#      em disco temporario. O runner ubuntu-latest tem ~14 GB livres.
+#   4. Duracao: funcao Vercel encerra em 300 s; um job aqui pode durar
+#      horas, com `timeout-minutes` explicito como trava.
+
+name: Construmanager Content Ingestion
+
+on:
+  # schedule:
+  #   - cron: "17 * * * *"   # DESATIVADO — ver cabecalho
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: "Project id do ACC"
+        required: false
+        default: "00000000-0000-4000-8000-000000000001"
+
+# Uma rodada por vez. O lease no banco protege contra workers
+# concorrentes; isto evita que eles sequer sejam criados.
+concurrency:
+  group: construmanager-content-ingestion
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Processo A — sincronizacao de metadados. E o step que descobre
+      # uma revisao nova na API. Roda PRIMEIRO e com interruptor proprio.
+      - name: Sync Construmanager metadata
+        run: node scripts/construmanager-metadata-worker.mjs "${{ inputs.project_id }}"
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          CONSTRUMANAGER_LOGIN: ${{ secrets.CONSTRUMANAGER_LOGIN }}
+          CONSTRUMANAGER_PASSWORD: ${{ secrets.CONSTRUMANAGER_PASSWORD }}
+          CONSTRUMANAGER_BASE_URL: ${{ secrets.CONSTRUMANAGER_BASE_URL }}
+          CONSTRUMANAGER_METADATA_SYNC_ENABLED: ${{ vars.CONSTRUMANAGER_METADATA_SYNC_ENABLED }}
+          CONSTRUMANAGER_VERSION_MONITORING_ENABLED: ${{ vars.CONSTRUMANAGER_VERSION_MONITORING_ENABLED }}
+          CONSTRUMANAGER_AUTO_KILL_SWITCH: ${{ vars.CONSTRUMANAGER_AUTO_KILL_SWITCH }}
+
+      # Processo C — ingestao de conteudo. `if: always()` para que uma
+      # falha na sincronizacao nao impeca o resto, e vice-versa: falha no
+      # download nunca bloqueia a proxima sincronizacao de metadados.
+      - name: Ingest Construmanager content
+        if: always()
+        run: node scripts/construmanager-content-worker.mjs "${{ inputs.project_id }}"
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          CONSTRUMANAGER_LOGIN: ${{ secrets.CONSTRUMANAGER_LOGIN }}
+          CONSTRUMANAGER_PASSWORD: ${{ secrets.CONSTRUMANAGER_PASSWORD }}
+          CONSTRUMANAGER_BASE_URL: ${{ secrets.CONSTRUMANAGER_BASE_URL }}
+          # Controles da automacao. Ausentes => worker nao faz nada.
+          CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED: ${{ vars.CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED }}
+          CONSTRUMANAGER_AUTO_DRY_RUN: ${{ vars.CONSTRUMANAGER_AUTO_DRY_RUN }}
+          CONSTRUMANAGER_AUTO_MAX_ITEMS: ${{ vars.CONSTRUMANAGER_AUTO_MAX_ITEMS }}
+          CONSTRUMANAGER_AUTO_MAX_FILE_BYTES: ${{ vars.CONSTRUMANAGER_AUTO_MAX_FILE_BYTES }}
+          CONSTRUMANAGER_AUTO_TIME_BUDGET_MS: ${{ vars.CONSTRUMANAGER_AUTO_TIME_BUDGET_MS }}
+          CONSTRUMANAGER_AUTO_KILL_SWITCH: ${{ vars.CONSTRUMANAGER_AUTO_KILL_SWITCH }}
+
+      # Processo B — monitoramento de versao vigente. Roda como STEP
+      # SEPARADO e com interruptor proprio: se os downloads estiverem
+      # desligados, o step acima encerra sem fazer nada e ESTE ainda
+      # executa. Nao recebe CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED — nao
+      # existe caminho para um habilitar o outro.
+      - name: Monitor Construmanager version vigency
+        if: always()
+        run: node scripts/construmanager-version-monitor.mjs "${{ inputs.project_id }}"
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          CONSTRUMANAGER_VERSION_MONITORING_ENABLED: ${{ vars.CONSTRUMANAGER_VERSION_MONITORING_ENABLED }}
+          CONSTRUMANAGER_AUTO_KILL_SWITCH: ${{ vars.CONSTRUMANAGER_AUTO_KILL_SWITCH }}

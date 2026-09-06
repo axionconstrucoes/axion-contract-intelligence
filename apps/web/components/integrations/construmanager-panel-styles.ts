@@ -57,3 +57,21 @@ export const CONSTRUMANAGER_DOWNLOAD_BUTTON_CLASS = [
 
 /** Rótulo do botão enquanto o download daquele item está em curso. */
 export const CONSTRUMANAGER_DOWNLOADING_LABEL = "Baixando...";
+
+/**
+ * Botão "Copiar ID" das linhas de referência externa.
+ *
+ * Discreto de propósito: é uma conveniência para localizar o arquivo na
+ * plataforma de origem, não uma ação de destaque como o Baixar. Negrito
+ * porque todo texto de botão do painel é negrito.
+ */
+export const CONSTRUMANAGER_COPY_ID_BUTTON_CLASS = [
+  "border-2",
+  "border-[#C2185B]",
+  "bg-white",
+  "text-black",
+  "font-bold",
+  "hover:bg-[#C2185B]",
+  "hover:text-white",
+  "hover:opacity-100",
+].join(" ");

@@ -62,10 +62,17 @@ export function ConstrumanagerMetadataSync({
     ? null
     : state.error ?? overview?.lastSyncError ?? null;
 
+  // Metadados gravados, mas a verificação de novas versões não concluiu.
+  // NÃO é "Concluída": dizer isso mandaria a pessoa embora achando que o
+  // monitoramento rodou.
+  const versionMonitoringFailed = state.success && state.versionMonitoringFailed;
+
   const statusLabel = state.success
-    ? orphaned && orphaned > 0
-      ? "Concluída com ressalvas"
-      : "Concluída"
+    ? versionMonitoringFailed
+      ? "Concluída parcialmente"
+      : orphaned && orphaned > 0
+        ? "Concluída com ressalvas"
+        : "Concluída"
     : overview?.lastSyncStatus === "SUCESSO"
       ? "Concluída"
       : overview?.lastSyncStatus === "PARCIAL"
@@ -90,6 +97,15 @@ export function ConstrumanagerMetadataSync({
           : "Metadados ainda não sincronizados."}
         {statusLabel ? ` · ${statusLabel}` : null}
       </p>
+
+      {/* Resultado PARCIAL: os metadados estão gravados e corretos, mas a
+          verificação de novas versões não concluiu. Sem detalhe técnico —
+          ele fica no log do servidor. */}
+      {versionMonitoringFailed ? (
+        <p className="text-xs font-bold text-destructive">
+          METADADOS SINCRONIZADOS, MAS O MONITORAMENTO DE VERSÕES FALHOU
+        </p>
+      ) : null}
 
       {documentsSeen !== null ? (
         <dl className="grid gap-1 text-xs sm:grid-cols-2">

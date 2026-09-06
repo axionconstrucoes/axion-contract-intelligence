@@ -17,6 +17,7 @@ import { estimateEligibleEmailCount } from "@/lib/email/inbound/ingestion-contro
 import { getEmailAttachmentRegistryForProject } from "@/lib/email/attachments/registry/get-attachment-registry";
 import { getConstrumanagerMetadataOverview } from "@/lib/integrations/construmanager/get-metadata-overview";
 import { getConstrumanagerContentOverview } from "@/lib/integrations/construmanager/get-content-overview";
+import { getConstrumanagerVersionTransitions } from "@/lib/integrations/construmanager/get-version-transitions";
 
 export const metadata: Metadata = { title: "Integrações" };
 
@@ -30,7 +31,7 @@ export default async function IntegracoesPage({
   const supabase = await createSupabaseServerClient();
   const sources = getSourceDefinitions();
 
-  const [configs, permission, project, projectStartRow, accounts, ingestionConfig, latestRun, attachmentRows, construmanagerMetadata, construmanagerContent] = await Promise.all([
+  const [configs, permission, project, projectStartRow, accounts, ingestionConfig, latestRun, attachmentRows, construmanagerMetadata, construmanagerContent, construmanagerTransitions] = await Promise.all([
     getIntegrationConfigs(projectId),
     getCurrentProjectPermission(projectId),
     getProject(projectId),
@@ -41,6 +42,7 @@ export default async function IntegracoesPage({
     getEmailAttachmentRegistryForProject(projectId),
     getConstrumanagerMetadataOverview(supabase, projectId),
     getConstrumanagerContentOverview(supabase, projectId),
+    getConstrumanagerVersionTransitions(supabase, projectId),
   ]);
 
   const canManage = permission === "ADMINISTRADOR";
@@ -72,6 +74,7 @@ export default async function IntegracoesPage({
               canManage={canManage}
               construmanagerMetadata={source.type === "CONSTRUMANAGER" ? construmanagerMetadata : null}
               construmanagerContent={source.type === "CONSTRUMANAGER" ? construmanagerContent : null}
+              construmanagerTransitions={source.type === "CONSTRUMANAGER" ? construmanagerTransitions : null}
             />
           );
         })}

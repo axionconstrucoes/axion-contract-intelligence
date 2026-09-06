@@ -12,7 +12,14 @@ export interface ConstrumanagerContentItem {
   objectId: number;
   sourceName: string;
   target: "DOCUMENTO" | "VERSAO";
-  status: "PENDENTE" | "BAIXANDO" | "ARMAZENADO" | "ERRO";
+  status:
+    | "PENDENTE"
+    | "BAIXANDO"
+    | "ARMAZENADO"
+    | "ERRO"
+    /** Fica no Construmanager por política de tamanho. Não é erro. */
+    | "REFERENCIA_EXTERNA";
+  /** Tamanho do conteúdo ARMAZENADO. Nulo enquanto não houver blob. */
   sizeBytes: number | null;
   sha256: string | null;
   /** Primeiros 12 caracteres — suficiente para conferência visual. */
@@ -20,6 +27,15 @@ export interface ConstrumanagerContentItem {
   downloadedAt: string | null;
   attempts: number;
   error: string | null;
+
+  // Metadados da ORIGEM. Existem mesmo sem download algum — é o que
+  // permite exibir um item de referência externa com informação útil
+  // para localizá-lo no Construmanager.
+  extension: string | null;
+  revision: string | null;
+  /** Caminho da pasta no Construmanager, como a plataforma o expõe. */
+  folderPath: string | null;
+  sourceSizeBytes: number | null;
 }
 
 export interface ConstrumanagerContentOverview {
@@ -28,6 +44,8 @@ export interface ConstrumanagerContentOverview {
   downloading: number;
   stored: number;
   failed: number;
+  /** Itens que permanecem no Construmanager por política de tamanho. */
+  externalReferences: number;
   /** Blobs físicos distintos entre os itens armazenados. */
   distinctBlobs: number;
   storedBytes: number;
@@ -59,12 +77,33 @@ type LinkRow = {
     | { sha256: string; size_bytes: number }
     | { sha256: string; size_bytes: number }[]
     | null;
+  construmanager_documents: SourceRow | SourceRow[] | null;
+  construmanager_document_versions: SourceRow | SourceRow[] | null;
+};
+
+type SourceRow = {
+  extension_normalized: string | null;
+  revision: string | null;
+  folder_path: string | null;
+  size_bytes: number | null;
 };
 
 function blobOf(row: LinkRow): { sha256: string; size_bytes: number } | null {
   const blob = row.construmanager_content_blobs;
   if (!blob) return null;
   return Array.isArray(blob) ? (blob[0] ?? null) : blob;
+}
+
+/**
+ * Metadados da origem, venha o vínculo de um documento-cabeça ou de uma
+ * versão histórica. O PostgREST devolve objeto ou array de um elemento
+ * conforme a cardinalidade que infere — aceitar as duas formas evita que
+ * uma mudança do driver apague a informação silenciosamente.
+ */
+function sourceOf(row: LinkRow): SourceRow | null {
+  const raw = row.construmanager_documents ?? row.construmanager_document_versions;
+  if (!raw) return null;
+  return Array.isArray(raw) ? (raw[0] ?? null) : raw;
 }
 
 export async function getConstrumanagerContentOverview(
@@ -74,7 +113,7 @@ export async function getConstrumanagerContentOverview(
   const { data, error } = await supabase
     .from("construmanager_content_links")
     .select(
-      "id, construmanager_object_id, source_name, document_id, version_id, download_status, download_attempts, download_error, downloaded_at, content_blob_id, construmanager_content_blobs (sha256, size_bytes)"
+      "id, construmanager_object_id, source_name, document_id, version_id, download_status, download_attempts, download_error, downloaded_at, content_blob_id, construmanager_content_blobs (sha256, size_bytes), construmanager_documents (extension_normalized, revision, folder_path, size_bytes), construmanager_document_versions (extension_normalized, revision, folder_path, size_bytes)"
     )
     .eq("project_id", projectId)
     .order("updated_at", { ascending: false });
@@ -90,6 +129,7 @@ export async function getConstrumanagerContentOverview(
       downloading: 0,
       stored: 0,
       failed: 0,
+      externalReferences: 0,
       distinctBlobs: 0,
       storedBytes: 0,
       items: [],
@@ -102,14 +142,17 @@ export async function getConstrumanagerContentOverview(
   let downloading = 0;
   let stored = 0;
   let failed = 0;
+  let externalReferences = 0;
 
   const items: ConstrumanagerContentItem[] = rows.map((row) => {
     const blob = blobOf(row);
+    const source = sourceOf(row);
 
     if (row.download_status === "PENDENTE") pending += 1;
     else if (row.download_status === "BAIXANDO") downloading += 1;
     else if (row.download_status === "ARMAZENADO") stored += 1;
     else if (row.download_status === "ERRO") failed += 1;
+    else if (row.download_status === "REFERENCIA_EXTERNA") externalReferences += 1;
 
     // Bytes físicos são contados UMA vez por blob: dois documentos com
     // o mesmo conteúdo ocupam um objeto só, e o total precisa refletir
@@ -131,6 +174,13 @@ export async function getConstrumanagerContentOverview(
       downloadedAt: row.downloaded_at,
       attempts: row.download_attempts,
       error: row.download_error,
+      extension: source?.extension_normalized ?? null,
+      revision: source?.revision ?? null,
+      folderPath: source?.folder_path ?? null,
+      sourceSizeBytes:
+        source?.size_bytes === null || source?.size_bytes === undefined
+          ? null
+          : Number(source.size_bytes),
     };
   });
 
@@ -140,6 +190,7 @@ export async function getConstrumanagerContentOverview(
     downloading,
     stored,
     failed,
+    externalReferences,
     distinctBlobs: distinct.size,
     storedBytes,
     items,
