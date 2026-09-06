@@ -257,8 +257,9 @@ export async function validateConstrumanagerConnectionAction(
     const auth = await client.authenticate();
 
     if (auth.user.companyId !== companyId) {
+      // Sem interpolar o valor recebido — ver collect-metadata.ts.
       throw new Error(
-        `A conta configurada (${companyId}) não corresponde à empresa retornada pela API.`
+        "A conta configurada não corresponde à empresa retornada pela API."
       );
     }
 
@@ -638,8 +639,9 @@ export async function downloadConstrumanagerContentAction(
     const auth = await client.authenticate();
 
     if (auth.user.companyId !== companyId) {
+      // Sem interpolar o valor recebido — ver collect-metadata.ts.
       throw new Error(
-        `A conta configurada (${companyId}) não corresponde à empresa retornada pela API.`
+        "A conta configurada não corresponde à empresa retornada pela API."
       );
     }
 
