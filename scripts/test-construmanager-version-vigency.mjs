@@ -451,7 +451,7 @@ console.log("-- 11. auditoria do codigo real --");
 const migration = readFileSync(
   "supabase/migrations/20260905180000_construmanager_content_automation.sql",
   "utf8"
-);
+).replace(/\r\n/g, "\n");
 const worker = readFileSync("scripts/construmanager-content-worker.mjs", "utf8");
 const policy = readFileSync(
   "apps/web/lib/integrations/construmanager/version-vigency.ts",

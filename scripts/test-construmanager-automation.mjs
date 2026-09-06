@@ -571,7 +571,7 @@ console.log("-- 13. interrupcao nao deixa orfao --");
 const migration = readFileSync(
   "supabase/migrations/20260905180000_construmanager_content_automation.sql",
   "utf8"
-);
+).replace(/\r\n/g, "\n");
 
 const worker = readFileSync("scripts/construmanager-content-worker.mjs", "utf8");
 const workflow = readFileSync(".github/workflows/construmanager-content-ingestion.yml", "utf8");
