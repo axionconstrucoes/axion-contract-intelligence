@@ -26,8 +26,13 @@ export async function collectConstrumanagerMetadata(
   const auth = await client.authenticate();
 
   if (auth.user.companyId !== companyId) {
+    // Sem interpolar o valor recebido. Quando um chamador erra a
+    // assinatura, este parâmetro pode conter qualquer coisa — inclusive
+    // um access token —, e a mensagem vai parar em log de CI. Uma
+    // mensagem de erro nunca deve ser um canal de exfiltração: o que ela
+    // precisa dizer é QUAL invariante quebrou, não com que valor.
     throw new Error(
-      `A conta configurada (${companyId}) não corresponde à empresa retornada pela API.`
+      "A conta configurada não corresponde à empresa retornada pela API."
     );
   }
 

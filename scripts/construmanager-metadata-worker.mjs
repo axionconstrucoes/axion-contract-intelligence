@@ -105,12 +105,19 @@ try {
     throw new Error("A conta configurada nao corresponde a empresa retornada pela API.");
   }
 
-  const token = await client.getAccessToken(auth.user.token);
-
   // 3. Coletar — MESMA implementacao validada no Pacote B.
+  //
+  // A assinatura e' (client, companyId, workId). NAO passar o access
+  // token aqui: collectConstrumanagerMetadata obtem o proprio token
+  // internamente. Um argumento a mais desloca todos os seguintes —
+  // `companyId` recebia o token, `workId` recebia o companyId e o
+  // workId real era descartado —, e a checagem de empresa passava a
+  // comparar numero com string, falhando sempre. Foi assim que um
+  // access token acabou interpolado numa mensagem de erro e gravado no
+  // log do GitHub Actions. JavaScript aceita argumentos extras em
+  // silencio e o .mjs nao passa pelo tsc: so um teste pega isto.
   const metadata = await collectConstrumanagerMetadata(
     client,
-    token.access_token,
     companyId,
     workId
   );
