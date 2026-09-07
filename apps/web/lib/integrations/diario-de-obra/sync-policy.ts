@@ -162,6 +162,118 @@ export function baselineConcluido(
   return proximaJanelaFim !== null && proximaJanelaFim !== undefined && proximaJanelaFim < pisoIso;
 }
 
+
+/*
+ * ESTADO DE RETOMADA DO BASELINE
+ *
+ * A versao anterior guardava so `proximaJanelaFim`, gravado apenas quando
+ * a janela terminava. Um run que batia no teto de 20 nao gravava nada, e
+ * o processo seguinte — outro processo, outra maquina, sem memoria —
+ * relia `null` e recomecava de HOJE. Foi o que aconteceu no run
+ * 34142741140: ele voltou a janela ja completa em vez de continuar a que
+ * tinha 49 pendentes.
+ *
+ * A causa nao era o calculo da janela: era o checkpoint nao dizer QUAL
+ * janela estava em curso. Agora ele diz, sempre.
+ */
+export interface CheckpointBaseline {
+  /** Janela que este run processou. */
+  currentWindowStart: string | null;
+  currentWindowEnd: string | null;
+  /** Por onde o PROXIMO processo retoma. `null` = acabou. */
+  resumeWindowEnd: string | null;
+  candidatesRemaining: number;
+  coverageGuaranteed: boolean;
+  baselineComplete: boolean;
+  piso: string;
+  totalNaOrigem: number;
+}
+
+/**
+ * Le a retomada, aceitando checkpoints antigos.
+ *
+ * Ordem de prioridade e' deliberada:
+ *
+ *   resumeWindowEnd    formato novo, sempre correto;
+ *   proximaJanelaFim   formato antigo, gravado SO quando a janela
+ *                      terminou — significa "comece na anterior";
+ *   janelaFimAtual /
+ *   janelaFim          formato antigo de uma janela NAO terminada —
+ *                      significa "continue nesta".
+ *
+ * `proximaJanelaFim` precisa vir ANTES de `janelaFim`: o checkpoint
+ * legado do run 34142741140 tem os dois (2026-06-09 e 2026-09-07), e
+ * preferir `janelaFim` reproduziria exatamente o defeito.
+ */
+export function lerRetomadaBaseline(
+  checkpoint: Record<string, unknown> | null | undefined
+): { resumeWindowEnd: string | null; baselineComplete: boolean } {
+  if (!checkpoint) return { resumeWindowEnd: null, baselineComplete: false };
+
+  if (checkpoint.baselineComplete === true) {
+    return { resumeWindowEnd: null, baselineComplete: true };
+  }
+
+  const candidatos = [
+    checkpoint.resumeWindowEnd,
+    checkpoint.proximaJanelaFim,
+    checkpoint.janelaFimAtual,
+    checkpoint.janelaFim,
+  ];
+
+  for (const valor of candidatos) {
+    if (typeof valor === "string" && /^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+      return { resumeWindowEnd: valor, baselineComplete: false };
+    }
+  }
+
+  return { resumeWindowEnd: null, baselineComplete: false };
+}
+
+/**
+ * Monta o checkpoint a partir do que ESTE run observou.
+ *
+ *   1. sobraram candidatos  -> retoma a MESMA janela;
+ *   2. janela esgotada      -> retoma no dia anterior ao inicio dela;
+ *   3. abaixo do piso       -> baseline completo, sem retomada.
+ *
+ * Cobertura incerta tambem mantem a janela: uma janela que nao pode ser
+ * garantida nao pode ser dada por concluida.
+ */
+export function montarCheckpointBaseline(entrada: {
+  janela: Janela;
+  candidatesRemaining: number;
+  coverageGuaranteed: boolean;
+  piso: string;
+  totalNaOrigem: number;
+}): CheckpointBaseline {
+  const { janela, candidatesRemaining, coverageGuaranteed, piso, totalNaOrigem } = entrada;
+
+  const esgotada = candidatesRemaining === 0 && coverageGuaranteed;
+
+  let resumeWindowEnd: string | null = esgotada
+    ? somarDias(janela.inicio, -1)
+    : janela.fim;
+
+  let baselineComplete = false;
+
+  if (resumeWindowEnd !== null && resumeWindowEnd < piso) {
+    baselineComplete = true;
+    resumeWindowEnd = null;
+  }
+
+  return {
+    currentWindowStart: janela.inicio,
+    currentWindowEnd: janela.fim,
+    resumeWindowEnd,
+    candidatesRemaining,
+    coverageGuaranteed,
+    baselineComplete,
+    piso,
+    totalNaOrigem,
+  };
+}
+
 /**
  * Subdivisao de janela cheia.
  *

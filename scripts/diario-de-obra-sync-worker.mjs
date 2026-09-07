@@ -39,7 +39,8 @@ const {
   maxDetalhesPara,
   janelaIncremental,
   janelaBaseline,
-  proximaJanelaBaseline,
+  lerRetomadaBaseline,
+  montarCheckpointBaseline,
   avaliarJanela,
   somarDias,
   BASELINE_DATA_MINIMA,
@@ -171,9 +172,19 @@ try {
 
     // DECRESCENTE: a primeira execucao parte de HOJE e caminha para
     // tras. Comecar no piso historico gastaria dezenas de janelas vazias
-    // antes de alcancar os RDOs recentes — e a primeira execucao
-    // entregaria nada de util.
-    janelaInicial = janelaBaseline(hoje, ultimo?.checkpoint?.proximaJanelaFim ?? null, pisoBaseline);
+    // antes de alcancar os RDOs recentes.
+    //
+    // A retomada vem do estado EXPLICITO do checkpoint — e aceita os
+    // formatos antigos. Antes, um run que batia no teto nao registrava a
+    // janela em curso e o processo seguinte recomecava de hoje.
+    const retomada = lerRetomadaBaseline(ultimo?.checkpoint ?? null);
+
+    if (retomada.baselineComplete) {
+      log("Baseline ja concluido segundo o checkpoint. Nenhuma chamada a API foi feita.");
+      process.exit(0);
+    }
+
+    janelaInicial = janelaBaseline(hoje, retomada.resumeWindowEnd, pisoBaseline);
 
     if (janelaInicial === null) {
       log(`Baseline concluido: o historico ja foi varrido ate o piso ${pisoBaseline}.`);
@@ -329,23 +340,28 @@ try {
   // 7. Checkpoint — SO agora, depois de a persistencia ter sido
   //    confirmada. Um checkpoint a frente dos dados faria a proxima
   //    execucao pular RDOs que nunca foram gravados.
-  const checkpoint = {
-    modo: MODO,
-    janelaInicio: janelaInicial.inicio,
-    janelaFim: janelaInicial.fim,
-    totalNaOrigem,
-    candidatosRestantes: Math.max(0, candidatos.length - selecionados.length),
-    coberturaGarantida: falhaDeCobertura === null,
-    piso: pisoBaseline,
-    // A janela so avanca quando ela terminou DE VERDADE: cobertura
-    // garantida e nenhum candidato pendente. Enquanto sobrar candidato,
-    // a proxima execucao repete a MESMA janela e continua de onde parou.
-    ...(MODO === "BASELINE" &&
-    falhaDeCobertura === null &&
-    candidatos.length <= selecionados.length
-      ? { proximaJanelaFim: proximaJanelaBaseline(janelaInicial) }
-      : {}),
-  };
+  // 7. Checkpoint — SO agora, depois de a persistencia ter sido
+  //    confirmada. Um checkpoint a frente dos dados faria a proxima
+  //    execucao pular RDOs que nunca foram gravados.
+  const candidatesRemaining = Math.max(0, candidatos.length - selecionados.length);
+
+  const checkpoint =
+    MODO === "BASELINE"
+      ? montarCheckpointBaseline({
+          janela: janelaInicial,
+          candidatesRemaining,
+          coverageGuaranteed: falhaDeCobertura === null,
+          piso: pisoBaseline,
+          totalNaOrigem,
+        })
+      : {
+          modo: MODO,
+          currentWindowStart: janelaInicial.inicio,
+          currentWindowEnd: janelaInicial.fim,
+          candidatesRemaining,
+          coverageGuaranteed: falhaDeCobertura === null,
+          totalNaOrigem,
+        };
 
   const { error: erroCheckpoint } = await supabase.rpc("advance_diario_de_obra_checkpoint", {
     p_sync_run_id: syncRunId,
@@ -369,6 +385,10 @@ try {
   });
 
   log(`criados ${criados} | alterados ${alterados} | inalterados ${inalterados} | erros ${erros}`);
+  log(
+    `checkpoint: retomar em ${checkpoint.resumeWindowEnd ?? "(fim)"} | ` +
+      `restantes ${candidatesRemaining} | completo ${checkpoint.baselineComplete ?? false}`
+  );
   log(`chamadas a API: ${api.totalDeChamadas} | nenhuma midia transferida | nenhum token de IA`);
 
   if (falhaDeCobertura) {
