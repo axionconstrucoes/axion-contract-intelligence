@@ -164,9 +164,18 @@ export function canonicalizar(valor: unknown): unknown {
     const comoData = parseDataBrasileira(valor);
     if (comoData) return comoData;
 
-    // Uma URL que sobreviveu por estar dentro de um texto tambem sai:
-    // ela expira e e' reemitida sem que nada tenha mudado.
-    return normalizarTexto(valor).replace(/https?:\/\/\S+/g, "");
+    const texto = normalizarTexto(valor);
+
+    // Um valor que E' inteiramente uma URL e' localizador de midia, nao
+    // conteudo: sai, mesmo sob uma chave desconhecida. Isso cobre o caso
+    // de uma foto aninhada dentro de atividade, ocorrencia ou checklist
+    // com um nome de campo que nao esta na lista.
+    if (/^https?:\/\/\S+$/.test(texto)) return "";
+
+    // Texto que apenas CONTEM uma URL e' preservado inteiro. Uma
+    // ocorrencia que cita um link e conteudo operacional legitimo, e
+    // apaga-lo mudaria o significado do que foi registrado na obra.
+    return texto;
   }
 
   return valor;

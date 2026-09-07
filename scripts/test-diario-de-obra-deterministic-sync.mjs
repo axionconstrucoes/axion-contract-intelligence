@@ -31,6 +31,10 @@ const {
   resolveModo,
   maxDetalhesPara,
   janelaIncremental,
+  janelaBaseline,
+  proximaJanelaBaseline,
+  baselineConcluido,
+  BASELINE_JANELA_DIAS,
   avaliarJanela,
   subdividirJanela,
   somarDias,
@@ -290,10 +294,10 @@ check(
   "o checkpoint avanca DEPOIS do upsert",
   WORKER.indexOf("upsert_diario_de_obra_report") < WORKER.indexOf("advance_diario_de_obra_checkpoint")
 );
-check("o baseline retoma do checkpoint", /proximaJanelaInicio/.test(WORKER));
+check("o baseline retoma do checkpoint", /proximaJanelaFim/.test(WORKER));
 check(
   "cobertura incompleta nao avanca a janela do baseline",
-  /falhaDeCobertura === null && candidatos\.length <= selecionados\.length/.test(WORKER)
+  /falhaDeCobertura === null &&[\s\S]{0,120}candidatos\.length <= selecionados\.length/.test(WORKER)
 );
 
 console.log("");
@@ -583,6 +587,132 @@ check(
   "nao ha early-return baseado no contador",
   !/totalNaOrigem\s*===[\s\S]{0,120}(process\.exit|return)/.test(WORKER)
 );
+
+console.log("");
+console.log("-- 24. Baseline DECRESCENTE, a partir de hoje --");
+
+// Comecar num piso historico e caminhar para frente gastaria dezenas de
+// janelas vazias antes de alcancar os RDOs de 2026 — a primeira execucao
+// entregaria nada. A varredura parte de HOJE e desce.
+const primeira = janelaBaseline("2026-09-07", null, "2020-01-01");
+check("a primeira janela termina HOJE", primeira.fim === "2026-09-07");
+check("a primeira janela cobre 90 dias", primeira.inicio === "2026-06-10");
+check("a primeira janela nao comeca no piso historico", primeira.inicio !== "2020-01-01");
+check("BASELINE_JANELA_DIAS e 90", BASELINE_JANELA_DIAS === 90);
+
+const proximo = proximaJanelaBaseline(primeira);
+check("o checkpoint aponta para o dia ANTERIOR ao inicio", proximo === "2026-06-09");
+
+const segunda = janelaBaseline("2026-09-07", proximo, "2020-01-01");
+check("a execucao seguinte continua para tras", segunda.fim === "2026-06-09");
+check("a segunda janela nao repete a primeira", segunda.fim < primeira.inicio);
+check("sem sobreposicao entre janelas", somarDias(segunda.fim, 1) === primeira.inicio);
+
+// Piso: a varredura TERMINA. Sem isso, desceria para sempre.
+const noPiso = janelaBaseline("2026-09-07", "2020-02-15", "2020-01-01");
+check("a janela e cortada no piso", noPiso.inicio === "2020-01-01");
+check("abaixo do piso nao ha mais janela", janelaBaseline("2026-09-07", "2019-12-31", "2020-01-01") === null);
+check("baselineConcluido reconhece o fim", baselineConcluido("2019-12-31", "2020-01-01") === true);
+check("baselineConcluido nao encerra cedo", baselineConcluido("2020-06-01", "2020-01-01") === false);
+
+const WORKER_EXEC = WORKER.replace(/^\s*\/\/.*$/gm, "");
+check("o worker usa janelaBaseline", /janelaBaseline\(/.test(WORKER_EXEC));
+check("o worker usa o inicio do projeto como piso", /projects[\s\S]{0,200}start_date/.test(WORKER_EXEC));
+check("o worker encerra quando o historico acaba", /janelaInicial === null/.test(WORKER_EXEC));
+check(
+  "enquanto restam candidatos, a janela NAO avanca",
+  /candidatos\.length <= selecionados\.length[\s\S]{0,120}proximaJanelaFim/.test(WORKER_EXEC)
+);
+check(
+  "cobertura nao garantida NAO avanca a janela",
+  /falhaDeCobertura === null &&[\s\S]{0,120}proximaJanelaFim/.test(WORKER_EXEC)
+);
+
+console.log("");
+console.log("-- 25. integration_id: exigido, nunca inventado --");
+
+check(
+  "a RPC resolve a integracao por source_type, sem UUID fixo",
+  /where pi\.project_id = p_project_id[\s\S]{0,80}source_type = 'DIARIO_OBRA'/.test(MIG_EXECUTAVEL)
+);
+check("nenhum UUID de integracao hardcoded na migration", !/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/.test(MIG_EXECUTAVEL));
+check("a RPC recusa projeto sem integracao", /Integracao Diario de Obra nao configurada/.test(MIG_EXECUTAVEL));
+check("o worker checa a integracao antes de tudo", /Integracao DIARIO_OBRA nao configurada/.test(WORKER_EXEC));
+check(
+  "a checagem vem ANTES da primeira chamada a API",
+  WORKER_EXEC.indexOf("source_type\", \"DIARIO_OBRA") < WORKER_EXEC.indexOf("api.getObra(")
+);
+check("o worker NAO cria integracao", !/insert[\s\S]{0,60}project_integrations/i.test(WORKER_EXEC));
+check("duplicidade de integracao e recusada", /integ\.length > 1/.test(WORKER_EXEC));
+
+console.log("");
+console.log("-- 26. Midia removida em qualquer profundidade --");
+
+// Midia escondida DENTRO de colecoes operacionais e sob chaves
+// desconhecidas. Nada disso pode chegar ao registro.
+const aninhado = normalizarRelatorio(
+  detalheReal({
+    atividades: [
+      { descricao: "Concretagem", foto: { url: URL_FOTO, urlMiniatura: URL_FOTO } },
+      { descricao: "Alvenaria", anexos: [{ url: URL_FOTO, linkPdf: URL_FOTO }] },
+    ],
+    ocorrencias: [{ descricao: "Chuva", evidencia: { url: URL_FOTO } }],
+    comentarios: [{ texto: "ver anexo", imagemDesconhecida: URL_FOTO }],
+    equipamentos: [{ descricao: "Guindaste", ficha: { linkPdf: URL_FOTO } }],
+    controleDeMaterial: { entradas: [{ nota: { url: URL_FOTO } }], saidas: [] },
+    checklist: [{ item: "EPI", assinaturasManualUrl: URL_FOTO }],
+    campoDesconhecido: { qualquerCoisa: [{ midia: URL_FOTO }] },
+  }),
+  resumo()
+);
+
+const serializado = JSON.stringify(aninhado);
+for (const [onde, alvo] of [
+  ["atividades", "atividades"],
+  ["ocorrencias", "ocorrencias"],
+  ["comentarios", "comentarios"],
+  ["equipamentos", "equipamentos"],
+  ["materiais", "materiais"],
+  ["checklist", "checklist"],
+]) {
+  check(`nenhuma URL sobrevive em ${onde}`, !serializado.includes("foto_12345"));
+}
+check("nenhuma URL em estrutura desconhecida", !/https?:\/\//.test(serializado));
+check("linkPdf aninhado nao sobrevive", !/linkPdf/i.test(serializado));
+check("assinatura aninhada nao sobrevive", !/assinaturasManualUrl/i.test(serializado));
+check("urlMiniatura aninhada nao sobrevive", !/urlMiniatura/i.test(serializado));
+
+// O texto operacional legitimo NAO pode ser mutilado so por citar um link.
+const comLinkNoTexto = normalizarRelatorio(
+  detalheReal({
+    ocorrencias: [{ descricao: "Cliente pediu revisao conforme https://exemplo.com/rfi-42" }],
+  }),
+  resumo()
+);
+const textoOperacional = JSON.stringify(comLinkNoTexto.occurrences);
+check(
+  "texto operacional que CITA um link e preservado inteiro",
+  textoOperacional.includes("Cliente pediu revisao conforme") &&
+    textoOperacional.includes("rfi-42")
+);
+check(
+  "mas um valor que E' so a URL some",
+  !JSON.stringify(canonicalizar({ foo: URL_FOTO })).includes("foto_12345")
+);
+
+console.log("");
+console.log("-- 27. Baseline remoto: teto, sem alerta, sem efeito colateral --");
+
+check("teto de 20 relatorios no baseline", maxDetalhesPara("BASELINE") === 20);
+check("o worker corta pelo teto antes de buscar detalhe", /candidatos\.slice\(0, teto\)/.test(WORKER_EXEC));
+check("baseline nao registra alteracao", /if p_mode <> 'BASELINE' then/.test(MIG_EXECUTAVEL));
+
+for (const proibido of ["contract_events", "event_evidence", "notifications", "notification_recipients", "sendEmail", "anthropic"]) {
+  check(`o worker nao toca ${proibido}`, !new RegExp(proibido, "i").test(WORKER_EXEC));
+}
+
+check("nenhuma tabela de ledger ou notificacao na migration", !/(contract_events|notifications|email)/i.test(MIG_EXECUTAVEL));
+check("reexecucao nao duplica", /unique \(project_id, provider_report_id\)/.test(MIG_EXECUTAVEL));
 
 console.log("");
 console.log("=====================================================================");

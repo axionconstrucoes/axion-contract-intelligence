@@ -44,10 +44,13 @@ export const MAX_DETALHES_INCREMENTAL = 10;
 export const JANELA_INCREMENTAL_DIAS = 14;
 
 /**
- * Fundo do baseline. A obra piloto comeca em 2020; um piso explicito
- * evita varrer decadas vazias quando a data de inicio nao for legivel.
+ * Piso ABSOLUTO do baseline, usado so quando a data de inicio do
+ * projeto nao for legivel. Existe para que a varredura termine sempre.
  */
 export const BASELINE_DATA_MINIMA = "2015-01-01";
+
+/** Tamanho de cada janela do baseline, em dias. */
+export const BASELINE_JANELA_DIAS = 90;
 
 export interface DiarioSyncEnv {
   DIARIO_DE_OBRA_SYNC_ENABLED?: string;
@@ -111,6 +114,52 @@ export function diasEntre(inicio: string, fim: string): number {
 /** Janela movel do incremental, ancorada em uma data de referencia. */
 export function janelaIncremental(hojeIso: string): Janela {
   return { inicio: somarDias(hojeIso, -(JANELA_INCREMENTAL_DIAS - 1)), fim: hojeIso };
+}
+
+/**
+ * Janela do baseline — DECRESCENTE, a partir de hoje.
+ *
+ * A primeira execucao precisa trazer os RDOs MAIS RECENTES: eles sao os
+ * que interessam a quem esta acompanhando a obra agora. Comecar num piso
+ * historico e caminhar para frente gastaria dezenas de janelas vazias
+ * antes de alcancar 2026 — e a primeira execucao entregaria nada.
+ *
+ * `proximaJanelaFim` vem do checkpoint da execucao anterior e aponta
+ * para o dia imediatamente ANTERIOR a janela ja varrida.
+ *
+ * O `piso` corta a janela: nunca se varre antes do inicio do projeto.
+ */
+export function janelaBaseline(
+  hojeIso: string,
+  proximaJanelaFim: string | null | undefined,
+  pisoIso: string
+): Janela | null {
+  const fim = proximaJanelaFim ?? hojeIso;
+
+  // Ja varremos ate o piso: o historico acabou.
+  if (fim < pisoIso) return null;
+
+  const inicioBruto = somarDias(fim, -(BASELINE_JANELA_DIAS - 1));
+  const inicio = inicioBruto < pisoIso ? pisoIso : inicioBruto;
+
+  return { inicio, fim };
+}
+
+/**
+ * Proximo `fim` do baseline: o dia anterior ao inicio da janela atual.
+ * So deve ser gravado quando a janela terminou de verdade — cobertura
+ * garantida e sem candidatos pendentes.
+ */
+export function proximaJanelaBaseline(janela: Janela): string {
+  return somarDias(janela.inicio, -1);
+}
+
+/** O baseline terminou quando nao ha mais janela abaixo do piso. */
+export function baselineConcluido(
+  proximaJanelaFim: string | null | undefined,
+  pisoIso: string
+): boolean {
+  return proximaJanelaFim !== null && proximaJanelaFim !== undefined && proximaJanelaFim < pisoIso;
 }
 
 /**

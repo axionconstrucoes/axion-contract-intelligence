@@ -38,6 +38,8 @@ const {
   resolveModo,
   maxDetalhesPara,
   janelaIncremental,
+  janelaBaseline,
+  proximaJanelaBaseline,
   avaliarJanela,
   somarDias,
   BASELINE_DATA_MINIMA,
@@ -101,6 +103,40 @@ const api = new DiarioDeObraClient({ token: requiredEnv("DIARIO_DE_OBRA_API_TOKE
 const inicio = Date.now();
 let syncRunId = null;
 
+// PRE-CONDICAO: a integracao precisa existir.
+//
+// `diario_de_obra_reports.integration_id` referencia a linha de
+// project_integrations com source_type = 'DIARIO_OBRA' — o CHECK do
+// banco ja aceita esse valor. Este worker NAO cria a integracao: criar
+// vinculo de origem e decisao de configuracao, nao efeito colateral de
+// uma sincronizacao. A checagem vem ANTES de abrir a execucao e antes de
+// qualquer chamada a API externa, para falhar sem consumir nada.
+{
+  const { data: integ, error } = await supabase
+    .from("project_integrations")
+    .select("id")
+    .eq("project_id", PROJECT_ID)
+    .eq("source_type", "DIARIO_OBRA");
+
+  if (error) {
+    log(`FALHA ao verificar a integracao: ${sanitizeDiarioError(error)}`);
+    process.exit(1);
+  }
+
+  if (!integ || integ.length === 0) {
+    log("Integracao DIARIO_OBRA nao configurada para este projeto.");
+    log("Configure a origem antes de sincronizar. Nenhuma chamada a API foi feita.");
+    process.exit(1);
+  }
+
+  if (integ.length > 1) {
+    // Duas integracoes para a mesma origem tornariam `integration_id`
+    // ambiguo e poderiam duplicar historico.
+    log(`Ha ${integ.length} integracoes DIARIO_OBRA neste projeto; deve haver exatamente uma.`);
+    process.exit(1);
+  }
+}
+
 try {
   const hoje = new Date().toISOString().slice(0, 10);
 
@@ -109,23 +145,41 @@ try {
   // BASELINE retoma do checkpoint da ultima execucao; sem checkpoint,
   // parte do piso configurado. INCREMENTAL usa a janela movel.
   let janelaInicial;
+  let pisoBaseline = BASELINE_DATA_MINIMA;
 
   if (MODO === "INCREMENTAL") {
     janelaInicial = janelaIncremental(hoje);
   } else {
+    // Piso: a data de inicio do projeto. Sem ela, o piso absoluto. E' o
+    // que garante que a varredura TERMINA em vez de descer para sempre.
+    const { data: projeto } = await supabase
+      .from("projects")
+      .select("start_date")
+      .eq("id", PROJECT_ID)
+      .maybeSingle();
+
+    if (projeto?.start_date) pisoBaseline = String(projeto.start_date).slice(0, 10);
+
     const { data: ultimo } = await supabase
       .from("diario_de_obra_sync_runs")
       .select("checkpoint")
       .eq("project_id", PROJECT_ID)
       .eq("mode", "BASELINE")
-      .eq("status", "SUCESSO")
       .order("started_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    const retomada = ultimo?.checkpoint?.proximaJanelaInicio ?? null;
-    const comeco = retomada ?? BASELINE_DATA_MINIMA;
-    janelaInicial = { inicio: comeco, fim: somarDias(comeco, 89) };
+    // DECRESCENTE: a primeira execucao parte de HOJE e caminha para
+    // tras. Comecar no piso historico gastaria dezenas de janelas vazias
+    // antes de alcancar os RDOs recentes — e a primeira execucao
+    // entregaria nada de util.
+    janelaInicial = janelaBaseline(hoje, ultimo?.checkpoint?.proximaJanelaFim ?? null, pisoBaseline);
+
+    if (janelaInicial === null) {
+      log(`Baseline concluido: o historico ja foi varrido ate o piso ${pisoBaseline}.`);
+      log("Nenhuma chamada a API foi feita.");
+      process.exit(0);
+    }
   }
 
   syncRunId = (
@@ -282,8 +336,14 @@ try {
     totalNaOrigem,
     candidatosRestantes: Math.max(0, candidatos.length - selecionados.length),
     coberturaGarantida: falhaDeCobertura === null,
-    ...(MODO === "BASELINE" && falhaDeCobertura === null && candidatos.length <= selecionados.length
-      ? { proximaJanelaInicio: somarDias(janelaInicial.fim, 1) }
+    piso: pisoBaseline,
+    // A janela so avanca quando ela terminou DE VERDADE: cobertura
+    // garantida e nenhum candidato pendente. Enquanto sobrar candidato,
+    // a proxima execucao repete a MESMA janela e continua de onde parou.
+    ...(MODO === "BASELINE" &&
+    falhaDeCobertura === null &&
+    candidatos.length <= selecionados.length
+      ? { proximaJanelaFim: proximaJanelaBaseline(janelaInicial) }
       : {}),
   };
 
