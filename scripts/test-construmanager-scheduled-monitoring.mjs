@@ -275,11 +275,17 @@ check("conclusao 'cancelled' tambem registra", cancelada.filter((a) => a.tipo ==
 const expirada = await rodar({ conclusion: "timed_out", abertas: [issueAberta] });
 check("conclusao 'timed_out' atualiza a existente", expirada.some((a) => a.tipo === "comment"));
 
-// (f) sucesso com issue aberta -> comenta e fecha
+// (f) sucesso com issue aberta -> NAO fecha e NAO comenta
 const recuperado = await rodar({ conclusion: "success", abertas: [issueAberta] });
-check("sucesso comenta recuperacao", recuperado.some((a) => a.tipo === "comment" && /recuperado/i.test(a.body)));
-check("sucesso fecha a issue", recuperado.some((a) => a.tipo === "update" && a.state === "closed"));
+
+// Um run pode concluir `success` porque a sincronizacao esta DESLIGADA:
+// o worker encerra em fail-closed com exit 0 sem tocar em nada. Fechar a
+// issue ali afirmaria uma recuperacao que nunca houve. A confirmacao e
+// humana.
+check("sucesso NAO fecha a issue", !recuperado.some((a) => a.tipo === "update"));
+check("sucesso NAO comenta na issue", !recuperado.some((a) => a.tipo === "comment"));
 check("sucesso nao cria issue", recuperado.filter((a) => a.tipo === "create").length === 0);
+check("sucesso com issue aberta nao faz escrita alguma", recuperado.length === 0);
 
 // (g) sucesso sem issue aberta -> nada
 const tranquilo = await rodar({ conclusion: "success" });
@@ -305,6 +311,12 @@ check("inclui a URL do run", /actions\/runs\/34080870149/.test(textos));
 check("inclui branch", /main/.test(textos));
 check("inclui o SHA", /7a9ca3574ec800017bb2169401e6bf162123378b/.test(textos));
 check("inclui data\/hora", /2026-09-07T03:50:00Z/.test(textos));
+
+// O texto precisa dizer que ninguem fecha por ele.
+check(
+  "o corpo avisa que a issue nao se fecha sozinha",
+  /NAO se fecha sozinha/.test(textos)
+);
 
 check("nao copia log do run", !/##\[error\]|Process completed with exit code/.test(textos));
 check("nao carrega token opaco", !/[A-Za-z0-9_-]{45,}/.test(textos.replace(/7a9ca3574ec800017bb2169401e6bf162123378b/g, "")));
