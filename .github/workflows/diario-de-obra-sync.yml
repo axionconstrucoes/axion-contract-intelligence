@@ -1,0 +1,91 @@
+# Sincronizacao deterministica do Diario de Obra.
+#
+# ESTE WORKFLOW NASCE DESLIGADO.
+#
+# Nao ha `schedule` — apenas `workflow_dispatch`. E, mesmo disparado a
+# mao, o worker so age se DIARIO_DE_OBRA_SYNC_ENABLED valer exatamente
+# "true". A variable NAO existe no repositorio, entao hoje qualquer
+# execucao encerra sem abrir conexao (fail-closed).
+#
+# FONTE INDEPENDENTE DO CONSTRUMANAGER
+#
+# Outra plataforma, outro host, outra credencial. Este workflow nao
+# recebe nenhum secret nem variable do Construmanager e nao invoca
+# nenhum script dele: o monitoramento ja operacional nao pode ser
+# afetado por nada daqui.
+#
+# CUSTO OPERACIONAL
+#
+# Zero token de LLM: a ingestao e' codigo deterministico — listagem,
+# hash e upsert. Nenhum expert, nenhuma analise semantica.
+#
+# Zero midia: foto, video, anexo e PDF entram apenas como CONTAGEM. O
+# client recusa qualquer caminho de midia antes da rede.
+#
+# LIMITE DO FORNECEDOR
+#
+# A API permite 150 requisicoes por minuto. O client tem teto local de
+# 60 por execucao — folga deliberada, para que um laco acidental nosso
+# nunca vire pressao na plataforma de terceiro.
+
+name: Diario de Obra Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: "Project id do ACC (uuid)"
+        required: true
+      obra_id:
+        description: "Id da obra no Diario de Obra (24 hex)"
+        required: true
+      mode:
+        description: "Modo de sincronizacao"
+        required: true
+        type: choice
+        options:
+          - baseline
+          - incremental
+
+# Uma rodada por vez. Duas execucoes concorrentes sobre a mesma obra
+# disputariam o mesmo checkpoint.
+concurrency:
+  group: diario-de-obra-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync Diario de Obra
+        # Credenciais SOMENTE por env. Nunca em argv: a linha de comando
+        # aparece na lista de processos do runner. project_id, obra_id e
+        # mode nao sao segredos e vao como argumento.
+        run: >-
+          node scripts/diario-de-obra-sync-worker.mjs
+          "${{ inputs.project_id }}"
+          "${{ inputs.obra_id }}"
+          "${{ inputs.mode }}"
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          DIARIO_DE_OBRA_API_TOKEN: ${{ secrets.DIARIO_DE_OBRA_API_TOKEN }}
+          # Ausente hoje. Ausente significa DESLIGADO.
+          DIARIO_DE_OBRA_SYNC_ENABLED: ${{ vars.DIARIO_DE_OBRA_SYNC_ENABLED }}
