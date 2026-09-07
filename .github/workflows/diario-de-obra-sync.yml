@@ -1,18 +1,20 @@
 # Sincronizacao deterministica do Diario de Obra.
 #
-# ESTE WORKFLOW NASCE DESLIGADO.
+# O INTERRUPTOR CONTINUA MANDANDO EM TUDO.
 #
-# Nao ha `schedule` — apenas `workflow_dispatch`. E, mesmo disparado a
-# mao, o worker so age se DIARIO_DE_OBRA_SYNC_ENABLED valer exatamente
-# "true". A variable NAO existe no repositorio, entao hoje qualquer
-# execucao encerra sem abrir conexao (fail-closed).
+# Agora existe `schedule`, mas ele nao liga nada sozinho: o worker so
+# age se DIARIO_DE_OBRA_SYNC_ENABLED valer exatamente "true". Hoje a
+# variable vale "false", entao a execucao diaria abre, le o interruptor,
+# encerra sem abrir conexao e sai com codigo 0 (fail-closed). Agendar
+# antes de ligar e' deliberado: o agendamento passa a ser rotina
+# observavel enquanto ainda nao faz nada, e ligar vira um gesto unico e
+# reversivel.
 #
 # FONTE INDEPENDENTE DO CONSTRUMANAGER
 #
 # Outra plataforma, outro host, outra credencial. Este workflow nao
 # recebe nenhum secret nem variable do Construmanager e nao invoca
-# nenhum script dele: o monitoramento ja operacional nao pode ser
-# afetado por nada daqui.
+# nenhum script dele.
 #
 # CUSTO OPERACIONAL
 #
@@ -21,6 +23,9 @@
 #
 # Zero midia: foto, video, anexo e PDF entram apenas como CONTAGEM. O
 # client recusa qualquer caminho de midia antes da rede.
+#
+# Zero e-mail e zero notificacao externa: quando algo falha, quem avisa
+# e' o watchdog, abrindo uma issue neste mesmo repositorio.
 #
 # LIMITE DO FORNECEDOR
 #
@@ -31,28 +36,49 @@
 name: Diario de Obra Sync
 
 on:
+  # 00:43 UTC = 21:43 de Brasilia (UTC-3).
+  #
+  # Um unico horario, e um horario "quebrado" de proposito: o minuto 0 de
+  # cada hora e' o pico de agendamento do GitHub, onde a fila atrasa. 43
+  # e' barato e chega mais perto do horario pretendido.
+  #
+  # Fim da noite tambem e' escolha: a janela incremental cobre 14 dias e
+  # os RDOs do dia ja foram apontados quando a obra encerra.
+  #
+  # NUNCA agende BASELINE nem RECONCILE aqui. O baseline reimportaria
+  # historico e a reconciliacao varre o acervo inteiro — os dois sao
+  # operacoes de comando, com decisao humana. O `modo` abaixo torna isso
+  # estrutural: execucao agendada e' SEMPRE incremental.
+  schedule:
+    - cron: "43 0 * * *"
+
   workflow_dispatch:
     inputs:
       project_id:
-        description: "Project id do ACC (uuid)"
-        required: true
+        description: "Project id do ACC (uuid). Vazio usa vars.DIARIO_DE_OBRA_PROJECT_ID."
+        required: false
       obra_id:
-        description: "Id da obra no Diario de Obra (24 hex)"
-        required: true
+        description: "Id da obra no Diario de Obra (24 hex). Vazio usa vars.DIARIO_DE_OBRA_OBRA_ID."
+        required: false
       mode:
-        description: "Modo de sincronizacao"
-        required: true
+        description: "Modo de sincronizacao (ignorado no agendamento, que e' sempre incremental)"
+        required: false
+        default: incremental
         type: choice
         options:
-          - baseline
           - incremental
-          # RECONCILE varre o historico ciclicamente. Continua SEM
-          # schedule: so roda por disparo manual, e so com
-          # DIARIO_DE_OBRA_SYNC_ENABLED=true.
+          - baseline
+          # RECONCILE varre o historico ciclicamente. So por disparo
+          # manual, e so com DIARIO_DE_OBRA_SYNC_ENABLED=true.
           - reconcile
 
 # Uma rodada por vez. Duas execucoes concorrentes sobre a mesma obra
 # disputariam o mesmo checkpoint.
+#
+# `cancel-in-progress: false` e' essencial e nao e' preferencia: uma
+# execucao interrompida no meio deixaria o checkpoint atras dos dados
+# gravados, e a proxima recomecaria de um ponto que ja passou. Melhor a
+# agendada esperar a manual terminar.
 concurrency:
   group: diario-de-obra-sync
   cancel-in-progress: false
@@ -64,6 +90,23 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
+    env:
+      # FALLBACK DE INPUTS — a razao de existir.
+      #
+      # Em `schedule` NAO existe `inputs`: todo `inputs.*` chega vazio.
+      # Sem estes defaults, a execucao diaria chamaria o worker com tres
+      # argumentos em branco. Ele recusaria com "projectId ausente ou
+      # malformado" — o que ja e' seguro —, mas falharia todo dia por um
+      # motivo bobo, e o watchdog abriria issue todo dia.
+      #
+      # O modo NAO usa `inputs.mode` quando o evento e' `schedule`: ele e'
+      # forcado a incremental. Assim, mesmo que alguem mude o default do
+      # input, o agendamento continua incremental — a garantia e'
+      # estrutural, nao depende de configuracao.
+      MODO: ${{ github.event_name == 'schedule' && 'incremental' || (inputs.mode || 'incremental') }}
+      PROJECT_ID: ${{ inputs.project_id || vars.DIARIO_DE_OBRA_PROJECT_ID }}
+      OBRA_ID: ${{ inputs.obra_id || vars.DIARIO_DE_OBRA_OBRA_ID }}
 
     steps:
       - name: Checkout
@@ -78,18 +121,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Barreira redundante. A expressao de `MODO` ja torna impossivel
+      # agendar baseline ou reconcile; este passo existe para que, se
+      # alguem alterar aquela expressao sem pensar, a execucao pare aqui
+      # em vez de reimportar o historico as 21h43.
+      - name: Garantir que o agendamento e sempre incremental
+        if: github.event_name == 'schedule'
+        run: |
+          if [ "$MODO" != "incremental" ]; then
+            echo "Execucao agendada so pode ser incremental. Recebido: $MODO"
+            exit 1
+          fi
+          echo "Agendamento em modo incremental confirmado."
+
       - name: Sync Diario de Obra
         # Credenciais SOMENTE por env. Nunca em argv: a linha de comando
         # aparece na lista de processos do runner. project_id, obra_id e
         # mode nao sao segredos e vao como argumento.
+        #
+        # As aspas em torno de cada argumento sao obrigatorias: sem elas,
+        # um valor vazio some da linha de comando e o worker leria o
+        # argumento seguinte na posicao errada.
         run: >-
           node scripts/diario-de-obra-sync-worker.mjs
-          "${{ inputs.project_id }}"
-          "${{ inputs.obra_id }}"
-          "${{ inputs.mode }}"
+          "$PROJECT_ID"
+          "$OBRA_ID"
+          "$MODO"
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
           DIARIO_DE_OBRA_API_TOKEN: ${{ secrets.DIARIO_DE_OBRA_API_TOKEN }}
-          # Ausente hoje. Ausente significa DESLIGADO.
+          # "false" hoje. Diferente de "true" significa DESLIGADO.
           DIARIO_DE_OBRA_SYNC_ENABLED: ${{ vars.DIARIO_DE_OBRA_SYNC_ENABLED }}

@@ -1872,7 +1872,24 @@ check(
 );
 
 const WORKFLOW = ler(".github/workflows/diario-de-obra-sync.yml");
-check("o workflow nao tem schedule", !/^\s*schedule:/m.test(WORKFLOW));
+
+// O agendamento diario passou a existir. A invariante deixou de ser
+// "nao ha schedule" e passou a ser "ha UM, diario, e o modo agendado e'
+// sempre incremental" — baseline e reconcile continuam sendo operacoes
+// de comando. A suite de agendamento cobre isso em detalhe; aqui fica a
+// checagem grossa, para que uma alteracao no workflow nao passe sem
+// tocar em nenhum teste do Diario de Obra.
+check("ha um unico agendamento", (WORKFLOW.match(/^\s*- cron:/gm) ?? []).length === 1);
+check(
+  "o agendamento e' sempre incremental",
+  WORKFLOW.includes("github.event_name == 'schedule' && 'incremental'")
+);
+check(
+  "nenhum baseline ou reconcile agendado",
+  !/schedule:[\s\S]*?- cron[\s\S]*?(baseline|reconcile)/.test(
+    WORKFLOW.slice(WORKFLOW.indexOf("schedule:"), WORKFLOW.indexOf("workflow_dispatch:"))
+  )
+);
 check("o workflow oferece o modo reconcile", WORKFLOW.includes("- reconcile"));
 
 console.log("");

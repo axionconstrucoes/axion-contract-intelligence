@@ -741,8 +741,24 @@ try {
   );
   log(`chamadas a API: ${api.totalDeChamadas} | nenhuma midia transferida | nenhum token de IA`);
 
-  if (falhaDeCobertura) {
-    log(`ATENCAO: ${falhaDeCobertura}`);
+  // PARCIAL TERMINA EM FALHA — sempre.
+  //
+  // Antes, so `falhaDeCobertura` saia com codigo 1. Uma execucao com
+  // `erros > 0` ou com a serie truncada gravava PARCIAL no banco e ainda
+  // assim devolvia 0, entao o workflow ficava verde. Com o agendamento
+  // diario isso seria pior que inutil: a tela do GitHub diria "sucesso"
+  // todos os dias enquanto o banco acumulava execucoes parciais que
+  // ninguem olharia.
+  //
+  // O registro no banco NAO muda: `finish_diario_de_obra_sync_run` ja
+  // gravou PARCIAL acima, com a contagem de erros e a mensagem
+  // sanitizada. O que muda e' so o codigo de saida — o run parcial
+  // continua auditavel exatamente como antes.
+  if (parcial) {
+    if (falhaDeCobertura) log(`ATENCAO: ${falhaDeCobertura}`);
+    if (coberturaDaSerie) log(`ATENCAO: ${coberturaDaSerie}`);
+    if (erros > 0) log(`ATENCAO: ${erros} erro(s) durante a execucao.`);
+
     log(`concluido em ${Date.now() - inicio}ms | status PARCIAL`);
     process.exit(1);
   }
