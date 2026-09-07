@@ -19,14 +19,19 @@
 // calculada sobre leituras falhadas seria pior que a ausencia dela:
 // pareceria um fato.
 
-import { contarTurnosImpraticaveis, diasAteEdicao, DIAS_PARA_EDICAO_TARDIA, totalDeEfetivo } from "./report-readers";
+import { diasAteEdicao, DIAS_PARA_EDICAO_TARDIA } from "./report-readers";
 
 /**
  * Uma linha da view `diario_de_obra_report_metrics`.
  *
- * `occurrences` e `activities` ja chegam como CONTAGEM: a view converte
- * as colecoes em numero dentro do banco, e a descricao nunca atravessa
- * a fronteira.
+ * TUDO ja chega como NUMERO. A view converte, dentro do banco,
+ * ocorrencias e atividades em contagem, o clima em quantidade de turnos
+ * impraticaveis e a mao de obra em total. Nenhum documento cru
+ * atravessa a fronteira — nem o `clima`, nem o `maoDeObra`, que podia
+ * trazer funcao e nome de quem esteve na obra.
+ *
+ * `laborTotal` e' `null` quando a forma nao foi legivel, e um RDO assim
+ * fica de fora da mediana em vez de entrar como zero.
  */
 export interface LinhaDeMetricaDoRdo {
   reportId: string;
@@ -38,8 +43,8 @@ export interface LinhaDeMetricaDoRdo {
   photoCount: number;
   occurrenceCount: number;
   activityCount: number;
-  weather: unknown;
-  labor: unknown;
+  impracticableShifts: number;
+  laborTotal: number | null;
 }
 
 export interface IntegridadeDaSerie {
@@ -119,10 +124,11 @@ function diasEntreDatas(inicio: string, fim: string): number {
  * Integridade da serie: duplicidade, salto, lacuna de datas e criacao
  * retroativa.
  *
- * Duplicidade e salto TAMBEM sao regra de alerta (severidade ALTO), mas
- * ali ancorados no RDO recem-chegado. Aqui sao o retrato da serie
- * inteira, historico incluido — o painel mostra o estado, o alerta
- * mostra a novidade. Sao perguntas diferentes.
+ * Duplicidade e salto TAMBEM sao regra de alerta (severidade ALTO). A
+ * diferenca e' o proposito: la o achado e' uma pendencia com ciclo de
+ * vida, que alguem reconhece e resolve; aqui e' o retrato numerico da
+ * serie, que o painel mostra ao lado dos demais agregados. Contam a
+ * mesma coisa e respondem perguntas diferentes.
  */
 export function calcularIntegridade(linhas: readonly LinhaDeMetricaDoRdo[]): IntegridadeDaSerie {
   const porNumero = new Map<number, number>();
@@ -183,8 +189,8 @@ export function calcularIntegridade(linhas: readonly LinhaDeMetricaDoRdo[]): Int
  *
  * A saida e' inteiramente numerica e datada. Nao existe caminho por
  * onde uma descricao de ocorrencia, um nome ou uma URL chegue aqui: a
- * view ja converteu as colecoes de texto em contagem, e o que sobra
- * (`weather`, `labor`) e' reduzido a numero antes de sair.
+ * view ja entrega tudo como numero, e a entrada deste modulo nao tem
+ * sequer um campo capaz de carregar documento.
  */
 export function calcularAgregados(linhas: readonly LinhaDeMetricaDoRdo[]): AgregadosDoDiario {
   let ocorrenciasRegistradas = 0;
@@ -203,14 +209,12 @@ export function calcularAgregados(linhas: readonly LinhaDeMetricaDoRdo[]): Agreg
     ocorrenciasRegistradas += linha.occurrenceCount;
     if (linha.occurrenceCount > 0) rdosComOcorrencia += 1;
 
-    const turnos = contarTurnosImpraticaveis(linha.weather);
-    if (turnos > 0) {
+    if (linha.impracticableShifts > 0) {
       rdosComClimaImpraticavel += 1;
-      turnosImpraticaveis += turnos;
+      turnosImpraticaveis += linha.impracticableShifts;
     }
 
-    const efetivo = totalDeEfetivo(linha.labor);
-    if (efetivo !== null) efetivos.push(efetivo);
+    if (linha.laborTotal !== null) efetivos.push(linha.laborTotal);
 
     if (linha.photoCount === 0) rdosSemFoto += 1;
 

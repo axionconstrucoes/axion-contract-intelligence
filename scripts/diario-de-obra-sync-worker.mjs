@@ -62,9 +62,75 @@ const { normalizarRelatorio, ehCandidato, apenasData } = await import(
   "../apps/web/lib/integrations/diario-de-obra/normalize-report.ts"
 );
 
-const { avaliarRegrasDoRelatorio, avaliarRegrasDaSerie, deveAvaliarAchados } = await import(
-  "../apps/web/lib/integrations/diario-de-obra/finding-rules.ts"
-);
+const {
+  avaliarRegrasDoRelatorio,
+  avaliarRegrasDaSerie,
+  deveAvaliarAchados,
+  chaveDeResolucao,
+} = await import("../apps/web/lib/integrations/diario-de-obra/finding-rules.ts");
+
+/*
+ * Tamanho da pagina na leitura da serie.
+ *
+ * A serie inteira precisa ser lida — duplicidade e lacuna so existem
+ * entre RDOs, e uma leitura truncada INVENTA lacunas. O PostgREST tem
+ * um teto proprio de linhas por resposta (`db-max-rows`), e sem
+ * paginacao explicita esse teto cortaria a serie EM SILENCIO. Uma
+ * lacuna falsa vira achado de severidade ALTO, entao o silencio aqui
+ * seria caro.
+ */
+const PAGINA_DA_SERIE = 500;
+
+/*
+ * Le a serie COMPLETA do projeto, ou declara que nao conseguiu.
+ *
+ * Ordenacao por `provider_report_id`: e' unica dentro do projeto, entao
+ * a paginacao nao pula nem repete linha. Ordenar por numero seria
+ * fragil — numero pode ser nulo e pode repetir, que e' justamente o que
+ * estamos procurando.
+ *
+ * `count: "exact"` da o total segundo o BANCO. Comparar esse total com
+ * o que foi de fato lido e' o que transforma um truncamento silencioso
+ * em uma recusa explicita.
+ */
+async function carregarSerieCompleta(supabase, projectId) {
+  const serie = [];
+  let total = null;
+
+  for (let inicio = 0; ; inicio += PAGINA_DA_SERIE) {
+    const { data, count, error } = await supabase
+      .from("diario_de_obra_reports")
+      .select("provider_report_id, report_number, reference_date", { count: "exact" })
+      .eq("project_id", projectId)
+      .order("provider_report_id", { ascending: true })
+      .range(inicio, inicio + PAGINA_DA_SERIE - 1);
+
+    if (error) return { serie: [], completa: false, total, lidos: serie.length, erro: error.message };
+
+    if (typeof count === "number") total = count;
+
+    const pagina = data ?? [];
+
+    for (const linha of pagina) {
+      serie.push({
+        providerReportId: linha.provider_report_id,
+        reportNumber: linha.report_number,
+        referenceDate: linha.reference_date,
+      });
+    }
+
+    if (pagina.length < PAGINA_DA_SERIE) break;
+
+    // Guarda contra laco infinito se o servidor devolver sempre cheio.
+    if (total !== null && serie.length >= total) break;
+  }
+
+  // Sem total nao ha como afirmar completude. Fail-closed: preferimos
+  // nao avaliar a serie a avaliar sobre uma leitura que pode faltar.
+  const completa = total !== null && serie.length === total;
+
+  return { serie, completa, total, lidos: serie.length, erro: null };
+}
 
 function log(mensagem) {
   console.log(`[diario-de-obra-sync] ${mensagem}`);
@@ -401,6 +467,45 @@ try {
   let achadosRegistrados = 0;
   let achadosResolvidos = 0;
 
+  // Cobertura da serie: `null` enquanto nao houve leitura; string quando
+  // a leitura foi incompleta. Vai para o checkpoint como telemetria.
+  let coberturaDaSerie = null;
+  let serieCompleta = null;
+  let serieLidos = 0;
+  let serieTotal = null;
+
+  /*
+   * Registra UM achado. Devolve `true` no sucesso.
+   *
+   * `p_severity` continua sendo enviado, mas o banco a RECALCULA a
+   * partir de (rule_code, category_code) e recusa divergencia — entao
+   * este parametro serve para detectar desalinhamento entre codigo e
+   * banco, nao para escolher a severidade.
+   */
+  async function registrarAchado(achado, reportId) {
+    const { error } = await supabase.rpc("register_diario_de_obra_finding", {
+      p_project_id: PROJECT_ID,
+      p_report_id: reportId,
+      p_sync_run_id: syncRunId,
+      p_mode: MODO,
+      p_rule_code: achado.ruleCode,
+      p_severity: achado.severity,
+      p_evidence_key: achado.evidenceKey,
+      p_evidence_hash: achado.evidenceHash,
+      p_structured_evidence: achado.structuredEvidence,
+      p_requires_human_review: achado.requiresHumanReview,
+      p_category_code: achado.categoryCode ?? null,
+    });
+
+    if (error) {
+      erros += 1;
+      log(`falha ao registrar um achado: ${sanitizeDiarioError(error)}`);
+      return false;
+    }
+
+    return true;
+  }
+
   if (avaliados.length > 0) {
     const idsAvaliados = avaliados.map((a) => a.providerReportId);
 
@@ -419,26 +524,33 @@ try {
       (persistidos ?? []).map((linha) => [linha.provider_report_id, linha])
     );
 
-    // A SERIE INTEIRA, historico incluido: duplicidade e salto so
-    // existem entre RDOs. So os IDENTIFICADORES sao lidos — numero e
-    // data —, nunca conteudo.
-    const { data: serieBruta, error: erroSerie } = await supabase
-      .from("diario_de_obra_reports")
-      .select("provider_report_id, report_number, reference_date")
-      .eq("project_id", PROJECT_ID);
+    // A SERIE INTEIRA, historico incluido: duplicidade e lacuna so
+    // existem ENTRE RDOs. So os IDENTIFICADORES sao lidos — id, numero
+    // e data —, nunca conteudo.
+    const leitura = await carregarSerieCompleta(supabase, PROJECT_ID);
+    serieCompleta = leitura.completa;
+    serieLidos = leitura.lidos;
+    serieTotal = leitura.total;
 
-    if (erroSerie) throw new Error(erroSerie.message);
+    if (!leitura.completa) {
+      // Telemetria SANITIZADA: diz QUE a cobertura falhou e em que
+      // proporcao, nunca com que dado. E, sobretudo, NAO avalia: uma
+      // serie truncada inventaria lacunas que nao existem, e cada uma
+      // valeria um achado de severidade ALTO.
+      coberturaDaSerie =
+        "Serie incompleta: " +
+        leitura.lidos +
+        " de " +
+        (leitura.total ?? "(desconhecido)") +
+        " relatorio(s) lidos. Regras de serie nao avaliadas nesta execucao.";
+      log("ATENCAO: " + coberturaDaSerie);
+    }
 
-    const serie = (serieBruta ?? []).map((linha) => ({
-      providerReportId: linha.provider_report_id,
-      reportNumber: linha.report_number,
-      referenceDate: linha.reference_date,
-    }));
-
-    // Ancoradas nos RDOs desta execucao: a serie inteira e' olhada, mas
-    // o achado nasce so sobre o que chegou agora. E' isso que impede
-    // alerta retroativo sobre os 146 registros historicos.
-    const achadosDaSerie = avaliarRegrasDaSerie(serie, idsAvaliados);
+    // O conjunto COMPLETO esperado — nao ancorado em quem chegou agora.
+    // Um fato = um achado: "o numero 11 esta duplicado" e' uma linha so,
+    // mesmo com tres RDOs envolvidos. Sem isso, corrigir a duplicidade
+    // deixava orfao o achado do RDO que nunca mais seria reavaliado.
+    const achadosDaSerie = leitura.completa ? avaliarRegrasDaSerie(leitura.serie) : [];
 
     for (const item of avaliados) {
       const persistido = porProviderId.get(item.providerReportId);
@@ -451,46 +563,25 @@ try {
         continue;
       }
 
-      const achados = [
-        ...avaliarRegrasDoRelatorio(item.normalizado, {
-          baselineImported: persistido.baseline_imported === true,
-          conteudoAlterado: item.resultado === "ALTERADO",
-        }),
-        ...(achadosDaSerie.get(item.providerReportId) ?? []),
-      ];
+      const achados = avaliarRegrasDoRelatorio(item.normalizado, {
+        baselineImported: persistido.baseline_imported === true,
+        conteudoAlterado: item.resultado === "ALTERADO",
+      });
 
       for (const achado of achados) {
-        const { error } = await supabase.rpc("register_diario_de_obra_finding", {
-          p_project_id: PROJECT_ID,
-          p_report_id: persistido.id,
-          p_sync_run_id: syncRunId,
-          p_mode: MODO,
-          p_rule_code: achado.ruleCode,
-          p_severity: achado.severity,
-          p_evidence_key: achado.evidenceKey,
-          p_evidence_hash: achado.evidenceHash,
-          p_structured_evidence: achado.structuredEvidence,
-          p_requires_human_review: achado.requiresHumanReview,
-        });
-
-        if (error) {
-          erros += 1;
-          log(`falha ao registrar um achado: ${sanitizeDiarioError(error)}`);
-          continue;
-        }
-
-        achadosRegistrados += 1;
+        if (await registrarAchado(achado, persistido.id)) achadosRegistrados += 1;
       }
 
       // O que a regra deixou de apontar foi corrigido na origem. A
-      // chave e' `RULE_CODE|evidence_key` porque varios achados do mesmo
-      // RDO compartilham a evidence_key.
+      // chave e' RULE_CODE|evidence_key porque varios achados do mesmo
+      // RDO compartilham a evidence_key. As regras de SERIE ficam de
+      // fora desta resolucao: elas nao pertencem a um RDO.
       const { data: resolvidos, error: erroResolucao } = await supabase.rpc(
         "resolve_diario_de_obra_findings",
         {
           p_project_id: PROJECT_ID,
           p_report_id: persistido.id,
-          p_achados_ativos: achados.map((a) => `${a.ruleCode}|${a.evidenceKey}`),
+          p_achados_ativos: achados.map((a) => chaveDeResolucao(a)),
         }
       );
 
@@ -501,6 +592,67 @@ try {
       }
 
       achadosResolvidos += Number(resolvidos ?? 0);
+    }
+
+    // Achados de SERIE: escopo do PROJETO, e so com a serie completa.
+    //
+    // A ancora de cada achado e' um RDO escolhido deterministicamente
+    // pela propria regra — o menor id do grupo duplicado, o RDO logo
+    // depois da lacuna. Ela nao faz parte da identidade, entao trocar de
+    // ancora nao cria achado novo.
+    if (leitura.completa) {
+      const idsDeAncora = [...new Set(achadosDaSerie.map((a) => a.ancoraProviderReportId))];
+      const ancoras = new Map();
+
+      if (idsDeAncora.length > 0) {
+        const { data: linhasDeAncora, error: erroAncora } = await supabase
+          .from("diario_de_obra_reports")
+          .select("id, provider_report_id")
+          .eq("project_id", PROJECT_ID)
+          .in("provider_report_id", idsDeAncora);
+
+        if (erroAncora) throw new Error(erroAncora.message);
+
+        for (const linha of linhasDeAncora ?? []) {
+          ancoras.set(linha.provider_report_id, linha.id);
+        }
+      }
+
+      const ativosDaSerie = [];
+
+      for (const achado of achadosDaSerie) {
+        const reportId = ancoras.get(achado.ancoraProviderReportId);
+
+        if (!reportId) {
+          erros += 1;
+          log("ancora de achado de serie nao encontrada; o achado nao foi registrado.");
+          continue;
+        }
+
+        if (!(await registrarAchado(achado, reportId))) continue;
+
+        achadosRegistrados += 1;
+        ativosDaSerie.push(chaveDeResolucao(achado));
+      }
+
+      // Resolver a serie SO quando todo o conjunto esperado foi
+      // registrado sem falha. Com um registro perdido, a chave dele
+      // faltaria na lista de ativos e um achado valido seria encerrado.
+      if (ativosDaSerie.length === achadosDaSerie.length) {
+        const { data: resolvidosSerie, error: erroResolucaoSerie } = await supabase.rpc(
+          "resolve_diario_de_obra_series_findings",
+          { p_project_id: PROJECT_ID, p_achados_ativos: ativosDaSerie }
+        );
+
+        if (erroResolucaoSerie) {
+          erros += 1;
+          log(`falha ao resolver achados de serie: ${sanitizeDiarioError(erroResolucaoSerie)}`);
+        } else {
+          achadosResolvidos += Number(resolvidosSerie ?? 0);
+        }
+      } else {
+        log("registro de serie incompleto: nenhuma resolucao de serie foi feita.");
+      }
     }
   }
 
@@ -542,6 +694,13 @@ try {
     };
   }
 
+  // Telemetria de cobertura da serie no checkpoint: sanitizada, so
+  // numeros e um booleano. Uma execucao que nao pode avaliar a serie
+  // precisa deixar isso registrado — silencio aqui pareceria sucesso.
+  checkpoint.serieLida = serieLidos;
+  checkpoint.serieTotal = serieTotal;
+  checkpoint.serieCompleta = serieCompleta;
+
   const { error: erroCheckpoint } = await supabase.rpc("advance_diario_de_obra_checkpoint", {
     p_sync_run_id: syncRunId,
     p_checkpoint: checkpoint,
@@ -554,13 +713,13 @@ try {
 
   if (erroCheckpoint) throw new Error(erroCheckpoint.message);
 
-  const parcial = falhaDeCobertura !== null || erros > 0;
+  const parcial = falhaDeCobertura !== null || coberturaDaSerie !== null || erros > 0;
 
   await supabase.rpc("finish_diario_de_obra_sync_run", {
     p_sync_run_id: syncRunId,
     p_status: parcial ? "PARCIAL" : "SUCESSO",
     p_error_count: erros,
-    p_sanitized_error: falhaDeCobertura,
+    p_sanitized_error: falhaDeCobertura ?? coberturaDaSerie,
   });
 
   log(`criados ${criados} | alterados ${alterados} | inalterados ${inalterados} | erros ${erros}`);
@@ -568,6 +727,13 @@ try {
     `achados: ${achadosRegistrados} registrado(s) | ${achadosResolvidos} resolvido(s) | ` +
       `${avaliados.length} RDO(s) avaliado(s)`
   );
+
+  if (serieCompleta !== null) {
+    log(
+      `serie: ${serieLidos}/${serieTotal ?? "?"} relatorio(s) | ` +
+        `cobertura ${serieCompleta ? "completa" : "INCOMPLETA"}`
+    );
+  }
   log(
     `checkpoint: retomar em ${checkpoint.resumeWindowEnd ?? "(fim)"} | ` +
       `restantes ${candidatesRemaining} | ` +

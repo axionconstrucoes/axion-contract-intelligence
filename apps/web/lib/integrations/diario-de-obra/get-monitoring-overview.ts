@@ -10,11 +10,11 @@
 // tela porque a afirmacao precisa ser verificavel por quem le.
 //
 // ZERO CONTEUDO. Os RDOs sao lidos pela view
-// `diario_de_obra_report_metrics`, que ja converteu ocorrencias e
-// atividades em CONTAGEM dentro do banco. O que ainda chega em forma de
-// documento — `clima` e `maoDeObra` — e' reduzido a numero por
-// `calcularAgregados` e NAO aparece no resultado. Nenhum campo desta
-// interface e' texto livre.
+// `diario_de_obra_report_metrics`, que devolve SO NUMERO: ocorrencias e
+// atividades ja vem como contagem, o clima como quantidade de turnos
+// impraticaveis e a mao de obra como total, tudo calculado dentro do
+// banco. Nenhum documento cru atravessa a fronteira, e nenhum campo
+// desta interface e' texto livre.
 //
 // DUAS EXECUCOES, NAO UMA
 //
@@ -80,7 +80,8 @@ const CAMPOS_DA_EXECUCAO =
 
 const CAMPOS_DA_METRICA =
   "report_id, report_number, reference_date, source_created_at, source_modified_at, " +
-  "baseline_imported, photo_count, occurrence_count, activity_count, weather, labor";
+  "baseline_imported, photo_count, occurrence_count, activity_count, " +
+  "impracticable_shifts, labor_total";
 
 type LinhaDaView = {
   report_id: string;
@@ -92,8 +93,8 @@ type LinhaDaView = {
   photo_count: number | null;
   occurrence_count: number | null;
   activity_count: number | null;
-  weather: unknown;
-  labor: unknown;
+  impracticable_shifts: number | null;
+  labor_total: number | string | null;
 };
 
 type LinhaDeAchado = {
@@ -208,8 +209,11 @@ export async function getDiarioDeObraMonitoringOverview(
     photoCount: linha.photo_count ?? 0,
     occurrenceCount: linha.occurrence_count ?? 0,
     activityCount: linha.activity_count ?? 0,
-    weather: linha.weather,
-    labor: linha.labor,
+    impracticableShifts: linha.impracticable_shifts ?? 0,
+    // `numeric` do Postgres chega como string no PostgREST. Converter
+    // aqui, e nao no agregador, mantem o modulo puro lidando so com
+    // numero.
+    laborTotal: linha.labor_total === null ? null : Number(linha.labor_total),
   }));
 
   const status = normalizarStatusDeExecucao(ultima?.status);

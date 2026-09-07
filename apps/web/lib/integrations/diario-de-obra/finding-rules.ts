@@ -7,18 +7,19 @@
 //
 // ZERO TOKEN DE LLM. Nao ha import de IA, nao ha analise semantica, nao
 // ha classificacao por lexico. Toda decisao aqui e' comparacao de
-// numero, contagem de item ou correspondencia de enum.
+// numero, contagem de item ou correspondencia de enum fechado.
 //
 // ZERO CONTEUDO NA EVIDENCIA. Nenhuma regra copia descricao, nome,
-// endereco, URL ou midia. `finding-evidence` recusa isso, e o banco
-// recusa de novo.
+// endereco, URL ou midia. `finding-evidence` so aceita os campos que
+// cada regra declara, e o banco recusa de novo.
 //
 // O HISTORICO NAO VIRA ALERTA
 //
-// As regras sao avaliadas sobre RDO NOVO ou REALMENTE ALTERADO fora do
-// modo BASELINE. Os 146 relatorios da carga historica alimentam
-// estatistica; transforma-los em alerta encheria a tela de avisos sobre
-// os quais ninguem pode mais agir, e isso ensina a ignorar alertas.
+// As regras de RDO sao avaliadas sobre RDO NOVO ou REALMENTE ALTERADO
+// fora do modo BASELINE. Os 146 relatorios da carga historica alimentam
+// estatistica.
+//
+// As regras de SERIE sao diferentes por natureza — ver a secao delas.
 
 import {
   calcularHashDeEvidencia,
@@ -33,8 +34,13 @@ import {
   DIAS_PARA_EDICAO_TARDIA,
   totalDeEfetivo,
 } from "./report-readers";
+import {
+  agruparOcorrenciasPorCategoria,
+  CATEGORIA_DESCONHECIDA,
+  type SeveridadeDeCategoria,
+} from "./occurrence-taxonomy";
 
-export type SeveridadeDeAchado = "BAIXO" | "MEDIO" | "ALTO";
+export type SeveridadeDeAchado = SeveridadeDeCategoria;
 export type StatusDeAchado = "OPEN" | "ACKNOWLEDGED" | "RESOLVED";
 
 export const STATUS_DE_ACHADO: readonly StatusDeAchado[] = Object.freeze([
@@ -57,76 +63,100 @@ export type CodigoDeRegra =
   | "HASH_ALTERADO_POS_BASELINE";
 
 export interface DefinicaoDeRegra {
-  severity: SeveridadeDeAchado;
+  /**
+   * Severidade fixa da regra. `null` significa DERIVADA — hoje so em
+   * OCORRENCIA_REGISTRADA, onde ela vem da categoria estruturada. O
+   * banco aplica a mesma tabela e recusa divergencia.
+   */
+  severity: SeveridadeDeAchado | null;
   requiresHumanReview: boolean;
+  /** A regra depende da serie inteira, e nao de um RDO isolado. */
+  daSerie: boolean;
   /** Por que a regra existe, em uma linha. Nao vai para o banco. */
   motivo: string;
 }
 
-/**
- * As regras ATIVAS, e so elas. O CHECK da migration repete esta lista:
- * uma regra nova exige migration, e portanto revisao humana.
- */
 export const REGRAS_ATIVAS: Readonly<Record<CodigoDeRegra, DefinicaoDeRegra>> = Object.freeze({
   CLIMA_IMPRATICAVEL_1_TURNO: {
     severity: "MEDIO",
     requiresHumanReview: false,
+    daSerie: false,
     motivo: "Um turno impraticavel — base factual de pleito de prazo.",
   },
   CLIMA_IMPRATICAVEL_2_TURNOS: {
     severity: "ALTO",
     requiresHumanReview: false,
+    daSerie: false,
     motivo: "Dois ou mais turnos impraticaveis no mesmo dia.",
   },
   EFETIVO_ZERO_COM_ATIVIDADE: {
     severity: "MEDIO",
     requiresHumanReview: false,
+    daSerie: false,
     motivo: "Atividade registrada sem nenhum efetivo: um dos dois esta errado.",
   },
   ATIVIDADE_100_SEM_CONCLUSAO: {
     severity: "MEDIO",
     requiresHumanReview: false,
+    daSerie: false,
     motivo: "Atividade em 100% que o status nao acompanha.",
   },
   OCORRENCIA_REGISTRADA: {
-    severity: "MEDIO",
-    requiresHumanReview: true,
-    motivo: "Ocorrencia estruturada existe — o que ela significa e' leitura humana.",
+    severity: null,
+    requiresHumanReview: false,
+    daSerie: false,
+    motivo: "Ocorrencia estruturada: a severidade vem da CATEGORIA escolhida na obra.",
   },
   EDICAO_TARDIA: {
     severity: "MEDIO",
     requiresHumanReview: false,
+    daSerie: false,
     motivo: "RDO editado mais de 30 dias apos a data de referencia.",
   },
   RDO_SEM_FOTO: {
     severity: "BAIXO",
     requiresHumanReview: false,
+    daSerie: false,
     motivo: "RDO sem nenhuma foto — lacuna de evidencia, nao irregularidade.",
   },
   NUMERO_DUPLICADO: {
     severity: "ALTO",
     requiresHumanReview: false,
-    motivo: "Dois RDOs com o mesmo numero quebram a serie.",
+    daSerie: true,
+    motivo: "Dois ou mais RDOs com o mesmo numero quebram a serie.",
   },
   DATA_DUPLICADA: {
     severity: "ALTO",
     requiresHumanReview: false,
-    motivo: "Dois RDOs para a mesma data de referencia.",
+    daSerie: true,
+    motivo: "Dois ou mais RDOs para a mesma data de referencia.",
   },
   SALTO_DE_NUMERACAO: {
     severity: "ALTO",
     requiresHumanReview: false,
+    daSerie: true,
     motivo: "Lacuna na numeracao: existe RDO que nunca chegou.",
   },
   HASH_ALTERADO_POS_BASELINE: {
     severity: "MEDIO",
     requiresHumanReview: false,
+    daSerie: false,
     motivo: "Conteudo de um RDO historico mudou depois da carga inicial.",
   },
 });
 
 export const CODIGOS_DE_REGRA = Object.freeze(
   Object.keys(REGRAS_ATIVAS) as CodigoDeRegra[]
+);
+
+/** As regras cujo escopo e' a serie inteira do projeto. */
+export const REGRAS_DE_SERIE: readonly CodigoDeRegra[] = Object.freeze(
+  CODIGOS_DE_REGRA.filter((c) => REGRAS_ATIVAS[c].daSerie)
+);
+
+/** As regras cujo escopo e' UM RDO. */
+export const REGRAS_DE_RELATORIO: readonly CodigoDeRegra[] = Object.freeze(
+  CODIGOS_DE_REGRA.filter((c) => !REGRAS_ATIVAS[c].daSerie)
 );
 
 /**
@@ -139,8 +169,6 @@ export const CODIGOS_DE_REGRA = Object.freeze(
  * lexico e' leitura de texto, que este modulo nao faz. Emitir alerta com
  * qualquer uma delas produziria falso positivo em volume — o unico
  * defeito que destroi um sistema de alerta de forma permanente.
- *
- * Elas alimentam o painel como AGREGADO, e nada mais.
  */
 export const APENAS_METRICA: readonly string[] = Object.freeze([
   "EFETIVO_ANOMALO",
@@ -172,26 +200,37 @@ export const NAO_SAO_REGRA: readonly string[] = Object.freeze([
 export interface AchadoDeterministico {
   ruleCode: CodigoDeRegra;
   severity: SeveridadeDeAchado;
+  /** Preenchido so em OCORRENCIA_REGISTRADA. */
+  categoryCode: string | null;
   evidenceKey: string;
   evidenceHash: string;
   structuredEvidence: EvidenciaEstruturada;
   requiresHumanReview: boolean;
 }
 
-function montar(
-  ruleCode: CodigoDeRegra,
-  evidenceKey: string,
-  structuredEvidence: EvidenciaEstruturada
-): AchadoDeterministico {
-  const definicao = REGRAS_ATIVAS[ruleCode];
+function montar(entrada: {
+  ruleCode: CodigoDeRegra;
+  evidenceKey: string;
+  structuredEvidence: EvidenciaEstruturada;
+  severity?: SeveridadeDeAchado;
+  categoryCode?: string | null;
+  requiresHumanReview?: boolean;
+}): AchadoDeterministico {
+  const definicao = REGRAS_ATIVAS[entrada.ruleCode];
+  const severity = entrada.severity ?? definicao.severity;
+
+  if (severity === null || severity === undefined) {
+    throw new Error(`Regra ${entrada.ruleCode} exige severidade derivada e nenhuma foi dada.`);
+  }
 
   return {
-    ruleCode,
-    severity: definicao.severity,
-    evidenceKey,
-    evidenceHash: calcularHashDeEvidencia(structuredEvidence),
-    structuredEvidence,
-    requiresHumanReview: definicao.requiresHumanReview,
+    ruleCode: entrada.ruleCode,
+    severity,
+    categoryCode: entrada.categoryCode ?? null,
+    evidenceKey: entrada.evidenceKey,
+    evidenceHash: calcularHashDeEvidencia(entrada.ruleCode, entrada.structuredEvidence),
+    structuredEvidence: entrada.structuredEvidence,
+    requiresHumanReview: entrada.requiresHumanReview ?? definicao.requiresHumanReview,
   };
 }
 
@@ -209,15 +248,11 @@ export type ResultadoDoUpsert = "CRIADO" | "ALTERADO" | "INALTERADO";
  *              retroativo sobre 146 registros seria uma caixa de
  *              entrada que ninguem pode mais atender.
  * INCREMENTAL  novo OU realmente alterado. A janela movel tem 14 dias,
- *              entao "novo" ali significa recem-chegado — nao um RDO de
- *              2025 aparecendo pela primeira vez.
+ *              entao "novo" ali significa recem-chegado.
  * RECONCILE    SO alterado. A reconciliacao varre historico: um RDO
- *              visto ali pela primeira vez e' backfill, nao novidade, e
- *              alerta-lo seria justamente o alerta retroativo que o
- *              BASELINE evita.
+ *              visto ali pela primeira vez e' backfill, nao novidade.
  *
- * INALTERADO nunca entra: hash igual significa que nada mudou, e
- *            reavaliar produziria o mesmo achado ja registrado.
+ * INALTERADO nunca entra: hash igual significa que nada mudou.
  */
 export function deveAvaliarAchados(
   modo: string,
@@ -243,10 +278,10 @@ export interface ContextoDoRelatorio {
 /**
  * Avalia as regras que dependem so deste RDO.
  *
- * `evidenceKey` e' o proprio `providerReportId` em todas elas: a
- * identidade do achado e' (regra, RDO). Uma chave por item da colecao
- * pareceria mais precisa e seria pior — o indice de um item nao e'
- * estavel entre leituras, e cada reordenacao viraria "achado novo".
+ * `evidenceKey` e' o `providerReportId` nas regras de um-por-RDO. Em
+ * OCORRENCIA_REGISTRADA a chave inclui a CATEGORIA e, quando existe, o
+ * identificador estruturado do tipo — sem isso, duas categorias no mesmo
+ * dia colidiriam na mesma identidade e uma delas sumiria.
  */
 export function avaliarRegrasDoRelatorio(
   relatorio: RelatorioNormalizado,
@@ -261,9 +296,21 @@ export function avaliarRegrasDoRelatorio(
   const turnos = contarTurnosImpraticaveis(relatorio.weather);
 
   if (turnos >= 2) {
-    achados.push(montar("CLIMA_IMPRATICAVEL_2_TURNOS", chave, { turnosImpraticaveis: turnos }));
+    achados.push(
+      montar({
+        ruleCode: "CLIMA_IMPRATICAVEL_2_TURNOS",
+        evidenceKey: chave,
+        structuredEvidence: { turnosImpraticaveis: turnos },
+      })
+    );
   } else if (turnos === 1) {
-    achados.push(montar("CLIMA_IMPRATICAVEL_1_TURNO", chave, { turnosImpraticaveis: 1 }));
+    achados.push(
+      montar({
+        ruleCode: "CLIMA_IMPRATICAVEL_1_TURNO",
+        evidenceKey: chave,
+        structuredEvidence: { turnosImpraticaveis: 1 },
+      })
+    );
   }
 
   // 2. Efetivo zero com atividade registrada.
@@ -273,7 +320,11 @@ export function avaliarRegrasDoRelatorio(
 
   if (efetivo === 0 && atividades > 0) {
     achados.push(
-      montar("EFETIVO_ZERO_COM_ATIVIDADE", chave, { efetivo: 0, atividades })
+      montar({
+        ruleCode: "EFETIVO_ZERO_COM_ATIVIDADE",
+        evidenceKey: chave,
+        structuredEvidence: { efetivo: 0, atividades },
+      })
     );
   }
 
@@ -281,26 +332,68 @@ export function avaliarRegrasDoRelatorio(
   const em100 = contarAtividades100SemConclusao(relatorio.activities);
 
   if (em100 > 0) {
-    achados.push(montar("ATIVIDADE_100_SEM_CONCLUSAO", chave, { atividades: em100 }));
+    achados.push(
+      montar({
+        ruleCode: "ATIVIDADE_100_SEM_CONCLUSAO",
+        evidenceKey: chave,
+        structuredEvidence: { atividades: em100 },
+      })
+    );
   }
 
-  // 4. Ocorrencia estruturada. So a CONTAGEM: a descricao fica no
-  //    Diario de Obra, onde ja esta, e quem precisa dela abre o RDO.
-  const ocorrencias = comoLista(relatorio.occurrences).length;
+  // 4. Ocorrencias — UM achado por CATEGORIA distinta.
+  //
+  //    A severidade vem da categoria estruturada que o apontador
+  //    escolheu, nunca da descricao. Duas categorias diferentes no mesmo
+  //    dia sao dois problemas com donos diferentes, e colapsa-las na
+  //    maior severidade esconderia um deles. Duas ocorrencias da MESMA
+  //    categoria sao um achado com contagem.
+  for (const categoria of agruparOcorrenciasPorCategoria(relatorio.occurrences)) {
+    const evidencia: EvidenciaEstruturada = {
+      categoria: categoria.code,
+      ocorrencias: categoria.ocorrencias,
+    };
 
-  if (ocorrencias > 0) {
-    achados.push(montar("OCORRENCIA_REGISTRADA", chave, { ocorrencias }));
+    // Identificador estruturado, quando a API o devolve. Nunca o rotulo.
+    if (categoria.tipoId !== null) evidencia.tipoId = categoria.tipoId;
+    if (categoria.tipoRef !== null) evidencia.tipoRef = categoria.tipoRef;
+
+    const sufixo = [categoria.code, categoria.tipoId ?? categoria.tipoRef ?? null]
+      .filter((parte) => parte !== null)
+      .join(":");
+
+    achados.push(
+      montar({
+        ruleCode: "OCORRENCIA_REGISTRADA",
+        evidenceKey: `${chave}:${sufixo}`,
+        structuredEvidence: evidencia,
+        severity: categoria.severity,
+        categoryCode: categoria.code,
+        // Categoria fora da tabela: o sistema nao sabe o que aquilo
+        // significa, e dizer que sabe seria pior que admitir que nao.
+        requiresHumanReview: categoria.code === CATEGORIA_DESCONHECIDA,
+      })
+    );
   }
 
   // 5. Edicao mais de 30 dias depois da data de referencia.
   const dias = diasAteEdicao(relatorio.referenceDate, relatorio.sourceModifiedAt);
 
-  if (dias !== null && dias > DIAS_PARA_EDICAO_TARDIA) {
+  if (
+    dias !== null &&
+    dias > DIAS_PARA_EDICAO_TARDIA &&
+    relatorio.referenceDate &&
+    relatorio.sourceModifiedAt
+  ) {
     achados.push(
-      montar("EDICAO_TARDIA", chave, {
-        diasApos: dias,
-        dataReferencia: relatorio.referenceDate ?? null,
-        dataEdicao: relatorio.sourceModifiedAt?.slice(0, 10) ?? null,
+      montar({
+        ruleCode: "EDICAO_TARDIA",
+        evidenceKey: chave,
+        structuredEvidence: {
+          diasApos: dias,
+          dataReferencia: relatorio.referenceDate,
+          dataEdicao: relatorio.sourceModifiedAt.slice(0, 10),
+        },
       })
     );
   }
@@ -308,18 +401,24 @@ export function avaliarRegrasDoRelatorio(
   // 6. RDO sem foto. BAIXO porque e' lacuna de evidencia, nao
   //    irregularidade: ha dia de obra que legitimamente nao rende foto.
   if (relatorio.photoCount === 0) {
-    achados.push(montar("RDO_SEM_FOTO", chave, { fotos: 0 }));
+    achados.push(
+      montar({ ruleCode: "RDO_SEM_FOTO", evidenceKey: chave, structuredEvidence: { fotos: 0 } })
+    );
   }
 
   // 7. Conteudo de um RDO historico mudou depois da carga inicial.
   //    O prefixo do hash entra na evidencia para que uma SEGUNDA edicao
-  //    reabra o achado em vez de passar por repeticao da primeira. Doze
-  //    hexadecimais sao identificador, nao conteudo.
+  //    seja distinguivel da primeira. Doze hexadecimais sao
+  //    identificador, nao conteudo.
   if (contexto.baselineImported && contexto.conteudoAlterado) {
     achados.push(
-      montar("HASH_ALTERADO_POS_BASELINE", chave, {
-        baselineImportado: true,
-        hashPrefixo: relatorio.contentHash.slice(0, 12),
+      montar({
+        ruleCode: "HASH_ALTERADO_POS_BASELINE",
+        evidenceKey: chave,
+        structuredEvidence: {
+          baselineImportado: true,
+          hashPrefixo: relatorio.contentHash.slice(0, 12),
+        },
       })
     );
   }
@@ -331,11 +430,24 @@ export function avaliarRegrasDoRelatorio(
 // ============================================================
 // Regras da SERIE
 //
-// Duplicidade e salto so existem entre RDOs. A serie inteira entra na
-// avaliacao — inclusive os historicos —, mas o achado e' ancorado no
-// RDO avaliado nesta execucao. Um RDO novo que duplica o numero de um
-// de 2025 gera achado no NOVO: e' ele que chegou, e e' sobre ele que se
-// pode agir.
+// POR QUE O ESCOPO E' O PROJETO, E NAO O RDO
+//
+// A versao anterior ancorava a duplicidade em CADA RDO do grupo. Isso
+// produzia dois defeitos. O primeiro: dois achados para um unico fato
+// ("o numero 11 esta duplicado"), e o painel contava duas vezes. O
+// segundo, pior: se A e B duplicavam e depois so B era reavaliado, o
+// achado de A ficava OPEN para sempre — A nunca mais mudava, entao nunca
+// mais era reavaliado, e a resolucao e' escoposada por RDO.
+//
+// Agora um fato = um achado. `NUMERO_DUPLICADO` e' identificado pelo
+// NUMERO, `DATA_DUPLICADA` pela DATA e `SALTO_DE_NUMERACAO` pelo
+// INTERVALO ausente. O conjunto esperado e' recalculado inteiro a cada
+// execucao que mexa na numeracao, e o que saiu do conjunto e' resolvido.
+//
+// O `report_id` continua existindo porque todo achado precisa de uma
+// ancora auditavel — mas ele e' escolhido DETERMINISTICAMENTE (menor
+// providerReportId do grupo; o RDO logo depois da lacuna) e nao faz
+// parte da identidade.
 // ============================================================
 
 export interface RelatorioDaSerie {
@@ -344,31 +456,39 @@ export interface RelatorioDaSerie {
   referenceDate: string | null;
 }
 
+export interface AchadoDeSerie extends AchadoDeterministico {
+  /** RDO ao qual o achado fica ancorado. Deterministico, nao identitario. */
+  ancoraProviderReportId: string;
+}
+
 /**
  * Maior salto de numeracao que ainda vira achado.
  *
- * Sem teto, a primeira sincronizacao de uma obra que comeca a numerar em
- * 900 acusaria 899 faltantes. O teto transforma isso em um achado com o
- * numero de faltantes, e nao em uma avalanche.
+ * Sem teto, uma obra que comeca a numerar em 900 acusaria 899 faltantes
+ * na primeira leitura. O teto transforma isso em um achado com o numero
+ * de faltantes, e nao numa avalanche.
  */
 export const MAX_FALTANTES_POR_SALTO = 500;
 
-export function avaliarRegrasDaSerie(
-  serie: readonly RelatorioDaSerie[],
-  ancoras: readonly string[]
-): Map<string, AchadoDeterministico[]> {
-  const porAncora = new Map<string, AchadoDeterministico[]>();
-  const ancorado = new Set(ancoras);
+function menorId(grupo: readonly RelatorioDaSerie[]): string {
+  return [...grupo].map((r) => r.providerReportId).sort()[0];
+}
 
-  const adicionar = (providerReportId: string, achado: AchadoDeterministico) => {
-    if (!ancorado.has(providerReportId)) return;
+/**
+ * Conjunto COMPLETO de achados de serie para a serie dada.
+ *
+ * A serie precisa estar completa — quem chama e' responsavel por
+ * garantir isso antes, porque uma serie truncada inventaria lacunas que
+ * nao existem.
+ *
+ * A ordenacao numerica e' feita aqui, em memoria, e nao delegada ao
+ * banco: a leitura e' paginada por chave unica estavel, e ordenar por
+ * numero no banco tornaria a paginacao fragil a numero nulo e repetido.
+ */
+export function avaliarRegrasDaSerie(serie: readonly RelatorioDaSerie[]): AchadoDeSerie[] {
+  const achados: AchadoDeSerie[] = [];
 
-    const lista = porAncora.get(providerReportId) ?? [];
-    lista.push(achado);
-    porAncora.set(providerReportId, lista);
-  };
-
-  // 1. Numero duplicado.
+  // 1. Numero duplicado — um achado por NUMERO.
   const porNumero = new Map<number, RelatorioDaSerie[]>();
 
   for (const rdo of serie) {
@@ -376,21 +496,20 @@ export function avaliarRegrasDaSerie(
     porNumero.set(rdo.reportNumber, [...(porNumero.get(rdo.reportNumber) ?? []), rdo]);
   }
 
-  for (const [numero, grupo] of porNumero) {
+  for (const [numero, grupo] of [...porNumero.entries()].sort((a, b) => a[0] - b[0])) {
     if (grupo.length < 2) continue;
 
-    for (const rdo of grupo) {
-      adicionar(
-        rdo.providerReportId,
-        montar("NUMERO_DUPLICADO", rdo.providerReportId, {
-          numero,
-          ocorrencias: grupo.length,
-        })
-      );
-    }
+    achados.push({
+      ...montar({
+        ruleCode: "NUMERO_DUPLICADO",
+        evidenceKey: `NUM-${numero}`,
+        structuredEvidence: { numero, ocorrencias: grupo.length },
+      }),
+      ancoraProviderReportId: menorId(grupo),
+    });
   }
 
-  // 2. Data de referencia duplicada.
+  // 2. Data de referencia duplicada — um achado por DATA.
   const porData = new Map<string, RelatorioDaSerie[]>();
 
   for (const rdo of serie) {
@@ -398,25 +517,31 @@ export function avaliarRegrasDaSerie(
     porData.set(rdo.referenceDate, [...(porData.get(rdo.referenceDate) ?? []), rdo]);
   }
 
-  for (const [data, grupo] of porData) {
+  for (const [data, grupo] of [...porData.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
     if (grupo.length < 2) continue;
 
-    for (const rdo of grupo) {
-      adicionar(
-        rdo.providerReportId,
-        montar("DATA_DUPLICADA", rdo.providerReportId, {
-          data,
-          ocorrencias: grupo.length,
-        })
-      );
-    }
+    achados.push({
+      ...montar({
+        ruleCode: "DATA_DUPLICADA",
+        evidenceKey: `DATA-${data}`,
+        structuredEvidence: { data, ocorrencias: grupo.length },
+      }),
+      ancoraProviderReportId: menorId(grupo),
+    });
   }
 
-  // 3. Salto de numeracao. Ancorado no RDO DEPOIS da lacuna: e' o que
-  //    chegou, e e' a partir dele que se pergunta pelo que faltou.
+  // 3. Salto de numeracao — um achado por INTERVALO ausente, ancorado no
+  //    RDO logo depois da lacuna: e' a partir dele que se pergunta pelo
+  //    que faltou.
   const numerados = serie
-    .filter((rdo): rdo is RelatorioDaSerie & { reportNumber: number } => rdo.reportNumber !== null)
-    .sort((a, b) => a.reportNumber - b.reportNumber);
+    .filter((r): r is RelatorioDaSerie & { reportNumber: number } => r.reportNumber !== null)
+    .sort((a, b) =>
+      a.reportNumber === b.reportNumber
+        ? a.providerReportId < b.providerReportId
+          ? -1
+          : 1
+        : a.reportNumber - b.reportNumber
+    );
 
   for (let i = 1; i < numerados.length; i += 1) {
     const anterior = numerados[i - 1].reportNumber;
@@ -425,15 +550,23 @@ export function avaliarRegrasDaSerie(
 
     if (faltando <= 0 || faltando > MAX_FALTANTES_POR_SALTO) continue;
 
-    adicionar(
-      numerados[i].providerReportId,
-      montar("SALTO_DE_NUMERACAO", numerados[i].providerReportId, {
-        numero: atual,
-        numeroAnterior: anterior,
-        faltando,
-      })
-    );
+    achados.push({
+      ...montar({
+        ruleCode: "SALTO_DE_NUMERACAO",
+        evidenceKey: `SALTO-${anterior + 1}-${atual - 1}`,
+        structuredEvidence: { numeroAnterior: anterior, numero: atual, faltando },
+      }),
+      ancoraProviderReportId: numerados[i].providerReportId,
+    });
   }
 
-  return porAncora;
+  return achados;
+}
+
+/** Chave de reconciliacao usada pelas funcoes de resolucao do banco. */
+export function chaveDeResolucao(achado: {
+  ruleCode: string;
+  evidenceKey: string;
+}): string {
+  return `${achado.ruleCode}|${achado.evidenceKey}`;
 }
