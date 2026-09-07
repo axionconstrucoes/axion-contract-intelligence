@@ -12,6 +12,7 @@
     "lint": "npm run lint --workspace=apps/web"
   },
   "devDependencies": {
+    "js-yaml": "^4.3.1",
     "supabase": "2.114.0"
   },
   "dependencies": {

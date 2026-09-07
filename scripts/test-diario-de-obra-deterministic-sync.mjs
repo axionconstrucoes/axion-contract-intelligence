@@ -502,13 +502,22 @@ for (const [nome, fonte] of [
 check("a migration nao cria nada de IA", !/\b(ai_|expert|anthropic|token_budget)\b/i.test(MIG));
 
 console.log("");
-console.log("-- 19. Workflow: sem schedule, fail-closed --");
+console.log("-- 19. Workflow: agendamento controlado, fail-closed --");
 
 const WF = ler(".github/workflows/diario-de-obra-sync.yml");
 const WF_EXEC = WF.split("\n").filter((l) => !/^\s*#/.test(l)).join("\n");
 
-check("apenas workflow_dispatch", /workflow_dispatch:/.test(WF_EXEC));
-check("sem schedule", !/^\s{2}schedule:/m.test(WF_EXEC));
+check("workflow_dispatch continua disponivel", /workflow_dispatch:/.test(WF_EXEC));
+
+// Passou a existir agendamento diario. Ele nao afrouxa nada: o
+// interruptor continua mandando, e o modo agendado e' fixado em
+// incremental — baseline e reconcile seguem sendo operacao de comando.
+check("um unico agendamento", (WF_EXEC.match(/^\s*- cron:/gm) ?? []).length === 1);
+check("agendamento diario as 00:43 UTC", /- cron: "43 0 \* \* \*"/.test(WF_EXEC));
+check(
+  "agendado e' sempre incremental",
+  WF_EXEC.includes("github.event_name == 'schedule' && 'incremental'")
+);
 check("permissions contents: read", /permissions:\n\s*contents: read/.test(WF_EXEC));
 check("uma unica permissao", (WF_EXEC.match(/^\s{2}[a-z-]+: (read|write)$/gm) ?? []).length === 1);
 check("tem concurrency com cancel-in-progress: false", /concurrency:/.test(WF_EXEC) && /cancel-in-progress: false/.test(WF_EXEC));

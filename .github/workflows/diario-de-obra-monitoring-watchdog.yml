@@ -1,0 +1,120 @@
+# Watchdog do monitoramento do Diario de Obra.
+#
+# POR QUE ELE EXISTE
+#
+# Com o agendamento diario, ninguem vai abrir a aba Actions todo dia
+# para ver se a execucao das 21h43 passou. Uma falha silenciosa seria
+# descoberta semanas depois, quando alguem estranhasse a falta de RDOs
+# novos — e ai o rastro ja teria envelhecido.
+#
+# O QUE ELE FAZ, E SO ISSO
+#
+# Observa o termino de "Diario de Obra Sync". Se a conclusao NAO for
+# `success`, abre — ou comenta — UMA issue neste repositorio. Nada mais.
+#
+# O QUE ELE NAO FAZ, DE PROPOSITO
+#
+#   sem checkout        nao ha codigo a rodar; clonar o repo seria
+#                       superficie desnecessaria;
+#   sem secrets         nenhum secret e' lido. So o GITHUB_TOKEN
+#                       automatico, com o minimo para escrever issue;
+#   sem log             NAO baixa nem le o log da execucao. Log de
+#                       ingestao pode conter dado operacional, e um
+#                       watchdog que o copiasse para uma issue publica
+#                       do repositorio criaria o vazamento que o resto
+#                       do modulo passou o tempo todo evitando;
+#   sem midia           nao ha download de nada;
+#   sem IA              nao ha analise, resumo ou diagnostico. A issue
+#                       diz O QUE falhou e ONDE olhar; o diagnostico e'
+#                       humano;
+#   sem e-mail          quem avisa e' a issue. A notificacao chega pelo
+#                       proprio GitHub, para quem acompanha o repo.
+#
+# SUCESSO NAO MEXE EM NADA
+#
+# Uma execucao boa nao fecha a issue nem comenta nela. Fechar
+# automaticamente seria errado: a issue registra que ALGO falhou e
+# precisa de olhar humano; a execucao seguinte dar certo nao significa
+# que a causa foi entendida. Quem fecha e' quem investigou.
+
+name: Diario de Obra Monitoring Watchdog
+
+on:
+  workflow_run:
+    workflows: ["Diario de Obra Sync"]
+    types: [completed]
+
+# O minimo que permite ler o evento e escrever a issue. Sem
+# `actions: read`, que seria necessario para baixar log — e nao
+# baixamos log.
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  alertar:
+    runs-on: ubuntu-latest
+    # Sucesso nao gera trabalho nenhum: o job inteiro nem comeca.
+    if: github.event.workflow_run.conclusion != 'success'
+
+    steps:
+      - name: Abrir ou atualizar a issue de falha
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Somente metadados da execucao. Nenhum conteudo, nenhum log.
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          CONCLUSAO: ${{ github.event.workflow_run.conclusion }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          QUANDO: ${{ github.event.workflow_run.updated_at }}
+          EVENTO: ${{ github.event.workflow_run.event }}
+          TITULO: "[RDO] Falha no monitoramento Diário de Obra"
+        run: |
+          set -euo pipefail
+
+          CORPO=$(cat <<EOF
+          A execução de monitoramento do Diário de Obra não concluiu com sucesso.
+
+          | | |
+          |---|---|
+          | Horário | \`$QUANDO\` |
+          | Conclusão | \`$CONCLUSAO\` |
+          | Run | \`$RUN_ID\` |
+          | URL | $RUN_URL |
+          | Branch | \`$BRANCH\` |
+          | SHA | \`$SHA\` |
+          | Evento | \`$EVENTO\` |
+
+          Conclusão \`failure\` inclui o caso PARCIAL: o worker grava o sync run
+          como PARCIAL no banco e encerra com código 1, então cobertura incompleta
+          ou erro em algum RDO aparece aqui em vez de passar como sucesso.
+
+          Este aviso traz apenas metadados. O log **não** é copiado para cá — ele
+          pode conter dado operacional da obra. Abra a URL acima para investigar.
+
+          Esta issue **não** é fechada automaticamente: a próxima execução dar
+          certo não significa que a causa foi entendida. Feche depois de investigar.
+          EOF
+          )
+
+          # UMA issue, sempre. Se ja existe uma aberta com este titulo,
+          # a ocorrencia vira comentario nela; senao, cria. Assim uma
+          # sequencia de falhas nao vira uma pilha de issues iguais.
+          EXISTENTE=$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --search "$TITULO in:title" \
+            --json number,title \
+            --jq "[.[] | select(.title == \"$TITULO\")][0].number // empty")
+
+          if [ -n "$EXISTENTE" ]; then
+            echo "Issue #$EXISTENTE ja aberta; registrando nova ocorrencia como comentario."
+            printf '%s\n' "$CORPO" | gh issue comment "$EXISTENTE" --repo "$GITHUB_REPOSITORY" --body-file -
+          else
+            echo "Nenhuma issue aberta com este titulo; criando."
+            printf '%s\n' "$CORPO" | gh issue create \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TITULO" \
+              --body-file -
+          fi
