@@ -1,0 +1,73 @@
+# Validacao isolada: Arquivo/List cobre os documentos vigentes sozinho?
+#
+# A decisao de escopo tirou o download do caminho — o ACC passa a apenas
+# detectar e informar novos arquivos e novas revisoes. Nesse recorte,
+# ListaMestra/List (hoje quebrada) deixaria de ser necessaria, porque
+# Arquivo/List entrega a mesma identidade e a mesma revisao. Falta um
+# fato: ele cobre os 192 documentos sozinho?
+#
+# ISOLAMENTO DELIBERADO
+#
+# Este workflow NAO reaproveita nenhum step do workflow operacional e
+# nao invoca nenhum dos tres workers — os scripts deles nem sao
+# mencionados. Roda um unico script que:
+#
+#   - so alcanca 5 rotas do Construmanager, por allowlist;
+#   - recusa ListaMestra/List, Objeto/Download e Arquivo/Status/List
+#     antes de qualquer rede;
+#   - tem teto rigido de 6 chamadas, autenticacao inclusa;
+#   - fala com o Supabase somente por GET;
+#   - nao repete tentativa.
+#
+# Nao recebe os interruptores de automacao, entao nada poderia ser
+# habilitado nem que o codigo tentasse. Nao aplica migration, nao toca
+# no Storage e nao produz artifact.
+
+name: Construmanager File List Validation
+
+# Disparo manual apenas. Sem schedule: uma chamada a API de terceiro nao
+# deve acontecer sozinha.
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: "Project id do ACC"
+        required: false
+        default: "00000000-0000-4000-8000-000000000001"
+
+concurrency:
+  group: construmanager-file-list-validation
+  cancel-in-progress: false
+
+# Minimo possivel. Nenhuma escrita no repositorio.
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    # Cinco chamadas com timeout de 60 s nao precisam de mais que isto.
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          # Sem `cache: npm` de proposito: o script nao tem dependencia
+          # externa, e um cache a menos e uma superficie a menos.
+
+      - name: Validate Arquivo/List coverage (read-only)
+        # Os segredos chegam SOMENTE por env. Nunca em argv: a linha de
+        # comando aparece na lista de processos do runner.
+        run: node scripts/validate-construmanager-file-list.mjs
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          CONSTRUMANAGER_BASE_URL: ${{ secrets.CONSTRUMANAGER_BASE_URL }}
+          CONSTRUMANAGER_LOGIN: ${{ secrets.CONSTRUMANAGER_LOGIN }}
+          CONSTRUMANAGER_PASSWORD: ${{ secrets.CONSTRUMANAGER_PASSWORD }}
+          ACC_PROJECT_ID: ${{ inputs.project_id }}
