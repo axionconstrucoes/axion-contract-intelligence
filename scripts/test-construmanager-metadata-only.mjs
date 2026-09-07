@@ -307,7 +307,7 @@ console.log("-- 11. Workflow sem worker de conteudo --");
 
 const WORKFLOW = ler(".github/workflows/construmanager-content-ingestion.yml");
 
-check("nenhum schedule ativo", !/^\s{2}schedule:/m.test(WORKFLOW));
+check("schedule ativo, quatro vezes ao dia", /- cron: "17 \*\/6 \* \* \*"/.test(WORKFLOW));
 check("apenas disparo manual", /workflow_dispatch:/.test(WORKFLOW));
 check("permissions contents: read", /permissions:\s*\n\s*contents:\s*read/.test(WORKFLOW));
 check("o worker de conteudo nao e invocado", !/construmanager-content-worker\.mjs/.test(WORKFLOW));
@@ -317,9 +317,16 @@ check(
   !/vars\.CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED/.test(WORKFLOW)
 );
 check(
-  "restaram os dois steps do escopo",
-  /- name: Sync Construmanager metadata/.test(WORKFLOW) &&
-    /- name: Monitor Construmanager version vigency/.test(WORKFLOW)
+  "restou o step de sincronizacao do escopo",
+  /- name: Sync Construmanager metadata/.test(WORKFLOW)
+);
+
+// A deteccao de vigencia deixou de ser step separado: roda dentro do
+// worker, ancorada no sync_run_id recem-criado.
+check(
+  "a deteccao de vigencia nao e mais um step separado",
+  !/- name: Monitor Construmanager version vigency/.test(WORKFLOW) &&
+    /detect_construmanager_version_transitions/.test(WORKER)
 );
 
 // O worker continua no repositorio, sem chamador: reverter e voltar a

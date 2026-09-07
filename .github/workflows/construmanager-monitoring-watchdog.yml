@@ -1,0 +1,172 @@
+# Watchdog do monitoramento Construmanager.
+#
+# POR QUE EXISTE
+#
+# O Gmail Inbound Sync falhou 8 vezes seguidas ao longo de ~25 h sem que
+# ninguem percebesse — a descoberta foi acidental, durante outra
+# auditoria. Um workflow agendado sem aviso de falha e um monitoramento
+# que pode parar em silencio, que e exatamente o que ele deveria evitar.
+#
+# Este workflow observa UM unico workflow e transforma falha em issue.
+#
+# ISOLAMENTO DELIBERADO
+#
+#   - NAO faz checkout: nenhuma linha de codigo do repositorio e
+#     executada aqui. O workflow monitorado e um dado observado, nao uma
+#     fonte de instrucoes;
+#   - NAO recebe secret algum. O GITHUB_TOKEN automatico basta e tem
+#     escopo minimo declarado abaixo;
+#   - NAO instala dependencias e nao roda npm;
+#   - so escreve em issues, e so no proprio repositorio.
+#
+# O QUE NUNCA ENTRA NA ISSUE
+#
+# Log, mensagem de erro, payload, nome de arquivo, token ou secret. A
+# issue carrega apenas identificadores publicos do run — quem precisa do
+# detalhe abre o run e o le com a propria permissao. Uma issue e mais
+# visivel que um log; copiar erro para dentro dela transformaria o aviso
+# num canal de vazamento.
+#
+# SEM LOOP
+#
+# O gatilho `workflow_run` filtra pelo NOME EXATO do workflow monitorado,
+# entao nenhum outro workflow o aciona. Alem disso, eventos gerados pelo
+# GITHUB_TOKEN nao disparam novos workflows: criar ou fechar issue aqui
+# nao volta a acionar nada.
+
+name: Construmanager Monitoring Watchdog
+
+on:
+  workflow_run:
+    # Nome EXATO. Qualquer outro workflow do repositorio e ignorado.
+    workflows: ["Construmanager Metadata Monitoring"]
+    types: [completed]
+
+concurrency:
+  # Serializa por workflow observado: duas conclusoes proximas nao podem
+  # criar duas issues para o mesmo problema.
+  group: construmanager-monitoring-watchdog
+  cancel-in-progress: false
+
+# O minimo para ler o evento e escrever a issue. Nenhuma escrita em
+# codigo, deployment, package ou action.
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Report monitoring status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const TITULO = "[ACC] Falha no monitoramento Construmanager";
+            const ETIQUETA = "construmanager-monitoring";
+            const OBSERVADO = "Construmanager Metadata Monitoring";
+
+            const run = context.payload.workflow_run;
+
+            // Cinto e suspensorio: o gatilho ja filtra por nome, mas um
+            // evento de outro workflow nunca deve gerar issue.
+            if (run.name !== OBSERVADO) {
+              core.info(`Ignorado: evento de "${run.name}".`);
+              return;
+            }
+
+            // Issues pode estar desabilitado no repositorio. Tentar
+            // escrever aqui daria 410 e mascararia o aviso real.
+            const repo = await github.rest.repos.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+            });
+
+            if (!repo.data.has_issues) {
+              core.warning("Issues desabilitado: nada a registrar.");
+              return;
+            }
+
+            const abertas = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              per_page: 100,
+            });
+
+            // Casa por titulo exato. Um titulo estavel e o que permite
+            // atualizar UMA issue em vez de abrir uma por falha.
+            const existente = abertas.data.find(
+              (issue) => issue.title === TITULO && !issue.pull_request
+            );
+
+            // SOMENTE identificadores publicos do run. Nenhum log,
+            // nenhuma mensagem de erro, nenhum nome de arquivo.
+            const fatos = [
+              `- Conclusao: \`${run.conclusion}\``,
+              `- Quando: ${run.updated_at}`,
+              `- Run ID: \`${run.id}\``,
+              `- Run: ${run.html_url}`,
+              `- Branch: \`${run.head_branch}\``,
+              `- SHA: \`${run.head_sha}\``,
+            ].join("\n");
+
+            if (run.conclusion === "success") {
+              if (!existente) {
+                core.info("Sucesso e nenhuma issue aberta: nada a fazer.");
+                return;
+              }
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existente.number,
+                body: `Monitoramento recuperado.\n\n${fatos}`,
+              });
+
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existente.number,
+                state: "closed",
+              });
+
+              core.info(`Issue #${existente.number} fechada.`);
+              return;
+            }
+
+            const corpo =
+              `A verificacao automatica do Construmanager nao concluiu com sucesso.\n\n` +
+              `${fatos}\n\n` +
+              `O detalhe tecnico fica no log do run, acessivel pelo link acima. ` +
+              `Ele NAO e copiado para ca de proposito: uma issue e mais visivel ` +
+              `que um log, e log costuma carregar dado que nao deve circular.\n\n` +
+              `Esta issue e atualizada a cada nova falha e fechada sozinha quando ` +
+              `uma execucao voltar a concluir com sucesso.`;
+
+            if (existente) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existente.number,
+                body: `Nova falha.\n\n${fatos}`,
+              });
+
+              core.info(`Issue #${existente.number} atualizada.`);
+              return;
+            }
+
+            // Sem `assignees`: atribuir a alguem exige identidade
+            // confirmada, e adivinhar destinatario e pior que nao
+            // atribuir.
+            const criada = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: TITULO,
+              body: corpo,
+              labels: [ETIQUETA],
+            });
+
+            core.info(`Issue #${criada.data.number} criada.`);

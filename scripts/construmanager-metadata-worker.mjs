@@ -44,8 +44,13 @@ const { sanitizeConstrumanagerApiError } = await import(
   "../apps/web/lib/integrations/construmanager/sanitize-error.ts"
 );
 
+// Argumento VAZIO nao e ausencia. Numa execucao agendada o workflow
+// nao tem `inputs`, e sem o filtro abaixo o worker receberia "" como
+// project id — `??` nao captura string vazia, so null/undefined.
 const PROJECT_ID =
-  process.argv.slice(2).find((arg) => !arg.startsWith("--")) ??
+  process.argv
+    .slice(2)
+    .find((arg) => !arg.startsWith("--") && arg.trim() !== "") ??
   "00000000-0000-4000-8000-000000000001";
 
 function log(message) {

@@ -398,15 +398,24 @@ check(
 );
 
 console.log("");
-console.log("-- 7. workflow: tres steps independentes --");
+console.log("-- 7. workflow: agendado, um unico step de sincronizacao --");
 
-check("nenhum schedule ativo", !/^\s{2}schedule:/m.test(WORKFLOW));
+check("schedule ativo", /^\s{2}schedule:/m.test(WORKFLOW));
+check('cron "17 */6 * * *"', /- cron: "17 \*\/6 \* \* \*"/.test(WORKFLOW));
 check("apenas disparo manual", /workflow_dispatch:/.test(WORKFLOW));
 
 check(
-  "step de metadados existe e vem primeiro",
-  WORKFLOW.indexOf("Sync Construmanager metadata") <
-    WORKFLOW.indexOf("Monitor Construmanager version vigency")
+  "o step de metadados existe",
+  /- name: Sync Construmanager metadata/.test(WORKFLOW)
+);
+
+// A deteccao de vigencia deixou de ser step separado: roda dentro do
+// worker, ancorada no sync_run_id recem-criado. Um step independente
+// repetia a mesma comparacao sobre o mesmo estado.
+check(
+  "nao ha mais step separado de vigencia",
+  !/- name: Monitor Construmanager version vigency/.test(WORKFLOW) &&
+    !/construmanager-version-monitor\.mjs/.test(WORKFLOW)
 );
 
 // Escopo somente metadados: o step de ingestao de conteudo saiu do
@@ -422,16 +431,12 @@ check(
 );
 
 check(
-  "cada step tem seu proprio interruptor",
+  "o step de metadados recebe os dois interruptores que governa",
   (() => {
-    const meta = WORKFLOW.slice(
-      WORKFLOW.indexOf("Sync Construmanager metadata"),
-      WORKFLOW.indexOf("Monitor Construmanager version vigency")
-    );
-    const mon = WORKFLOW.slice(WORKFLOW.indexOf("Monitor Construmanager version vigency"));
+    const meta = WORKFLOW.slice(WORKFLOW.indexOf("Sync Construmanager metadata"));
     return (
       meta.includes("CONSTRUMANAGER_METADATA_SYNC_ENABLED") &&
-      mon.includes("CONSTRUMANAGER_VERSION_MONITORING_ENABLED")
+      meta.includes("CONSTRUMANAGER_VERSION_MONITORING_ENABLED")
     );
   })()
 );
@@ -441,14 +446,19 @@ check(
   !/vars\.CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED/.test(WORKFLOW)
 );
 
+// Interruptores continuam independentes DENTRO do worker: sincronizar
+// nao habilita monitorar. A separacao mudou de lugar, nao sumiu.
 check(
-  "falha na sincronizacao nao impede o monitoramento (if: always)",
-  (WORKFLOW.match(/if: always\(\)/g) ?? []).length >= 1
+  "sincronizar nao habilita monitorar",
+  (() => {
+    const w = readFileSync("scripts/construmanager-metadata-worker.mjs", "utf8");
+    return /resolveVersionMonitoringEnabled\(process\.env\)/.test(w);
+  })()
 );
 
 check(
-  "o kill switch chega aos dois steps",
-  (WORKFLOW.match(/CONSTRUMANAGER_AUTO_KILL_SWITCH/g) ?? []).length >= 2
+  "o kill switch chega ao step de sincronizacao",
+  (WORKFLOW.match(/CONSTRUMANAGER_AUTO_KILL_SWITCH/g) ?? []).length >= 1
 );
 
 console.log("");
