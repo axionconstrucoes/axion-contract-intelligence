@@ -218,6 +218,22 @@ export interface MetadataCrossCheck {
   revisionMismatches: number[];
 }
 
+// Diagnostico da coleta somente-metadados (Arquivo/List sozinho).
+//
+// `statusIdCounts` existe porque a API devolve `statusId` mas nao um
+// rotulo: guardar o numero cru numa coluna de rotulo fabricaria
+// significado. Aqui ele fica visivel, sem ser gravado como se fosse
+// status legivel.
+export interface ConstrumanagerFileListDiagnostics {
+  filesReturned: number;
+  documentsBuilt: number;
+  duplicateIds: number[];
+  invalidIds: number[];
+  /** Documentos cujo parentId nao existe em Pasta/List: caminho fica nulo. */
+  unknownFolderIds: number[];
+  statusIdCounts: Record<string, number>;
+}
+
 export interface NormalizedMetadata {
   folders: NormalizedFolder[];
   documents: NormalizedDocument[];
@@ -225,5 +241,8 @@ export interface NormalizedMetadata {
   // Versões cujo cabeça não veio na mesma resposta. Diagnóstico: nunca
   // viram vínculo inventado.
   orphanVersionIds: number[];
-  crossCheck: MetadataCrossCheck;
+  /** So o caminho antigo (ListaMestra + Arquivo/List) produz isto. */
+  crossCheck?: MetadataCrossCheck;
+  /** So o caminho somente-metadados (Arquivo/List) produz isto. */
+  fileListDiagnostics?: ConstrumanagerFileListDiagnostics;
 }

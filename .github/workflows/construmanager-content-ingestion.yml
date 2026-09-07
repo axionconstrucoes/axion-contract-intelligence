@@ -1,17 +1,25 @@
-# Pacote D — ingestao automatica de conteudo do Construmanager.
+# Monitoramento de metadados do Construmanager.
 #
-# ESTE WORKFLOW NASCE DESATIVADO.
+# ESCOPO: OBSERVAR E INFORMAR. NAO TRANSFERIR.
 #
-# Nao ha gatilho `schedule` — apenas `workflow_dispatch` (disparo manual
-# pela aba Actions). Ativar a automacao periodica e descomentar o bloco
-# `schedule` abaixo, em commit proprio e revisado. Ate la, nada roda
-# sozinho.
+# A decisao de escopo tirou o download do caminho. O ACC detecta novos
+# arquivos e novas revisoes; nenhum DWG, IFC ou PDF e' transferido. O
+# step de ingestao de conteudo foi removido daqui — o worker e as
+# funcoes de download continuam no repositorio, sem chamador.
 #
-# Mesmo disparado a mao, o worker so age se as variaveis de ambiente
-# autorizarem: CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED precisa valer
-# exatamente "true" e CONSTRUMANAGER_AUTO_DRY_RUN precisa valer
-# exatamente "false" para sair do modo de simulacao. Ausentes, a rodada
-# termina sem tocar em nada (fail-closed).
+# Nao ha gatilho `schedule` — apenas `workflow_dispatch`. Ativar a
+# automacao periodica e descomentar o bloco `schedule` abaixo, em commit
+# proprio e revisado. Ate la, nada roda sozinho.
+#
+# Mesmo disparado a mao, cada processo so age se seu interruptor
+# autorizar, e o valor precisa ser exatamente "true":
+#
+#   A. metadados -> CONSTRUMANAGER_METADATA_SYNC_ENABLED
+#   B. vigencia  -> CONSTRUMANAGER_VERSION_MONITORING_ENABLED
+#
+# Ausentes, a rodada termina sem tocar em nada (fail-closed).
+# CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED nao e' lido por nenhum step: nao
+# existe caminho de codigo aqui capaz de baixar conteudo.
 #
 # POR QUE GITHUB ACTIONS E NAO VERCEL CRON
 #
@@ -20,12 +28,10 @@
 #   2. apps/web/proxy.ts exige sessao Supabase em todas as rotas exceto
 #      /login e /auth/callback. Uma rota de cron sem cookie levaria 307
 #      para /login — ativa-la exigiria abrir o perimetro de autenticacao.
-#   3. Disco: um arquivo de 263 MiB precisa de ZIP + extraido (~526 MiB)
-#      em disco temporario. O runner ubuntu-latest tem ~14 GB livres.
-#   4. Duracao: funcao Vercel encerra em 300 s; um job aqui pode durar
-#      horas, com `timeout-minutes` explicito como trava.
+#   3. Duracao: funcao Vercel encerra em 300 s; um job aqui pode durar
+#      bem mais, com `timeout-minutes` explicito como trava.
 
-name: Construmanager Content Ingestion
+name: Construmanager Metadata Monitoring
 
 on:
   # schedule:
@@ -40,16 +46,16 @@ on:
 # Uma rodada por vez. O lease no banco protege contra workers
 # concorrentes; isto evita que eles sequer sejam criados.
 concurrency:
-  group: construmanager-content-ingestion
+  group: construmanager-metadata-monitoring
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  ingest:
+  monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -78,25 +84,16 @@ jobs:
           CONSTRUMANAGER_VERSION_MONITORING_ENABLED: ${{ vars.CONSTRUMANAGER_VERSION_MONITORING_ENABLED }}
           CONSTRUMANAGER_AUTO_KILL_SWITCH: ${{ vars.CONSTRUMANAGER_AUTO_KILL_SWITCH }}
 
-      # Processo C — ingestao de conteudo. `if: always()` para que uma
-      # falha na sincronizacao nao impeca o resto, e vice-versa: falha no
-      # download nunca bloqueia a proxima sincronizacao de metadados.
-      - name: Ingest Construmanager content
-        if: always()
-        run: node scripts/construmanager-content-worker.mjs "${{ inputs.project_id }}"
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-          CONSTRUMANAGER_LOGIN: ${{ secrets.CONSTRUMANAGER_LOGIN }}
-          CONSTRUMANAGER_PASSWORD: ${{ secrets.CONSTRUMANAGER_PASSWORD }}
-          CONSTRUMANAGER_BASE_URL: ${{ secrets.CONSTRUMANAGER_BASE_URL }}
-          # Controles da automacao. Ausentes => worker nao faz nada.
-          CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED: ${{ vars.CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED }}
-          CONSTRUMANAGER_AUTO_DRY_RUN: ${{ vars.CONSTRUMANAGER_AUTO_DRY_RUN }}
-          CONSTRUMANAGER_AUTO_MAX_ITEMS: ${{ vars.CONSTRUMANAGER_AUTO_MAX_ITEMS }}
-          CONSTRUMANAGER_AUTO_MAX_FILE_BYTES: ${{ vars.CONSTRUMANAGER_AUTO_MAX_FILE_BYTES }}
-          CONSTRUMANAGER_AUTO_TIME_BUDGET_MS: ${{ vars.CONSTRUMANAGER_AUTO_TIME_BUDGET_MS }}
-          CONSTRUMANAGER_AUTO_KILL_SWITCH: ${{ vars.CONSTRUMANAGER_AUTO_KILL_SWITCH }}
+      # Processo C — ingestao de conteudo: REMOVIDO.
+      #
+      # A decisao de escopo tirou o download do caminho: o ACC monitora
+      # informacoes e nao transfere desenhos. O worker e as funcoes de
+      # download continuam no repositorio, sem chamador — reverter e
+      # voltar a chamar, nao reescrever.
+      #
+      # Sem este step, nenhuma execucao deste workflow pode abrir
+      # Objeto/Download nem criar vinculo pendente, independentemente do
+      # valor de qualquer variavel.
 
       # Processo B — monitoramento de versao vigente. Roda como STEP
       # SEPARADO e com interruptor proprio: se os downloads estiverem

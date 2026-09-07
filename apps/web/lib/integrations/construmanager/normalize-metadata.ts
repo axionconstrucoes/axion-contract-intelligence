@@ -185,6 +185,120 @@ function toNullableText(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+// ============================================================
+// ESCOPO SOMENTE METADADOS — coleta a partir de Arquivo/List
+// ============================================================
+//
+// ListaMestra/List saiu do caminho critico. A validacao isolada
+// (run 34078849742) mediu, na obra real: Arquivo/List devolveu 192 de
+// 192 documentos, com 192 revisoes identicas, 0 ausentes, 0 divergentes,
+// 0 invalidos. `id` e o mesmo `cad_objects_id` e `review` e o mesmo
+// `cad_objects_versoes`.
+//
+// O que Arquivo/List NAO traz, e que por isso fica nulo — nunca
+// inventado: id numerico do autor, data de aprovacao e rotulo de status.
+//
+// `statusId` VEM na resposta, mas nao e' gravado em `status_label`: a
+// coluna guarda um rotulo legivel e a API devolve um numero sem mapa
+// validado (todas as linhas reais observadas valem 3). Escrever "3" ali
+// seria fabricar significado. Ele e' exposto em `statusIdCounts`, para
+// que a distribuicao fique visivel quando houver mapa.
+//
+// Versoes historicas nao aparecem em Arquivo/List. Isso e' o recorte
+// desejado — e o nucleo SQL so faz upsert, nunca delete, entao as 11
+// versoes ja gravadas permanecem intactas ao receber uma lista vazia.
+export function normalizeFileListMetadata(
+  fileList: ConstrumanagerFileListResponse | null | undefined,
+  folders: NormalizedFolder[]
+): NormalizedMetadata {
+  const files: ConstrumanagerFile[] = Array.isArray(fileList?.listFile)
+    ? fileList!.listFile
+    : [];
+
+  const pathByFolderId = new Map(
+    folders.map((folder) => [folder.construmanager_folder_id, folder.path])
+  );
+
+  const documents: NormalizedDocument[] = [];
+  const seen = new Set<number>();
+  const duplicateIds: number[] = [];
+  const invalidIds: number[] = [];
+  const unknownFolderIds: number[] = [];
+  const statusIdCounts: Record<string, number> = {};
+
+  for (const file of files) {
+    const objectId = Number(file.id);
+
+    if (!Number.isInteger(objectId) || objectId <= 0) {
+      invalidIds.push(Number.isFinite(objectId) ? objectId : 0);
+      continue;
+    }
+
+    // Id repetido nao vira segundo documento: a chave natural do banco e
+    // (integration_id, construmanager_object_id), e um upsert duplo na
+    // mesma carga sobrescreveria a si mesmo em ordem indefinida.
+    if (seen.has(objectId)) {
+      duplicateIds.push(objectId);
+      continue;
+    }
+
+    seen.add(objectId);
+
+    const folderId = Number(file.parentId);
+    const folderPath = pathByFolderId.get(folderId) ?? null;
+
+    if (folderPath === null) unknownFolderIds.push(objectId);
+
+    const chave = String(file.statusId ?? "(sem status)");
+    statusIdCounts[chave] = (statusIdCounts[chave] ?? 0) + 1;
+
+    const name = String(file.name ?? "");
+    const revision = String(file.review ?? "");
+    const revisionFromName = extractRevisionFromName(name);
+    const extension = String(file.extension ?? "") || extractExtension(name);
+
+    documents.push({
+      construmanager_object_id: objectId,
+      construmanager_folder_id: Number.isInteger(folderId) ? folderId : 0,
+      name,
+      extension,
+      extension_normalized: normalizeExtension(extension),
+      revision,
+      revision_from_name: revisionFromName,
+      revision_conflict: computeRevisionConflict(revision, revisionFromName),
+      has_versions: Boolean(file.hasVersion),
+      // Arquivo/List traz o NOME de quem subiu, nunca o id.
+      author_id: null,
+      author_name: toNullableText(file.upload),
+      source_created_at_raw: toNullableText(file.dataUpload),
+      source_created_at: parseNaiveSourceDate(file.dataUpload),
+      // Sem fonte em Arquivo/List.
+      source_approved_at_raw: null,
+      source_approved_at: null,
+      size_bytes: toNullableNumber(file.sizeNumber),
+      folder_path: folderPath,
+      status_label: null,
+    });
+  }
+
+  return {
+    folders,
+    documents,
+    // Arquivo/List nao expoe historico. Lista vazia => o upsert nao
+    // toca nas versoes ja gravadas.
+    versions: [],
+    orphanVersionIds: [],
+    fileListDiagnostics: {
+      filesReturned: files.length,
+      documentsBuilt: documents.length,
+      duplicateIds,
+      invalidIds,
+      unknownFolderIds,
+      statusIdCounts,
+    },
+  };
+}
+
 export function normalizeMetadata(
   masterList: ConstrumanagerMasterListResponse | null | undefined,
   fileList: ConstrumanagerFileListResponse | null | undefined

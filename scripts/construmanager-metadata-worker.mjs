@@ -153,6 +153,27 @@ try {
       `${syncData.documents_created} novo(s) | ${syncData.versions_created} nova(s) versao(oes)`
   );
 
+  // Documento conhecido que a listagem NAO devolveu.
+  //
+  // Nunca e' excluido: sumir da origem nao e' o mesmo que deixar de
+  // existir, e distinguir as duas coisas e uma decisao humana. O sinal
+  // sai de `last_seen_at`, que o upsert atualiza a cada carga — nenhuma
+  // coluna nova foi criada para isto.
+  const { count: naoRetornados, error: naoRetornadosErro } = await supabase
+    .from("construmanager_documents")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", PROJECT_ID)
+    .lt("last_seen_at", startedAt);
+
+  if (naoRetornadosErro) {
+    log(`nao foi possivel contar documentos nao retornados: ${naoRetornadosErro.message}`);
+  } else if ((naoRetornados ?? 0) > 0) {
+    log(
+      `ATENCAO: ${naoRetornados} documento(s) conhecido(s) nao vieram nesta ` +
+        "listagem. Nada foi excluido — requer revisao humana."
+    );
+  }
+
   // 6. Detectar transicoes de vigencia, ancoradas nesta observacao.
   //    Interruptor SEPARADO: sincronizar nao habilita monitorar.
   const monitoring = resolveVersionMonitoringEnabled(process.env);
