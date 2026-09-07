@@ -5,11 +5,11 @@
 // nunca sai desta função — não é retornado, não é logado, não é
 // persistido.
 //
-// Estritamente somente leitura: Pasta/List, ListaMestra/List e
-// Arquivo/List. Nenhum Objeto/Download, nenhum byte de documento.
+// Estritamente somente leitura: Obra/List, Pasta/List e Arquivo/List.
+// Nenhum ListaMestra/List, nenhum Objeto/Download, nenhum byte de documento.
 
 import type { ConstrumanagerClient } from "./client";
-import { normalizeFolders, normalizeMetadata } from "./normalize-metadata";
+import { normalizeFileListMetadata, normalizeFolders } from "./normalize-metadata";
 import type { NormalizedMetadata } from "./types";
 
 export interface CollectedConstrumanagerMetadata extends NormalizedMetadata {
@@ -36,13 +36,9 @@ export async function collectConstrumanagerMetadata(
     );
   }
 
-  const userTypeId = Number(auth.user.type);
-
-  if (!Number.isInteger(userTypeId) || userTypeId <= 0) {
-    throw new Error(
-      "A API não devolveu um tipo de usuário válido para montar a lista mestra."
-    );
-  }
+  // `idTipoUsuario` era exigência exclusiva de ListaMestra/List. Sem ela
+  // no caminho, validar esse campo só criaria uma forma nova de falhar
+  // por um dado que ninguém mais usa.
 
   const token = await client.getAccessToken(auth.user.token);
   const accessToken = token.access_token;
@@ -58,9 +54,8 @@ export async function collectConstrumanagerMetadata(
     );
   }
 
-  // 1) Pastas primeiro: os ids são entrada OBRIGATÓRIA de idObjeto na
-  //    lista mestra. Sem eles a lista mestra devolve 200 com "Registro
-  //    não encontrado" — um falso negativo silencioso.
+  // 1) Pastas: unica fonte do caminho legivel, e o `parentId` de cada
+  //    arquivo aponta para um id daqui.
   const folderResponse = await client.listFolders(
     accessToken,
     companyId,
@@ -74,22 +69,21 @@ export async function collectConstrumanagerMetadata(
     );
   }
 
-  const folderIds = folders.map((folder) => folder.construmanager_folder_id);
-
-  // 2) Fonte PRIMÁRIA: documentos vigentes + versões históricas.
-  const masterList = await client.listMasterList(
-    accessToken,
-    companyId,
-    workId,
-    auth.user.id,
-    userTypeId,
-    folderIds
-  );
-
-  // 3) Fonte SECUNDÁRIA: extensão crua e conferência cruzada.
+  // 2) Arquivos vigentes. FONTE UNICA desde a decisão de escopo somente
+  //    metadados: ListaMestra/List saiu do caminho crítico por estar
+  //    quebrada na obra (falha idêntica pelo worker headless e pela UI) e
+  //    por ser dispensável neste recorte — a validação isolada do run
+  //    34078849742 mediu Arquivo/List devolvendo 192 de 192 documentos,
+  //    com 192 revisões idênticas e nenhum ausente, divergente ou
+  //    inválido.
+  //
+  //    O que se perde, e a decisão de escopo aceitou: versões históricas
+  //    deixam de ser coletadas (as já gravadas ficam intactas, porque o
+  //    núcleo SQL só faz upsert), e não se sabe qual objeto foi
+  //    substituído numa troca de revisão.
   const fileList = await client.listFiles(accessToken, companyId, workId);
 
-  const normalized = normalizeMetadata(masterList, fileList);
+  const normalized = normalizeFileListMetadata(fileList, folders);
 
   return {
     ...normalized,

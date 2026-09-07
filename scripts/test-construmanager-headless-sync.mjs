@@ -406,7 +406,19 @@ check("apenas disparo manual", /workflow_dispatch:/.test(WORKFLOW));
 check(
   "step de metadados existe e vem primeiro",
   WORKFLOW.indexOf("Sync Construmanager metadata") <
-    WORKFLOW.indexOf("Ingest Construmanager content")
+    WORKFLOW.indexOf("Monitor Construmanager version vigency")
+);
+
+// Escopo somente metadados: o step de ingestao de conteudo saiu do
+// workflow. Ele nao pode voltar por acidente — se voltar, aqui reprova.
+check(
+  "o step de ingestao de conteudo NAO existe mais",
+  !/- name: Ingest Construmanager content/.test(WORKFLOW)
+);
+
+check(
+  "nenhum step invoca o worker de conteudo",
+  !/construmanager-content-worker\.mjs/.test(WORKFLOW)
 );
 
 check(
@@ -414,40 +426,29 @@ check(
   (() => {
     const meta = WORKFLOW.slice(
       WORKFLOW.indexOf("Sync Construmanager metadata"),
-      WORKFLOW.indexOf("Ingest Construmanager content")
-    );
-    const cont = WORKFLOW.slice(
-      WORKFLOW.indexOf("Ingest Construmanager content"),
       WORKFLOW.indexOf("Monitor Construmanager version vigency")
     );
     const mon = WORKFLOW.slice(WORKFLOW.indexOf("Monitor Construmanager version vigency"));
     return (
       meta.includes("CONSTRUMANAGER_METADATA_SYNC_ENABLED") &&
-      cont.includes("CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED") &&
       mon.includes("CONSTRUMANAGER_VERSION_MONITORING_ENABLED")
     );
   })()
 );
 
 check(
-  "o step de metadados NAO recebe a variavel de download",
-  (() => {
-    const meta = WORKFLOW.slice(
-      WORKFLOW.indexOf("Sync Construmanager metadata"),
-      WORKFLOW.indexOf("Ingest Construmanager content")
-    );
-    return !meta.includes("CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED");
-  })()
+  "nenhum step recebe a variavel de download",
+  !/vars\.CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED/.test(WORKFLOW)
 );
 
 check(
-  "falha no download nao impede a proxima sincronizacao (if: always)",
-  (WORKFLOW.match(/if: always\(\)/g) ?? []).length >= 2
+  "falha na sincronizacao nao impede o monitoramento (if: always)",
+  (WORKFLOW.match(/if: always\(\)/g) ?? []).length >= 1
 );
 
 check(
-  "o kill switch chega aos tres steps",
-  (WORKFLOW.match(/CONSTRUMANAGER_AUTO_KILL_SWITCH/g) ?? []).length >= 3
+  "o kill switch chega aos dois steps",
+  (WORKFLOW.match(/CONSTRUMANAGER_AUTO_KILL_SWITCH/g) ?? []).length >= 2
 );
 
 console.log("");
@@ -533,9 +534,14 @@ check(
 );
 
 check(
-  "a novidade aparece ANTES do painel de download",
+  "a novidade aparece ANTES do painel de monitoramento",
   CARD.indexOf("<ConstrumanagerVersionTransitions") <
-    CARD.indexOf("<ConstrumanagerContentDownload")
+    CARD.indexOf("<ConstrumanagerMonitoringPanel")
+);
+
+check(
+  "o painel de download saiu do card",
+  !/<ConstrumanagerContentDownload/.test(CARD)
 );
 
 console.log("");

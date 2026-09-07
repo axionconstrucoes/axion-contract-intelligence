@@ -794,7 +794,7 @@ check(
 
 check(
   "concorrencia impede duas rodadas simultaneas",
-  /concurrency:[\s\S]{0,120}group: construmanager-content-ingestion/.test(workflow)
+  /concurrency:[\s\S]{0,120}group: construmanager-metadata-monitoring/.test(workflow)
 );
 
 check(
@@ -810,7 +810,15 @@ check(
 check(
   "segredos vem de secrets/vars do agendador",
   /\$\{\{ secrets\.SUPABASE_SECRET_KEY \}\}/.test(workflow) &&
-    /\$\{\{ vars\.CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED \}\}/.test(workflow)
+    /\$\{\{ vars\.CONSTRUMANAGER_METADATA_SYNC_ENABLED \}\}/.test(workflow)
+);
+
+// Escopo somente metadados: o interruptor de download nao e mais lido
+// por step algum. Se voltar ao workflow, e porque alguem reintroduziu o
+// caminho de download — e isto precisa reprovar.
+check(
+  "o workflow nao le mais o interruptor de download",
+  !/vars\.CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED/.test(workflow)
 );
 
 console.log("");

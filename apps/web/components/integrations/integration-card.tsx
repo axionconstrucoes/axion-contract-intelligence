@@ -14,11 +14,10 @@ import { resolveIntegrationVisualIdentity } from "./integration-visual-identity"
 import { IntegrationOriginForm } from "./integration-origin-form";
 import { ConstrumanagerConnectionCheck } from "./construmanager-connection-check";
 import { ConstrumanagerMetadataSync } from "./construmanager-metadata-sync";
-import { ConstrumanagerContentDownload } from "./construmanager-content-download";
+import { ConstrumanagerMonitoringPanel } from "./construmanager-monitoring-panel";
 import { ConstrumanagerIntegrationStatusBadge } from "./construmanager-status-badge";
 import { ConstrumanagerVersionTransitions } from "./construmanager-version-transitions";
 import type { ConstrumanagerMetadataOverview } from "@/lib/integrations/construmanager/get-metadata-overview";
-import type { ConstrumanagerContentOverview } from "@/lib/integrations/construmanager/get-content-overview";
 import type { ConstrumanagerVersionTransitionsResult } from "@/lib/integrations/construmanager/get-version-transitions";
 import { resolveGenericIntegrationDisplayStatus } from "@/lib/ui/resolve-integration-display-status";
 import { driveTypeLabels, formatDateTime } from "@/lib/labels";
@@ -31,7 +30,6 @@ export function IntegrationCard({
   config,
   canManage,
   construmanagerMetadata,
-  construmanagerContent,
   construmanagerTransitions,
 }: {
   projectId: string;
@@ -39,7 +37,6 @@ export function IntegrationCard({
   config: IntegrationConfig | undefined;
   canManage: boolean;
   construmanagerMetadata?: ConstrumanagerMetadataOverview | null;
-  construmanagerContent?: ConstrumanagerContentOverview | null;
   construmanagerTransitions?: ConstrumanagerVersionTransitionsResult | null;
 }) {
   const [editing, setEditing] = useState(false);
@@ -126,9 +123,10 @@ export function IntegrationCard({
             <ConstrumanagerVersionTransitions
               result={construmanagerTransitions ?? null}
             />
-            <ConstrumanagerContentDownload
-              projectId={projectId}
-              overview={construmanagerContent ?? null}
+            {/* Escopo somente metadados: o painel de download saiu. A
+                integração observa e informa; não transfere desenho. */}
+            <ConstrumanagerMonitoringPanel
+              overview={construmanagerMetadata ?? null}
             />
           </>
         ) : null}
