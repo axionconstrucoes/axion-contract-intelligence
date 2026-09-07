@@ -1,0 +1,77 @@
+# Validacao isolada da API EXTERNA do APP Diario de Obra.
+#
+# FONTE INDEPENDENTE DO CONSTRUMANAGER
+#
+# Outra plataforma, outro host, outra credencial. Este workflow nao
+# recebe nenhum secret nem variable do Construmanager, nao invoca
+# nenhum script dele e nao pode alterar o monitoramento ja operacional.
+#
+# API OFICIAL, NAO A DO PORTAL
+#
+# O portal web usa internamente api.diariodeobra.app/v2 com a sessao do
+# navegador. Aqui usamos a API EXTERNA publicada pelo fornecedor —
+# https://apiexterna.diariodeobra.app/v1 — cuja documentacao existe para
+# "exportar os dados inseridos no sistema (em formato JSON)". Imitar a
+# sessao do navegador seria possivel e seria errado.
+#
+# ISOLAMENTO DELIBERADO
+#
+#   - somente GET, em 3 rotas de allowlist;
+#   - teto de 5 chamadas (o fornecedor permite 150/min: folga enorme);
+#   - nenhum retry;
+#   - nenhuma midia: foto, video, anexo, PDF, impressao e exportacao sao
+#     inalcancaveis;
+#   - sem Supabase, sem banco, sem Storage, sem migration, sem IA;
+#   - nenhuma criacao ou alteracao de RDO;
+#   - nao produz artifact e nao usa cache.
+#
+# O LOG SO RECEBE ESTRUTURA
+#
+# Nomes de campo, tipos, contagens e presenca de colecoes. Nunca texto de
+# atividade ou ocorrencia, comentario, nome de pessoa, endereco, nome de
+# empresa ou obra, descricao de equipamento, URL de foto, token ou
+# payload bruto.
+
+name: Diario de Obra API Validation
+
+# Disparo manual apenas. Sem schedule: uma chamada a API de terceiro nao
+# deve acontecer sozinha.
+on:
+  workflow_dispatch:
+    inputs:
+      obra_id:
+        description: "Id da obra no Diario de Obra (24 caracteres hex)"
+        required: true
+
+concurrency:
+  group: diario-de-obra-api-validation
+  cancel-in-progress: false
+
+# Minimo possivel. Nenhuma escrita.
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    # Tres chamadas com timeout de 30 s nao precisam de mais que isto.
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          # Sem `cache: npm` de proposito: o script nao tem dependencia
+          # externa, e um cache a menos e uma superficie a menos.
+
+      - name: Validate Diario de Obra API (GET only, no media)
+        # O token chega SOMENTE por env. Nunca em argv: a linha de
+        # comando aparece na lista de processos do runner.
+        run: node scripts/validate-diario-de-obra-api.mjs
+        env:
+          DIARIO_DE_OBRA_API_TOKEN: ${{ secrets.DIARIO_DE_OBRA_API_TOKEN }}
+          DIARIO_DE_OBRA_OBRA_ID: ${{ inputs.obra_id }}
