@@ -1,4 +1,4 @@
-﻿import { getConstrumanagerConfig } from "./config";
+﻿import { DEFAULT_TIMEOUT_MS, getConstrumanagerConfig } from "./config";
 import type {
   ConstrumanagerAuthResponse,
   ConstrumanagerConfig,
@@ -39,11 +39,25 @@ export class ConstrumanagerClient {
       "/Arquivo/List": 60_000,
     });
 
+  /*
+   * Precedencia, do mais forte ao mais fraco:
+   *
+   *   1. config.timeoutMs EXPLICITO  — vale para todas as rotas
+   *   2. padrao da rota              — 15 s auth, 60 s listagem
+   *   3. DEFAULT_TIMEOUT_MS          — rota desconhecida
+   *
+   * O override vem primeiro porque quem o informa esta dizendo algo
+   * que a tabela nao sabe: um ambiente de teste que precisa expirar em
+   * 50 ms, ou uma rede especifica. Por isso `timeoutMs` e OPCIONAL —
+   * ausencia significa "use o padrao da rota", e nao 15000.
+   */
   private timeoutParaRota(path: string): number {
-    // Rota desconhecida cai no teto configurado, nunca no maior: um
-    // endpoint novo nao deve herdar folga por acidente.
+    // Rota desconhecida cai no minimo, nunca no maior: um endpoint novo
+    // nao deve herdar folga por acidente.
     return (
-      ConstrumanagerClient.TIMEOUTS_POR_ROTA[path] ?? this.config.timeoutMs
+      this.config.timeoutMs ??
+      ConstrumanagerClient.TIMEOUTS_POR_ROTA[path] ??
+      DEFAULT_TIMEOUT_MS
     );
   }
 

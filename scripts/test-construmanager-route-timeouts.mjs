@@ -44,13 +44,15 @@ function check(rotulo, condicao) {
 const TOKEN_FALSO = "TOKEN_FALSO_DE_TESTE_nunca_deve_vazar_0123456789abcdefghij";
 const SENHA_FALSA = "SENHA_FALSA_DE_TESTE";
 
+// SEM `timeoutMs`: ausencia significa "use o padrao da rota". Preencher
+// 15000 aqui seria um override explicito e todas as rotas expirariam em
+// 15 s — inclusive as listagens que precisam de 60 s.
 const CONFIG = {
   baseUrl: "https://exemplo.invalido",
   login: "LOGIN_FALSO",
   password: SENHA_FALSA,
   companyId: 1645,
   workId: 34164,
-  timeoutMs: 15000,
 };
 
 /*
@@ -165,6 +167,43 @@ for (const [rota, chamar] of rotas) {
 }
 
 console.log("");
+console.log("-- 2b. Override explicito vence o padrao da rota --");
+
+// Quem informa `timeoutMs` esta dizendo algo que a tabela nao sabe: um
+// ambiente que precisa expirar em 50 ms, ou uma rede especifica. Por isso
+// o override vem PRIMEIRO na precedencia — e por isso `timeoutMs` e
+// opcional: ausencia significa "use o padrao da rota", nunca 15000.
+const clienteComOverride = new ConstrumanagerClient({ ...CONFIG, timeoutMs: 50 });
+
+const overrideAuth = await medirTimeout(() => clienteComOverride.authenticate());
+check("override vale em rota de autenticacao", overrideAuth.prazos.includes(50));
+check("override afasta o padrao de 15 s", !overrideAuth.prazos.includes(15000));
+check(
+  "mensagem cita o valor sobreposto",
+  /\/Login\/Auth timed out after 50 ms/.test(String(overrideAuth.erro?.message))
+);
+
+const overrideLista = await medirTimeout(() =>
+  clienteComOverride.listFiles(TOKEN_FALSO, CONFIG.companyId, CONFIG.workId)
+);
+check("override vale em rota de listagem", overrideLista.prazos.includes(50));
+check("override afasta o padrao de 60 s", !overrideLista.prazos.includes(60000));
+check(
+  "mensagem cita o valor sobreposto",
+  /\/Arquivo\/List timed out after 50 ms/.test(String(overrideLista.erro?.message))
+);
+check("override tambem nao repete a chamada", overrideLista.chamadasDeRede === 1);
+check("override tambem limpa o timer", overrideLista.limpos >= 1);
+
+// Rota fora da tabela e sem override: cai no minimo, nunca no maior.
+const clienteSemOverride = new ConstrumanagerClient(CONFIG);
+const desconhecida = await medirTimeout(() =>
+  clienteSemOverride.listMasterList(TOKEN_FALSO, CONFIG.companyId, CONFIG.workId, 11, 3, [900])
+);
+check("rota fora da tabela usa 15000 ms", desconhecida.prazos.includes(15000));
+check("rota fora da tabela NAO herda 60000 ms", !desconhecida.prazos.includes(60000));
+
+console.log("");
 console.log("-- 3. Abort, limpeza de timer e ausencia de retry --");
 
 const arquivo = await medirTimeout(() => client.listFiles(TOKEN_FALSO, CONFIG.companyId, CONFIG.workId));
@@ -237,7 +276,26 @@ check(
     readFileSync("apps/web/lib/integrations/construmanager/config.ts", "utf8")
   )
 );
-check("rota desconhecida cai no teto configurado", /\?\? this\.config\.timeoutMs/.test(FONTE));
+check(
+  "override explicito tem precedencia sobre o padrao da rota",
+  /this\.config\.timeoutMs \?\?/.test(FONTE) &&
+    FONTE.indexOf("this.config.timeoutMs ??") <
+      FONTE.indexOf("ConstrumanagerClient.TIMEOUTS_POR_ROTA[path] ??")
+);
+
+check(
+  "rota desconhecida cai no DEFAULT_TIMEOUT_MS",
+  FONTE.includes("DEFAULT_TIMEOUT_MS") &&
+    FONTE.indexOf("ConstrumanagerClient.TIMEOUTS_POR_ROTA[path] ??") <
+      FONTE.lastIndexOf("DEFAULT_TIMEOUT_MS")
+);
+
+check(
+  "a configuracao de producao NAO preenche timeoutMs",
+  !/timeoutMs: DEFAULT_TIMEOUT_MS/.test(
+    readFileSync("apps/web/lib/integrations/construmanager/config.ts", "utf8")
+  )
+);
 check("AbortController preservado", /new AbortController\(\)/.test(FONTE));
 check("clearTimeout em finally", /finally \{\n\s*\/\/[\s\S]{0,200}clearTimeout\(timeout\);|finally \{\n\s*clearTimeout\(timeout\);/.test(FONTE));
 // Comentario nao e codigo. O client EXPLICA que nao ha retry, e

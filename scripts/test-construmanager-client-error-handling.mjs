@@ -198,10 +198,10 @@ console.log("===========================================================");
     });
   await expectRejects(
     client.authenticate(),
-    // O prazo agora vem da tabela POR ROTA, nao de config.timeoutMs:
-    // /Login/Auth vale 15 s. O que este teste garante continua sendo o
-    // mesmo — que o abort vira uma mensagem explicita em vez de travar.
-    (msg) => msg.includes("timed out after 15000 ms"),
+    // config.timeoutMs EXPLICITO vence o padrao da rota: este teste
+    // configura 50 ms e e isso que precisa valer, inclusive em
+    // /Login/Auth. A tabela por rota so entra quando nao ha override.
+    (msg) => msg.includes("timed out after 50 ms"),
     "authenticate() trata timeout explicitamente (nunca trava indefinidamente)"
   );
   globalThis.fetch = originalFetch;
