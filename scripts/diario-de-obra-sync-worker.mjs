@@ -9,17 +9,26 @@
 //
 // FONTE INDEPENDENTE. Nada do Construmanager e' importado ou lido aqui.
 //
-// DOIS MODOS
+// TRES MODOS
 //
 //   BASELINE     importacao historica por janelas, com checkpoint para
-//                continuar noutra execucao. Nao gera alteracao.
+//                continuar noutra execucao. Nao gera alteracao nem
+//                achado.
 //   INCREMENTAL  janela movel de 14 dias; busca detalhe SO de RDO novo
 //                ou com `modified` avancado.
+//   RECONCILE    varredura CICLICA do historico. Existe porque os
+//                filtros da API sao pela DATA DO RELATORIO e nao por
+//                `modified`: uma edicao feita hoje num RDO de dois anos
+//                atras fica fora de toda janela incremental e so a
+//                reconciliacao a encontra. Sem schedule nesta etapa —
+//                roda sob comando.
 //
-// RECONCILE existe na politica e ainda nao tem execucao propria: e' a
-// varredura periodica do historico, necessaria porque os filtros da API
-// sao pela DATA DO RELATORIO e nao por `modified` — uma edicao feita
-// hoje num RDO antigo fica fora da janela incremental.
+// ACHADOS DETERMINISTICOS
+//
+// Fora do BASELINE, cada RDO novo ou realmente alterado passa pelas
+// regras de `finding-rules`. Sao comparacoes de numero e enum: nenhuma
+// chamada de IA, nenhum texto copiado. A evidencia gravada e' numero,
+// data e enum, e o banco recusa qualquer outra coisa.
 //
 // Uso:
 //   node scripts/diario-de-obra-sync-worker.mjs <projectId> <obraId> <modo>
@@ -39,8 +48,11 @@ const {
   maxDetalhesPara,
   janelaIncremental,
   janelaBaseline,
+  janelaReconcile,
   lerRetomadaBaseline,
+  lerRetomadaReconcile,
   montarCheckpointBaseline,
+  montarCheckpointReconcile,
   avaliarJanela,
   somarDias,
   BASELINE_DATA_MINIMA,
@@ -48,6 +60,10 @@ const {
 
 const { normalizarRelatorio, ehCandidato, apenasData } = await import(
   "../apps/web/lib/integrations/diario-de-obra/normalize-report.ts"
+);
+
+const { avaliarRegrasDoRelatorio, avaliarRegrasDaSerie, deveAvaliarAchados } = await import(
+  "../apps/web/lib/integrations/diario-de-obra/finding-rules.ts"
 );
 
 function log(mensagem) {
@@ -77,9 +93,9 @@ if (!decisao.enabled) {
 
 const MODO = resolveModo(MODO_BRUTO);
 
-if (MODO === null || MODO === "RECONCILE") {
-  log(`Modo invalido ou ainda nao executavel: ${MODO_BRUTO ?? "(ausente)"}.`);
-  log("Modos executaveis nesta etapa: baseline, incremental.");
+if (MODO === null) {
+  log(`Modo invalido: ${MODO_BRUTO ?? "(ausente)"}.`);
+  log("Modos executaveis: baseline, incremental, reconcile.");
   process.exit(1);
 }
 
@@ -143,10 +159,12 @@ try {
 
   // 2. Janela inicial.
   //
-  // BASELINE retoma do checkpoint da ultima execucao; sem checkpoint,
-  // parte do piso configurado. INCREMENTAL usa a janela movel.
+  // BASELINE e RECONCILE retomam do checkpoint da propria modalidade;
+  // INCREMENTAL usa a janela movel e nao tem retomada — ela e' sempre
+  // os ultimos 14 dias.
   let janelaInicial;
   let pisoBaseline = BASELINE_DATA_MINIMA;
+  let ciclosDeReconciliacao = 0;
 
   if (MODO === "INCREMENTAL") {
     janelaInicial = janelaIncremental(hoje);
@@ -161,35 +179,56 @@ try {
 
     if (projeto?.start_date) pisoBaseline = String(projeto.start_date).slice(0, 10);
 
+    // O checkpoint lido e' o do MESMO modo. Ler o do baseline numa
+    // reconciliacao (ou o contrario) faria uma varredura retomar da
+    // posicao da outra e pular janelas inteiras.
     const { data: ultimo } = await supabase
       .from("diario_de_obra_sync_runs")
       .select("checkpoint")
       .eq("project_id", PROJECT_ID)
-      .eq("mode", "BASELINE")
+      .eq("mode", MODO)
       .order("started_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    // DECRESCENTE: a primeira execucao parte de HOJE e caminha para
-    // tras. Comecar no piso historico gastaria dezenas de janelas vazias
-    // antes de alcancar os RDOs recentes.
-    //
-    // A retomada vem do estado EXPLICITO do checkpoint — e aceita os
-    // formatos antigos. Antes, um run que batia no teto nao registrava a
-    // janela em curso e o processo seguinte recomecava de hoje.
-    const retomada = lerRetomadaBaseline(ultimo?.checkpoint ?? null);
+    if (MODO === "BASELINE") {
+      // DECRESCENTE: a primeira execucao parte de HOJE e caminha para
+      // tras. Comecar no piso historico gastaria dezenas de janelas
+      // vazias antes de alcancar os RDOs recentes.
+      //
+      // A retomada vem do estado EXPLICITO do checkpoint — e aceita os
+      // formatos antigos. Antes, um run que batia no teto nao registrava
+      // a janela em curso e o processo seguinte recomecava de hoje.
+      const retomada = lerRetomadaBaseline(ultimo?.checkpoint ?? null);
 
-    if (retomada.baselineComplete) {
-      log("Baseline ja concluido segundo o checkpoint. Nenhuma chamada a API foi feita.");
-      process.exit(0);
-    }
+      if (retomada.baselineComplete) {
+        log("Baseline ja concluido segundo o checkpoint. Nenhuma chamada a API foi feita.");
+        process.exit(0);
+      }
 
-    janelaInicial = janelaBaseline(hoje, retomada.resumeWindowEnd, pisoBaseline);
+      janelaInicial = janelaBaseline(hoje, retomada.resumeWindowEnd, pisoBaseline);
 
-    if (janelaInicial === null) {
-      log(`Baseline concluido: o historico ja foi varrido ate o piso ${pisoBaseline}.`);
-      log("Nenhuma chamada a API foi feita.");
-      process.exit(0);
+      if (janelaInicial === null) {
+        log(`Baseline concluido: o historico ja foi varrido ate o piso ${pisoBaseline}.`);
+        log("Nenhuma chamada a API foi feita.");
+        process.exit(0);
+      }
+    } else {
+      // RECONCILE e' CICLICO: ciclo fechado nao encerra nada, apenas
+      // reinicia a varredura a partir de hoje. E' o oposto do baseline,
+      // que para quando chega ao piso.
+      const retomada = lerRetomadaReconcile(ultimo?.checkpoint ?? null);
+      ciclosDeReconciliacao = retomada.ciclosConcluidos;
+
+      janelaInicial = janelaReconcile(hoje, retomada.resumeWindowEnd, pisoBaseline);
+
+      if (janelaInicial === null) {
+        log(`Nada a reconciliar: o piso ${pisoBaseline} e' posterior a hoje.`);
+        log("Nenhuma chamada a API foi feita.");
+        process.exit(0);
+      }
+
+      log(`reconciliacao | ciclos concluidos ate aqui: ${ciclosDeReconciliacao}`);
     }
   }
 
@@ -291,6 +330,9 @@ try {
   let inalterados = 0;
   let erros = 0;
 
+  // RDOs que passarao pelas regras deterministicas.
+  const avaliados = [];
+
   for (const id of selecionados) {
     const detalhe = await api.getRelatorio(OBRA_ID, id);
     const normalizado = normalizarRelatorio(detalhe, resumos.get(id));
@@ -335,33 +377,170 @@ try {
     if (resultado === "CRIADO") criados += 1;
     else if (resultado === "ALTERADO") alterados += 1;
     else inalterados += 1;
+
+    // Guardado para a etapa de regras. `deveAvaliarAchados` decide, por
+    // MODO e RESULTADO, quem entra — e o BASELINE nunca entra.
+    if (deveAvaliarAchados(MODO, resultado)) {
+      avaliados.push({
+        providerReportId: normalizado.providerReportId,
+        normalizado,
+        resultado,
+      });
+    }
   }
 
-  // 7. Checkpoint — SO agora, depois de a persistencia ter sido
-  //    confirmada. Um checkpoint a frente dos dados faria a proxima
-  //    execucao pular RDOs que nunca foram gravados.
-  // 7. Checkpoint — SO agora, depois de a persistencia ter sido
+  // 7. Regras deterministicas.
+  //
+  //    Roda DEPOIS da persistencia: um achado precisa apontar para um
+  //    RDO que existe. Nenhuma chamada de IA acontece aqui — cada regra
+  //    e' comparacao de numero, contagem de item ou enum.
+  //
+  //    Falha numa regra nao derruba a ingestao: os RDOs ja estao
+  //    gravados e corretos, e o achado pode ser reavaliado na proxima
+  //    execucao. Ela e' contada e a execucao termina como PARCIAL.
+  let achadosRegistrados = 0;
+  let achadosResolvidos = 0;
+
+  if (avaliados.length > 0) {
+    const idsAvaliados = avaliados.map((a) => a.providerReportId);
+
+    // O uuid do RDO e o `baseline_imported` — que diz se aquele registro
+    // veio da carga historica e portanto se uma alteracao agora e'
+    // "mudou depois do baseline".
+    const { data: persistidos, error: erroPersistidos } = await supabase
+      .from("diario_de_obra_reports")
+      .select("id, provider_report_id, baseline_imported")
+      .eq("project_id", PROJECT_ID)
+      .in("provider_report_id", idsAvaliados);
+
+    if (erroPersistidos) throw new Error(erroPersistidos.message);
+
+    const porProviderId = new Map(
+      (persistidos ?? []).map((linha) => [linha.provider_report_id, linha])
+    );
+
+    // A SERIE INTEIRA, historico incluido: duplicidade e salto so
+    // existem entre RDOs. So os IDENTIFICADORES sao lidos — numero e
+    // data —, nunca conteudo.
+    const { data: serieBruta, error: erroSerie } = await supabase
+      .from("diario_de_obra_reports")
+      .select("provider_report_id, report_number, reference_date")
+      .eq("project_id", PROJECT_ID);
+
+    if (erroSerie) throw new Error(erroSerie.message);
+
+    const serie = (serieBruta ?? []).map((linha) => ({
+      providerReportId: linha.provider_report_id,
+      reportNumber: linha.report_number,
+      referenceDate: linha.reference_date,
+    }));
+
+    // Ancoradas nos RDOs desta execucao: a serie inteira e' olhada, mas
+    // o achado nasce so sobre o que chegou agora. E' isso que impede
+    // alerta retroativo sobre os 146 registros historicos.
+    const achadosDaSerie = avaliarRegrasDaSerie(serie, idsAvaliados);
+
+    for (const item of avaliados) {
+      const persistido = porProviderId.get(item.providerReportId);
+
+      if (!persistido) {
+        // Gravado e nao encontrado na releitura: nao ha report_id para
+        // ancorar o achado. Contado, nunca inventado.
+        erros += 1;
+        log("RDO gravado nao encontrado na releitura; achados dele nao foram avaliados.");
+        continue;
+      }
+
+      const achados = [
+        ...avaliarRegrasDoRelatorio(item.normalizado, {
+          baselineImported: persistido.baseline_imported === true,
+          conteudoAlterado: item.resultado === "ALTERADO",
+        }),
+        ...(achadosDaSerie.get(item.providerReportId) ?? []),
+      ];
+
+      for (const achado of achados) {
+        const { error } = await supabase.rpc("register_diario_de_obra_finding", {
+          p_project_id: PROJECT_ID,
+          p_report_id: persistido.id,
+          p_sync_run_id: syncRunId,
+          p_mode: MODO,
+          p_rule_code: achado.ruleCode,
+          p_severity: achado.severity,
+          p_evidence_key: achado.evidenceKey,
+          p_evidence_hash: achado.evidenceHash,
+          p_structured_evidence: achado.structuredEvidence,
+          p_requires_human_review: achado.requiresHumanReview,
+        });
+
+        if (error) {
+          erros += 1;
+          log(`falha ao registrar um achado: ${sanitizeDiarioError(error)}`);
+          continue;
+        }
+
+        achadosRegistrados += 1;
+      }
+
+      // O que a regra deixou de apontar foi corrigido na origem. A
+      // chave e' `RULE_CODE|evidence_key` porque varios achados do mesmo
+      // RDO compartilham a evidence_key.
+      const { data: resolvidos, error: erroResolucao } = await supabase.rpc(
+        "resolve_diario_de_obra_findings",
+        {
+          p_project_id: PROJECT_ID,
+          p_report_id: persistido.id,
+          p_achados_ativos: achados.map((a) => `${a.ruleCode}|${a.evidenceKey}`),
+        }
+      );
+
+      if (erroResolucao) {
+        erros += 1;
+        log(`falha ao resolver achados de um RDO: ${sanitizeDiarioError(erroResolucao)}`);
+        continue;
+      }
+
+      achadosResolvidos += Number(resolvidos ?? 0);
+    }
+  }
+
+  // 8. Checkpoint — SO agora, depois de a persistencia ter sido
   //    confirmada. Um checkpoint a frente dos dados faria a proxima
   //    execucao pular RDOs que nunca foram gravados.
   const candidatesRemaining = Math.max(0, candidatos.length - selecionados.length);
 
-  const checkpoint =
-    MODO === "BASELINE"
-      ? montarCheckpointBaseline({
-          janela: janelaInicial,
-          candidatesRemaining,
-          coverageGuaranteed: falhaDeCobertura === null,
-          piso: pisoBaseline,
-          totalNaOrigem,
-        })
-      : {
-          modo: MODO,
-          currentWindowStart: janelaInicial.inicio,
-          currentWindowEnd: janelaInicial.fim,
-          candidatesRemaining,
-          coverageGuaranteed: falhaDeCobertura === null,
-          totalNaOrigem,
-        };
+  let checkpoint;
+
+  if (MODO === "BASELINE") {
+    checkpoint = montarCheckpointBaseline({
+      janela: janelaInicial,
+      candidatesRemaining,
+      coverageGuaranteed: falhaDeCobertura === null,
+      piso: pisoBaseline,
+      totalNaOrigem,
+    });
+  } else if (MODO === "RECONCILE") {
+    checkpoint = montarCheckpointReconcile({
+      janela: janelaInicial,
+      candidatesRemaining,
+      coverageGuaranteed: falhaDeCobertura === null,
+      piso: pisoBaseline,
+      totalNaOrigem,
+      ciclosConcluidos: ciclosDeReconciliacao,
+    });
+  } else {
+    // INCREMENTAL nao tem retomada: a janela e' sempre os ultimos 14
+    // dias. O checkpoint aqui e' registro do que foi coberto, nao
+    // instrucao para a proxima execucao.
+    checkpoint = {
+      modo: MODO,
+      currentWindowStart: janelaInicial.inicio,
+      currentWindowEnd: janelaInicial.fim,
+      candidatesRemaining,
+      coverageGuaranteed: falhaDeCobertura === null,
+      totalNaOrigem,
+    };
+  }
 
   const { error: erroCheckpoint } = await supabase.rpc("advance_diario_de_obra_checkpoint", {
     p_sync_run_id: syncRunId,
@@ -386,8 +565,13 @@ try {
 
   log(`criados ${criados} | alterados ${alterados} | inalterados ${inalterados} | erros ${erros}`);
   log(
+    `achados: ${achadosRegistrados} registrado(s) | ${achadosResolvidos} resolvido(s) | ` +
+      `${avaliados.length} RDO(s) avaliado(s)`
+  );
+  log(
     `checkpoint: retomar em ${checkpoint.resumeWindowEnd ?? "(fim)"} | ` +
-      `restantes ${candidatesRemaining} | completo ${checkpoint.baselineComplete ?? false}`
+      `restantes ${candidatesRemaining} | ` +
+      `completo ${checkpoint.baselineComplete ?? checkpoint.cicloCompleto ?? false}`
   );
   log(`chamadas a API: ${api.totalDeChamadas} | nenhuma midia transferida | nenhum token de IA`);
 

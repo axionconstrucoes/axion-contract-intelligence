@@ -40,6 +40,17 @@ export const MODOS_VALIDOS: readonly DiarioSyncMode[] = Object.freeze([
 export const MAX_DETALHES_BASELINE = 20;
 export const MAX_DETALHES_INCREMENTAL = 10;
 
+/**
+ * Teto do RECONCILE.
+ *
+ * Igual ao incremental, e nao ao baseline, de proposito: a reconciliacao
+ * roda sobre historico ja importado, onde o esperado e' encontrar POUCO
+ * ou NADA. Um teto alto ali nao aceleraria nada e so ampliaria o
+ * estrago de um engano — a varredura avanca por janelas, e cada execucao
+ * retoma onde a anterior parou.
+ */
+export const MAX_DETALHES_RECONCILE = 10;
+
 /** Janela movel do incremental, em dias de DATA DO RELATORIO. */
 export const JANELA_INCREMENTAL_DIAS = 14;
 
@@ -51,6 +62,15 @@ export const BASELINE_DATA_MINIMA = "2015-01-01";
 
 /** Tamanho de cada janela do baseline, em dias. */
 export const BASELINE_JANELA_DIAS = 90;
+
+/**
+ * Tamanho de cada janela do RECONCILE, em dias.
+ *
+ * Mesmo tamanho do baseline porque a limitacao e' a mesma: a API filtra
+ * pela DATA DO RELATORIO e devolve no maximo o lote pedido. Janela maior
+ * viria truncada e exigiria subdivisao de qualquer forma.
+ */
+export const RECONCILE_JANELA_DIAS = 90;
 
 export interface DiarioSyncEnv {
   DIARIO_DE_OBRA_SYNC_ENABLED?: string;
@@ -85,7 +105,9 @@ export function resolveModo(bruto: string | undefined): DiarioSyncMode | null {
 }
 
 export function maxDetalhesPara(modo: DiarioSyncMode): number {
-  return modo === "BASELINE" ? MAX_DETALHES_BASELINE : MAX_DETALHES_INCREMENTAL;
+  if (modo === "BASELINE") return MAX_DETALHES_BASELINE;
+  if (modo === "RECONCILE") return MAX_DETALHES_RECONCILE;
+  return MAX_DETALHES_INCREMENTAL;
 }
 
 export interface Janela {
@@ -273,6 +295,165 @@ export function montarCheckpointBaseline(entrada: {
     totalNaOrigem,
   };
 }
+
+/*
+ * RECONCILIACAO
+ *
+ * POR QUE ELA PRECISA EXISTIR
+ *
+ * A API filtra pela DATA DO RELATORIO, nao por `modified`. Uma edicao
+ * feita hoje num RDO de dois anos atras nao aparece em NENHUMA janela
+ * incremental: o RDO continua datado de dois anos atras. Sem
+ * reconciliacao, essa edicao seria invisivel para sempre — e edicao
+ * tardia de diario e' exatamente o que interessa auditar.
+ *
+ * COMO ELA DIFERE DO BASELINE
+ *
+ * O baseline TERMINA: chegou ao piso, acabou. A reconciliacao e'
+ * CICLICA: chegou ao piso, o ciclo fecha e o proximo comeca de hoje.
+ * Por isso `cicloCompleto` nao para nada — ele so reinicia a contagem.
+ *
+ * Fora isso o mecanismo e' o mesmo, e deliberadamente: janela
+ * decrescente, `_id` e `modified` da listagem escolhem candidatos, o
+ * detalhe so e' buscado para candidato, o hash confirma a mudanca, o
+ * checkpoint permite retomar noutro processo e o upsert garante
+ * idempotencia. Zero midia, zero IA — nao ha caminho para nenhuma das
+ * duas em nenhum modo.
+ */
+
+/** Janela decrescente generica: e' a mesma matematica do baseline. */
+function janelaDecrescente(
+  hojeIso: string,
+  proximaJanelaFim: string | null | undefined,
+  pisoIso: string,
+  tamanhoDias: number
+): Janela | null {
+  const fim = proximaJanelaFim ?? hojeIso;
+
+  if (fim < pisoIso) return null;
+
+  const inicioBruto = somarDias(fim, -(tamanhoDias - 1));
+
+  return { inicio: inicioBruto < pisoIso ? pisoIso : inicioBruto, fim };
+}
+
+/**
+ * Janela do RECONCILE — decrescente, como a do baseline.
+ *
+ * `proximaJanelaFim` nulo significa "comece de hoje": ou e' a primeira
+ * reconciliacao, ou a anterior fechou o ciclo.
+ */
+export function janelaReconcile(
+  hojeIso: string,
+  proximaJanelaFim: string | null | undefined,
+  pisoIso: string
+): Janela | null {
+  return janelaDecrescente(hojeIso, proximaJanelaFim, pisoIso, RECONCILE_JANELA_DIAS);
+}
+
+export interface CheckpointReconcile {
+  modo: "RECONCILE";
+  /** Janela que este run processou. */
+  currentWindowStart: string | null;
+  currentWindowEnd: string | null;
+  /** Por onde o PROXIMO processo retoma. `null` = recomeca de hoje. */
+  resumeWindowEnd: string | null;
+  candidatesRemaining: number;
+  coverageGuaranteed: boolean;
+  /** O ciclo alcancou o piso nesta execucao. */
+  cicloCompleto: boolean;
+  /** Quantas varreduras completas do historico ja aconteceram. */
+  ciclosConcluidos: number;
+  piso: string;
+  totalNaOrigem: number;
+}
+
+export interface RetomadaReconcile {
+  resumeWindowEnd: string | null;
+  ciclosConcluidos: number;
+}
+
+/**
+ * Le a retomada do RECONCILE.
+ *
+ * `cicloCompleto` nao encerra nada: ele zera a retomada para que a
+ * proxima execucao recomece de hoje. E' a diferenca essencial em
+ * relacao a `lerRetomadaBaseline`, onde `baselineComplete` significa
+ * "nao ha mais o que fazer".
+ */
+export function lerRetomadaReconcile(
+  checkpoint: Record<string, unknown> | null | undefined
+): RetomadaReconcile {
+  const ciclos =
+    typeof checkpoint?.ciclosConcluidos === "number" && checkpoint.ciclosConcluidos >= 0
+      ? checkpoint.ciclosConcluidos
+      : 0;
+
+  if (!checkpoint || checkpoint.cicloCompleto === true) {
+    return { resumeWindowEnd: null, ciclosConcluidos: ciclos };
+  }
+
+  const valor = checkpoint.resumeWindowEnd;
+
+  if (typeof valor === "string" && /^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+    return { resumeWindowEnd: valor, ciclosConcluidos: ciclos };
+  }
+
+  return { resumeWindowEnd: null, ciclosConcluidos: ciclos };
+}
+
+/**
+ * Monta o checkpoint do RECONCILE a partir do que ESTE run observou.
+ *
+ *   1. sobraram candidatos  -> retoma a MESMA janela;
+ *   2. janela esgotada      -> retoma no dia anterior ao inicio dela;
+ *   3. abaixo do piso       -> ciclo completo; a proxima recomeca de hoje.
+ *
+ * Cobertura incerta tambem mantem a janela: uma janela que nao pode ser
+ * garantida nao pode ser dada por varrida.
+ */
+export function montarCheckpointReconcile(entrada: {
+  janela: Janela;
+  candidatesRemaining: number;
+  coverageGuaranteed: boolean;
+  piso: string;
+  totalNaOrigem: number;
+  ciclosConcluidos: number;
+}): CheckpointReconcile {
+  const {
+    janela,
+    candidatesRemaining,
+    coverageGuaranteed,
+    piso,
+    totalNaOrigem,
+    ciclosConcluidos,
+  } = entrada;
+
+  const esgotada = candidatesRemaining === 0 && coverageGuaranteed;
+
+  let resumeWindowEnd: string | null = esgotada ? somarDias(janela.inicio, -1) : janela.fim;
+
+  let cicloCompleto = false;
+
+  if (resumeWindowEnd !== null && resumeWindowEnd < piso) {
+    cicloCompleto = true;
+    resumeWindowEnd = null;
+  }
+
+  return {
+    modo: "RECONCILE",
+    currentWindowStart: janela.inicio,
+    currentWindowEnd: janela.fim,
+    resumeWindowEnd,
+    candidatesRemaining,
+    coverageGuaranteed,
+    cicloCompleto,
+    ciclosConcluidos: ciclosConcluidos + (cicloCompleto ? 1 : 0),
+    piso,
+    totalNaOrigem,
+  };
+}
+
 
 /**
  * Subdivisao de janela cheia.

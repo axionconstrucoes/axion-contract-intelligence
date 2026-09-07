@@ -17,6 +17,7 @@ import { estimateEligibleEmailCount } from "@/lib/email/inbound/ingestion-contro
 import { getEmailAttachmentRegistryForProject } from "@/lib/email/attachments/registry/get-attachment-registry";
 import { getConstrumanagerMetadataOverview } from "@/lib/integrations/construmanager/get-metadata-overview";
 import { getConstrumanagerVersionTransitions } from "@/lib/integrations/construmanager/get-version-transitions";
+import { getDiarioDeObraMonitoringOverview } from "@/lib/integrations/diario-de-obra/get-monitoring-overview";
 
 export const metadata: Metadata = { title: "Integrações" };
 
@@ -30,7 +31,7 @@ export default async function IntegracoesPage({
   const supabase = await createSupabaseServerClient();
   const sources = getSourceDefinitions();
 
-  const [configs, permission, project, projectStartRow, accounts, ingestionConfig, latestRun, attachmentRows, construmanagerMetadata, construmanagerTransitions] = await Promise.all([
+  const [configs, permission, project, projectStartRow, accounts, ingestionConfig, latestRun, attachmentRows, construmanagerMetadata, construmanagerTransitions, diarioDeObraOverview] = await Promise.all([
     getIntegrationConfigs(projectId),
     getCurrentProjectPermission(projectId),
     getProject(projectId),
@@ -41,6 +42,9 @@ export default async function IntegracoesPage({
     getEmailAttachmentRegistryForProject(projectId),
     getConstrumanagerMetadataOverview(supabase, projectId),
     getConstrumanagerVersionTransitions(supabase, projectId),
+    // Somente leitura de agregados, pelo client de sessao: a RLS de
+    // diario_de_obra_* ja restringe a membros do projeto.
+    getDiarioDeObraMonitoringOverview(supabase, projectId),
   ]);
 
   const canManage = permission === "ADMINISTRADOR";
@@ -72,6 +76,7 @@ export default async function IntegracoesPage({
               canManage={canManage}
               construmanagerMetadata={source.type === "CONSTRUMANAGER" ? construmanagerMetadata : null}
               construmanagerTransitions={source.type === "CONSTRUMANAGER" ? construmanagerTransitions : null}
+              diarioDeObraOverview={source.type === "DIARIO_OBRA" ? diarioDeObraOverview : null}
             />
           );
         })}
