@@ -9,6 +9,10 @@
 #
 # Este workflow observa UM unico workflow e transforma falha em issue.
 #
+# A issue NUNCA e fechada automaticamente: um run pode concluir com
+# sucesso apenas porque a sincronizacao esta desligada, e fechar ali
+# afirmaria uma recuperacao que nao houve.
+#
 # ISOLAMENTO DELIBERADO
 #
 #   - NAO faz checkout: nenhuma linha de codigo do repositorio e
@@ -113,27 +117,26 @@ jobs:
               `- SHA: \`${run.head_sha}\``,
             ].join("\n");
 
+            // SUCESSO NAO FECHA NADA — e nem comenta.
+            //
+            // Um run pode terminar `success` porque a sincronizacao esta
+            // DESLIGADA: o worker encerra em fail-closed com exit 0 sem
+            // tocar em nada. Fechar a issue nesse caso afirmaria uma
+            // recuperacao que nunca houve, e o aviso sumiria da vista
+            // justamente enquanto o problema continua.
+            //
+            // Distinguir "funcionou" de "nao rodou" exigiria o watchdog
+            // inspecionar steps e variables do run observado — mais
+            // permissao e mais superficie para acertar algo que uma pessoa
+            // confirma em segundos. A issue fica aberta ate alguem auditar
+            // e fechar a mao.
             if (run.conclusion === "success") {
-              if (!existente) {
-                core.info("Sucesso e nenhuma issue aberta: nada a fazer.");
-                return;
-              }
-
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: existente.number,
-                body: `Monitoramento recuperado.\n\n${fatos}`,
-              });
-
-              await github.rest.issues.update({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: existente.number,
-                state: "closed",
-              });
-
-              core.info(`Issue #${existente.number} fechada.`);
+              core.info(
+                existente
+                  ? `Sucesso registrado. Issue #${existente.number} permanece ABERTA: ` +
+                      "recuperacao e confirmada por auditoria humana."
+                  : "Sucesso e nenhuma issue aberta: nada a fazer."
+              );
               return;
             }
 
@@ -143,8 +146,9 @@ jobs:
               `O detalhe tecnico fica no log do run, acessivel pelo link acima. ` +
               `Ele NAO e copiado para ca de proposito: uma issue e mais visivel ` +
               `que um log, e log costuma carregar dado que nao deve circular.\n\n` +
-              `Esta issue e atualizada a cada nova falha e fechada sozinha quando ` +
-              `uma execucao voltar a concluir com sucesso.`;
+              `Esta issue e atualizada a cada nova falha. Ela NAO se fecha sozinha: ` +
+              `um run pode concluir com sucesso apenas porque a sincronizacao ` +
+              `esta desligada, e isso nao e recuperacao. Feche a mao apos auditar.`;
 
             if (existente) {
               await github.rest.issues.createComment({

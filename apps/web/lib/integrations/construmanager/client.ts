@@ -1,4 +1,4 @@
-﻿import { getConstrumanagerConfig } from "./config";
+﻿import { DEFAULT_TIMEOUT_MS, getConstrumanagerConfig } from "./config";
 import type {
   ConstrumanagerAuthResponse,
   ConstrumanagerConfig,
@@ -16,18 +16,64 @@ export class ConstrumanagerClient {
     this.config = config;
   }
 
+  /*
+   * Timeout POR CATEGORIA de rota.
+   *
+   * Autenticar e trocar token sao operacoes curtas: se demoram, algo
+   * esta errado e esperar mais so atrasa o diagnostico. Ja as listagens
+   * varrem o acervo da obra — 192 documentos e 25 pastas — e a latencia
+   * do fornecedor varia. Um teto unico de 15 s derrubou a confirmacao do
+   * run 34082823463 em /Arquivo/List, numa chamada que minutos antes
+   * respondera dentro de um ciclo completo de 11 s.
+   *
+   * Alargar TUDO para 60 s seria o caminho preguicoso: tornaria uma
+   * falha de autenticacao quatro vezes mais lenta de perceber sem ganho
+   * nenhum. Por isso o teto e por rota, nao global.
+   */
+  private static readonly TIMEOUTS_POR_ROTA: Readonly<Record<string, number>> =
+    Object.freeze({
+      "/Login/Auth": 15_000,
+      "/Login/Token/Get": 15_000,
+      "/Obra/List": 60_000,
+      "/Pasta/List": 60_000,
+      "/Arquivo/List": 60_000,
+    });
+
+  /*
+   * Precedencia, do mais forte ao mais fraco:
+   *
+   *   1. config.timeoutMs EXPLICITO  — vale para todas as rotas
+   *   2. padrao da rota              — 15 s auth, 60 s listagem
+   *   3. DEFAULT_TIMEOUT_MS          — rota desconhecida
+   *
+   * O override vem primeiro porque quem o informa esta dizendo algo
+   * que a tabela nao sabe: um ambiente de teste que precisa expirar em
+   * 50 ms, ou uma rede especifica. Por isso `timeoutMs` e OPCIONAL —
+   * ausencia significa "use o padrao da rota", e nao 15000.
+   */
+  private timeoutParaRota(path: string): number {
+    // Rota desconhecida cai no minimo, nunca no maior: um endpoint novo
+    // nao deve herdar folga por acidente.
+    return (
+      this.config.timeoutMs ??
+      ConstrumanagerClient.TIMEOUTS_POR_ROTA[path] ??
+      DEFAULT_TIMEOUT_MS
+    );
+  }
+
   private async requestJson<T>(
     path: string,
     init: RequestInit
   ): Promise<T> {
     const controller = new AbortController();
+    const timeoutMs = this.timeoutParaRota(path);
 
-    const timeout = setTimeout(
-      () => controller.abort(),
-      this.config.timeoutMs
-    );
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
+      // Uma tentativa por chamada. Sem retry: repetir mascararia
+      // justamente a instabilidade que precisamos medir, e dobraria a
+      // carga sobre a API de terceiro quando ela ja esta lenta.
       const response = await fetch(`${this.config.baseUrl}${path}`, {
         ...init,
         signal: controller.signal,
@@ -46,13 +92,16 @@ export class ConstrumanagerClient {
         error instanceof Error &&
         error.name === "AbortError"
       ) {
+        // Rota e limite. Nunca cabecalho, corpo ou credencial.
         throw new Error(
-          `Construmanager request ${path} timed out after ${this.config.timeoutMs} ms.`
+          `Construmanager request ${path} timed out after ${timeoutMs} ms.`
         );
       }
 
       throw error;
     } finally {
+      // Sempre, inclusive no caminho de sucesso: um timer pendente
+      // manteria o processo vivo depois de a resposta ter chegado.
       clearTimeout(timeout);
     }
   }

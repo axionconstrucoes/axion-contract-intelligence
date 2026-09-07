@@ -48,7 +48,16 @@ export interface ConstrumanagerConfig {
   baseUrl: string;
   login: string;
   password: string;
-  timeoutMs: number;
+  /**
+   * Override GLOBAL e OPCIONAL do timeout, em milissegundos.
+   *
+   * Ausente e' diferente de 15000: ausente deixa cada rota usar o
+   * proprio padrao (autenticacao curta, listagem longa); um valor
+   * explicito vale para TODAS as rotas e vence o padrao. Se o campo
+   * fosse obrigatorio, a configuracao de producao preencheria 15000 e
+   * a selecao por rota nunca aconteceria.
+   */
+  timeoutMs?: number;
 }
 
 // ============================================================

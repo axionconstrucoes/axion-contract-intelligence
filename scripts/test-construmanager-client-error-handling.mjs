@@ -198,6 +198,9 @@ console.log("===========================================================");
     });
   await expectRejects(
     client.authenticate(),
+    // config.timeoutMs EXPLICITO vence o padrao da rota: este teste
+    // configura 50 ms e e isso que precisa valer, inclusive em
+    // /Login/Auth. A tabela por rota so entra quando nao ha override.
     (msg) => msg.includes("timed out after 50 ms"),
     "authenticate() trata timeout explicitamente (nunca trava indefinidamente)"
   );
