@@ -46,6 +46,10 @@ on:
         options:
           - baseline
           - incremental
+          # RECONCILE varre o historico ciclicamente. Continua SEM
+          # schedule: so roda por disparo manual, e so com
+          # DIARIO_DE_OBRA_SYNC_ENABLED=true.
+          - reconcile
 
 # Uma rodada por vez. Duas execucoes concorrentes sobre a mesma obra
 # disputariam o mesmo checkpoint.
