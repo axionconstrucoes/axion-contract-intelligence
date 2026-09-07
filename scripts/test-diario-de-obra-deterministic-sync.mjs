@@ -32,6 +32,8 @@ const {
   maxDetalhesPara,
   janelaIncremental,
   janelaBaseline,
+  lerRetomadaBaseline,
+  montarCheckpointBaseline,
   proximaJanelaBaseline,
   baselineConcluido,
   BASELINE_JANELA_DIAS,
@@ -294,10 +296,19 @@ check(
   "o checkpoint avanca DEPOIS do upsert",
   WORKER.indexOf("upsert_diario_de_obra_report") < WORKER.indexOf("advance_diario_de_obra_checkpoint")
 );
-check("o baseline retoma do checkpoint", /proximaJanelaFim/.test(WORKER));
+// A regra de retomada saiu do worker e virou estado explicito na
+// politica. Testar o COMPORTAMENTO vale mais que casar o texto de
+// onde ele mora — foi a falta disso que deixou o defeito passar.
+check("o baseline retoma pelo estado explicito", /lerRetomadaBaseline/.test(WORKER));
 check(
   "cobertura incompleta nao avanca a janela do baseline",
-  /falhaDeCobertura === null &&[\s\S]{0,120}candidatos\.length <= selecionados\.length/.test(WORKER)
+  montarCheckpointBaseline({
+    janela: { inicio: "2026-06-10", fim: "2026-09-07" },
+    candidatesRemaining: 0,
+    coverageGuaranteed: false,
+    piso: "2026-01-01",
+    totalNaOrigem: 146,
+  }).resumeWindowEnd === "2026-09-07"
 );
 
 console.log("");
@@ -336,7 +347,7 @@ check("janela de um dia nao se subdivide", subdividirJanela({ inicio: "2026-01-0
 
 check(
   "o worker nunca trata lote cheio como cobertura completa",
-  /falhaDeCobertura/.test(WORKER) && /coberturaGarantida/.test(WORKER)
+  /falhaDeCobertura/.test(WORKER) && /coverageGuaranteed: falhaDeCobertura === null/.test(WORKER)
 );
 check("cobertura incompleta encerra como PARCIAL", /parcial \? "PARCIAL" : "SUCESSO"/.test(WORKER));
 
@@ -619,13 +630,22 @@ const WORKER_EXEC = WORKER.replace(/^\s*\/\/.*$/gm, "");
 check("o worker usa janelaBaseline", /janelaBaseline\(/.test(WORKER_EXEC));
 check("o worker usa o inicio do projeto como piso", /projects[\s\S]{0,200}start_date/.test(WORKER_EXEC));
 check("o worker encerra quando o historico acaba", /janelaInicial === null/.test(WORKER_EXEC));
+const CP = (restantes, cobertura) =>
+  montarCheckpointBaseline({
+    janela: { inicio: "2026-03-12", fim: "2026-06-09" },
+    candidatesRemaining: restantes,
+    coverageGuaranteed: cobertura,
+    piso: "2026-01-01",
+    totalNaOrigem: 146,
+  });
+
+check("enquanto restam candidatos, a janela NAO avanca", CP(49, true).resumeWindowEnd === "2026-06-09");
+check("cobertura nao garantida NAO avanca a janela", CP(0, false).resumeWindowEnd === "2026-06-09");
+check("janela esgotada e coberta AVANCA", CP(0, true).resumeWindowEnd === "2026-03-11");
 check(
-  "enquanto restam candidatos, a janela NAO avanca",
-  /candidatos\.length <= selecionados\.length[\s\S]{0,120}proximaJanelaFim/.test(WORKER_EXEC)
-);
-check(
-  "cobertura nao garantida NAO avanca a janela",
-  /falhaDeCobertura === null &&[\s\S]{0,120}proximaJanelaFim/.test(WORKER_EXEC)
+  "o defeito do run 34142741140 nao pode voltar",
+  lerRetomadaBaseline({ janelaFim: "2026-09-07", proximaJanelaFim: "2026-06-09" }).resumeWindowEnd ===
+    "2026-06-09"
 );
 
 console.log("");
