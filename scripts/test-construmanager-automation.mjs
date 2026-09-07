@@ -778,13 +778,17 @@ console.log("");
 console.log("-- 16. workflow nasce desativado --");
 
 check(
-  "nao existe gatilho schedule ativo",
-  !/^\s{2}schedule:/m.test(workflow)
+  "existe gatilho schedule ativo",
+  /^\s{2}schedule:/m.test(workflow)
 );
 
+// Quatro verificacoes por dia, fora do minuto cheio. A obra publica
+// revisao em ritmo de dias: de hora em hora so multiplicaria chamadas
+// a API de terceiro para reencontrar as mesmas 192 linhas.
 check(
-  "o schedule esta comentado e sinalizado",
-  /#\s*schedule:/.test(workflow) && /DESATIVADO/.test(workflow)
+  'o cron e exatamente "17 */6 * * *"',
+  /- cron: "17 \*\/6 \* \* \*"/.test(workflow) &&
+    (workflow.match(/- cron:/g) ?? []).length === 1
 );
 
 check(

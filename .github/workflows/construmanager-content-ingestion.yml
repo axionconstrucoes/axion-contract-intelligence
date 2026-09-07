@@ -34,8 +34,11 @@
 name: Construmanager Metadata Monitoring
 
 on:
-  # schedule:
-  #   - cron: "17 * * * *"   # DESATIVADO — ver cabecalho
+  # Quatro verificacoes por dia, fora do minuto cheio. A obra publica
+  # revisao em ritmo de dias: de hora em hora so multiplicaria chamadas
+  # a API de terceiro para reencontrar as mesmas 192 linhas.
+  schedule:
+    - cron: "17 */6 * * *"
   workflow_dispatch:
     inputs:
       project_id:
@@ -73,7 +76,13 @@ jobs:
       # Processo A — sincronizacao de metadados. E o step que descobre
       # uma revisao nova na API. Roda PRIMEIRO e com interruptor proprio.
       - name: Sync Construmanager metadata
-        run: node scripts/construmanager-metadata-worker.mjs "${{ inputs.project_id }}"
+        # `inputs` so existe em workflow_dispatch. Numa execucao agendada
+        # ele vem VAZIO, e um argumento "" nao e ausencia: o worker
+        # receberia string vazia como project id. O fallback aqui e a
+        # guarda no worker cobrem os dois gatilhos.
+        run: >-
+          node scripts/construmanager-metadata-worker.mjs
+          "${{ inputs.project_id || '00000000-0000-4000-8000-000000000001' }}"
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
@@ -95,16 +104,19 @@ jobs:
       # Objeto/Download nem criar vinculo pendente, independentemente do
       # valor de qualquer variavel.
 
-      # Processo B — monitoramento de versao vigente. Roda como STEP
-      # SEPARADO e com interruptor proprio: se os downloads estiverem
-      # desligados, o step acima encerra sem fazer nada e ESTE ainda
-      # executa. Nao recebe CONSTRUMANAGER_AUTO_DOWNLOAD_ENABLED — nao
-      # existe caminho para um habilitar o outro.
-      - name: Monitor Construmanager version vigency
-        if: always()
-        run: node scripts/construmanager-version-monitor.mjs "${{ inputs.project_id }}"
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-          CONSTRUMANAGER_VERSION_MONITORING_ENABLED: ${{ vars.CONSTRUMANAGER_VERSION_MONITORING_ENABLED }}
-          CONSTRUMANAGER_AUTO_KILL_SWITCH: ${{ vars.CONSTRUMANAGER_AUTO_KILL_SWITCH }}
+      # Processo B — deteccao de vigencia: NAO ha step separado.
+      #
+      # O worker acima ja chama detect_construmanager_version_transitions
+      # ancorado no sync_run_id que ACABOU de criar, e so depois de a
+      # sincronizacao ter gravado. Um step independente repetiria a
+      # mesma comparacao sobre o mesmo estado — foi o que se viu no run
+      # 34080870149, onde ambos devolveram 0 | 0 | 192.
+      #
+      # A duplicata tambem nao servia de rede de seguranca: quando a
+      # sincronizacao falha nao existe observacao nova para comparar, e
+      # o step so refazia uma varredura de 192 documentos sem efeito.
+      #
+      # CONSTRUMANAGER_VERSION_MONITORING_ENABLED continua valendo: ele
+      # governa a deteccao DENTRO do worker. O interruptor nao mudou de
+      # significado, mudou de lugar. E scripts/construmanager-version-
+      # monitor.mjs segue no repositorio, sem chamador.

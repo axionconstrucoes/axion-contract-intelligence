@@ -869,13 +869,26 @@ console.log("-- 16. worker de conteudo x monitor de versao --");
   );
 
   check(
-    "o workflow roda o monitor como step SEPARADO",
-    /construmanager-version-monitor\.mjs/.test(workflow)
+    // A deteccao deixou de ser um step separado: ela roda DENTRO do
+    // worker de metadados, ancorada no sync_run_id que ele acabou de
+    // criar. Um step independente repetia a mesma comparacao sobre o
+    // mesmo estado — no run 34080870149 ambos devolveram 0 | 0 | 192.
+    "a deteccao roda dentro do worker de metadados",
+    (() => {
+      const metadataWorker = readFileSync(
+        "scripts/construmanager-metadata-worker.mjs",
+        "utf8"
+      );
+      return (
+        /detect_construmanager_version_transitions/.test(metadataWorker) &&
+        /p_sync_run_id: syncRunId/.test(metadataWorker)
+      );
+    })()
   );
 
   check(
-    "o step do monitor roda mesmo se o de download nao fizer nada",
-    /Monitor Construmanager version vigency[\s\S]{0,200}if: always\(\)/.test(workflow)
+    "o workflow nao tem mais step separado de vigencia",
+    !/construmanager-version-monitor\.mjs/.test(workflow)
   );
 
   check(
