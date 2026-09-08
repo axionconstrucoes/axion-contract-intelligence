@@ -180,7 +180,9 @@ check("PageHeader usa a MESMA cor institucional do logo/ícone (red-900 ~ #7f1d1
 const ALL_15_PAGES = [
   "apps/web/app/[projectId]/acoes/page.tsx",
   "apps/web/app/[projectId]/action-requests/page.tsx",
-  "apps/web/app/[projectId]/adicionais/page.tsx",
+  // "adicionais/page.tsx" removido desta lista: virou redirecionamento
+  // puro para Documentos (aba "Serviços Adicionais" descontinuada) —
+  // não renderiza mais PageHeader nem título próprio.
   "apps/web/app/[projectId]/auditoria/page.tsx",
   "apps/web/app/[projectId]/dashboard/page.tsx",
   "apps/web/app/[projectId]/documentos/page.tsx",

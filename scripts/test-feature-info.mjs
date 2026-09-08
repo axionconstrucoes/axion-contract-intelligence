@@ -77,7 +77,10 @@ const EXPECTED_SIDEBAR_LABELS = [
   "Event Ledger",
   "Solicitações",
   "Ações e Escalonamentos",
-  "Propostas de Adicionais", // "Adicionais" no requisito — mesmo item, rótulo real já existente na sidebar
+  // "Propostas de Adicionais" removida da sidebar: aba "Serviços
+  // Adicionais" descontinuada (dependia da importação automática do
+  // Drive de Orçamentos, integração cancelada) — serviço adicional
+  // aprovado agora entra por upload manual do ADM em Documentos.
   "Análise Contratual",
   "Análise de Cláusulas",
   "Documentos",
@@ -157,10 +160,12 @@ check("Adicionais tem ajuda: os 5 campos/ações internas têm entrada no regist
   for (const id of ids) assert(ACC_FEATURE_HELP[id], `${id} ausente do registry`);
 });
 
-check("Adicionais tem ajuda: page.tsx e os componentes internos realmente renderizam FeatureInfo com os helpIds certos", () => {
-  const pageSource = readSource("apps/web/app/[projectId]/adicionais/page.tsx");
-  assert(pageSource.includes('helpId="adicionais-nova-proposta"'));
-
+check("Adicionais tem ajuda: componentes internos (preservados) realmente renderizam FeatureInfo com os helpIds certos", () => {
+  // page.tsx e o helpId "adicionais-nova-proposta" (só usado na aba "+
+  // Nova proposta", removida) ficaram de fora deste check de propósito:
+  // a aba "Serviços Adicionais" foi descontinuada da interface — os
+  // componentes internos abaixo continuam existindo (lib/components
+  // preservados, só o ponto de entrada foi removido).
   const contractedSource = readSource("apps/web/components/additionals/additional-proposal-contracted-form.tsx");
   assert(contractedSource.includes('helpId="adicionais-marcar-contratado"'));
   assert(contractedSource.includes('helpId="adicionais-formalizacao"'));
@@ -297,17 +302,12 @@ const TAB_COVERAGE = [
       { id: "documentos-tab-cronograma", file: "apps/web/app/[projectId]/documentos/page.tsx" },
     ],
   },
-  {
-    page: "Adicionais",
-    entries: [
-      { id: "adicionais-tab-propostas", file: "apps/web/app/[projectId]/adicionais/page.tsx" },
-      { id: "adicionais-nova-proposta", file: "apps/web/app/[projectId]/adicionais/page.tsx" },
-      { id: "adicionais-marcar-contratado", file: "apps/web/components/additionals/additional-proposal-contracted-form.tsx" },
-      { id: "adicionais-formalizacao", file: "apps/web/components/additionals/additional-proposal-contracted-form.tsx" },
-      { id: "adicionais-status-prazo", file: "apps/web/components/additionals/additional-proposal-approvals-form.tsx" },
-      { id: "adicionais-documentacao", file: "apps/web/components/additionals/additional-proposal-checklist.tsx" },
-    ],
-  },
+  // "Adicionais" removida da cobertura de abas: a pagina (page.tsx) nao
+  // tem mais aba/secao real, virou redirecionamento (aba "Servicos
+  // Adicionais" descontinuada). Os helpIds dos componentes internos
+  // preservados (adicionais-marcar-contratado/formalizacao/status-prazo/
+  // documentacao) continuam existindo e renderizados nesses arquivos —
+  // so nao tem mais uma "pagina" navegavel para agrupa-los aqui.
   {
     page: "Start-up ACC",
     entries: [
@@ -356,7 +356,8 @@ const TABBED_PAGES = [
   "apps/web/app/[projectId]/acoes/page.tsx",
   "apps/web/app/[projectId]/esg/page.tsx",
   "apps/web/app/[projectId]/documentos/page.tsx",
-  "apps/web/app/[projectId]/adicionais/page.tsx",
+  // "adicionais/page.tsx" removida desta lista: virou redirecionamento
+  // puro (aba "Serviços Adicionais" descontinuada), não tem mais <Tabs>.
 ];
 
 check("nenhuma aba funcional relevante sem ajuda: toda ocorrência de <TabsTrigger tem um <FeatureInfo irmão na mesma página", () => {
