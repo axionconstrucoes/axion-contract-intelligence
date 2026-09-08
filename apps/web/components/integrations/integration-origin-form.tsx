@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/select";
 import { saveIntegrationOriginAction } from "@/app/[projectId]/integracoes/actions";
 import { initialSaveIntegrationOriginState } from "@/app/[projectId]/integracoes/actions-state";
 import { driveTypeLabels } from "@/lib/labels";
+import { ESG_SSMA_DRIVE_ROOT_PATH } from "@/lib/integrations/esg-ssma/drive-source-policy";
 import type { DriveType, IntegrationConfig, SourceType } from "@axion/types";
 
 function fieldLabels(sourceType: SourceType) {
@@ -78,13 +79,17 @@ export function IntegrationOriginForm({
         </label>
       </div>
 
-      {sourceType === "GOOGLE_DRIVE" ? (
+      {sourceType === "GOOGLE_DRIVE" || sourceType === "ESG_SSMA" ? (
         <label className="flex flex-col gap-1.5 text-xs font-medium">
           <span className="flex items-center gap-1.5">
             Tipo
             <FeatureInfo helpId="drive-type" />
           </span>
-          <Select name="driveType" defaultValue={config?.driveType ?? ""}>
+          <Select
+            name="driveType"
+            defaultValue={sourceType === "ESG_SSMA" ? "DRIVE_COMPARTILHADO" : config?.driveType ?? ""}
+            disabled={sourceType === "ESG_SSMA"}
+          >
             <option value="">Selecione…</option>
             {(Object.keys(driveTypeLabels) as DriveType[]).map((type) => (
               <option key={type} value={type}>
@@ -95,17 +100,27 @@ export function IntegrationOriginForm({
         </label>
       ) : null}
 
-      {sourceType !== "ESG_SSMA" ? (
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="flex flex-col gap-1.5 text-xs font-medium">
-            Pasta/Local
-            <Input name="folderReference" defaultValue={config?.folderReference ?? ""} placeholder="Ex.: 01_RECEBIDOS CLIENTE" />
-          </label>
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="flex flex-col gap-1.5 text-xs font-medium">
+          Pasta/Local
+          <Input
+            name="folderReference"
+            defaultValue={config?.folderReference ?? ""}
+            placeholder={sourceType === "ESG_SSMA" ? "Cole a URL da pasta SSMA-ESG desta obra" : "Ex.: 01_RECEBIDOS CLIENTE"}
+          />
+        </label>
+        {sourceType !== "ESG_SSMA" ? (
           <label className="flex flex-col gap-1.5 text-xs font-medium">
             Arquivo
             <Input name="fileReference" defaultValue={config?.fileReference ?? ""} placeholder="Ex.: cronograma-baseline.mpp" />
           </label>
-        </div>
+        ) : null}
+      </div>
+
+      {sourceType === "ESG_SSMA" ? (
+        <p className="text-xs text-muted-foreground">
+          Raiz autorizada: {ESG_SSMA_DRIVE_ROOT_PATH}. Orçamentos e Planejamento não são fontes do Drive para o ACC.
+        </p>
       ) : null}
 
       {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}

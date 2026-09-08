@@ -54,11 +54,11 @@ export function IntegrationCard({
 
   const origin = config
     ? [
-        { label: source.type === "ESG_SSMA" ? null : "Sistema", value: config.externalSystemReference },
+        { label: "Sistema", value: source.type === "ESG_SSMA" ? config.externalSystemReference ?? "Google Drive" : config.externalSystemReference },
         { label: source.type === "ESG_SSMA" ? null : "Projeto/Obra", value: config.externalProjectReference },
         { label: source.type === "ESG_SSMA" ? "Técnico de Segurança" : "Conta", value: config.accountReference },
         { label: "Tipo", value: config.driveType ? driveTypeLabels[config.driveType] : null },
-        { label: source.type === "ESG_SSMA" ? null : "Pasta/Local", value: config.folderReference },
+        { label: "Pasta/Local", value: config.folderReference },
         { label: source.type === "ESG_SSMA" ? null : "Arquivo", value: config.fileReference },
         { label: source.type === "ESG_SSMA" ? "Responsável/Gerente ESG" : "Responsável", value: config.responsibleReference },
       ].filter((field): field is { label: string; value: string } => Boolean(field.label) && Boolean(field.value))
@@ -113,6 +113,16 @@ export function IntegrationCard({
           ) : (
             <p className="text-xs italic">Origem ainda não definida</p>
           )}
+          {source.type === "ESG_SSMA" && config?.folderReference?.startsWith("https://drive.google.com/drive/folders/") ? (
+            <a
+              href={config.folderReference}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs font-medium text-primary underline underline-offset-2"
+            >
+              Abrir pasta SSMA/ESG no Google Drive
+            </a>
+          ) : null}
         </div>
 
         {source.type === "CONSTRUMANAGER" && canManage ? (

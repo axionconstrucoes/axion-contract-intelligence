@@ -144,7 +144,10 @@ export default async function DocumentosPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Documentos" description="Contratos, aditivos, propostas, documentos técnicos e cronogramas do projeto." />
+      <PageHeader
+        title="Documentos"
+        description="Upload manual de contratos, aditivos, editais, RFI, RFP, clarificações, propostas, relatórios e cronogramas. O Google Drive é reservado exclusivamente ao SSMA/ESG."
+      />
 
       <Tabs defaultValue="documentos">
         <TabsList>
