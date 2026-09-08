@@ -85,11 +85,16 @@ export function CategoryBadge({ category }: { category: ImplicationCategory }) {
 // ERRO — autorização expirada/retry/falha não bloqueante, nunca "não
 // consegue operar". A cor do badge identifica o ESTADO, nunca a FONTE
 // (a cor da fonte vive em integration-visual-identity.ts).
+//
+// CONECTADO ("Ativo"), PENDENTE e ERRO usam cor SÓLIDA (hex explícito
+// via arbitrary value, não o token translúcido `/15` dos demais
+// estados): alto contraste pedido para esses três especificamente.
+// ATENCAO fica de fora de proposito — continua no padrão translúcido.
 const integrationClasses: Record<IntegrationStatus, string> = {
-  CONECTADO: "border-transparent bg-severity-baixa/15 text-severity-baixa",
-  PENDENTE: "border-transparent bg-severity-media/15 text-severity-media",
+  CONECTADO: "border-transparent bg-[#166534] text-[#FFFFFF] font-bold",
+  PENDENTE: "border-transparent bg-[#FFD600] text-[#000000] font-bold",
   ATENCAO: "border-transparent bg-orange-500/15 text-orange-600 dark:text-orange-400",
-  ERRO: "border-transparent bg-severity-critica/15 text-severity-critica",
+  ERRO: "border-transparent bg-[#DC2626] text-[#FFFFFF] font-bold",
 };
 
 export function IntegrationStatusBadge({ status }: { status: IntegrationStatus }) {

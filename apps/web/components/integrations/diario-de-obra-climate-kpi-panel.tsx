@@ -12,6 +12,7 @@
 
 import { formatDate } from "@/lib/labels";
 import type { ClimaKpiDoPeriodo } from "@/lib/integrations/diario-de-obra/climate-kpi";
+import { formatarNumeroPtBr, formatarPercentualPtBr } from "@/lib/integrations/diario-de-obra/format-numero-pt-br";
 
 export const DIARIO_CLIMA_KPI_TITULO = "Disponibilidade operacional por clima e catástrofes";
 
@@ -23,12 +24,8 @@ export const DIARIO_CLIMA_KPI_NOTA_RESIDUAL =
 
 export const AVISO_IA_DESATIVADA_CLIMA = "Análise por IA desativada — 0 tokens";
 
-function formatarPercentual(valor: number | null): string {
-  return valor === null ? "—" : `${valor.toFixed(1)}%`;
-}
-
 function formatarDias(valor: number): string {
-  return Number.isInteger(valor) ? String(valor) : valor.toFixed(1);
+  return Number.isInteger(valor) ? String(valor) : formatarNumeroPtBr(valor);
 }
 
 function faixa(inicio: string | null, fim: string | null): string {
@@ -66,7 +63,7 @@ export function DiarioDeObraClimateKpiPanel({
     { rotulo: "Candidatos a efeito residual", valor: String(overview.candidatosEfeitoResidual) },
     {
       rotulo: "Disponibilidade operacional confirmada",
-      valor: formatarPercentual(overview.disponibilidadeConfirmadaPercentual),
+      valor: formatarPercentualPtBr(overview.disponibilidadeConfirmadaPercentual),
     },
     {
       rotulo: "Ocorrências catastróficas sem paralisação confirmada",
@@ -75,7 +72,7 @@ export function DiarioDeObraClimateKpiPanel({
     {
       rotulo: "Cobertura dos dados climáticos",
       valor:
-        `${formatarPercentual(overview.coberturaClimaticaPercentual)} ` +
+        `${formatarPercentualPtBr(overview.coberturaClimaticaPercentual)} ` +
         `(${overview.diasComClimaLegivel}/${overview.diasMonitorados} dia(s))`,
     },
   ];

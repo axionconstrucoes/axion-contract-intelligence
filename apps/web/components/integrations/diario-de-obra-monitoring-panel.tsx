@@ -17,8 +17,10 @@
 // e' a afirmacao de que esta area nao consome token, verificavel por
 // quem opera o sistema sem precisar ler codigo.
 
-import { formatDate, formatDateTime } from "@/lib/labels";
+import { formatDate } from "@/lib/labels";
 import type { DiarioDeObraMonitoringOverview } from "@/lib/integrations/diario-de-obra/get-monitoring-overview";
+import { formatarDataHoraBrasilia } from "@/lib/integrations/diario-de-obra/format-brasilia";
+import { formatarNumeroPtBr } from "@/lib/integrations/diario-de-obra/format-numero-pt-br";
 
 /**
  * Afirmacao exigida em tela. Constante exportada, e nao literal solto,
@@ -45,6 +47,10 @@ function ou(valor: string | null | undefined): string {
 function faixa(inicio: string | null, fim: string | null): string {
   if (!inicio || !fim) return "—";
   return inicio === fim ? formatDate(inicio) : `${formatDate(inicio)} a ${formatDate(fim)}`;
+}
+
+function formatarMediano(valor: number): string {
+  return Number.isInteger(valor) ? String(valor) : formatarNumeroPtBr(valor);
 }
 
 export function DiarioDeObraMonitoringPanel({
@@ -79,7 +85,7 @@ export function DiarioDeObraMonitoringPanel({
     {
       rotulo: "Última sincronização",
       valor: overview.ultimaSincronizacaoAt
-        ? `${formatDateTime(overview.ultimaSincronizacaoAt)} · ${ou(overview.ultimaSincronizacaoModo)} · ${ou(overview.ultimaSincronizacaoStatus)}`
+        ? `${formatarDataHoraBrasilia(overview.ultimaSincronizacaoAt)} · ${ou(overview.ultimaSincronizacaoModo)} · ${ou(overview.ultimaSincronizacaoStatus)}`
         : "—",
     },
     { rotulo: "Total de RDOs", valor: String(agregados.totalDeRdos) },
@@ -110,7 +116,7 @@ export function DiarioDeObraMonitoringPanel({
       valor:
         agregados.efetivoMediano === null
           ? "—"
-          : `${agregados.efetivoMediano} (${agregados.rdosComEfetivoLegivel} RDO(s) legível(is))`,
+          : `${formatarMediano(agregados.efetivoMediano)} (${agregados.rdosComEfetivoLegivel} RDO(s) legível(is))`,
     },
     { rotulo: "RDOs sem foto", valor: String(agregados.rdosSemFoto) },
     { rotulo: "Edições tardias", valor: String(agregados.edicoesTardias) },
@@ -120,7 +126,7 @@ export function DiarioDeObraMonitoringPanel({
         `${integridade.numerosDuplicados} nº duplicado(s) · ` +
         `${integridade.datasDuplicadas} data(s) duplicada(s) · ` +
         `${integridade.saltosDeNumeracao} salto(s) · ` +
-        `${integridade.diasSemRdo} dia(s) sem RDO`,
+        `${integridade.diasSemRdo} dia(s) corrido(s) sem RDO — inclui fins de semana e folgas`,
     },
     {
       rotulo: "Achados por severidade",
