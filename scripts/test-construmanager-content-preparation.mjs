@@ -545,11 +545,21 @@ check(
 );
 
 check(
-  "o mapa compartilhado de badges NÃO foi alterado",
+  // Ate a correcao visual do painel do Diario de Obra
+  // (fix/diario-de-obra-monitoring-display), o mapa compartilhado NAO
+  // usava cor solida — decisao consciente para nao "repintar" area que
+  // ninguem tinha pedido. Autorizado explicitamente depois (mesma
+  // branch): IntegrationStatusBadge passou a usar cor solida tambem,
+  // com hex proprio (#FFD600/#166534/#DC2626), DIFERENTE do hex do
+  // Construmanager (bg-yellow-400/bg-green-600/bg-red-600) verificado
+  // acima — dois badges distintos, cada um com sua paleta.
+  "o mapa compartilhado de badges usa a paleta solida propria do Diario de Obra",
   (() => {
     const shared = readFileSync("apps/web/components/shared/badges.tsx", "utf8");
     return (
-      /CONECTADO: "border-transparent bg-severity-baixa\/15 text-severity-baixa"/.test(shared) &&
+      /CONECTADO: "border-transparent bg-\[#166534\] text-\[#FFFFFF\] font-bold"/.test(shared) &&
+      /PENDENTE: "border-transparent bg-\[#FFD600\] text-\[#000000\] font-bold"/.test(shared) &&
+      /ERRO: "border-transparent bg-\[#DC2626\] text-\[#FFFFFF\] font-bold"/.test(shared) &&
       !/bg-yellow-400|bg-green-600|bg-red-600/.test(shared)
     );
   })()
