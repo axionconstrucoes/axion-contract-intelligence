@@ -321,10 +321,10 @@ check("Relatórios Semanais: conta/remetente nunca hardcoded no código (é semp
 
 // ---------------- ESG/SSMA card (seção 19) ----------------
 
-check("sourceDefinitions inclui ESG_SSMA com a descrição exata do requisito", () => {
+check("sourceDefinitions inclui ESG_SSMA como única fonte do Google Drive", () => {
   const source = readSource("packages/mock-data/src/sources.ts");
   assert(source.includes('type: "ESG_SSMA"'));
-  assert(source.includes("Registros, evidências e documentos de segurança, saúde, meio ambiente e obrigações ESG/SSMA"));
+  assert(source.includes("Única fonte do Google Drive usada pelo ACC"));
 });
 
 check("sourceTypeShortLabels cobre ESG_SSMA (Record<SourceType,...> — TS já garante isso, checagem real de conteúdo aqui)", () => {

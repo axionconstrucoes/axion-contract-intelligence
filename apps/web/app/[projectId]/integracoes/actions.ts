@@ -11,6 +11,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
+import { getSourceDefinitions } from "@/lib/data";
+import { isGoogleDriveFolderUrl } from "@/lib/integrations/esg-ssma/drive-source-policy";
 import { createConstrumanagerClient } from "@/lib/integrations/construmanager/client";
 import { collectConstrumanagerMetadata } from "@/lib/integrations/construmanager/collect-metadata";
 import {
@@ -149,16 +151,29 @@ export async function saveIntegrationOriginAction(
     const projectId = requiredField(formData, "projectId");
     const sourceType = requiredField(formData, "sourceType");
 
+    if (!getSourceDefinitions().some((source) => source.type === sourceType)) {
+      throw new Error("Esta fonte não faz parte das integrações operacionais do ACC.");
+    }
+
+    const folderReference = optionalField(formData, "folderReference");
+    if (
+      sourceType === "ESG_SSMA" &&
+      (!folderReference || !isGoogleDriveFolderUrl(folderReference))
+    ) {
+      throw new Error("Informe a URL completa da pasta SSMA/ESG no Google Drive compartilhado.");
+    }
+
     const { error } = await supabase.rpc("save_integration_origin", {
       p_project_id: projectId,
       p_source_type: sourceType,
-      p_external_system_reference: optionalField(formData, "externalSystemReference"),
+      p_external_system_reference:
+        sourceType === "ESG_SSMA" ? "Google Drive" : optionalField(formData, "externalSystemReference"),
       p_external_project_reference: optionalField(formData, "externalProjectReference"),
       p_account_reference: optionalField(formData, "accountReference"),
-      p_folder_reference: optionalField(formData, "folderReference"),
-      p_file_reference: optionalField(formData, "fileReference"),
+      p_folder_reference: folderReference,
+      p_file_reference: sourceType === "ESG_SSMA" ? null : optionalField(formData, "fileReference"),
       p_responsible_reference: optionalField(formData, "responsibleReference"),
-      p_drive_type: optionalField(formData, "driveType"),
+      p_drive_type: sourceType === "ESG_SSMA" ? "DRIVE_COMPARTILHADO" : optionalField(formData, "driveType"),
     });
     if (error) throw new Error(error.message);
 
