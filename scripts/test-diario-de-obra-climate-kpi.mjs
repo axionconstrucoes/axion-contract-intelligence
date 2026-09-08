@@ -12,19 +12,33 @@
 // O que esta suite protege:
 //
 //   1. um turno impraticavel = 0,5 dia perdido, dois = 1 dia;
-//   2. "Dia Chuvoso" e "Dia parado" sozinhos nao reduzem a disponibilidade;
-//   3. catastrofe sozinha e' ocorrencia, nao dia perdido;
-//   4. catastrofe + (Dia parado OU turno impraticavel) = dia confirmado;
-//   5. chuva direta e catastrofe no mesmo dia nao duplicam a perda;
-//   6. efeito residual so em D-1 EXATO, nunca com turno impraticavel hoje;
-//   7. efetivo zero SO conta com atividade declarada;
-//   8. ausencia de RDO nunca entra em nenhuma soma;
-//   9. cobertura climatica incompleta e divisao por zero sem NaN;
-//  10. isolamento por projeto na leitura;
-//  11. migration: security_invoker, sem escrita, sem coluna jsonb crua;
-//  12. painel: aviso de IA desligada, nota de confirmacao humana,
+//   2. "Dia Chuvoso" e "Dia parado" sozinhos (sem catastrofe) nao reduzem
+//      a disponibilidade;
+//   3. catastrofe sozinha (sem Dia parado nem turno impraticavel) e'
+//      ocorrencia, nao dia perdido;
+//   4. catastrofe + "Dia parado" reduz a disponibilidade MESMO sem turno
+//      climatico marcado como impraticavel — perda_catastrofe = 1 dia,
+//      disponibilidade 0% para um unico dia monitorado;
+//   5. catastrofe + turno impraticavel (sem Dia parado) atribui a perda
+//      ao bucket de CATASTROFE, nao ao de chuva direta — sem dupla
+//      contagem entre os dois buckets do painel;
+//   6. catastrofe + Dia parado + turno impraticavel: perda_total = 1 dia
+//      (max, nunca soma) — nunca 1,5;
+//   7. soma de perda_chuva_direta + perda_catastrofe == perda total
+//      confirmada, sempre;
+//   8. efeito residual so em D-1 EXATO, nunca com turno impraticavel
+//      hoje, e nunca reduz a disponibilidade confirmada;
+//   9. efetivo zero SO conta com atividade declarada;
+//  10. ausencia de RDO nunca entra em nenhuma soma;
+//  11. cobertura climatica incompleta e divisao por zero sem NaN;
+//  12. isolamento por projeto na leitura;
+//  13. migration: security_invoker, sem escrita, sem coluna jsonb crua,
+//      SEM extensao (nenhuma dependencia de `unaccent`), normalizacao
+//      via `translate` com paridade comprovada contra a normalizacao
+//      TypeScript para as 5 categorias do KPI;
+//  14. painel: aviso de IA desligada, nota de confirmacao humana,
 //      nenhuma palavra de conteudo livre ou midia;
-//  13. modulo de calculo e' puro (zero import).
+//  15. modulo de calculo e' puro (zero import).
 //
 // Uso: node scripts/test-diario-de-obra-climate-kpi.mjs
 
@@ -43,6 +57,10 @@ const { calcularClimaKpi } = await import(
 
 const { getDiarioDeObraClimateKpiOverview } = await import(
   "../apps/web/lib/integrations/diario-de-obra/get-climate-kpi-overview.ts"
+);
+
+const { normalizarRotuloDeCategoria } = await import(
+  "../apps/web/lib/integrations/diario-de-obra/occurrence-taxonomy.ts"
 );
 
 let passaram = 0;
@@ -143,10 +161,13 @@ function linha(data, sobrescritas = {}) {
 
 
 // ============================================================
-// 3-5. Catastrofe: sozinha, com dia parado, e sem duplicar chuva.
+// 3-7. Catastrofe: sozinha, com Dia parado (mesmo sem chuva), com turno
+//      impraticavel, com os dois juntos (sem somar 1,5), e o invariante
+//      de que as parcelas do painel sempre fecham com o total.
 // ============================================================
 
 {
+  // Catastrofe sem Dia parado e sem turno impraticavel: so ocorrencia.
   const r = calcularClimaKpi([linha("2026-06-01", { hasCatastrofe: true })]);
 
   check("catastrofe sem paralisacao: 1 ocorrencia sem dia perdido", r.ocorrenciasCatastroficasSemParalisacaoConfirmada === 1);
@@ -155,27 +176,67 @@ function linha(data, sobrescritas = {}) {
 }
 
 {
-  const r = calcularClimaKpi([linha("2026-06-01", { hasCatastrofe: true, hasDiaParado: true })]);
+  // TESTE OBRIGATORIO: catastrofe + Dia parado, clima PRATICAVEL — a
+  // disponibilidade cai mesmo sem turno impraticavel, porque a
+  // catastrofe confirmada por "Dia parado" vale os 2 turnos do dia.
+  const r = calcularClimaKpi([
+    linha("2026-06-01", { hasCatastrofe: true, hasDiaParado: true, impracticableShifts: 0 }),
+  ]);
 
-  check("catastrofe com dia parado: 1 dia equivalente confirmado", r.diasEquivalentesConfirmadosPorCatastrofe === 1);
-  check("catastrofe com dia parado: 0 ocorrencia sem paralisacao", r.ocorrenciasCatastroficasSemParalisacaoConfirmada === 0);
-  check("catastrofe com dia parado: disponibilidade nao muda (100%)", r.disponibilidadeConfirmadaPercentual === 100);
+  check("catastrofe + dia parado: perda catastrofe = 1 dia equivalente", r.diasEquivalentesConfirmadosPorCatastrofe === 1);
+  check("catastrofe + dia parado: 2 turnos perdidos por catastrofe", r.turnosPerdidosPorCatastrofe === 2);
+  check("catastrofe + dia parado: 0 turno perdido por chuva direta", r.turnosPerdidosPorChuvaDireta === 0);
+  check("catastrofe + dia parado: 0 ocorrencia sem paralisacao", r.ocorrenciasCatastroficasSemParalisacaoConfirmada === 0);
+  check("catastrofe + dia parado: disponibilidade 0%", r.disponibilidadeConfirmadaPercentual === 0);
 }
 
 {
+  // TESTE OBRIGATORIO: catastrofe + 1 turno impraticavel, SEM Dia
+  // parado — a perda vai para o bucket de catastrofe (atribuicao
+  // exclusiva), nao para o de chuva direta.
   const r = calcularClimaKpi([
     linha("2026-06-01", { hasCatastrofe: true, impracticableShifts: 1 }),
   ]);
 
-  check("chuva + catastrofe: turno perdido contado uma vez", r.turnosPerdidosPorChuvaDireta === 1);
+  check("catastrofe + 1 turno: perda catastrofe = 0,5 dia equivalente", r.diasEquivalentesConfirmadosPorCatastrofe === 0.5);
+  check("catastrofe + 1 turno: 1 turno perdido por catastrofe", r.turnosPerdidosPorCatastrofe === 1);
+  check("catastrofe + 1 turno: 0 turno perdido por chuva direta (atribuicao exclusiva)", r.turnosPerdidosPorChuvaDireta === 0);
+  check("catastrofe + 1 turno: disponibilidade 50%", r.disponibilidadeConfirmadaPercentual === 50);
   check(
-    "chuva + catastrofe: nao duplica no bucket de catastrofe",
-    r.diasEquivalentesConfirmadosPorCatastrofe === 0
-  );
-  check(
-    "chuva + catastrofe: nao aparece como catastrofe sem paralisacao",
+    "catastrofe + 1 turno: nao aparece como catastrofe sem paralisacao",
     r.ocorrenciasCatastroficasSemParalisacaoConfirmada === 0
   );
+}
+
+{
+  // TESTE OBRIGATORIO: catastrofe + Dia parado + 1 turno impraticavel —
+  // perda total = 1 dia (max), NUNCA 1,5 (nao soma as duas causas).
+  const r = calcularClimaKpi([
+    linha("2026-06-01", { hasCatastrofe: true, hasDiaParado: true, impracticableShifts: 1 }),
+  ]);
+
+  check("catastrofe + dia parado + turno: perda total = 2 turnos (1 dia), nunca 3 (1,5 dia)", r.turnosPerdidosConfirmados === 2);
+  check("catastrofe + dia parado + turno: perda catastrofe = 1 dia equivalente", r.diasEquivalentesConfirmadosPorCatastrofe === 1);
+  check("catastrofe + dia parado + turno: 0 turno perdido por chuva direta", r.turnosPerdidosPorChuvaDireta === 0);
+  check("catastrofe + dia parado + turno: disponibilidade 0%", r.disponibilidadeConfirmadaPercentual === 0);
+}
+
+{
+  // Invariante do painel: as duas parcelas exclusivas sempre somam a
+  // perda total confirmada — em qualquer combinacao, para varios dias.
+  const r = calcularClimaKpi([
+    linha("2026-06-01", { impracticableShifts: 1 }),
+    linha("2026-06-02", { hasCatastrofe: true, hasDiaParado: true }),
+    linha("2026-06-03", { hasCatastrofe: true, impracticableShifts: 1 }),
+    linha("2026-06-04"),
+  ]);
+
+  check(
+    "soma das parcelas (chuva direta + catastrofe) == perda total confirmada",
+    r.turnosPerdidosPorChuvaDireta + r.turnosPerdidosPorCatastrofe === r.turnosPerdidosConfirmados
+  );
+  check("perda total confirmada = 1 (chuva) + 2 (catastrofe+parado) + 1 (catastrofe+turno) = 4", r.turnosPerdidosConfirmados === 4);
+  check("disponibilidade do periodo = 100*(8-4)/8 = 50%", r.disponibilidadeConfirmadaPercentual === 50);
 }
 
 
@@ -231,6 +292,24 @@ function linha(data, sobrescritas = {}) {
   ]);
 
   check("intervalo maior que um dia nao e' residual", r.candidatosEfeitoResidual === 0);
+}
+
+{
+  // Efeito residual continua FORA da disponibilidade confirmada: um dia
+  // com candidato (Dia parado hoje, chuva ontem) tem disponibilidade
+  // identica a um dia so com Dia parado (sem D-1 nenhum) — o candidato
+  // e' contado, mas nao muda o numerador da perda confirmada.
+  const comCandidato = calcularClimaKpi([
+    linha("2026-06-01", { impracticableShifts: 1 }),
+    linha("2026-06-02", { hasDiaParado: true }),
+  ]);
+  const semCandidato = calcularClimaKpi([linha("2026-06-02", { hasDiaParado: true })]);
+
+  check("ha 1 candidato residual no cenario com D-1 chuvoso", comCandidato.candidatosEfeitoResidual === 1);
+  check(
+    "candidato residual nao reduz a disponibilidade confirmada do dia com Dia parado",
+    semCandidato.disponibilidadeConfirmadaPercentual === 100
+  );
 }
 
 
@@ -407,6 +486,48 @@ check(
   "view nao filtra nem seleciona baseline_imported — KPI cobre os 146 historicos",
   !MIGRATION.includes("r.baseline_imported")
 );
+
+check("migration nao cria a extensao unaccent", !MIGRATION.toLowerCase().includes("create extension"));
+check("migration nao chama public.unaccent", !MIGRATION.includes("unaccent("));
+check(
+  "normalizacao de rotulo usa translate() deterministico, nao extensao",
+  MIGRATION.includes("translate(") && MIGRATION.includes("lower(coalesce(p_texto, ''))")
+);
+check(
+  "condicao redundante 'weather is not null' foi removida (coluna e' NOT NULL)",
+  !MIGRATION.toLowerCase().includes("weather is not null")
+);
+
+// Paridade: o translate() da migration precisa normalizar as 5
+// categorias do KPI EXATAMENTE como `normalizarRotuloDeCategoria` faz
+// em TypeScript — sao os mesmos alvos comparados em
+// `diario_de_obra_tem_categoria`/`diario_de_obra_tem_catastrofe`.
+{
+  const mapaAcentos = new Map(
+    [...("áàâãäéèêëíìîïóòôõöúùûüçñýÿ")].map((de, i) => [de, [..."aaaaaeeeeiiiiooooouuuucnyy"][i]])
+  );
+
+  function normalizarComoAMigration(texto) {
+    const traduzido = [...texto.toLowerCase()].map((c) => mapaAcentos.get(c) ?? c).join("");
+    const espacado = traduzido.replace(/[^a-z0-9]+/g, " ").trim();
+    return espacado === "" ? null : espacado;
+  }
+
+  const ROTULOS_DO_KPI = [
+    "Dia Chuvoso",
+    "Dia parado",
+    "Dano em estrutura existente - não mapeada",
+    "Dano em estrutura nova",
+    "Taludes danificado devido fortes chuvas",
+  ];
+
+  for (const rotulo of ROTULOS_DO_KPI) {
+    check(
+      `translate() da migration confere com o TypeScript para "${rotulo}"`,
+      normalizarComoAMigration(rotulo) === normalizarRotuloDeCategoria(rotulo)
+    );
+  }
+}
 
 
 // ============================================================

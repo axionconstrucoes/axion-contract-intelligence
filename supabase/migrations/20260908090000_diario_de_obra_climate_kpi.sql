@@ -32,20 +32,17 @@
 
 
 -- ------------------------------------------------------------
--- A. unaccent — necessaria para normalizar rotulo de categoria do mesmo
---    jeito que `occurrence-taxonomy.ts:normalizarRotuloDeCategoria` faz
---    em TypeScript (NFD, sem diacritico, minusculo). Extensao padrao do
---    Postgres, sem acesso a dado nenhum por si so.
--- ------------------------------------------------------------
-
-create extension if not exists unaccent;
-
-
--- ------------------------------------------------------------
--- B. Normalizacao de rotulo
+-- A. Normalizacao de rotulo — SEM extensao.
 --
--- Espelha `normalizarRotuloDeCategoria`: NFD sem diacritico, minusculo,
--- pontuacao vira espaco, espacos colapsam.
+-- Espelha `normalizarRotuloDeCategoria`: sem diacritico, minusculo,
+-- pontuacao vira espaco, espacos colapsam. Em vez da extensao
+-- `unaccent` (cuja instalacao pode cair fora do schema `public` e
+-- quebrar em runtime sem aviso — risco que nao da' para provar sem uma
+-- aplicacao real da migration), o mapa de acentuacao e' um `translate`
+-- explicito, so com os caracteres que as 5 categorias deste KPI usam
+-- ("Dano em estrutura existente - não mapeada" e' a unica com acento).
+-- Determinístico, sem dependencia externa, sem qualificacao de schema
+-- para verificar.
 -- ------------------------------------------------------------
 
 create or replace function public.diario_de_obra_normalizar_rotulo(p_texto text)
@@ -55,14 +52,23 @@ immutable
 set search_path = ''
 as $$
   select nullif(
-    btrim(regexp_replace(lower(public.unaccent(coalesce(p_texto, ''))), '[^a-z0-9]+', ' ', 'g')),
+    btrim(
+      regexp_replace(
+        translate(
+          lower(coalesce(p_texto, '')),
+          'áàâãäéèêëíìîïóòôõöúùûüçñýÿ',
+          'aaaaaeeeeiiiiooooouuuucnyy'
+        ),
+        '[^a-z0-9]+', ' ', 'g'
+      )
+    ),
     ''
   );
 $$;
 
 
 -- ------------------------------------------------------------
--- C. Rotulo normalizado de UMA ocorrencia
+-- B. Rotulo normalizado de UMA ocorrencia
 --
 -- Mesma cascata de campos que `resolverCategoria`: tenta
 -- tipo/tipoDeOcorrencia/categoria/classificacao NESSA ORDEM; o primeiro
@@ -122,7 +128,7 @@ $$;
 
 
 -- ------------------------------------------------------------
--- D. Presenca de UMA categoria (por rotulo normalizado) nas ocorrencias
+-- C. Presenca de UMA categoria (por rotulo normalizado) nas ocorrencias
 --    de um RDO.
 -- ------------------------------------------------------------
 
@@ -152,7 +158,7 @@ $$;
 
 
 -- ------------------------------------------------------------
--- E. Presenca de QUALQUER UMA das 3 categorias de catastrofe.
+-- D. Presenca de QUALQUER UMA das 3 categorias de catastrofe.
 --
 --    "Dano em estrutura existente - não mapeada", "Dano em estrutura
 --    nova" e "Taludes danificado devido fortes chuvas" — as mesmas 3
@@ -195,7 +201,7 @@ $$;
 
 
 -- ------------------------------------------------------------
--- F. Superficie de leitura do KPI de clima
+-- E. Superficie de leitura do KPI de clima
 --
 -- SO NUMERO, BOOLEANO E DATA saem daqui. `weather` e `occurrences`
 -- nunca atravessam a fronteira — so o resultado ja resolvido delas.
@@ -215,7 +221,7 @@ as
     r.project_id,
     r.reference_date,
     public.diario_de_obra_turnos_impraticaveis(r.weather) as impracticable_shifts,
-    (r.weather is not null and r.weather <> '{}'::jsonb) as has_weather_data,
+    (r.weather <> '{}'::jsonb) as has_weather_data,
     public.diario_de_obra_tem_categoria(r.occurrences, 'dia chuvoso') as has_dia_chuvoso,
     public.diario_de_obra_tem_categoria(r.occurrences, 'dia parado') as has_dia_parado,
     public.diario_de_obra_tem_categoria(

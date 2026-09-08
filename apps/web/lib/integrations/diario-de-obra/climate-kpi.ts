@@ -13,17 +13,41 @@
 // limitado a 2 antes de entrar em qualquer soma, para que
 // `turnos_perdidos_confirmados` nunca ultrapasse `turnos_monitorados`.
 //
-// FORMULA CONFIRMADA (a disponibilidade nao usa catastrofe nem "Dia
-// Parado" — so turno impraticavel):
+// FORMULA CONFIRMADA — POR DIA:
+//
+//   turnos_chuva = clamp(impracticableShifts, 0, 2)
+//
+//   turnos_catastrofe =
+//     se hasCatastrofe e hasDiaParado: 2
+//     senao, se hasCatastrofe e turnos_chuva > 0: turnos_chuva
+//     senao: 0
+//
+//   turnos_perdidos_confirmados_no_dia = max(turnos_chuva, turnos_catastrofe)
+//
+// ATRIBUICAO EXCLUSIVA — o painel mostra "perda por chuva direta" e
+// "perda por catastrofe" como duas linhas separadas; sem exclusividade,
+// um dia com as duas causas apareceria contado nas duas linhas ao mesmo
+// tempo, ainda que a disponibilidade em si nao dobrasse:
+//
+//   se turnos_catastrofe > 0:
+//     perda_catastrofe_no_dia = turnos_perdidos_confirmados_no_dia
+//     perda_chuva_direta_no_dia = 0
+//   senao:
+//     perda_catastrofe_no_dia = 0
+//     perda_chuva_direta_no_dia = turnos_chuva
+//
+// FORMULA CONFIRMADA — DO PERIODO:
 //
 //   turnos_monitorados = 2 x quantidade de datas com RDO
-//   turnos_perdidos_confirmados = soma dos turnos com clima Impraticavel
+//   turnos_perdidos_confirmados = soma, por dia, de turnos_perdidos_confirmados_no_dia
 //   disponibilidade_confirmada =
 //     100 x (turnos_monitorados - turnos_perdidos_confirmados) / turnos_monitorados
 //
-// "Dia Chuvoso" sozinho, "Dia parado" sozinho e catastrofe sozinha NUNCA
-// reduzem a disponibilidade — sao ocorrencia informativa, nao turno
-// impraticavel. So o clima estruturado por turno participa da conta.
+// "Dia Chuvoso" sozinho, "Dia parado" sozinho (sem catastrofe) e
+// catastrofe sozinha (sem "Dia parado" nem turno impraticavel) NUNCA
+// reduzem a disponibilidade. Catastrofe + "Dia parado" reduz mesmo SEM
+// turno climatico marcado como impraticavel — e' o unico caso em que
+// "Dia parado" participa da conta, e so por causa da catastrofe.
 //
 // AUSENCIA DE RDO NUNCA ENTRA NA CONTA. A base historica e' feita das
 // DATAS QUE TEM RDO; um dia sem RDO nao e' presumido parado nem
@@ -63,8 +87,12 @@ export interface ClimaKpiDoPeriodo {
   turnosPerdidosPorChuvaDireta: number;
   diasEquivalentesPerdidosPorChuvaDireta: number;
 
+  turnosPerdidosPorCatastrofe: number;
   diasEquivalentesConfirmadosPorCatastrofe: number;
   ocorrenciasCatastroficasSemParalisacaoConfirmada: number;
+
+  /** `turnosPerdidosPorChuvaDireta + turnosPerdidosPorCatastrofe` — cada turno confirmado entra em SO uma das duas parcelas (atribuicao exclusiva), entao a soma nunca duplica um turno. */
+  turnosPerdidosConfirmados: number;
 
   candidatosEfeitoResidual: number;
 
@@ -190,35 +218,45 @@ export function calcularClimaKpi(linhas: readonly LinhaDeClimaDoRdo[]): ClimaKpi
   const turnosMonitorados = diasMonitorados * TURNOS_MONITORADOS_POR_DIA;
 
   let turnosPerdidosPorChuvaDireta = 0;
-  let diasEquivalentesConfirmadosPorCatastrofe = 0;
+  let turnosPerdidosPorCatastrofe = 0;
   let ocorrenciasCatastroficasSemParalisacaoConfirmada = 0;
   let diasComClimaLegivel = 0;
 
   for (const dia of dias) {
-    turnosPerdidosPorChuvaDireta += dia.turnosImpraticaveis;
     if (dia.climaLegivel) diasComClimaLegivel += 1;
 
-    if (!dia.catastrofe) continue;
+    // Catastrofe + "Dia parado" perde o dia inteiro mesmo sem turno
+    // climatico marcado como impraticavel; catastrofe + turno
+    // impraticavel nao soma nada alem do que o turno ja perdeu; e
+    // catastrofe sem nenhum dos dois e' so ocorrencia registrada.
+    const turnosCatastrofeNoDia = !dia.catastrofe
+      ? 0
+      : dia.diaParado
+        ? TURNOS_MONITORADOS_POR_DIA
+        : dia.turnosImpraticaveis > 0
+          ? dia.turnosImpraticaveis
+          : 0;
 
-    // Regra 5: catastrofe sozinha e' ocorrencia, nao dia perdido.
-    const confirmadaPorDiaParadoOuImpraticavel = dia.diaParado || dia.turnosImpraticaveis > 0;
-
-    if (!confirmadaPorDiaParadoOuImpraticavel) {
+    if (dia.catastrofe && turnosCatastrofeNoDia === 0) {
       ocorrenciasCatastroficasSemParalisacaoConfirmada += 1;
-      continue;
     }
 
-    // Regra 6: se o dia ja tem turno impraticavel, a perda dele ja esta
-    // em `turnosPerdidosPorChuvaDireta`. Contar de novo aqui duplicaria
-    // a mesma perda sob dois rotulos diferentes.
-    if (dia.turnosImpraticaveis > 0) continue;
+    const turnosPerdidosConfirmadosNoDia = Math.max(dia.turnosImpraticaveis, turnosCatastrofeNoDia);
 
-    diasEquivalentesConfirmadosPorCatastrofe += 1;
+    // Atribuicao exclusiva: o mesmo turno confirmado nunca aparece nas
+    // duas parcelas do painel ao mesmo tempo.
+    if (turnosCatastrofeNoDia > 0) {
+      turnosPerdidosPorCatastrofe += turnosPerdidosConfirmadosNoDia;
+    } else {
+      turnosPerdidosPorChuvaDireta += dia.turnosImpraticaveis;
+    }
   }
+
+  const turnosPerdidosConfirmados = turnosPerdidosPorChuvaDireta + turnosPerdidosPorCatastrofe;
 
   const disponibilidadeConfirmadaPercentual =
     turnosMonitorados > 0
-      ? (100 * (turnosMonitorados - turnosPerdidosPorChuvaDireta)) / turnosMonitorados
+      ? (100 * (turnosMonitorados - turnosPerdidosConfirmados)) / turnosMonitorados
       : null;
 
   const coberturaClimaticaPercentual =
@@ -234,8 +272,11 @@ export function calcularClimaKpi(linhas: readonly LinhaDeClimaDoRdo[]): ClimaKpi
     turnosPerdidosPorChuvaDireta,
     diasEquivalentesPerdidosPorChuvaDireta: turnosPerdidosPorChuvaDireta / TURNOS_MONITORADOS_POR_DIA,
 
-    diasEquivalentesConfirmadosPorCatastrofe,
+    turnosPerdidosPorCatastrofe,
+    diasEquivalentesConfirmadosPorCatastrofe: turnosPerdidosPorCatastrofe / TURNOS_MONITORADOS_POR_DIA,
     ocorrenciasCatastroficasSemParalisacaoConfirmada,
+
+    turnosPerdidosConfirmados,
 
     candidatosEfeitoResidual: contarCandidatosEfeitoResidual(dias),
 

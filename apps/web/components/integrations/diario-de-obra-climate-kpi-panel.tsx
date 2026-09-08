@@ -61,7 +61,7 @@ export function DiarioDeObraClimateKpiPanel({
     },
     {
       rotulo: "Dias equivalentes confirmados por catástrofe",
-      valor: formatarDias(overview.diasEquivalentesConfirmadosPorCatastrofe),
+      valor: `${formatarDias(overview.diasEquivalentesConfirmadosPorCatastrofe)} (${overview.turnosPerdidosPorCatastrofe} turno(s))`,
     },
     { rotulo: "Candidatos a efeito residual", valor: String(overview.candidatosEfeitoResidual) },
     {
