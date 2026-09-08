@@ -197,14 +197,14 @@ check("globals.css: --severity-baixa/media/alta/critica permanecem intocados", (
 
 const badgesSource = readSource("apps/web/components/shared/badges.tsx");
 
-check("badges.tsx: severityClasses (risco) não foi tocado por esta mudança", () => {
+check("badges.tsx: severityClasses (risco) usa a paleta GLOBAL definitiva (padronização visual do ACC, não desta feature)", () => {
   assert(
-    /MEDIA:\s*"[^"]*bg-risk-media\s+text-white\s+font-bold[^"]*"/.test(badgesSource),
-    "severityClasses.MEDIA deveria continuar bg-risk-media + text-white + font-bold"
+    /MEDIA:\s*"[^"]*bg-\[#2563EB\]\s+text-\[#FFFFFF\]\s+font-bold[^"]*"/.test(badgesSource),
+    "severityClasses.MEDIA deveria usar bg-[#2563EB] + text-[#FFFFFF] + font-bold"
   );
   assert(
-    /ALTA:\s*"border-transparent bg-severity-alta text-white font-bold"/.test(badgesSource),
-    "severityClasses.ALTA deveria continuar inalterado"
+    /ALTA:\s*"border-transparent bg-\[#FFD600\] text-\[#000000\] font-bold"/.test(badgesSource),
+    "severityClasses.ALTA deveria usar amarelo #FFD600 + texto preto (nunca mais laranja)"
   );
 });
 

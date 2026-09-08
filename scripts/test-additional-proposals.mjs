@@ -114,24 +114,27 @@ check("os 5 Experts oficiais têm identidade visual (ícone + cor) distinta, nun
   }
 });
 
-check("risco ALTO usa caixa sólida laranja + fonte branca + bold no componente compartilhado", () => {
+// Paleta de risco: padrão GLOBAL definitivo do ACC (não específico
+// desta feature) — ALTO deixou de ser laranja e BAIXO deixou de ser
+// translúcido; os 4 graus agora usam fundo sólido + hex explícito.
+check("risco ALTO usa caixa sólida amarela #FFD600 + texto PRETO + bold no componente compartilhado (nunca mais laranja)", () => {
   const source = readSource("apps/web/components/shared/badges.tsx");
-  assert(/ALTA:\s*"[^"]*bg-severity-alta\s+text-white\s+font-bold[^"]*"/.test(source), "ALTA deveria usar bg-severity-alta sólido + text-white + font-bold");
+  assert(/ALTA:\s*"[^"]*bg-\[#FFD600\]\s+text-\[#000000\]\s+font-bold[^"]*"/.test(source), "ALTA deveria usar bg-[#FFD600] + text-[#000000] + font-bold");
 });
 
-check("risco CRÍTICO usa caixa sólida vermelha + fonte branca + bold no componente compartilhado", () => {
+check("risco CRÍTICO usa caixa sólida vermelha #DC2626 + fonte branca + bold no componente compartilhado", () => {
   const source = readSource("apps/web/components/shared/badges.tsx");
-  assert(/CRITICA:\s*"[^"]*bg-severity-critica\s+text-white\s+font-bold[^"]*"/.test(source), "CRITICA deveria usar bg-severity-critica sólido + text-white + font-bold");
+  assert(/CRITICA:\s*"[^"]*bg-\[#DC2626\]\s+text-\[#FFFFFF\]\s+font-bold[^"]*"/.test(source), "CRITICA deveria usar bg-[#DC2626] + text-[#FFFFFF] + font-bold");
 });
 
-check("BAIXO permanece no padrão visual existente (translúcido, sem forçar branco/bold)", () => {
+check("risco BAIXO usa caixa sólida verde-escuro #166534 + fonte branca + bold no componente compartilhado (padrão translúcido anterior cancelado)", () => {
   const source = readSource("apps/web/components/shared/badges.tsx");
-  assert(/BAIXA:\s*"[^"]*bg-severity-baixa\/15[^"]*"/.test(source));
+  assert(/BAIXA:\s*"[^"]*bg-\[#166534\]\s+text-\[#FFFFFF\]\s+font-bold[^"]*"/.test(source), "BAIXA deveria usar bg-[#166534] + text-[#FFFFFF] + font-bold");
 });
 
-check("risco MÉDIO usa caixa sólida AZUL + fonte branca + bold no componente compartilhado (nunca âmbar/amarelo/laranja-claro)", () => {
+check("risco MÉDIO usa caixa sólida AZUL #2563EB + fonte branca + bold no componente compartilhado (nunca âmbar/amarelo/laranja-claro)", () => {
   const source = readSource("apps/web/components/shared/badges.tsx");
-  assert(/MEDIA:\s*"[^"]*bg-risk-media\s+text-white\s+font-bold[^"]*"/.test(source), "MEDIA deveria usar bg-risk-media sólido + text-white + font-bold");
+  assert(/MEDIA:\s*"[^"]*bg-\[#2563EB\]\s+text-\[#FFFFFF\]\s+font-bold[^"]*"/.test(source), "MEDIA deveria usar bg-[#2563EB] sólido + text-[#FFFFFF] + font-bold");
   const mediaLine = source.match(/MEDIA:\s*"[^"]*"/)?.[0] ?? "";
   assert(!/severity-media|amber|yellow|orange/.test(mediaLine), `badge MÉDIO não pode referenciar âmbar/amarelo/laranja: "${mediaLine}"`);
 });

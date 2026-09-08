@@ -1,13 +1,12 @@
-// Cores solidas de IntegrationStatusBadge (PENDENTE, ATIVO/CONECTADO,
-// ERRO) — badge compartilhado usado por toda integracao que nao seja
-// Construmanager (Diario de Obra, Email, Drive, ESG/SSMA, ...).
+// Cores solidas dos 4 status de integracao — PENDENTE, ATIVO/CONECTADO,
+// ATENCAO e ERRO — padronizacao visual GLOBAL (substitui a autorizacao
+// anterior, que so cobria PENDENTE/ATIVO/ERRO e deixava ATENCAO
+// translucido e o Construmanager com paleta propria).
 //
-// Autorizado explicitamente por Reynaldo nesta sessao, na branch
-// fix/diario-de-obra-monitoring-display: alto contraste (fundo solido
-// + texto preto/branco + negrito) para PENDENTE/ATIVO/ERRO, sem tocar
-// no badge proprio do Construmanager (paleta diferente, arquivo
-// separado) nem no estado ATENCAO (continua translucido, de proposito
-// — ver comentario em badges.tsx).
+// Fonte unica: `integrationClasses`, exportado de
+// apps/web/components/shared/badges.tsx. Toda tela — Dashboard,
+// Integracoes (fontes genericas E Construmanager), Email — consome o
+// MESMO objeto, nunca duplica o mapa.
 //
 // SEM REDE, SEM BANCO, SEM IA — so texto do arquivo fonte.
 //
@@ -39,6 +38,8 @@ function ler(relativo) {
 const BADGES_SRC = ler("apps/web/components/shared/badges.tsx");
 const INTEGRATION_CARD_SRC = ler("apps/web/components/integrations/integration-card.tsx");
 const EMAIL_CARD_SRC = ler("apps/web/components/integrations/email-integration-card.tsx");
+const CONSTRUMANAGER_BADGE_SRC = ler("apps/web/components/integrations/construmanager-status-badge.tsx");
+const DASHBOARD_SUMMARY_SRC = ler("apps/web/components/dashboard/integration-status-summary.tsx");
 
 function linhaDe(chave) {
   const m = BADGES_SRC.match(new RegExp(`${chave}:\\s*"[^"]*"`));
@@ -52,7 +53,7 @@ const linhaAtencao = linhaDe("ATENCAO");
 
 
 // ============================================================
-// 1. As tres combinacoes obrigatorias.
+// 1. As quatro combinacoes obrigatorias.
 // ============================================================
 
 check(
@@ -70,6 +71,13 @@ check(
 );
 
 check(
+  "ATENCAO: fundo laranja solido, texto branco, negrito (era translucido)",
+  /bg-orange-500(?!\/)/.test(linhaAtencao) &&
+    /text-white/.test(linhaAtencao) &&
+    /font-bold/.test(linhaAtencao)
+);
+
+check(
   "ERRO: fundo vermelho solido #DC2626, texto branco #FFFFFF, negrito",
   /bg-\[#DC2626\]/.test(linhaErro) &&
     /text-\[#FFFFFF\]/.test(linhaErro) &&
@@ -78,37 +86,22 @@ check(
 
 
 // ============================================================
-// 2. Ausencia das classes translucidas antigas nesses tres estados.
+// 2. Ausencia de transparencia/tokens antigos nos 4 estados.
 // ============================================================
 
 for (const [nome, linha] of [
   ["PENDENTE", linhaPendente],
   ["CONECTADO", linhaConectado],
+  ["ATENCAO", linhaAtencao],
   ["ERRO", linhaErro],
 ]) {
-  check(`${nome} nao usa mais opacidade /15 (era translucido)`, !/\/15/.test(linha));
+  check(`${nome} nao usa opacidade /10, /15 ou /20`, !/\/(10|15|20)\b/.test(linha));
   check(`${nome} nao referencia mais token severity-* (era o antigo)`, !/severity-(baixa|media|critica)/.test(linha));
 }
 
 
 // ============================================================
-// 3. Preservacao dos demais estados — ATENCAO continua translucido, de
-//    proposito (distinto de ERRO: falha nao bloqueante).
-// ============================================================
-
-check(
-  "ATENCAO continua translucido (nao foi solidificado sem necessidade)",
-  /bg-orange-500\/15/.test(linhaAtencao) && /text-orange-600/.test(linhaAtencao)
-);
-
-check(
-  "ATENCAO nao ganhou negrito (nao e' um dos tres estados pedidos)",
-  !/ATENCAO:\s*"[^"]*font-bold/.test(BADGES_SRC)
-);
-
-
-// ============================================================
-// 4. Preservacao de texto, funcao, borda — nada alem da cor mudou.
+// 3. Preservacao de texto, funcao, borda — nada alem da cor mudou.
 // ============================================================
 
 check(
@@ -125,62 +118,72 @@ check(
 );
 
 check(
-  "integrationStatusLabels (lib/labels.ts) nao foi tocado — textos PENDENTE/Ativo/ERRO preservados",
+  "integrationStatusLabels (lib/labels.ts) nao foi tocado — textos PENDENTE/Ativo/Atenção/ERRO preservados",
   (() => {
     const labels = ler("apps/web/lib/labels.ts");
     return /CONECTADO:\s*"Ativo"/.test(labels) &&
       /PENDENTE:\s*"Pendente"/.test(labels) &&
+      /ATENCAO:\s*"Atenção"/.test(labels) &&
       /ERRO:\s*"Erro"/.test(labels);
   })()
 );
 
 check(
-  "o mapeamento continua UM SO Record<IntegrationStatus,string> — sem duplicacao",
-  (BADGES_SRC.match(/const integrationClasses: Record<IntegrationStatus, string>/g) ?? []).length === 1
-);
-
-check(
-  "SeverityBadge (outro componente/severidades) nao foi alterado por esta mudanca",
-  /const severityClasses: Record<AlertSeverity, string> = \{\s*BAIXA: "border-transparent bg-severity-baixa\/15 text-severity-baixa",\s*MEDIA: "border-transparent bg-risk-media text-white font-bold",\s*ALTA: "border-transparent bg-severity-alta text-white font-bold",\s*CRITICA: "border-transparent bg-severity-critica text-white font-bold",\s*\};/.test(
-    BADGES_SRC
-  )
+  "integrationClasses e' exportado (fonte unica reutilizavel) e aparece so 1 vez",
+  (BADGES_SRC.match(/export const integrationClasses: Record<IntegrationStatus, string>/g) ?? []).length === 1
 );
 
 
 // ============================================================
-// 5. O mesmo componente compartilhado e' usado nos 2 pontos de
-//    integracao que nao sao Construmanager — sem duplicacao de
-//    mapeamento em outro arquivo.
+// 4. Todo consumidor usa a MESMA fonte — sem mapa local duplicado em
+//    nenhuma tela (Integracoes genericas, Email, Construmanager,
+//    Dashboard).
 // ============================================================
 
 check(
-  "integration-card.tsx continua usando IntegrationStatusBadge para as fontes nao-Construmanager",
+  "integration-card.tsx usa IntegrationStatusBadge para as fontes nao-Construmanager",
   /<IntegrationStatusBadge status=\{status\} \/>/.test(INTEGRATION_CARD_SRC)
 );
 
 check(
-  "email-integration-card.tsx tambem usa o MESMO componente (ganha a cor nova automaticamente)",
+  "email-integration-card.tsx usa o MESMO componente",
   /<IntegrationStatusBadge status=\{status\} \/>/.test(EMAIL_CARD_SRC)
 );
 
 check(
-  "nenhum arquivo de integracao redefine cor de status localmente (grep por bg-[#... fora de badges.tsx)",
-  !/bg-\[#(FFD600|166534|DC2626)\]/.test(INTEGRATION_CARD_SRC) &&
-    !/bg-\[#(FFD600|166534|DC2626)\]/.test(EMAIL_CARD_SRC)
+  "construmanager-status-badge.tsx NAO tem mais mapa proprio de cor de status de integracao (CONSTRUMANAGER_INTEGRATION_STATUS_CLASSES removido)",
+  !/CONSTRUMANAGER_INTEGRATION_STATUS_CLASSES/.test(CONSTRUMANAGER_BADGE_SRC) &&
+    !/Record<\s*\n?\s*IntegrationStatus,\s*\n?\s*string\s*\n?\s*>/.test(CONSTRUMANAGER_BADGE_SRC)
 );
 
-
-// ============================================================
-// 6. Badge do Construmanager (paleta PROPRIA, arquivo separado) fica
-//    de fora — nao foi tocado por esta mudanca.
-// ============================================================
+check(
+  "ConstrumanagerIntegrationStatusBadge importa integrationClasses da fonte compartilhada",
+  /import \{ integrationClasses \} from "@\/components\/shared\/badges";/.test(CONSTRUMANAGER_BADGE_SRC) &&
+    /className=\{cn\(integrationClasses\[status\]\)\}/.test(CONSTRUMANAGER_BADGE_SRC)
+);
 
 check(
-  "construmanager-status-badge.tsx nao foi tocado (paleta propria, fora do escopo)",
-  (() => {
-    const src = ler("apps/web/components/integrations/construmanager-status-badge.tsx");
-    return /bg-yellow-400/.test(src) && /bg-green-600/.test(src) && /bg-red-600/.test(src);
-  })()
+  "status de CONTEUDO do Construmanager (download por item — conceito diferente) continua com paleta propria, fora do escopo",
+  /CONSTRUMANAGER_CONTENT_STATUS_CLASSES/.test(CONSTRUMANAGER_BADGE_SRC)
+);
+
+check(
+  "Dashboard (card 'Status das integrações') NAO tem mais mapa proprio (STATUS_TONE_CLASSNAME removido)",
+  !/STATUS_TONE_CLASSNAME/.test(DASHBOARD_SUMMARY_SRC)
+);
+
+check(
+  "Dashboard importa integrationClasses da fonte compartilhada",
+  /import \{ integrationClasses \} from "@\/components\/shared\/badges";/.test(DASHBOARD_SUMMARY_SRC) &&
+    /integrationClasses\[group\.status\]/.test(DASHBOARD_SUMMARY_SRC)
+);
+
+check(
+  "nenhum arquivo de integracao/dashboard redefine cor de status com hex literal fora de badges.tsx",
+  !/bg-\[#(FFD600|166534|DC2626)\]/.test(INTEGRATION_CARD_SRC) &&
+    !/bg-\[#(FFD600|166534|DC2626)\]/.test(EMAIL_CARD_SRC) &&
+    !/bg-\[#(FFD600|166534|DC2626)\]/.test(DASHBOARD_SUMMARY_SRC) &&
+    !/bg-\[#(FFD600|166534|DC2626)\]/.test(CONSTRUMANAGER_BADGE_SRC)
 );
 
 

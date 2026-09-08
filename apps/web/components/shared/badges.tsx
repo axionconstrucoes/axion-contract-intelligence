@@ -17,18 +17,30 @@ import type { EmailAccountStatus } from "@/lib/email/inbound/ingestion-controls/
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { cn } from "@/lib/utils";
 
-// MÉDIA/ALTA/CRÍTICA usam caixa sólida + fonte branca + bold (forte
-// contraste, nunca âmbar/amarelo/laranja-claro para MÉDIA — ver token
-// dedicado --risk-media em globals.css, separado de --severity-media,
-// que continua âmbar só para estados não relacionados a risco). Único
-// componente compartilhado de severidade do ACC — nunca duplicar esta
-// paleta em Dashboard/Timeline/Event Ledger/Ações/ESG/Experts IA/
-// Adicionais/Análise Contratual.
-const severityClasses: Record<AlertSeverity, string> = {
-  BAIXA: "border-transparent bg-severity-baixa/15 text-severity-baixa",
-  MEDIA: "border-transparent bg-risk-media text-white font-bold",
-  ALTA: "border-transparent bg-severity-alta text-white font-bold",
-  CRITICA: "border-transparent bg-severity-critica text-white font-bold",
+// PADRAO DEFINITIVO DE RISCO (cancela o esquema anterior — BAIXO
+// amarelo e ALTO laranja nao existem mais em lugar nenhum): as 4
+// severidades usam fundo SOLIDO + fonte em negrito, hex explicito via
+// arbitrary value (nao os tokens --severity-*/--risk-media de
+// globals.css — esses tokens continuam existindo e sendo usados por
+// telas que pintam avisos/confirmacoes com a MESMA cor mas SEM
+// significar um grau de risco, ex.: caixa de alerta em
+// adicionais/[proposalId]/page.tsx; mudar aqui nao afeta aquelas).
+//
+//   BAIXA    verde-escuro #166534 / branco
+//   MEDIA    azul #2563EB / branco
+//   ALTA     amarelo forte #FFD600 / PRETO (nunca mais laranja)
+//   CRITICA  vermelho forte #DC2626 / branco
+//
+// EXPORTADO: fonte UNICA de estilo de risco do ACC — Dashboard,
+// Integracoes, Ledger, Ações, ESG, Experts IA, Adicionais, Analise
+// Contratual e qualquer tela nova devem importar daqui, nunca duplicar
+// o mapa localmente. `RiskLegend` (risk-legend.tsx) e' a forma
+// recomendada de mostrar as 4 severidades juntas (ex.: legenda).
+export const severityClasses: Record<AlertSeverity, string> = {
+  BAIXA: "border-transparent bg-[#166534] text-[#FFFFFF] font-bold",
+  MEDIA: "border-transparent bg-[#2563EB] text-[#FFFFFF] font-bold",
+  ALTA: "border-transparent bg-[#FFD600] text-[#000000] font-bold",
+  CRITICA: "border-transparent bg-[#DC2626] text-[#FFFFFF] font-bold",
 };
 
 const SEVERITY_HELP_ID: Record<AlertSeverity, string> = {
@@ -86,14 +98,19 @@ export function CategoryBadge({ category }: { category: ImplicationCategory }) {
 // consegue operar". A cor do badge identifica o ESTADO, nunca a FONTE
 // (a cor da fonte vive em integration-visual-identity.ts).
 //
-// CONECTADO ("Ativo"), PENDENTE e ERRO usam cor SÓLIDA (hex explícito
-// via arbitrary value, não o token translúcido `/15` dos demais
-// estados): alto contraste pedido para esses três especificamente.
-// ATENCAO fica de fora de proposito — continua no padrão translúcido.
-const integrationClasses: Record<IntegrationStatus, string> = {
+// PADRAO DEFINITIVO DE STATUS: os 4 usam fundo SOLIDO + negrito, sem
+// transparencia. ATENCAO preserva a tonalidade laranja institucional
+// (bg-orange-500, a mesma ja usada em construmanager-status-badge.tsx
+// para o mesmo estado) — so ganhou fundo solido e negrito, deixou de
+// ser translucido.
+//
+// EXPORTADO: fonte UNICA de status de integracao do ACC — toda tela
+// que exiba PENDENTE/ATIVO/ATENCAO/ERRO (Dashboard, Integracoes, ...)
+// importa este mapa, nunca duplica localmente.
+export const integrationClasses: Record<IntegrationStatus, string> = {
   CONECTADO: "border-transparent bg-[#166534] text-[#FFFFFF] font-bold",
   PENDENTE: "border-transparent bg-[#FFD600] text-[#000000] font-bold",
-  ATENCAO: "border-transparent bg-orange-500/15 text-orange-600 dark:text-orange-400",
+  ATENCAO: "border-transparent bg-orange-500 text-white font-bold",
   ERRO: "border-transparent bg-[#DC2626] text-[#FFFFFF] font-bold",
 };
 

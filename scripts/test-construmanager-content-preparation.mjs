@@ -503,10 +503,28 @@ check(
 console.log("");
 console.log("-- 9. cores dos status --");
 
+// Status de INTEGRACAO (cabecalho do card) passou a usar a paleta
+// GLOBAL compartilhada (badges.tsx:integrationClasses) na padronizacao
+// visual do ACC — CONSTRUMANAGER_INTEGRATION_STATUS_CLASSES foi
+// removido deste arquivo de proposito, entao as 3 checagens abaixo
+// verificam o IMPORT/USO da fonte unica, nao mais um mapa proprio.
+check(
+  "status de integração (cabeçalho) importa a paleta global, não mantém mapa próprio",
+  /import \{ integrationClasses \} from "@\/components\/shared\/badges";/.test(badgeSource) &&
+    !/CONSTRUMANAGER_INTEGRATION_STATUS_CLASSES/.test(badgeSource)
+);
+
+check(
+  "ConstrumanagerIntegrationStatusBadge usa integrationClasses[status]",
+  /export function ConstrumanagerIntegrationStatusBadge[\s\S]{0,200}className=\{cn\(integrationClasses\[status\]\)\}/.test(
+    badgeSource
+  )
+);
+
+// Status de CONTEUDO (download por item) e' um conceito diferente de
+// status de integracao/risco — fica de fora da padronizacao, mantém
+// paleta própria neste arquivo.
 const regras = [
-  ["PENDENTE (integração)", /CONSTRUMANAGER_INTEGRATION_STATUS_CLASSES[\s\S]{0,400}?PENDENTE: "[^"]*bg-yellow-400[^"]*text-black[^"]*font-bold/],
-  ["ATIVO/CONECTADO (integração)", /CONSTRUMANAGER_INTEGRATION_STATUS_CLASSES[\s\S]{0,400}?CONECTADO: "[^"]*bg-green-600[^"]*text-white[^"]*font-bold/],
-  ["ERRO (integração)", /CONSTRUMANAGER_INTEGRATION_STATUS_CLASSES[\s\S]{0,400}?ERRO: "[^"]*bg-red-600[^"]*text-white[^"]*font-bold/],
   ["PENDENTE (conteúdo)", /CONSTRUMANAGER_CONTENT_STATUS_CLASSES[\s\S]{0,400}?PENDENTE: "[^"]*bg-yellow-400[^"]*text-black[^"]*font-bold/],
   ["ARMAZENADO (conteúdo)", /CONSTRUMANAGER_CONTENT_STATUS_CLASSES[\s\S]{0,400}?ARMAZENADO: "[^"]*bg-green-600[^"]*text-white[^"]*font-bold/],
   ["ERRO (conteúdo)", /CONSTRUMANAGER_CONTENT_STATUS_CLASSES[\s\S]{0,400}?ERRO: "[^"]*bg-red-600[^"]*text-white[^"]*font-bold/],
@@ -517,14 +535,14 @@ for (const [nome, padrao] of regras) {
 }
 
 check(
-  "PENDENTE usa texto PRETO (branco sobre amarelo não teria contraste)",
+  "PENDENTE (conteúdo) usa texto PRETO (branco sobre amarelo não teria contraste)",
   /PENDENTE: "[^"]*text-black/.test(badgeSource) &&
     !/PENDENTE: "[^"]*text-white/.test(badgeSource)
 );
 
 check(
-  "todos os status do Construmanager são negrito",
-  (badgeSource.match(/font-bold/g) ?? []).length >= 8
+  "todos os status de CONTEÚDO do Construmanager são negrito (integração usa a paleta global, verificada à parte)",
+  (badgeSource.match(/font-bold/g) ?? []).length >= 5
 );
 
 check(

@@ -1,9 +1,10 @@
 // Bloco 9 (rodada "produção") — caixas-resumo do Start-up ACC em preto
-// sólido/branco, +1 nível tipográfico, label BAIXO amarelo forte/fonte
-// preta SÓ nesta página (RiskLegend/SeverityBadge continuam com a
-// paleta padrão em qualquer outro lugar). Verificação estrutural do
-// código-fonte real (mesmo padrão de toda a suíte, sem framework de
-// DOM neste projeto).
+// sólido/branco, +1 nível tipográfico. O antigo destaque amarelo forte
+// exclusivo do BAIXO nesta página foi REMOVIDO pela padronização visual
+// global de risco (RiskLegend/SeverityBadge usam sempre a mesma paleta,
+// em qualquer tela, sem exceção — BAIXO é sempre verde-escuro sólido).
+// Verificação estrutural do código-fonte real (mesmo padrão de toda a
+// suíte, sem framework de DOM neste projeto).
 //
 // Uso:
 //   node scripts/test-startup-black-yellow-styling.mjs
@@ -37,7 +38,7 @@ function assert(condition, message) {
 
 console.log("");
 console.log("======================================");
-console.log("START-UP ACC — caixas preto/branco + BAIXO amarelo forte (exclusivo desta página)");
+console.log("START-UP ACC — caixas preto/branco (BAIXO amarelo removido — RiskLegend usa a paleta global)");
 console.log("======================================");
 console.log("");
 
@@ -71,31 +72,24 @@ check("Stat: caixa continua compacta (w-20, padding pequeno) — só o texto cre
   assert(statFn.includes("px-1.5 py-1.5"), "o padding compacto deveria ser preservado");
 });
 
-check("Start-up page: RiskLegend recebe strongBaixaHighlight (só aqui)", () => {
-  assert(startupSource.includes("<RiskLegend strongBaixaHighlight"), "a página Start-up deveria pedir o destaque forte do BAIXO");
+// A padronizacao visual GLOBAL de risco (badges.tsx:severityClasses)
+// cancelou o destaque amarelo exclusivo do BAIXO nesta pagina — agora
+// BAIXO e' sempre verde-escuro solido, em qualquer tela, sem excecao.
+// `strongBaixaHighlight` foi removido de RiskLegend por isso.
+check("Start-up page: RiskLegend NAO recebe mais strongBaixaHighlight (paleta global, sem exceção por página)", () => {
+  assert(startupSource.includes("<RiskLegend />"), "a página Start-up deveria usar <RiskLegend /> sem props");
+  assert(!startupSource.includes("strongBaixaHighlight"), "strongBaixaHighlight não deveria mais existir nesta página");
 });
 
-check("RiskLegend: strongBaixaHighlight é opcional (default false) e só afeta o item BAIXA", () => {
-  assert(/strongBaixaHighlight\s*=\s*false/.test(legendSource), "deveria ter default false — nunca ligado sem pedir explicitamente");
-  const baixaBlock = legendSource.slice(legendSource.indexOf('severity="BAIXA"'), legendSource.indexOf('severity="MEDIA"'));
-  assert(baixaBlock.includes("bg-yellow-400"), "o override amarelo forte deveria estar só no item BAIXA");
-  assert(baixaBlock.includes("text-black"), "a fonte deveria ficar preta sobre o amarelo forte");
-  const mediaAltaCriticaBlock = legendSource.slice(legendSource.indexOf('severity="MEDIA"'));
-  assert(!mediaAltaCriticaBlock.includes("bg-yellow-400"), "MEDIA/ALTA/CRITICA nunca deveriam receber o override amarelo");
+check("RiskLegend: prop strongBaixaHighlight foi removida do componente (BAIXO nunca mais amarelo)", () => {
+  assert(!/strongBaixaHighlight/.test(legendSource), "strongBaixaHighlight não deveria mais existir em risk-legend.tsx");
+  assert(!/bg-yellow-400/.test(legendSource), "risk-legend.tsx não deveria mais ter override amarelo para nenhum item");
+  assert(/<SeverityBadge severity="BAIXA" withInfo \/>/.test(legendSource), "BAIXA deveria renderizar sem className de override, herdando a paleta global");
 });
 
-check("SeverityBadge: aceita className opcional (undefined em todos os OUTROS 13+ usos existentes) — twMerge resolve o conflito, nunca duplica a paleta global", () => {
+check("SeverityBadge: aceita className opcional (usado só por dashboard/page.tsx para layout, w-fit — nunca para sobrescrever cor)", () => {
   assert(/className\?:\s*string/.test(badgesSource), "SeverityBadge deveria aceitar um className opcional");
   assert(badgesSource.includes("cn(severityClasses[severity], className)"), "o className deveria ser mesclado via cn/twMerge, nunca substituir o objeto de classes global");
-});
-
-check("Nenhuma outra tela usa RiskLegend (o override continua isolado ao Start-up por construção, não só por convenção)", () => {
-  // Já confirmado por busca no repositório antes da implementação —
-  // este check apenas fixa a expectativa: se algum dia outra tela
-  // importar RiskLegend SEM strongBaixaHighlight, ela recebe a paleta
-  // padrão automaticamente (default false), nunca o amarelo forte por
-  // engano.
-  assert(/strongBaixaHighlight\s*=\s*false/.test(legendSource));
 });
 
 console.log("");

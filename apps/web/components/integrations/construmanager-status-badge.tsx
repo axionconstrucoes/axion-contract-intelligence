@@ -1,38 +1,24 @@
 // Badges de status do painel Construmanager.
 //
-// Módulo próprio, e não uma alteração de integrationClasses em
-// components/shared/badges.tsx, por um motivo concreto: aquele mapa é
-// compartilhado por Drive, Gmail, ERP e ESG/SSMA. Mudar as cores lá
-// repintaria badges de áreas que ninguém pediu para mexer. Aqui as
-// regras valem só para o Construmanager, e as demais integrações
-// continuam com IntegrationStatusBadge exatamente como estava.
+// Status da INTEGRACAO (cabecalho do card) agora usa `integrationClasses`
+// de components/shared/badges.tsx — a MESMA fonte que Drive, Gmail, ERP,
+// ESG/SSMA e o Dashboard usam. Ate a padronizacao visual global, este
+// arquivo mantinha um mapa proprio com hex levemente diferente
+// (bg-yellow-400/bg-green-600/bg-red-600); isso violava a garantia de
+// "o mesmo status tem aparencia identica em qualquer pagina", entao foi
+// eliminado. `ConstrumanagerIntegrationStatusBadge` continua existindo
+// como componente proprio (integration-card.tsx so troca de badge por
+// tipo de fonte), so a cor deixou de ser duplicada.
 //
-// Contraste: caixa sólida + texto de alto contraste + negrito, para que
-// o estado seja legível de relance no card. PENDENTE usa texto preto
-// sobre amarelo porque branco sobre amarelo-400 não alcança contraste
-// aceitável.
+// Status de CONTEUDO (download de cada item) e' um conceito DIFERENTE —
+// nao e' status de integracao nem grau de risco — e continua com paleta
+// propria abaixo, fora do escopo da padronizacao.
 
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { integrationClasses } from "@/components/shared/badges";
 import { integrationStatusLabels } from "@/lib/labels";
 import type { IntegrationStatus } from "@axion/types";
-
-/**
- * Status da INTEGRAÇÃO (cabeçalho do card).
- *
- * CONECTADO é rotulado "Ativo" na UI (integrationStatusLabels), daí o
- * verde. ATENCAO não foi especificado nas regras visuais; recebe laranja
- * sólido para permanecer distinguível de ERRO sem se confundir com ele.
- */
-export const CONSTRUMANAGER_INTEGRATION_STATUS_CLASSES: Record<
-  IntegrationStatus,
-  string
-> = {
-  CONECTADO: "border-transparent bg-green-600 text-white font-bold",
-  PENDENTE: "border-transparent bg-yellow-400 text-black font-bold",
-  ATENCAO: "border-transparent bg-orange-500 text-white font-bold",
-  ERRO: "border-transparent bg-red-600 text-white font-bold",
-};
 
 export function ConstrumanagerIntegrationStatusBadge({
   status,
@@ -40,7 +26,7 @@ export function ConstrumanagerIntegrationStatusBadge({
   status: IntegrationStatus;
 }) {
   return (
-    <Badge className={cn(CONSTRUMANAGER_INTEGRATION_STATUS_CLASSES[status])}>
+    <Badge className={cn(integrationClasses[status])}>
       {integrationStatusLabels[status]}
     </Badge>
   );

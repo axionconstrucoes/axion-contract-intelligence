@@ -190,10 +190,10 @@ check("nenhum HIGH/CRITICAL visível em PT-BR: registry de risco nunca contém e
   }
 });
 
-check("badges: ALTO/CRÍTICO mantêm caixa sólida + fonte branca + bold; SeverityBadge aceita withInfo opcional sem poluir o uso default", () => {
+check("badges: ALTO (amarelo/preto) e CRÍTICO (vermelho/branco) mantêm caixa sólida + bold (paleta global definitiva); SeverityBadge aceita withInfo opcional sem poluir o uso default", () => {
   const source = readSource("apps/web/components/shared/badges.tsx");
-  assert(/ALTA:\s*"[^"]*bg-severity-alta\s+text-white\s+font-bold[^"]*"/.test(source));
-  assert(/CRITICA:\s*"[^"]*bg-severity-critica\s+text-white\s+font-bold[^"]*"/.test(source));
+  assert(/ALTA:\s*"[^"]*bg-\[#FFD600\]\s+text-\[#000000\]\s+font-bold[^"]*"/.test(source));
+  assert(/CRITICA:\s*"[^"]*bg-\[#DC2626\]\s+text-\[#FFFFFF\]\s+font-bold[^"]*"/.test(source));
   assert(source.includes("withInfo = false"), "withInfo deveria ter default false — nunca poluir os usos existentes de SeverityBadge");
 });
 

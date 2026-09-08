@@ -94,7 +94,7 @@ export default async function StartupPage({ params }: { params: Promise<{ projec
             Findings históricos ALTO/CRÍTICO
             <FeatureInfo helpId="finding" />
           </h2>
-          <RiskLegend strongBaixaHighlight />
+          <RiskLegend />
         </div>
         {highCriticalFindings.length === 0 ? (
           <EmptyState message="Nenhum finding histórico ALTO/CRÍTICO registrado ainda — LOW/MEDIUM permanecem pesquisáveis mas não bloqueiam o Start-up." />
