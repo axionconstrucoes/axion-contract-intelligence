@@ -3,8 +3,11 @@
 // A API devolve as colecoes com forma variavel por modelo de relatorio:
 // o clima ora e' uma string por turno, ora um objeto com `praticavel`;
 // a mao de obra ora e' `{ total }`, ora uma lista de itens com
-// `quantidade`. Cada leitor aqui entende as formas observadas e devolve
-// `null` quando NAO consegue ler.
+// `quantidade`, ora (forma medida na obra real, contrato observado em
+// producao) `{ opcaoSelecionada: "padrao" | "personalizada", padrao: [...],
+// personalizada: [...] }` — a obra escolhe um dos dois modelos de
+// lancamento, e so a lista escolhida importa. Cada leitor aqui entende
+// as formas observadas e devolve `null` quando NAO consegue ler.
 //
 // `null` NUNCA vira alerta. Fail-closed no alerta e' o certo: um alerta
 // emitido por leitura errada custa mais caro que um alerta nao emitido,
@@ -118,6 +121,20 @@ export function totalDeEfetivo(labor: unknown): number | null {
 
   const obj = comoObjeto(labor);
   if (!obj) return null;
+
+  // Forma medida em producao: a obra escolhe entre lancamento "padrao"
+  // e "personalizada", e a lista NAO escolhida fica presente mas vazia
+  // — le-la contaria efetivo que a obra nunca lancou. Uma lista vazia
+  // aqui e' formulario NAO PREENCHIDO, nao "zero declarado": ao
+  // contrario do ramo generico abaixo, ela NAO conta como leitura
+  // valida de zero.
+  const opcao = obj.opcaoSelecionada;
+  if (opcao === "padrao" || opcao === "personalizada") {
+    const selecionado = obj[opcao];
+    if (Array.isArray(selecionado)) {
+      return selecionado.length === 0 ? null : totalDeEfetivo(selecionado);
+    }
+  }
 
   for (const campo of ["total", "efetivo", "totalEfetivo", "quantidade"]) {
     const n = comoNumero(obj[campo]);
