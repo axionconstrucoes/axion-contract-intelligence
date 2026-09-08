@@ -18,9 +18,11 @@ import { ConstrumanagerMonitoringPanel } from "./construmanager-monitoring-panel
 import { ConstrumanagerIntegrationStatusBadge } from "./construmanager-status-badge";
 import { ConstrumanagerVersionTransitions } from "./construmanager-version-transitions";
 import { DiarioDeObraMonitoringPanel } from "./diario-de-obra-monitoring-panel";
+import { DiarioDeObraClimateKpiPanel } from "./diario-de-obra-climate-kpi-panel";
 import type { ConstrumanagerMetadataOverview } from "@/lib/integrations/construmanager/get-metadata-overview";
 import type { ConstrumanagerVersionTransitionsResult } from "@/lib/integrations/construmanager/get-version-transitions";
 import type { DiarioDeObraMonitoringOverview } from "@/lib/integrations/diario-de-obra/get-monitoring-overview";
+import type { ClimaKpiDoPeriodo } from "@/lib/integrations/diario-de-obra/climate-kpi";
 import { resolveGenericIntegrationDisplayStatus } from "@/lib/ui/resolve-integration-display-status";
 import { driveTypeLabels, formatDateTime } from "@/lib/labels";
 import { normalizeLegacyMojibake } from "@/lib/normalize-legacy-mojibake";
@@ -34,6 +36,7 @@ export function IntegrationCard({
   construmanagerMetadata,
   construmanagerTransitions,
   diarioDeObraOverview,
+  diarioDeObraClimateKpi,
 }: {
   projectId: string;
   source: SourceDefinition;
@@ -42,6 +45,7 @@ export function IntegrationCard({
   construmanagerMetadata?: ConstrumanagerMetadataOverview | null;
   construmanagerTransitions?: ConstrumanagerVersionTransitionsResult | null;
   diarioDeObraOverview?: DiarioDeObraMonitoringOverview | null;
+  diarioDeObraClimateKpi?: ClimaKpiDoPeriodo | null;
 }) {
   const [editing, setEditing] = useState(false);
   const identity = resolveIntegrationVisualIdentity(source.type);
@@ -140,7 +144,10 @@ export function IntegrationCard({
             que exija ser administrador. Diferente do Construmanager,
             que expoe botao de verificacao e de sincronizacao. */}
         {source.type === "DIARIO_OBRA" ? (
-          <DiarioDeObraMonitoringPanel overview={diarioDeObraOverview ?? null} />
+          <>
+            <DiarioDeObraMonitoringPanel overview={diarioDeObraOverview ?? null} />
+            <DiarioDeObraClimateKpiPanel overview={diarioDeObraClimateKpi ?? null} />
+          </>
         ) : null}
 
         {canManage ? (

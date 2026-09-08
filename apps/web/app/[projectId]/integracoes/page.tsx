@@ -18,6 +18,7 @@ import { getEmailAttachmentRegistryForProject } from "@/lib/email/attachments/re
 import { getConstrumanagerMetadataOverview } from "@/lib/integrations/construmanager/get-metadata-overview";
 import { getConstrumanagerVersionTransitions } from "@/lib/integrations/construmanager/get-version-transitions";
 import { getDiarioDeObraMonitoringOverview } from "@/lib/integrations/diario-de-obra/get-monitoring-overview";
+import { getDiarioDeObraClimateKpiOverview } from "@/lib/integrations/diario-de-obra/get-climate-kpi-overview";
 
 export const metadata: Metadata = { title: "Integrações" };
 
@@ -31,7 +32,7 @@ export default async function IntegracoesPage({
   const supabase = await createSupabaseServerClient();
   const sources = getSourceDefinitions();
 
-  const [configs, permission, project, projectStartRow, accounts, ingestionConfig, latestRun, attachmentRows, construmanagerMetadata, construmanagerTransitions, diarioDeObraOverview] = await Promise.all([
+  const [configs, permission, project, projectStartRow, accounts, ingestionConfig, latestRun, attachmentRows, construmanagerMetadata, construmanagerTransitions, diarioDeObraOverview, diarioDeObraClimateKpi] = await Promise.all([
     getIntegrationConfigs(projectId),
     getCurrentProjectPermission(projectId),
     getProject(projectId),
@@ -45,6 +46,7 @@ export default async function IntegracoesPage({
     // Somente leitura de agregados, pelo client de sessao: a RLS de
     // diario_de_obra_* ja restringe a membros do projeto.
     getDiarioDeObraMonitoringOverview(supabase, projectId),
+    getDiarioDeObraClimateKpiOverview(supabase, projectId),
   ]);
 
   const canManage = permission === "ADMINISTRADOR";
@@ -77,6 +79,7 @@ export default async function IntegracoesPage({
               construmanagerMetadata={source.type === "CONSTRUMANAGER" ? construmanagerMetadata : null}
               construmanagerTransitions={source.type === "CONSTRUMANAGER" ? construmanagerTransitions : null}
               diarioDeObraOverview={source.type === "DIARIO_OBRA" ? diarioDeObraOverview : null}
+              diarioDeObraClimateKpi={source.type === "DIARIO_OBRA" ? diarioDeObraClimateKpi : null}
             />
           );
         })}
