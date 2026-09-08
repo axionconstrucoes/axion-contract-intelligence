@@ -127,8 +127,14 @@ check(
   /PENDENTE: "[^"]*bg-yellow-400[^"]*text-black[^"]*font-bold/.test(badgeSource)
 );
 check(
-  "ATIVO (CONECTADO) segue verde/branco/negrito",
-  /CONECTADO: "[^"]*bg-green-600[^"]*text-white[^"]*font-bold/.test(badgeSource)
+  // Status de INTEGRACAO passou a usar a paleta GLOBAL compartilhada
+  // (badges.tsx:integrationClasses) na padronização visual do ACC —
+  // CONECTADO não tem mais linha própria neste arquivo, o badge importa
+  // a cor de fora. PENDENTE/ERRO acima ainda "passam" por coincidirem
+  // com o status de CONTEÚDO (conceito diferente, continua igual).
+  "ATIVO (CONECTADO) usa a paleta global compartilhada (importada, não mais própria deste arquivo)",
+  /import \{ integrationClasses \} from "@\/components\/shared\/badges";/.test(badgeSource) &&
+    /className=\{cn\(integrationClasses\[status\]\)\}/.test(badgeSource)
 );
 check(
   "ARMAZENADO segue verde/branco/negrito",

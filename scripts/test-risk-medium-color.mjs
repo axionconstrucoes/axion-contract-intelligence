@@ -1,11 +1,16 @@
 // Teste estrutural dedicado — "Atualização global — cor do risco MÉDIO".
 // Garante que o badge de risco MÉDIO nunca volte a usar âmbar/amarelo/
-// laranja-claro (token dedicado --risk-media, azul, separado de
-// --severity-media que continua âmbar só para estados não relacionados
-// a risco), que ALTO continua laranja e não foi afetado, e que a
-// duplicação de mapeamento de cor por página foi eliminada. Puramente
-// estrutural (leitura de código-fonte), mesmo padrão já usado em
-// scripts/test-feature-info.mjs e scripts/test-global-test-mode-banner.mjs.
+// laranja-claro, e que a duplicação de mapeamento de cor por página foi
+// eliminada.
+//
+// ATUALIZADO pela padronização visual global (badges.tsx agora usa hex
+// explícito por arbitrary value, não mais o token --risk-media — que
+// continua existindo em globals.css, só deixou de ser referenciado por
+// severityClasses.MEDIA) — nessa mesma padronização, ALTO deixou de ser
+// laranja e passou a amarelo forte/texto preto (o padrão anterior de
+// "ALTO laranja" foi cancelado). Puramente estrutural (leitura de
+// código-fonte), mesmo padrão já usado em scripts/test-feature-info.mjs
+// e scripts/test-global-test-mode-banner.mjs.
 //
 // Uso:
 //   node scripts/test-risk-medium-color.mjs
@@ -69,10 +74,10 @@ check("globals.css: --severity-media (âmbar) permanece intocado — outros esta
 
 const badgesSource = readSource("apps/web/components/shared/badges.tsx");
 
-check("badges.tsx: severityClasses.MEDIA usa bg-risk-media sólido + text-white + font-bold", () => {
+check("badges.tsx: severityClasses.MEDIA usa azul sólido #2563EB + text-[#FFFFFF] + font-bold", () => {
   assert(
-    /MEDIA:\s*"[^"]*bg-risk-media\s+text-white\s+font-bold[^"]*"/.test(badgesSource),
-    "MEDIA deveria usar bg-risk-media + text-white + font-bold"
+    /MEDIA:\s*"[^"]*bg-\[#2563EB\]\s+text-\[#FFFFFF\]\s+font-bold[^"]*"/.test(badgesSource),
+    "MEDIA deveria usar bg-[#2563EB] + text-[#FFFFFF] + font-bold"
   );
 });
 
@@ -82,17 +87,18 @@ check("badges.tsx: severityClasses.MEDIA nunca referencia severity-media/amber/y
   assert(!/severity-media|amber|yellow|orange/i.test(mediaLine), `MEDIA não pode referenciar âmbar/amarelo/laranja: "${mediaLine}"`);
 });
 
-check("badges.tsx: severityClasses.ALTA continua bg-severity-alta + text-white + font-bold — não afetado pela mudança do MÉDIO", () => {
+check("badges.tsx: severityClasses.ALTA usa amarelo forte #FFD600 + texto PRETO + font-bold (padrão anterior de ALTO laranja está cancelado)", () => {
   assert(
-    /ALTA:\s*"border-transparent bg-severity-alta text-white font-bold"/.test(badgesSource),
-    "ALTA deveria permanecer exatamente como antes (bg-severity-alta, laranja)"
+    /ALTA:\s*"border-transparent bg-\[#FFD600\] text-\[#000000\] font-bold"/.test(badgesSource),
+    "ALTA deveria usar bg-[#FFD600] + text-[#000000] (nunca mais laranja/bg-severity-alta)"
   );
+  assert(!/ALTA:\s*"[^"]*orange|ALTA:\s*"[^"]*severity-alta/.test(badgesSource), "ALTA não pode mais referenciar laranja/severity-alta");
 });
 
-check("badges.tsx: severityClasses.CRITICA continua bg-severity-critica — não afetado", () => {
+check("badges.tsx: severityClasses.CRITICA usa vermelho sólido #DC2626 + text-[#FFFFFF] + font-bold (hex explícito, mesmo resultado visual de antes)", () => {
   assert(
-    /CRITICA:\s*"border-transparent bg-severity-critica text-white font-bold"/.test(badgesSource),
-    "CRITICA deveria permanecer exatamente como antes"
+    /CRITICA:\s*"border-transparent bg-\[#DC2626\] text-\[#FFFFFF\] font-bold"/.test(badgesSource),
+    "CRITICA deveria usar bg-[#DC2626] + text-[#FFFFFF]"
   );
 });
 

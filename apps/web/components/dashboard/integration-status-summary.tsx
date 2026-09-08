@@ -6,16 +6,10 @@
 
 import Link from "next/link";
 import { FeatureInfo } from "@/components/shared/feature-info";
+import { integrationClasses } from "@/components/shared/badges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { integrationStatusLabels } from "@/lib/labels";
 import type { IntegrationStatusGroup } from "@/lib/ui/resolve-integration-display-status";
-
-const STATUS_TONE_CLASSNAME: Record<IntegrationStatusGroup["status"], string> = {
-  CONECTADO: "border-transparent bg-severity-baixa/15 text-severity-baixa",
-  PENDENTE: "border-transparent bg-severity-media/15 text-severity-media",
-  ATENCAO: "border-transparent bg-orange-500/15 text-orange-600 dark:text-orange-400",
-  ERRO: "border-transparent bg-severity-critica/15 text-severity-critica",
-};
 
 export function IntegrationStatusSummary({ projectId, groups }: { projectId: string; groups: IntegrationStatusGroup[] }) {
   return (
@@ -31,7 +25,7 @@ export function IntegrationStatusSummary({ projectId, groups }: { projectId: str
           <span
             key={group.status}
             title={group.labels.length > 0 ? group.labels.join("\n") : "Nenhuma fonte neste status"}
-            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium ${STATUS_TONE_CLASSNAME[group.status]}`}
+            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${integrationClasses[group.status]}`}
           >
             <span className="text-sm font-semibold">{group.count}</span>
             {integrationStatusLabels[group.status]}
