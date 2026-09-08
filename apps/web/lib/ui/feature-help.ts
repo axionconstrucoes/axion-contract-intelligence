@@ -121,7 +121,8 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
     id: "integracoes",
     title: "Integrações",
     shortDescription: "Conexões do ACC com fontes externas.",
-    description: "Mostra e gerencia fontes externas utilizadas pelo projeto, como Gmail, Google Drive e demais integrações disponíveis.",
+    description:
+      "Mostra e gerencia fontes externas utilizadas pelo projeto. Política atual: contratos e aditivos, edital/RFI/RFP e dúvidas da licitação, e serviços adicionais aprovados entram por upload manual do ADM na área de Documentos. Google Drive é usado somente para ESG/SSMA. Drive de Orçamentos e Drive de Planejamento não estão integrados.",
   },
   {
     id: "dashboard-integration-status-summary",

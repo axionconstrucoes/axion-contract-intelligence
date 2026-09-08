@@ -7,7 +7,7 @@
 // Uso:
 //   node scripts/test-additional-proposal-drive-lookup.mjs
 
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { register } from "node:module";
@@ -330,10 +330,17 @@ check("fail-closed NA INTERFACE: o formulário distingue 'integração não conf
   assert(createFormSource.includes("Nenhuma proposta encontrada na pasta ORÇAMENTOS."));
 });
 
-check("fail-closed NA INTERFACE: adicionais/page.tsx calcula a flag no SERVIDOR (isProposalDriveFixtureAllowed) e a repassa ao formulário — nunca uma heurística do lado do cliente", () => {
-  const pageSource = readSource("apps/web/app/[projectId]/adicionais/page.tsx");
-  assert(pageSource.includes("isProposalDriveFixtureAllowed()"));
-  assert(pageSource.includes("driveIntegrationConfigured={isProposalDriveFixtureAllowed()}"));
+check("fail-closed NA INTERFACE: o formulário preservado (AdditionalProposalCreateForm) continua exigindo a flag do SERVIDOR (driveIntegrationConfigured), nunca calcula heurística própria — mesma garantia de antes, agora sem ponto de entrada na UI", () => {
+  // adicionais/page.tsx (o antigo caller) virou redirecionamento — aba
+  // "Serviços Adicionais" descontinuada. isProposalDriveFixtureAllowed
+  // e AdditionalProposalCreateForm continuam existindo e com a mesma
+  // garantia fail-closed; só não há mais tela que os invoque.
+  const formSource = readSource("apps/web/components/additionals/additional-proposal-create-form.tsx");
+  assert(formSource.includes("driveIntegrationConfigured"), "o formulário deveria continuar recebendo a flag por prop, não calculá-la");
+  assert(
+    existsSync(path.join(repoRoot, "apps/web/lib/additionals/proposal-drive-lookup/get-proposal-drive-lookup-client.ts")),
+    "isProposalDriveFixtureAllowed (lib preservada) deveria continuar existindo"
+  );
 });
 
 console.log("");
