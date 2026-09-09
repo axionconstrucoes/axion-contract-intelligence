@@ -44,7 +44,9 @@ check("UI declara somente leitura", component.includes("Somente leitura"));
 check("UI mostra 11/11 e contagem por pasta", component.includes("11/11 pastas") && component.includes("Ver contagem por pasta"));
 check("painel aparece apenas para ADMIN no ESG_SSMA", card.includes('source.type === "ESG_SSMA" && canManage'));
 check("caminho padrão é Drive compartilhado > SSMA-ESG > pasta da obra", policy.includes('"Drive compartilhado > SSMA-ESG > pasta da obra"'));
-check("nome da pasta usa código de quatro dígitos, obra e local", policy.includes("buildEsgSsmaProjectFolderName") && policy.includes('/^\\d{4}$/'));
+check("nome da pasta usa código de quatro dígitos, cliente, local e obra", policy.includes("buildEsgSsmaProjectFolderName") && policy.includes('/^\\d{4}$/'));
+check("ordem do nome é código + cliente + local + obra", policy.includes("`${code} ${client} ${normalizedLocation} ${name}`"));
+check("exemplo correto é 0075 WEG LINHARES FABRICA DE FIOS", policy.includes("0075 WEG LINHARES FABRICA DE FIOS"));
 check("nome da pasta não recebe sufixos ADM ou SSMA", policy.includes("não fazem parte da identidade da obra"));
 check(
   "nenhuma operação de download/escrita no validador",
