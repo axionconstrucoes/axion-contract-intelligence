@@ -4,7 +4,29 @@
  * informada pelo ADMIN e armazenada pela RPC/RLS existente.
  */
 export const ESG_SSMA_DRIVE_ROOT_PATH =
-  "Shared drives > diretório corporativo do ACC > SSMA-ESG > pasta do projeto";
+  "Drive compartilhado > SSMA-ESG > pasta da obra";
+
+/**
+ * Nome padrão das pastas de obra: `NNNN NOME DA OBRA LOCAL`.
+ * Exemplo: `0078 WEG LINHARES`. Sufixos de área como -ADM ou -SSMA
+ * não fazem parte da identidade da obra nesta árvore.
+ */
+export function buildEsgSsmaProjectFolderName(
+  projectCode: string,
+  projectName: string,
+  location: string
+): string {
+  const code = projectCode.trim();
+  const normalizePart = (value: string) => value.trim().replace(/\s+/g, " ").toLocaleUpperCase("pt-BR");
+  const name = normalizePart(projectName);
+  const normalizedLocation = normalizePart(location);
+
+  if (!/^\d{4}$/.test(code)) throw new Error("PROJECT_CODE_MUST_HAVE_FOUR_DIGITS");
+  if (!name) throw new Error("PROJECT_NAME_IS_REQUIRED");
+  if (!normalizedLocation) throw new Error("PROJECT_LOCATION_IS_REQUIRED");
+
+  return `${code} ${name} ${normalizedLocation}`;
+}
 
 export const ESG_SSMA_PROJECT_SUBFOLDERS = [
   "01 - DIÁLOGO DIÁRIO DE SEGURANÇA - DDA (FOTOS)",

@@ -18,6 +18,7 @@ function check(label, condition) {
 }
 
 const validator = read("apps/web/lib/integrations/esg-ssma/validate-drive-source.ts");
+const policy = read("apps/web/lib/integrations/esg-ssma/drive-source-policy.ts");
 const client = read("apps/web/lib/drive/drive-client.ts");
 const action = read("apps/web/app/[projectId]/integracoes/actions.ts");
 const component = read("apps/web/components/integrations/ssma-drive-connection-check.tsx");
@@ -42,6 +43,9 @@ check("estado retornado contém somente contagens", state.includes("ValidateSsma
 check("UI declara somente leitura", component.includes("Somente leitura"));
 check("UI mostra 11/11 e contagem por pasta", component.includes("11/11 pastas") && component.includes("Ver contagem por pasta"));
 check("painel aparece apenas para ADMIN no ESG_SSMA", card.includes('source.type === "ESG_SSMA" && canManage'));
+check("caminho padrão é Drive compartilhado > SSMA-ESG > pasta da obra", policy.includes('"Drive compartilhado > SSMA-ESG > pasta da obra"'));
+check("nome da pasta usa código de quatro dígitos, obra e local", policy.includes("buildEsgSsmaProjectFolderName") && policy.includes('/^\\d{4}$/'));
+check("nome da pasta não recebe sufixos ADM ou SSMA", policy.includes("não fazem parte da identidade da obra"));
 check(
   "nenhuma operação de download/escrita no validador",
   !/client\.(create|update|delete|download|export|getMedia)\(/i.test(validator) &&
