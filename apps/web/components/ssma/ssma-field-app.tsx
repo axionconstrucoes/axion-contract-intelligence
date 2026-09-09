@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { createSupabaseBrowserClient } from "@axion/db/browser";
 import {
   ArrowLeft,
   Camera,
@@ -25,9 +26,12 @@ import {
   type SsmaChecklistState,
   type SsmaFieldDefinition,
 } from "@/lib/ssma/checklist-definitions";
+import { computeFileSha256Hex } from "@/lib/documents/multi-upload/sha256";
+import { sanitizeFileName } from "@/lib/documents/multi-upload/queue-core";
 import { cn } from "@/lib/utils";
 
 type SsmaFieldAppProps = {
+  projectId: string;
   projectLabel: string;
   technicianLabel: string;
   initialDateTime: string;
@@ -52,16 +56,20 @@ function formatBytes(bytes: number): string {
   })} MB`;
 }
 
-function PhotoUploadPanel({ actions }: { actions: readonly string[] }) {
+function PhotoUploadPanel({
+  actions,
+  onPhotosChange,
+  disabled,
+}: {
+  actions: readonly string[];
+  onPhotosChange: (photos: SelectedPhoto[]) => void;
+  disabled: boolean;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedActionRef = useRef(actions[0] ?? "Foto");
   const photosRef = useRef<SelectedPhoto[]>([]);
   const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    photosRef.current = photos;
-  }, [photos]);
 
   useEffect(
     () => () => {
@@ -103,7 +111,10 @@ function PhotoUploadPanel({ actions }: { actions: readonly string[] }) {
         action: selectedActionRef.current,
       }));
 
-    setPhotos((current) => [...current, ...additions]);
+    const next = [...photos, ...additions];
+    photosRef.current = next;
+    setPhotos(next);
+    onPhotosChange(next);
     setError(null);
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -114,11 +125,12 @@ function PhotoUploadPanel({ actions }: { actions: readonly string[] }) {
   }
 
   function removePhoto(id: string) {
-    setPhotos((current) => {
-      const target = current.find((photo) => photo.id === id);
-      if (target) URL.revokeObjectURL(target.previewUrl);
-      return current.filter((photo) => photo.id !== id);
-    });
+    const target = photos.find((photo) => photo.id === id);
+    if (target) URL.revokeObjectURL(target.previewUrl);
+    const next = photos.filter((photo) => photo.id !== id);
+    photosRef.current = next;
+    setPhotos(next);
+    onPhotosChange(next);
     setError(null);
   }
 
@@ -140,8 +152,9 @@ function PhotoUploadPanel({ actions }: { actions: readonly string[] }) {
           <button
             key={action}
             type="button"
+            disabled={disabled}
             onClick={() => openPhotoPicker(action)}
-            className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 font-black uppercase text-white"
+            className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 font-black uppercase text-white disabled:opacity-50"
           >
             <Camera className="size-6" /> {action}
           </button>
@@ -150,8 +163,9 @@ function PhotoUploadPanel({ actions }: { actions: readonly string[] }) {
 
       <button
         type="button"
+        disabled={disabled}
         onClick={() => openPhotoPicker(actions[0] ?? "Foto")}
-        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-[#7f1d1d] bg-white px-4 text-sm font-black uppercase text-[#7f1d1d]"
+        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-[#7f1d1d] bg-white px-4 text-sm font-black uppercase text-[#7f1d1d] disabled:opacity-50"
       >
         <CloudUpload className="size-5" /> Selecionar fotos do computador
       </button>
@@ -177,6 +191,7 @@ function PhotoUploadPanel({ actions }: { actions: readonly string[] }) {
                 </div>
                 <button
                   type="button"
+                  disabled={disabled}
                   onClick={() => removePhoto(photo.id)}
                   className="absolute bottom-2 right-2 flex size-8 items-center justify-center rounded-full bg-red-700 text-white"
                   aria-label={`Remover ${photo.file.name}`}
@@ -245,6 +260,7 @@ function SavedContext({ projectLabel, technicianLabel, initialDateTime }: SsmaFi
       <label className="block text-sm font-bold text-slate-900">
         Data e hora
         <input
+          name="occurredAt"
           type="datetime-local"
           defaultValue={initialDateTime}
           className="mt-1 block w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium"
@@ -281,6 +297,7 @@ function DynamicField({ field }: { field: SsmaFieldDefinition }) {
 
 function ChecklistForm({
   definition,
+  projectId,
   projectLabel,
   technicianLabel,
   initialDateTime,
@@ -293,6 +310,10 @@ function ChecklistForm({
 }) {
   const [checks, setChecks] = useState<CheckState>({});
   const [risk, setRisk] = useState<string>("BAIXA");
+  const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   function mark(check: string, value: SsmaChecklistState) {
     setChecks((current) => ({ ...current, [check]: value }));
@@ -306,9 +327,93 @@ function ChecklistForm({
       <SsmaHeader title={definition.title} onBack={onBack} />
       <form
         className="mx-auto max-w-2xl space-y-5 bg-white p-4 pb-28 sm:my-4 sm:rounded-xl sm:border sm:p-6"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          if (allChecksAnswered) onComplete(definition.slug);
+          if (!allChecksAnswered || submitting) return;
+
+          const formData = new FormData(event.currentTarget);
+          const occurredAtValue = String(formData.get("occurredAt") ?? "");
+          const occurredAt = new Date(occurredAtValue);
+          if (!occurredAtValue || Number.isNaN(occurredAt.getTime())) {
+            setSubmitError("Informe uma data e hora válidas.");
+            return;
+          }
+
+          setSubmitting(true);
+          setSubmitError(null);
+          setUploadProgress(0);
+
+          try {
+            const supabase = createSupabaseBrowserClient();
+            const fieldValues = Object.fromEntries(
+              definition.fields.map((field) => [field.id, String(formData.get(field.id) ?? "").trim()])
+            );
+            const checklistValues = Object.fromEntries(
+              definition.checks.map((check) => [check, checks[check]])
+            );
+
+            const { data: submissionData, error: submissionError } = await supabase.rpc(
+              "create_ssma_form_submission",
+              {
+                p_project_id: projectId,
+                p_checklist_slug: definition.slug,
+                p_checklist_number: definition.number,
+                p_checklist_title: definition.title,
+                p_drive_folder_name: definition.driveFolder,
+                p_occurred_at: occurredAt.toISOString(),
+                p_field_values: fieldValues,
+                p_checklist_values: checklistValues,
+                p_risk_level: showRisk ? risk : null,
+              }
+            );
+            if (submissionError || !submissionData) {
+              throw new Error(submissionError?.message ?? "Não foi possível iniciar o envio.");
+            }
+            const submissionId = String(submissionData);
+
+            for (let index = 0; index < photos.length; index += 1) {
+              const photo = photos[index];
+              const photoId = crypto.randomUUID();
+              const storagePath = `${projectId}/ssma/${submissionId}/${photoId}-${sanitizeFileName(photo.file.name)}`;
+              const sha256Hash = await computeFileSha256Hex(photo.file);
+              const { error: uploadError } = await supabase.storage
+                .from("project-documents")
+                .upload(storagePath, photo.file, {
+                  upsert: false,
+                  contentType: photo.file.type,
+                });
+              if (uploadError) throw new Error(`Falha ao enviar “${photo.file.name}”.`);
+
+              const { error: registerError } = await supabase.rpc("register_ssma_submission_photo", {
+                p_photo_id: photoId,
+                p_submission_id: submissionId,
+                p_action_label: photo.action,
+                p_storage_path: storagePath,
+                p_original_file_name: photo.file.name,
+                p_mime_type: photo.file.type,
+                p_file_size_bytes: photo.file.size,
+                p_sha256_hash: sha256Hash,
+              });
+              if (registerError) {
+                await supabase.rpc("discard_unregistered_ssma_photo", {
+                  p_submission_id: submissionId,
+                  p_storage_path: storagePath,
+                });
+                throw new Error(`Falha ao registrar “${photo.file.name}”.`);
+              }
+              setUploadProgress(Math.round(((index + 1) / Math.max(photos.length, 1)) * 100));
+            }
+
+            const { error: finalizeError } = await supabase.rpc("finalize_ssma_form_submission", {
+              p_submission_id: submissionId,
+            });
+            if (finalizeError) throw new Error("Os arquivos foram enviados, mas o formulário não pôde ser finalizado.");
+            onComplete(definition.slug);
+          } catch (error) {
+            setSubmitError(error instanceof Error ? error.message : "Não foi possível enviar os dados.");
+          } finally {
+            setSubmitting(false);
+          }
         }}
       >
         {definition.independent ? (
@@ -317,7 +422,7 @@ function ChecklistForm({
           </p>
         ) : null}
 
-        <SavedContext projectLabel={projectLabel} technicianLabel={technicianLabel} initialDateTime={initialDateTime} />
+        <SavedContext projectId={projectId} projectLabel={projectLabel} technicianLabel={technicianLabel} initialDateTime={initialDateTime} />
 
         <div className="h-px bg-slate-300" />
 
@@ -373,7 +478,18 @@ function ChecklistForm({
           ))}
         </fieldset>
 
-        <PhotoUploadPanel actions={definition.photoActions} />
+        <PhotoUploadPanel actions={definition.photoActions} onPhotosChange={setPhotos} disabled={submitting} />
+
+        {submitting && photos.length > 0 ? (
+          <div className="space-y-1" aria-live="polite">
+            <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+              <div className="h-full bg-[#7f1d1d] transition-all" style={{ width: `${uploadProgress}%` }} />
+            </div>
+            <p className="text-center text-sm font-bold text-slate-700">Enviando fotos: {uploadProgress}%</p>
+          </div>
+        ) : null}
+
+        {submitError ? <p role="alert" className="text-center text-sm font-bold text-red-700">{submitError}</p> : null}
 
         {!allChecksAnswered ? (
           <p className="text-center text-sm font-semibold text-amber-700">Marque Feito ou NA em todos os itens para enviar.</p>
@@ -381,21 +497,21 @@ function ChecklistForm({
 
         <button
           type="submit"
-          disabled={!allChecksAnswered}
+          disabled={!allChecksAnswered || submitting}
           className="flex min-h-14 w-full items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 text-base font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
-          <Send className="size-6" /> Enviar dados
+          <Send className="size-6" /> {submitting ? "Enviando…" : "Enviar dados"}
         </button>
 
         <p className="text-center text-xs font-medium text-slate-500">
-          Tela {definition.number} de 11 · Protótipo funcional sem gravação externa
+          Tela {definition.number} de 11 · Registro protegido e auditável
         </p>
       </form>
     </div>
   );
 }
 
-export function SsmaFieldApp({ projectLabel, technicianLabel, initialDateTime }: SsmaFieldAppProps) {
+export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initialDateTime }: SsmaFieldAppProps) {
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [completed, setCompleted] = useState<Set<string>>(() => new Set());
 
@@ -408,6 +524,7 @@ export function SsmaFieldApp({ projectLabel, technicianLabel, initialDateTime }:
     return (
       <ChecklistForm
         definition={active}
+        projectId={projectId}
         projectLabel={projectLabel}
         technicianLabel={technicianLabel}
         initialDateTime={initialDateTime}
