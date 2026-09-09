@@ -42,5 +42,16 @@ assert(!serviceWorker.includes('addEventListener("fetch"'), "Dados autenticados 
 assert(esgPage.includes("/ssma/${projectId}"), "Módulo ESG deve oferecer acesso ao aplicativo");
 assert(definitions.includes('value: "MEDIA", label: "Médio", className: "bg-[#2563EB] text-white"'), "Médio deve ser azul");
 assert(definitions.includes('value: "ALTA", label: "Alto", className: "bg-[#FFD600] text-black"'), "Alto deve ser amarelo");
+assert(app.includes('type="file"') && app.includes('name="photos"'), "Formulários devem permitir selecionar fotos");
+assert(app.includes("multiple"), "Seleção de fotos deve aceitar múltiplos arquivos");
+assert(app.includes('accept="image/jpeg,image/png,.jpg,.jpeg,.png"'), "Upload deve aceitar somente JPG e PNG");
+assert(app.includes("MAX_PHOTO_SIZE_BYTES = 15 * 1024 * 1024"), "Cada foto deve ser limitada a 15 MB");
+assert(app.includes("MAX_PHOTOS_PER_FORM = 20"), "Cada formulário deve aceitar no máximo 20 fotos");
+assert(app.includes("URL.createObjectURL(file)"), "Fotos devem ter pré-visualização local");
+assert(app.includes("URL.revokeObjectURL"), "Pré-visualizações devem liberar memória do navegador");
+assert(app.includes("removePhoto(photo.id)"), "Usuário deve poder remover uma foto antes do envio");
+assert(app.includes("Selecionar fotos do computador"), "Desktop deve ter ação explícita para escolher fotos");
+assert(app.includes("file.lastModified"), "Fotos repetidas devem ser detectadas na seleção");
+assert(app.includes("action: selectedActionRef.current"), "Foto deve preservar a ação correspondente, como antes/depois");
 
 console.log(`${checks} verificações, 0 falhas`);
