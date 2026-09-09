@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { ExpertQueryPanel } from "@/components/ai/expert-query-panel";
 import { EsgManagerialSummary, type EsgManagerialRow } from "@/components/esg/esg-managerial-summary";
 import { EsgObligationForm } from "@/components/esg/esg-obligation-form";
@@ -126,6 +127,23 @@ export default async function EsgObligationsPage({ params }: { params: Promise<{
           description="Obrigações contratuais de ESG/SSMA — prazo, comprovação, evidência, status e risco de penalidade. Não é um sistema de ESG corporativo nem de gestão operacional de segurança do trabalho."
         />
       </div>
+
+      <Card className="border-[#7f1d1d]/30">
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-semibold">Aplicativo de campo SSMA/ESG</p>
+            <p className="text-sm text-muted-foreground">
+              Interface responsiva para celular, tablet e desktop. Nesta fase, disponível para validação dos formulários.
+            </p>
+          </div>
+          <Link
+            href={`/ssma/${projectId}`}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-md bg-[#7f1d1d] px-4 text-sm font-bold text-white"
+          >
+            Abrir aplicativo
+          </Link>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="pendencias">
         <TabsList>
