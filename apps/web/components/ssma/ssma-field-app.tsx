@@ -1,0 +1,359 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Image from "next/image";
+import {
+  ArrowLeft,
+  Camera,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardCheck,
+  CloudUpload,
+  FileText,
+  History,
+  Home,
+  Send,
+  ShieldAlert,
+  Truck,
+  UserRound,
+} from "lucide-react";
+import {
+  SSMA_CHECKLISTS,
+  SSMA_RISK_LEVELS,
+  type SsmaChecklistDefinition,
+  type SsmaChecklistState,
+  type SsmaFieldDefinition,
+} from "@/lib/ssma/checklist-definitions";
+import { cn } from "@/lib/utils";
+
+type SsmaFieldAppProps = {
+  projectLabel: string;
+  technicianLabel: string;
+  initialDateTime: string;
+};
+
+type CheckState = Record<string, SsmaChecklistState | undefined>;
+
+function SsmaHeader({ title, onBack }: { title: string; onBack?: () => void }) {
+  return (
+    <header className="relative flex min-h-24 items-center bg-[#7f1d1d] px-4 text-white shadow-sm">
+      {onBack ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="absolute left-2 top-1/2 z-10 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/15"
+          aria-label="Voltar"
+        >
+          <ArrowLeft className="size-6" />
+        </button>
+      ) : null}
+      <Image
+        src="/branding/acc-logo.png"
+        alt="ACC"
+        width={1254}
+        height={1254}
+        priority
+        className={cn(
+          "absolute top-1/2 size-16 -translate-y-1/2 object-cover",
+          onBack ? "left-14" : "left-4"
+        )}
+      />
+      <h1 className="mx-auto max-w-[58%] text-center text-lg font-black uppercase leading-tight sm:text-xl">{title}</h1>
+    </header>
+  );
+}
+
+function SavedContext({ projectLabel, technicianLabel, initialDateTime }: SsmaFieldAppProps) {
+  return (
+    <section className="space-y-3">
+      <label className="block text-sm font-bold text-slate-900">
+        Obra / Local de trabalho
+        <span className="mt-1 block rounded-lg border-2 border-slate-400 bg-white px-3 py-3 text-base font-semibold text-slate-900">
+          {projectLabel}
+        </span>
+      </label>
+      <p className="flex items-center gap-2 text-xs font-semibold text-green-700">
+        <CheckCircle2 className="size-5 fill-green-700 text-white" /> Obra salva para os próximos envios
+      </p>
+      <label className="block text-sm font-bold text-slate-900">
+        Técnico responsável
+        <span className="mt-1 block rounded-lg border-2 border-slate-300 bg-slate-50 px-3 py-3 text-base font-semibold text-slate-900">
+          {technicianLabel}
+        </span>
+      </label>
+      <p className="flex items-center gap-2 text-xs font-semibold text-green-700">
+        <CheckCircle2 className="size-5 fill-green-700 text-white" /> Carregado automaticamente do cadastro da obra
+      </p>
+      <label className="block text-sm font-bold text-slate-900">
+        Data e hora
+        <input
+          type="datetime-local"
+          defaultValue={initialDateTime}
+          className="mt-1 block w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-3 text-base font-medium"
+        />
+      </label>
+    </section>
+  );
+}
+
+function DynamicField({ field }: { field: SsmaFieldDefinition }) {
+  const className = "mt-1 block min-h-12 w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-3 text-base outline-none focus:border-[#7f1d1d]";
+
+  if (field.type === "textarea") {
+    return <textarea name={field.id} placeholder={field.placeholder} rows={3} className={className} />;
+  }
+
+  if (field.type === "select") {
+    return (
+      <select name={field.id} defaultValue="" className={className}>
+        <option value="" disabled>
+          Selecione
+        </option>
+        {field.options?.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  return <input name={field.id} type={field.type} placeholder={field.placeholder} className={className} />;
+}
+
+function ChecklistForm({
+  definition,
+  projectLabel,
+  technicianLabel,
+  initialDateTime,
+  onBack,
+  onComplete,
+}: SsmaFieldAppProps & {
+  definition: SsmaChecklistDefinition;
+  onBack: () => void;
+  onComplete: (slug: string) => void;
+}) {
+  const [checks, setChecks] = useState<CheckState>({});
+  const [risk, setRisk] = useState<string>("BAIXA");
+
+  function mark(check: string, value: SsmaChecklistState) {
+    setChecks((current) => ({ ...current, [check]: value }));
+  }
+
+  const allChecksAnswered = definition.checks.every((check) => checks[check]);
+  const showRisk = definition.slug === "fotos-diarias" || definition.slug === "riscos-apontados" || definition.slug === "outros";
+
+  return (
+    <div className="min-h-dvh bg-slate-100">
+      <SsmaHeader title={definition.title} onBack={onBack} />
+      <form
+        className="mx-auto max-w-2xl space-y-5 bg-white p-4 pb-28 sm:my-4 sm:rounded-xl sm:border sm:p-6"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (allChecksAnswered) onComplete(definition.slug);
+        }}
+      >
+        {definition.independent ? (
+          <p className="rounded-md bg-[#7f1d1d]/10 px-3 py-2 text-center text-sm font-bold text-[#7f1d1d]">
+            Tarefa independente — pode ser preenchida a qualquer momento
+          </p>
+        ) : null}
+
+        <SavedContext projectLabel={projectLabel} technicianLabel={technicianLabel} initialDateTime={initialDateTime} />
+
+        <div className="h-px bg-slate-300" />
+
+        <section className="space-y-4">
+          {definition.fields.map((field) => (
+            <label key={field.id} className="block text-sm font-bold text-slate-900">
+              {field.label}
+              <DynamicField field={field} />
+            </label>
+          ))}
+        </section>
+
+        {showRisk ? (
+          <fieldset>
+            <legend className="mb-2 text-sm font-bold text-slate-900">Classificação do risco</legend>
+            <div className="grid grid-cols-4 gap-2">
+              {SSMA_RISK_LEVELS.map((level) => (
+                <button
+                  key={level.value}
+                  type="button"
+                  onClick={() => setRisk(level.value)}
+                  className={cn(
+                    "min-h-11 rounded-md px-1 text-xs font-bold ring-offset-2",
+                    level.className,
+                    risk === level.value && "ring-2 ring-slate-900"
+                  )}
+                >
+                  {level.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        ) : null}
+
+        <fieldset className="overflow-hidden rounded-lg border-2 border-slate-300">
+          <legend className="sr-only">Checklist</legend>
+          <div className="bg-slate-200 px-3 py-2 text-sm font-black uppercase text-slate-900">Checklist</div>
+          {definition.checks.map((check) => (
+            <div key={check} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-t border-slate-300 px-3 py-3 first:border-t-0">
+              <span className="text-sm font-semibold text-slate-900">{check}</span>
+              {(["FEITO", "NA"] as const).map((value) => (
+                <label key={value} className="flex min-h-11 cursor-pointer items-center gap-2 px-1 text-sm font-bold">
+                  <input
+                    type="checkbox"
+                    checked={checks[check] === value}
+                    onChange={() => mark(check, value)}
+                    className="size-6 accent-[#7f1d1d]"
+                  />
+                  {value === "FEITO" ? "Feito" : "NA"}
+                </label>
+              ))}
+            </div>
+          ))}
+        </fieldset>
+
+        <section className="grid gap-2 sm:grid-cols-2">
+          {definition.photoActions.map((action) => (
+            <button
+              key={action}
+              type="button"
+              className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 font-black uppercase text-white"
+            >
+              <Camera className="size-6" /> {action}
+            </button>
+          ))}
+        </section>
+
+        {!allChecksAnswered ? (
+          <p className="text-center text-sm font-semibold text-amber-700">Marque Feito ou NA em todos os itens para enviar.</p>
+        ) : null}
+
+        <button
+          type="submit"
+          disabled={!allChecksAnswered}
+          className="flex min-h-14 w-full items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 text-base font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Send className="size-6" /> Enviar dados
+        </button>
+
+        <p className="text-center text-xs font-medium text-slate-500">
+          Tela {definition.number} de 11 · Protótipo funcional sem gravação externa
+        </p>
+      </form>
+    </div>
+  );
+}
+
+export function SsmaFieldApp({ projectLabel, technicianLabel, initialDateTime }: SsmaFieldAppProps) {
+  const [activeSlug, setActiveSlug] = useState<string | null>(null);
+  const [completed, setCompleted] = useState<Set<string>>(() => new Set());
+
+  const active = useMemo(
+    () => SSMA_CHECKLISTS.find((definition) => definition.slug === activeSlug) ?? null,
+    [activeSlug]
+  );
+
+  if (active) {
+    return (
+      <ChecklistForm
+        definition={active}
+        projectLabel={projectLabel}
+        technicianLabel={technicianLabel}
+        initialDateTime={initialDateTime}
+        onBack={() => setActiveSlug(null)}
+        onComplete={(slug) => {
+          setCompleted((current) => new Set(current).add(slug));
+          setActiveSlug(null);
+        }}
+      />
+    );
+  }
+
+  const routine = SSMA_CHECKLISTS.filter((definition) => !definition.independent);
+  const independent = SSMA_CHECKLISTS.find((definition) => definition.independent);
+  const completedRoutine = routine.filter((definition) => completed.has(definition.slug)).length;
+
+  return (
+    <div className="min-h-dvh bg-slate-100 pb-20">
+      <SsmaHeader title="SSMA/ESG" />
+      <main className="mx-auto max-w-4xl space-y-4 p-4">
+        <section className="rounded-xl border-2 border-slate-500 bg-white p-3">
+          <p className="text-xs font-semibold text-slate-500">Projeto atual</p>
+          <p className="mt-1 font-black text-slate-900">{projectLabel}</p>
+        </section>
+
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-base font-bold text-slate-900">Olá, {technicianLabel.split(" — ")[0]}</p>
+          <span className="flex items-center gap-1 text-xs font-bold text-green-700">
+            <CloudUpload className="size-5" /> Sincronizado
+          </span>
+        </div>
+
+        <section className="rounded-xl bg-white p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <ClipboardCheck className="size-9 text-[#7f1d1d]" />
+            <div className="flex-1">
+              <p className="font-black text-slate-900">Checklist de hoje</p>
+              <p className="text-sm text-slate-600">{completedRoutine} de 10 concluídos</p>
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+                <div className="h-full bg-[#7f1d1d]" style={{ width: `${completedRoutine * 10}%` }} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {routine.map((definition) => (
+            <button
+              key={definition.slug}
+              type="button"
+              onClick={() => setActiveSlug(definition.slug)}
+              className="flex min-h-24 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-[#7f1d1d]"
+            >
+              {definition.slug === "riscos-apontados" ? (
+                <ShieldAlert className="size-7 shrink-0 text-slate-800" />
+              ) : (
+                <FileText className="size-7 shrink-0 text-slate-800" />
+              )}
+              <span className="min-w-0 flex-1">
+                <span className="block font-black text-slate-900">
+                  {String(definition.number).padStart(2, "0")} {definition.shortTitle}
+                </span>
+                <span className={cn("mt-1 block text-xs font-bold", completed.has(definition.slug) ? "text-green-700" : "text-amber-600")}>
+                  {completed.has(definition.slug) ? "Concluído" : "Pendente"}
+                </span>
+              </span>
+              <ChevronRight className="size-5 shrink-0 text-slate-500" />
+            </button>
+          ))}
+        </section>
+
+        {independent ? (
+          <button
+            type="button"
+            onClick={() => setActiveSlug(independent.slug)}
+            className="flex min-h-20 w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-[#7f1d1d]"
+          >
+            <Truck className="size-7 shrink-0 text-[#7f1d1d]" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-black text-slate-900">11 Remessa para bota-fora</span>
+              <span className="block text-xs text-slate-600">Tarefa independente</span>
+            </span>
+            <span className="text-sm font-bold text-[#7f1d1d]">Registrar remessa</span>
+            <ChevronRight className="size-5 shrink-0 text-[#7f1d1d]" />
+          </button>
+        ) : null}
+      </main>
+
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-slate-300 bg-white px-2 py-2 text-[11px] font-semibold text-slate-600">
+        <span className="flex flex-col items-center gap-1 text-[#7f1d1d]"><Home className="size-5" />Início</span>
+        <span className="flex flex-col items-center gap-1"><History className="size-5" />Histórico</span>
+        <span className="flex flex-col items-center gap-1"><CloudUpload className="size-5" />Sincronização</span>
+        <span className="flex flex-col items-center gap-1"><UserRound className="size-5" />Perfil</span>
+      </nav>
+    </div>
+  );
+}
