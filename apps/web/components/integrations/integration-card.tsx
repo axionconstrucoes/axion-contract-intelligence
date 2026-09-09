@@ -19,6 +19,7 @@ import { ConstrumanagerIntegrationStatusBadge } from "./construmanager-status-ba
 import { ConstrumanagerVersionTransitions } from "./construmanager-version-transitions";
 import { DiarioDeObraMonitoringPanel } from "./diario-de-obra-monitoring-panel";
 import { DiarioDeObraClimateKpiPanel } from "./diario-de-obra-climate-kpi-panel";
+import { SsmaDriveConnectionCheck } from "./ssma-drive-connection-check";
 import type { ConstrumanagerMetadataOverview } from "@/lib/integrations/construmanager/get-metadata-overview";
 import type { ConstrumanagerVersionTransitionsResult } from "@/lib/integrations/construmanager/get-version-transitions";
 import type { DiarioDeObraMonitoringOverview } from "@/lib/integrations/diario-de-obra/get-monitoring-overview";
@@ -158,6 +159,10 @@ export function IntegrationCard({
             <DiarioDeObraMonitoringPanel overview={diarioDeObraOverview ?? null} />
             <DiarioDeObraClimateKpiPanel overview={diarioDeObraClimateKpi ?? null} />
           </>
+        ) : null}
+
+        {source.type === "ESG_SSMA" && canManage ? (
+          <SsmaDriveConnectionCheck projectId={projectId} />
         ) : null}
 
         {canManage ? (

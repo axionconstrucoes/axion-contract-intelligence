@@ -31,6 +31,28 @@ export const initialValidateConstrumanagerConnectionState: ValidateConstrumanage
   checkedAt: null,
 };
 
+export type ValidateSsmaDriveState = {
+  error: string | null;
+  success: boolean;
+  checkedAt: string | null;
+  rootName: string | null;
+  totalFiles: number | null;
+  totalFolders: number | null;
+  totalItems: number | null;
+  folders: Array<{ name: string; files: number; folders: number; totalItems: number }>;
+};
+
+export const initialValidateSsmaDriveState: ValidateSsmaDriveState = {
+  error: null,
+  success: false,
+  checkedAt: null,
+  rootName: null,
+  totalFiles: null,
+  totalFolders: null,
+  totalItems: null,
+  folders: [],
+};
+
 // Sincronização MANUAL de metadados do Construmanager (Pacote B).
 // Somente contagens: nenhum documento, nome de arquivo ou conteúdo
 // trafega para o estado do formulário.

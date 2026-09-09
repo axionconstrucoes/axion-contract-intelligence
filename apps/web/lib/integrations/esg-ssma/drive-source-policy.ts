@@ -21,5 +21,16 @@ export const ESG_SSMA_PROJECT_SUBFOLDERS = [
 ] as const;
 
 export function isGoogleDriveFolderUrl(value: string): boolean {
-  return value.startsWith("https://drive.google.com/drive/folders/");
+  return extractGoogleDriveFolderId(value) !== null;
+}
+
+export function extractGoogleDriveFolderId(value: string): string | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.hostname !== "drive.google.com") return null;
+    const match = url.pathname.match(/^\/drive\/folders\/([A-Za-z0-9_-]+)\/?$/);
+    return match?.[1] ?? null;
+  } catch {
+    return null;
+  }
 }

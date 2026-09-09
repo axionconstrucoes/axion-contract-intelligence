@@ -30,6 +30,11 @@ export interface DriveConfig {
   emailAttachmentsFolderId: string;
 }
 
+export type DriveOAuthConfig = Pick<
+  DriveConfig,
+  "clientId" | "clientSecret" | "refreshToken"
+>;
+
 function readOptionalFolderId(envVarName: string): string | null {
   const value = process.env[envVarName];
   return value && value.trim() ? value.trim() : null;
@@ -59,11 +64,41 @@ export function isDriveConfigured(): boolean {
   );
 }
 
-/** FAIL CLOSED: só deve ser chamada depois de confirmar isDriveConfigured() === true. */
-export function loadDriveConfig(): DriveConfig {
+/** Credencial Google Drive disponível, independentemente das pastas do espelho de e-mail. */
+export function isDriveOAuthConfigured(): boolean {
+  return Boolean(
+    process.env.GOOGLE_DRIVE_CLIENT_ID &&
+      process.env.GOOGLE_DRIVE_CLIENT_SECRET &&
+      process.env.GOOGLE_DRIVE_REFRESH_TOKEN
+  );
+}
+
+/** FAIL CLOSED: credencial compartilhada pelos fluxos Drive, sem exigir uma pasta específica. */
+export function loadDriveOAuthConfig(): DriveOAuthConfig {
   const clientId = process.env.GOOGLE_DRIVE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_DRIVE_CLIENT_SECRET;
   const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
+  const missing: string[] = [];
+
+  if (!clientId) missing.push("GOOGLE_DRIVE_CLIENT_ID");
+  if (!clientSecret) missing.push("GOOGLE_DRIVE_CLIENT_SECRET");
+  if (!refreshToken) missing.push("GOOGLE_DRIVE_REFRESH_TOKEN");
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Configuração OAuth do Google Drive incompleta — variáveis ausentes: ${missing.join(", ")}.`
+    );
+  }
+
+  return { clientId: clientId!, clientSecret: clientSecret!, refreshToken: refreshToken! };
+}
+
+/** FAIL CLOSED: só deve ser chamada depois de confirmar isDriveConfigured() === true. */
+export function loadDriveConfig(): DriveConfig {
+  const oauth = isDriveOAuthConfigured() ? loadDriveOAuthConfig() : null;
+  const clientId = oauth?.clientId;
+  const clientSecret = oauth?.clientSecret;
+  const refreshToken = oauth?.refreshToken;
   const emailAttachmentsFolderId = readDriveFolderConfig().emailAttachmentsFolderId;
 
   const missing: string[] = [];
