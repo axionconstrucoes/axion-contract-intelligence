@@ -1,8 +1,8 @@
 name: SSMA Drive Photo Sync
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"
+  # Piloto controlado: o agendamento de 15 minutos será habilitado somente
+  # depois de confirmar a primeira escrita real no Drive compartilhado.
   workflow_dispatch:
 
 concurrency:
