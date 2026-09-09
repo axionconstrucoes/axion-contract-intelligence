@@ -50,6 +50,7 @@ export default async function SsmaAppPage({ params }: { params: Promise<{ projec
 
   return (
     <SsmaFieldApp
+      projectId={projectId}
       projectLabel={projectLabel(project)}
       technicianLabel={technicianLabel}
       initialDateTime={currentDateTimeInSaoPaulo()}
