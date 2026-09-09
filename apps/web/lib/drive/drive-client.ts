@@ -4,14 +4,19 @@
 // apps/web/lib/email/inbound/gmail-inbound-auth.ts.
 
 import { google } from "googleapis";
-import type { DriveConfig, DriveOAuthConfig } from "./drive-config";
+import type { DriveOAuthConfig } from "./drive-config";
 
 /** Subconjunto mínimo do client real — permite injetar um client falso nos testes, sem rede nem o SDK googleapis completo. */
 export interface DriveFilesClient {
   create(params: {
-    requestBody: { name: string; parents: string[] };
+    requestBody: {
+      name: string;
+      parents: string[];
+      appProperties?: Record<string, string>;
+    };
     media: { mimeType: string; body: NodeJS.ReadableStream };
     fields: string;
+    supportsAllDrives?: boolean;
   }): Promise<{ data: { id?: string | null } }>;
 }
 
@@ -37,15 +42,19 @@ export interface DriveReadOnlyFilesClient {
   }>;
 }
 
+export interface DriveWritableFilesClient
+  extends DriveFilesClient,
+    DriveReadOnlyFilesClient {}
+
 function createOAuthClient(config: DriveOAuthConfig) {
   const oauth2Client = new google.auth.OAuth2(config.clientId, config.clientSecret);
   oauth2Client.setCredentials({ refresh_token: config.refreshToken });
   return oauth2Client;
 }
 
-export function createDriveFilesClient(config: DriveConfig): DriveFilesClient {
+export function createDriveFilesClient(config: DriveOAuthConfig): DriveWritableFilesClient {
   const drive = google.drive({ version: "v3", auth: createOAuthClient(config) });
-  return drive.files as unknown as DriveFilesClient;
+  return drive.files as unknown as DriveWritableFilesClient;
 }
 
 export function createDriveReadOnlyFilesClient(
