@@ -12,7 +12,10 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
 import { getSourceDefinitions } from "@/lib/data";
+import { createDriveReadOnlyFilesClient } from "@/lib/drive/drive-client";
+import { isDriveOAuthConfigured, loadDriveOAuthConfig } from "@/lib/drive/drive-config";
 import { isGoogleDriveFolderUrl } from "@/lib/integrations/esg-ssma/drive-source-policy";
+import { inspectSsmaDriveSource } from "@/lib/integrations/esg-ssma/validate-drive-source";
 import { createConstrumanagerClient } from "@/lib/integrations/construmanager/client";
 import { collectConstrumanagerMetadata } from "@/lib/integrations/construmanager/collect-metadata";
 import {
@@ -31,6 +34,7 @@ import {
 import {
   initialDownloadConstrumanagerContentState,
   initialPrepareConstrumanagerContentState,
+  initialValidateSsmaDriveState,
 } from "./actions-state";
 import type {
   DisconnectEmailAccountState,
@@ -42,7 +46,25 @@ import type {
   StartEmailSyncState,
   SyncConstrumanagerMetadataState,
   ValidateConstrumanagerConnectionState,
+  ValidateSsmaDriveState,
 } from "./actions-state";
+
+function sanitizeSsmaDriveValidationError(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (message === "INVALID_FOLDER_URL") return "A origem configurada não é uma URL válida de pasta do Google Drive.";
+  if (message === "ROOT_IS_NOT_A_FOLDER") return "A origem configurada não aponta para uma pasta do Google Drive.";
+  if (message.startsWith("MISSING_FOLDERS:")) {
+    const count = message.slice("MISSING_FOLDERS:".length).split("|").filter(Boolean).length;
+    return `Estrutura incompleta: ${count} das 11 subpastas obrigatórias não foram encontradas.`;
+  }
+  if (message.startsWith("DUPLICATED_FOLDERS:")) {
+    return "Estrutura ambígua: há subpastas obrigatórias duplicadas na raiz configurada.";
+  }
+  if (/invalid_grant|unauthorized|401/i.test(message)) return "A autorização do Google Drive expirou ou foi revogada.";
+  if (/forbidden|permission|insufficient|403/i.test(message)) return "A conta configurada não possui acesso de leitura à pasta SSMA/ESG.";
+  if (/not found|404/i.test(message)) return "A pasta SSMA/ESG não foi encontrada ou não está compartilhada com a conta configurada.";
+  return "Não foi possível validar a pasta SSMA/ESG. Nenhum arquivo foi baixado ou alterado.";
+}
 
 function requiredField(formData: FormData, name: string): string {
   const value = String(formData.get(name) ?? "").trim();
@@ -181,6 +203,60 @@ export async function saveIntegrationOriginAction(
     return { error: null, success: true };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Falha ao salvar origem da fonte.", success: false };
+  }
+}
+
+export async function validateSsmaDriveSourceAction(
+  _prevState: ValidateSsmaDriveState,
+  formData: FormData
+): Promise<ValidateSsmaDriveState> {
+  const checkedAt = new Date().toISOString();
+  const supabase = await createSupabaseServerClient();
+
+  try {
+    const user = await requireUser(supabase);
+    const projectId = requiredField(formData, "projectId");
+
+    const { data: membership, error: membershipError } = await supabase
+      .from("project_memberships")
+      .select("permission")
+      .eq("project_id", projectId)
+      .eq("user_id", user.id)
+      .eq("status", "ACTIVE")
+      .maybeSingle();
+
+    if (membershipError) throw new Error("MEMBERSHIP_LOOKUP_FAILED");
+    if (membership?.permission !== "ADMINISTRADOR") {
+      return { ...initialValidateSsmaDriveState, error: "Permissão de administrador é necessária para validar esta integração.", checkedAt };
+    }
+
+    const { data: config, error: configError } = await supabase
+      .from("project_integrations")
+      .select("folder_reference")
+      .eq("project_id", projectId)
+      .eq("source_type", "ESG_SSMA")
+      .maybeSingle();
+
+    if (configError) throw new Error("CONFIG_LOOKUP_FAILED");
+    if (!config?.folder_reference) {
+      return { ...initialValidateSsmaDriveState, error: "Configure primeiro a URL da pasta SSMA/ESG em Editar origem.", checkedAt };
+    }
+    if (!isDriveOAuthConfigured()) {
+      return { ...initialValidateSsmaDriveState, error: "Credencial somente leitura do Google Drive ainda não está configurada no ambiente.", checkedAt };
+    }
+
+    const inspection = await inspectSsmaDriveSource(
+      createDriveReadOnlyFilesClient(loadDriveOAuthConfig()),
+      config.folder_reference
+    );
+
+    return { error: null, success: true, checkedAt, ...inspection };
+  } catch (error) {
+    return {
+      ...initialValidateSsmaDriveState,
+      error: sanitizeSsmaDriveValidationError(error),
+      checkedAt,
+    };
   }
 }
 

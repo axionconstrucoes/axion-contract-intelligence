@@ -70,7 +70,7 @@ const expectedFolders = [
 ];
 for (const folder of expectedFolders) check(`estrutura SSMA/ESG documentada: ${folder}`, policy.includes(folder));
 
-check("raiz SSMA/ESG documentada sem publicar diretório privado", policy.includes("SSMA-ESG > pasta do projeto"));
+check("raiz SSMA/ESG documentada sem publicar diretório privado", policy.includes("SSMA-ESG > pasta da obra"));
 check("nenhum ID ou link privado do Drive está codificado", !/drive\/folders\/[A-Za-z0-9_-]{10,}/.test(policy));
 
 const migrations = readdirSync(path.join(root, "supabase/migrations"));
