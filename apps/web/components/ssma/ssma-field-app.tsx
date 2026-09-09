@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   ArrowLeft,
@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   Truck,
   UserRound,
+  X,
 } from "lucide-react";
 import {
   SSMA_CHECKLISTS,
@@ -33,6 +34,163 @@ type SsmaFieldAppProps = {
 };
 
 type CheckState = Record<string, SsmaChecklistState | undefined>;
+
+type SelectedPhoto = {
+  id: string;
+  file: File;
+  previewUrl: string;
+  action: string;
+};
+
+const ACCEPTED_PHOTO_TYPES = new Set(["image/jpeg", "image/png"]);
+const MAX_PHOTO_SIZE_BYTES = 15 * 1024 * 1024;
+const MAX_PHOTOS_PER_FORM = 20;
+
+function formatBytes(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toLocaleString("pt-BR", {
+    maximumFractionDigits: 1,
+  })} MB`;
+}
+
+function PhotoUploadPanel({ actions }: { actions: readonly string[] }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const selectedActionRef = useRef(actions[0] ?? "Foto");
+  const photosRef = useRef<SelectedPhoto[]>([]);
+  const [photos, setPhotos] = useState<SelectedPhoto[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    photosRef.current = photos;
+  }, [photos]);
+
+  useEffect(
+    () => () => {
+      for (const photo of photosRef.current) URL.revokeObjectURL(photo.previewUrl);
+    },
+    []
+  );
+
+  function addPhotos(files: FileList | null) {
+    if (!files) return;
+
+    const incoming = Array.from(files);
+    const invalidType = incoming.find((file) => !ACCEPTED_PHOTO_TYPES.has(file.type));
+    if (invalidType) {
+      setError(`Formato não permitido em “${invalidType.name}”. Use JPG ou PNG.`);
+      return;
+    }
+
+    const oversized = incoming.find((file) => file.size > MAX_PHOTO_SIZE_BYTES);
+    if (oversized) {
+      setError(`“${oversized.name}” ultrapassa o limite de 15 MB.`);
+      return;
+    }
+
+    if (photos.length + incoming.length > MAX_PHOTOS_PER_FORM) {
+      setError(`Selecione no máximo ${MAX_PHOTOS_PER_FORM} fotos por formulário.`);
+      return;
+    }
+
+    const existing = new Set(
+      photos.map((photo) => `${photo.file.name}|${photo.file.size}|${photo.file.lastModified}`)
+    );
+    const additions = incoming
+      .filter((file) => !existing.has(`${file.name}|${file.size}|${file.lastModified}`))
+      .map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        action: selectedActionRef.current,
+      }));
+
+    setPhotos((current) => [...current, ...additions]);
+    setError(null);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function openPhotoPicker(action: string) {
+    selectedActionRef.current = action;
+    inputRef.current?.click();
+  }
+
+  function removePhoto(id: string) {
+    setPhotos((current) => {
+      const target = current.find((photo) => photo.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((photo) => photo.id !== id);
+    });
+    setError(null);
+  }
+
+  return (
+    <section className="space-y-3 rounded-lg border-2 border-slate-300 bg-slate-50 p-3">
+      <input
+        ref={inputRef}
+        type="file"
+        name="photos"
+        multiple
+        accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+        onChange={(event) => addPhotos(event.target.files)}
+        className="sr-only"
+        aria-label="Selecionar fotos do computador"
+      />
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {actions.map((action) => (
+          <button
+            key={action}
+            type="button"
+            onClick={() => openPhotoPicker(action)}
+            className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 font-black uppercase text-white"
+          >
+            <Camera className="size-6" /> {action}
+          </button>
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => openPhotoPicker(actions[0] ?? "Foto")}
+        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-[#7f1d1d] bg-white px-4 text-sm font-black uppercase text-[#7f1d1d]"
+      >
+        <CloudUpload className="size-5" /> Selecionar fotos do computador
+      </button>
+
+      <p className="text-xs font-medium text-slate-600">JPG ou PNG · até 15 MB por foto · máximo de 20 fotos</p>
+      {error ? <p role="alert" className="text-sm font-bold text-red-700">{error}</p> : null}
+
+      {photos.length > 0 ? (
+        <div className="space-y-2" aria-live="polite">
+          <p className="text-sm font-black text-slate-900">
+            {photos.length} {photos.length === 1 ? "foto selecionada" : "fotos selecionadas"}
+          </p>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {photos.map((photo) => (
+              <article key={photo.id} className="relative overflow-hidden rounded-lg border border-slate-300 bg-white">
+                <div className="relative aspect-square bg-slate-200">
+                  <Image src={photo.previewUrl} alt={`Pré-visualização de ${photo.file.name}`} fill unoptimized className="object-cover" />
+                </div>
+                <div className="p-2 pr-9">
+                  <p className="truncate text-xs font-bold text-slate-900" title={photo.file.name}>{photo.file.name}</p>
+                  <p className="truncate text-[11px] font-semibold text-[#7f1d1d]">{photo.action}</p>
+                  <p className="text-[11px] text-slate-500">{formatBytes(photo.file.size)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removePhoto(photo.id)}
+                  className="absolute bottom-2 right-2 flex size-8 items-center justify-center rounded-full bg-red-700 text-white"
+                  aria-label={`Remover ${photo.file.name}`}
+                >
+                  <X className="size-4" />
+                </button>
+              </article>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
 
 function SsmaHeader({ title, onBack }: { title: string; onBack?: () => void }) {
   return (
@@ -215,17 +373,7 @@ function ChecklistForm({
           ))}
         </fieldset>
 
-        <section className="grid gap-2 sm:grid-cols-2">
-          {definition.photoActions.map((action) => (
-            <button
-              key={action}
-              type="button"
-              className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 font-black uppercase text-white"
-            >
-              <Camera className="size-6" /> {action}
-            </button>
-          ))}
-        </section>
+        <PhotoUploadPanel actions={definition.photoActions} />
 
         {!allChecksAnswered ? (
           <p className="text-center text-sm font-semibold text-amber-700">Marque Feito ou NA em todos os itens para enviar.</p>
