@@ -7,6 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { EmptyState } from "@/components/shared/empty-state";
 import { ManageMembersPanel } from "@/components/users/manage-members-panel";
 import { MemberRowActions } from "@/components/users/member-row-actions";
+import { SlaAreaResponsiblesForm } from "@/components/sla/sla-area-responsibles-form";
+import { SlaMatrixConfigForm } from "@/components/sla/sla-matrix-config-form";
+import { SlaProjectSettingsForm } from "@/components/sla/sla-project-settings-form";
+import { FeatureInfo } from "@/components/shared/feature-info";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getProject, getProjectMemberInvitations, getProjectMembers } from "@/lib/data";
 import {
@@ -15,7 +20,14 @@ import {
   membershipStatusLabels,
   originLabels,
   permissionLabels,
+  slaAreaLabels,
 } from "@/lib/labels";
+import { resolveBusinessHoursConfig, resolveGenericMatrixRule } from "@/lib/sla/resolve-matrix-rule";
+import { getSlaAreaResponsibles, getSlaMatrixRules, getSlaProjectSettings } from "@/lib/sla/sla-actions-data";
+import type { SlaArea, SlaRiskLevel } from "@/lib/sla/types";
+
+const RISK_LEVELS: SlaRiskLevel[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
+const SLA_AREAS = Object.keys(slaAreaLabels) as SlaArea[];
 
 export const metadata: Metadata = { title: "Usuários" };
 
@@ -23,12 +35,15 @@ export default async function UsuariosPage({ params }: { params: Promise<{ proje
   const { projectId } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const [members, invitations, permission, project, authData] = await Promise.all([
+  const [members, invitations, permission, project, authData, matrixRules, areaResponsibles, projectSettings] = await Promise.all([
     getProjectMembers(projectId),
     getProjectMemberInvitations(projectId),
     getCurrentProjectPermission(projectId),
     getProject(projectId),
     supabase.auth.getUser(),
+    getSlaMatrixRules(projectId),
+    getSlaAreaResponsibles(projectId),
+    getSlaProjectSettings(projectId),
   ]);
 
   // "ADMINISTRADOR ativo" — getCurrentProjectPermission já filtra por
@@ -38,6 +53,9 @@ export default async function UsuariosPage({ params }: { params: Promise<{ proje
   const currentUserId = authData.data.user?.id ?? null;
   const projectLabel = project ? `${project.code} — ${project.name}` : "";
   const pendingInvitations = invitations.filter((invitation) => invitation.status === "PENDING");
+  const memberOptions = members.map((member) => ({ userId: member.userId, name: member.user.name }));
+  const responsiblesByArea = new Map(areaResponsibles.map((responsible) => [responsible.area, responsible]));
+  const businessHoursConfig = resolveBusinessHoursConfig(projectSettings);
 
   return (
     <div className="flex flex-col gap-6">
@@ -132,6 +150,96 @@ export default async function UsuariosPage({ params }: { params: Promise<{ proje
           </TableBody>
         </Table>
       )}
+
+      {canManage ? (
+        <section id="matriz-responsabilidades" className="scroll-mt-6 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Matriz de responsabilidades e prazos</h2>
+            <p className="text-sm text-muted-foreground">
+              Configuração exclusiva deste projeto. O Nível 1 trata a ação, o Nível 2 recebe o primeiro escalonamento e o Nível 3 corresponde à Diretoria.
+            </p>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-1.5">
+                Responsáveis por área
+                <FeatureInfo helpId="sla-config-responsaveis" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {SLA_AREAS.map((area) => {
+                const current = responsiblesByArea.get(area);
+                return (
+                  <SlaAreaResponsiblesForm
+                    key={area}
+                    projectId={projectId}
+                    area={area}
+                    responsibleDirectUserId={current?.responsibleDirectUserId ?? null}
+                    escalation1UserId={current?.escalation1UserId ?? null}
+                    boardUserId={current?.boardUserId ?? null}
+                    members={memberOptions}
+                  />
+                );
+              })}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-1.5">
+                Prazos por grau de risco
+                <FeatureInfo helpId="sla-config-matriz-prazos" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-xs">
+                  <thead>
+                    <tr className="border-b text-left">
+                      <th scope="col" className="px-2 py-1.5 font-semibold text-muted-foreground">Risco</th>
+                      <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Unidade</th>
+                      <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Nível 1: assumir</th>
+                      <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Responder</th>
+                      <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Concluir</th>
+                      <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Nível 2</th>
+                      <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Nível 3</th>
+                      <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Opções</th>
+                      <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {RISK_LEVELS.map((riskLevel) => (
+                      <SlaMatrixConfigForm
+                        key={riskLevel}
+                        projectId={projectId}
+                        riskLevel={riskLevel}
+                        rule={resolveGenericMatrixRule(matrixRules, riskLevel)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+
+          <details className="rounded-md border">
+            <summary className="flex cursor-pointer items-center gap-1.5 px-3 py-2 text-sm font-medium">
+              Fuso horário e horário útil
+              <FeatureInfo helpId="sla-config-timezone" />
+            </summary>
+            <div className="border-t px-3 py-3">
+              <SlaProjectSettingsForm
+                projectId={projectId}
+                timezone={businessHoursConfig.timeZone}
+                businessDayStartHour={businessHoursConfig.businessDayStartHour}
+                businessDayEndHour={businessHoursConfig.businessDayEndHour}
+                isDefault={projectSettings === null}
+              />
+            </div>
+          </details>
+        </section>
+      ) : null}
     </div>
   );
 }

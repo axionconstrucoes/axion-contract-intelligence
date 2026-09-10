@@ -146,7 +146,7 @@ export function SlaMatrixConfigForm({
             name="escalation2AfterValue"
             defaultValue={rule.escalation2AfterValue}
             required
-            aria-label={`Até 2º escalão — ${RISK_LABELS[riskLevel]}`}
+            aria-label={`Prazo do Nível 2 — ${RISK_LABELS[riskLevel]}`}
             className="h-8 w-full px-1.5 text-xs"
           />
         </td>
@@ -160,7 +160,7 @@ export function SlaMatrixConfigForm({
             name="boardAfterValue"
             defaultValue={rule.boardAfterValue}
             required
-            aria-label={`Até Diretoria — ${RISK_LABELS[riskLevel]}`}
+            aria-label={`Prazo do Nível 3 — ${RISK_LABELS[riskLevel]}`}
             className="h-8 w-full px-1.5 text-xs"
           />
         </td>

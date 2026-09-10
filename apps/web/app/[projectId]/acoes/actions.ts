@@ -14,6 +14,7 @@ import { getProject } from "@/lib/data";
 import { computeEscalation } from "@/lib/sla/compute-escalation";
 import { computeSlaDeadlines } from "@/lib/sla/compute-deadlines";
 import { resolveBusinessHoursConfig, resolveMatrixRule } from "@/lib/sla/resolve-matrix-rule";
+import { resolveEscalationDestination } from "@/lib/sla/resolve-escalation-destination";
 import { formatSlaMatrixRuleAuditDetail, validateSlaMatrixRuleValues } from "@/lib/sla/validate-matrix-rule";
 import { formatDurationBetween } from "@/lib/sla/format-duration";
 import { buildSlaActionUrl } from "@/lib/sla/build-action-url";
@@ -58,10 +59,10 @@ const RISK_LEVEL_TO_ALERT_SEVERITY: Record<SlaRiskLevel, "BAIXA" | "MEDIA" | "AL
 };
 
 const ESCALATION_LEVEL_LABELS: Record<SlaEscalationLevel, string> = {
-  RESPONSAVEL: "Responsável",
-  ESCALAO_1: "1º Escalão",
-  ESCALAO_2: "2º Escalão",
-  DIRETORIA: "Diretoria",
+  RESPONSAVEL: "Nível 1 · Responsável",
+  ESCALAO_1: "Nível 2 · Gerência",
+  ESCALAO_2: "Nível 2 · Gerência",
+  DIRETORIA: "Nível 3 · Diretoria",
 };
 
 // ---------------- Criar ação ----------------
@@ -438,7 +439,9 @@ export async function configureSlaAreaResponsiblesAction(
         area,
         responsible_direct_user_id: optionalField(formData, "responsibleDirectUserId"),
         escalation_1_user_id: optionalField(formData, "escalation1UserId"),
-        escalation_2_user_id: optionalField(formData, "escalation2UserId"),
+        // Campo legado do antigo modelo de quatro níveis. A matriz atual
+        // usa Nível 1, Nível 2 e Nível 3, portanto este valor é limpo.
+        escalation_2_user_id: null,
         board_user_id: optionalField(formData, "boardUserId"),
         updated_by_user_id: authData.user.id,
       },
@@ -450,6 +453,7 @@ export async function configureSlaAreaResponsiblesAction(
     }
 
     revalidatePath(`/${projectId}/acoes/configuracao`);
+    revalidatePath(`/${projectId}/usuarios`);
     return { error: null, success: true };
   } catch (error) {
     return {
@@ -515,10 +519,13 @@ export async function processSlaEscalationsAction(
         continue;
       }
 
+      const responsibles = areaResponsibles.find((item) => item.area === action.area);
+      const destination = resolveEscalationDestination(result.recommendedLevel, responsibles);
+
       const { error: escalateError } = await supabase.rpc("escalate_sla_action", {
         p_action_id: action.id,
         p_expected_current_level: action.currentEscalationLevel,
-        p_new_level: result.recommendedLevel,
+        p_new_level: destination.level,
         p_reason: result.reason,
       });
 
@@ -531,15 +538,7 @@ export async function processSlaEscalationsAction(
       escalatedCount += 1;
 
       if (rule.notifyByEmail && project) {
-        const responsibles = areaResponsibles.find((r) => r.area === action.area);
-        const notifiedUserId =
-          result.recommendedLevel === "ESCALAO_1"
-            ? responsibles?.escalation1UserId
-            : result.recommendedLevel === "ESCALAO_2"
-              ? responsibles?.escalation2UserId
-              : result.recommendedLevel === "DIRETORIA"
-                ? responsibles?.boardUserId
-                : null;
+        const notifiedUserId = destination.userId;
 
         if (notifiedUserId) {
           const { data: recipientProfile } = await supabase
@@ -571,7 +570,8 @@ export async function processSlaEscalationsAction(
                   currentResponsibleName: action.responsibleName,
                   originalDeadline: action.assumeDueAt,
                   overdueBy: formatDurationBetween(action.assumeDueAt, now),
-                  escalationLevelLabel: ESCALATION_LEVEL_LABELS[result.recommendedLevel],
+                  previousLevelLabel: ESCALATION_LEVEL_LABELS[action.currentEscalationLevel],
+                  escalationLevelLabel: ESCALATION_LEVEL_LABELS[destination.level],
                   recommendedAction: result.reasons[result.reasons.length - 1] ?? null,
                   eventUrl: buildSlaActionUrl(baseUrl, projectId, action.id),
                   actionButtons,

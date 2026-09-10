@@ -62,13 +62,13 @@ export default async function SlaActionsPage({ params }: { params: Promise<{ pro
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader
           title="Ações e Escalonamentos"
-          description="Matriz de criticidade, SLA interno e escalonamento automático — RESPONSÁVEL → 1º ESCALÃO → 2º ESCALÃO → DIRETORIA."
+          description="Matriz de criticidade, SLA interno e escalonamento automático — Nível 1 → Nível 2 → Nível 3."
         />
         <div className="flex items-center gap-2">
           {isMember ? <SlaProcessEscalationsButton projectId={projectId} /> : null}
           {canConfigure ? (
-            <Link href={`/${projectId}/acoes/configuracao`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-              Matriz de SLA e Escalonamento
+            <Link href={`/${projectId}/usuarios#matriz-responsabilidades`} className={buttonVariants({ variant: "outline", size: "sm" })}>
+              Matriz de responsabilidades e prazos
             </Link>
           ) : null}
         </div>

@@ -105,8 +105,9 @@ export function SlaActionItem({
           <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
             {escalations.map((esc) => (
               <li key={esc.id}>
-                {formatDateTime(esc.escalatedAt)}: {slaEscalationLevelLabels[esc.fromLevel]} →{" "}
-                {slaEscalationLevelLabels[esc.toLevel]} ({slaEscalationReasonLabels[esc.reason]})
+                {formatDateTime(esc.escalatedAt)}: pendência não resolvida por {slaEscalationLevelLabels[esc.fromLevel]};
+                escalonada para {slaEscalationLevelLabels[esc.toLevel]}
+                {esc.notifiedUserName ? ` (${esc.notifiedUserName})` : ""}. Motivo: {slaEscalationReasonLabels[esc.reason]}.
               </li>
             ))}
           </ul>
@@ -129,7 +130,7 @@ export function SlaActionItem({
                 <input type="hidden" name="projectId" value={projectId} />
                 <input type="hidden" name="actionId" value={action.id} />
                 <Button type="submit" size="sm" variant="outline" disabled={startPending}>
-                  {startPending ? "Iniciando…" : "Iniciar"}
+                  {startPending ? "Registrando…" : "Estudando solução"}
                 </Button>
               </form>
             ) : null}
@@ -172,8 +173,11 @@ export function SlaActionItem({
               </Select>
             </label>
             <Button type="submit" size="sm" variant="outline" disabled={reassignPending}>
-              {reassignPending ? "Reatribuindo…" : "Reatribuir"}
+              {reassignPending ? "Direcionando…" : "Direcionar"}
             </Button>
+            <p className="basis-full text-xs text-muted-foreground">
+              O direcionamento mantém os prazos e o escalonamento originais.
+            </p>
             {reassignState.error ? <p className="text-xs text-destructive">{reassignState.error}</p> : null}
           </form>
         ) : null}

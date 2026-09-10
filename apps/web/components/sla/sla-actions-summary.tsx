@@ -177,7 +177,21 @@ export function SlaActionsSummary({
               const overdue = dueAt ? dueAt < now : false;
               return (
                 <tr key={action.id} className="border-t">
-                  <td className="p-2">{action.title}</td>
+                  <td className="p-2">
+                    <span className="group/alert-detail relative inline-flex max-w-xs" tabIndex={action.description ? 0 : undefined}>
+                      <span className={action.description ? "cursor-help underline decoration-dotted underline-offset-4" : undefined}>
+                        {action.title}
+                      </span>
+                      {action.description ? (
+                        <span
+                          role="tooltip"
+                          className="pointer-events-none absolute left-0 top-full z-50 mt-1 hidden w-80 max-w-[calc(100vw-2rem)] rounded-md border bg-popover p-3 text-xs leading-relaxed text-popover-foreground shadow-md group-hover/alert-detail:block group-focus/alert-detail:block"
+                        >
+                          {action.description}
+                        </span>
+                      ) : null}
+                    </span>
+                  </td>
                   <td className="p-2">
                     <SeverityBadge severity={confrontationSeverityToAlertSeverity[action.riskLevel]} />
                   </td>

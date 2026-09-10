@@ -88,11 +88,11 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
                 <tr className="border-b text-left">
                   <th scope="col" className="px-2 py-1.5 font-semibold text-muted-foreground">Risco</th>
                   <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Unidade</th>
-                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Assumir</th>
+                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Nível 1: assumir</th>
                   <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Responder</th>
                   <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Concluir</th>
-                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">2º escalão</th>
-                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Diretoria</th>
+                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Nível 2</th>
+                  <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Nível 3</th>
                   <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Opções</th>
                   <th scope="col" className="px-1 py-1.5 font-semibold text-muted-foreground">Ações</th>
                 </tr>
@@ -115,7 +115,7 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-1.5">
-            Responsáveis por área e escalão
+            Responsáveis por área e nível
             <FeatureInfo helpId="sla-config-responsaveis" />
           </CardTitle>
         </CardHeader>
@@ -129,7 +129,6 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
                 area={area}
                 responsibleDirectUserId={current?.responsibleDirectUserId ?? null}
                 escalation1UserId={current?.escalation1UserId ?? null}
-                escalation2UserId={current?.escalation2UserId ?? null}
                 boardUserId={current?.boardUserId ?? null}
                 members={memberOptions}
               />
