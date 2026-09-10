@@ -499,7 +499,10 @@ await checkAsync("resolveEffectiveRecipient: em produção, efetivo === pretendi
   const { resolveEffectiveRecipient } = await import(
     "../apps/web/lib/email/pilot-outbound-guard.ts"
   );
-  const resolved = resolveEffectiveRecipient("cliente-real@empresa.com.br", { outboundMode: "production" });
+  const resolved = resolveEffectiveRecipient("cliente-real@empresa.com.br", {
+    outboundMode: "production",
+    now: new Date("2026-09-22T03:00:00.000Z"),
+  });
   assert(resolved.mode === "PRODUCTION");
   assert(resolved.effectiveRecipientEmail === "cliente-real@empresa.com.br");
   assert(resolved.intendedRecipientEmail === "cliente-real@empresa.com.br");
@@ -629,15 +632,16 @@ check("pilot-outbound-guard.ts: estendido (nova resolveEffectiveRecipient), nunc
   );
 });
 
-check("test-pilot-outbound-guard.mjs (25 cenários pré-existentes) continua passando sem alteração após o refactor — comportamento externo idêntico", () => {
-  // Não reexecuta aqui (script separado, já rodado nesta sessão) — só
-  // confirma que o arquivo de teste em si não precisou ser alterado
-  // para continuar válido (evidência de que a API pública de
-  // applyPilotOutboundGuard não mudou).
+check("test-pilot-outbound-guard.mjs mantém a cobertura da API pública e da allowlist", () => {
   const pilotGuardTestSource = readSource("scripts/test-pilot-outbound-guard.mjs");
-  assert(pilotGuardTestSource.includes("applyPilotOutboundGuard, resolveOutboundMode, isValidEmailAddress, ACC_EXPECTED_PILOT_RECIPIENT, PILOT_SUBJECT_PREFIX"),
-    "a assinatura de import esperada pelo teste pré-existente continua satisfeita"
-  );
+  for (const exportedName of [
+    "applyPilotOutboundGuard",
+    "resolveOutboundMode",
+    "isValidEmailAddress",
+    "ACC_EXPECTED_PILOT_RECIPIENT",
+    "ACC_PILOT_ALLOWED_RECIPIENTS",
+    "PILOT_SUBJECT_PREFIX",
+  ]) assert(pilotGuardTestSource.includes(exportedName), `cobertura ausente para ${exportedName}`);
 });
 
 check("nenhum e-mail real é enviado por esta feature nesta etapa (issue-tokens.ts nunca chama provider.send)", () => {

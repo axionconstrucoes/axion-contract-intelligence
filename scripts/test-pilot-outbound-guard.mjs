@@ -78,7 +78,11 @@ async function assertThrowsEmailSendError(fn, message) {
 }
 
 const VALID_PILOT_ENV = { outboundMode: "pilot", pilotRecipient: "reynaldo@axion.com.br" };
-const PRODUCTION_ENV = { outboundMode: "production", pilotRecipient: undefined };
+const PRODUCTION_ENV = {
+  outboundMode: "production",
+  pilotRecipient: undefined,
+  now: new Date("2026-09-22T03:00:00.000Z"),
+};
 
 const baseInput = {
   to: "cliente-real@empresa-do-cliente.com.br",
@@ -102,7 +106,17 @@ check('resolveOutboundMode: ausente/"pilot"/vazio/inválido mantêm PILOT; só "
   assert(resolveOutboundMode({ outboundMode: "PRODUCTION" }) === "PILOT", 'caixa diferente ("PRODUCTION") não deveria contar como o valor exato');
   assert(resolveOutboundMode({ outboundMode: "Production" }) === "PILOT");
   assert(resolveOutboundMode({ outboundMode: "producao" }) === "PILOT");
-  assert(resolveOutboundMode({ outboundMode: "production" }) === "PRODUCTION", 'valor exato "production" deveria liberar');
+  assert(resolveOutboundMode(PRODUCTION_ENV) === "PRODUCTION", 'valor exato "production" deveria liberar após o marco');
+});
+
+check("antes de 22/09/2026 em São Paulo, até o valor production permanece em PILOT", () => {
+  assert(
+    resolveOutboundMode({ outboundMode: "production", now: new Date("2026-09-22T02:59:59.999Z") }) === "PILOT"
+  );
+});
+
+check("à meia-noite de 22/09/2026 em São Paulo, a liberação manual pode entrar em vigor", () => {
+  assert(resolveOutboundMode(PRODUCTION_ENV) === "PRODUCTION");
 });
 
 // --- Destinatário original substituído ---
@@ -121,9 +135,17 @@ check("Ricardo Silva permanece como destinatário quando o alerta já é destina
   assert(guarded.to === "ricardo.silva@axion.com.br", `to obtido: "${guarded.to}"`);
 });
 
-check("allowlist do período de testes contém somente Reynaldo e Ricardo Silva", () => {
+check("Carlos Evandro e Rosana Mendes permanecem como destinatários quando o alerta já é destinado a eles", () => {
+  for (const email of ["carlos.evandro@axion.com.br", "rosana.mendes@axion.com.br"]) {
+    const guarded = applyPilotOutboundGuard({ ...baseInput, to: email }, VALID_PILOT_ENV);
+    assert(guarded.to === email, `to obtido: "${guarded.to}"`);
+  }
+});
+
+check("allowlist do período de testes contém somente os quatro participantes autorizados", () => {
   assert(
-    ACC_PILOT_ALLOWED_RECIPIENTS.join("|") === "reynaldo@axion.com.br|ricardo.silva@axion.com.br",
+    ACC_PILOT_ALLOWED_RECIPIENTS.join("|") ===
+      "reynaldo@axion.com.br|ricardo.silva@axion.com.br|carlos.evandro@axion.com.br|rosana.mendes@axion.com.br",
     `allowlist obtida: ${ACC_PILOT_ALLOWED_RECIPIENTS.join(", ")}`
   );
 });
@@ -217,11 +239,13 @@ check("modo production (valor exato) preserva to/subject/cc/bcc/replyTo originai
   assert(guarded.bcc === withExtras.bcc);
 });
 
-// --- Sem desligamento automático por data ---
+// --- Período de testes protegido por data + liberação manual ---
 
-check("guard não referencia relógio/data para decidir modo (só variáveis de ambiente)", () => {
+check("guard força PILOT antes do go-live e ainda exige liberação manual depois do marco", () => {
   const guardSource = readSource("apps/web/lib/email/pilot-outbound-guard.ts");
-  assert(!/new Date\(\)|Date\.now\(\)/.test(guardSource), "guard nunca deveria consultar data/hora para decidir se está em modo piloto");
+  assert(guardSource.includes("dateInSaoPaulo"));
+  assert(guardSource.includes("ACC_GO_LIVE_DATE"));
+  assert(guardSource.includes('raw === "production" ? "PRODUCTION" : "PILOT"'));
 });
 
 // --- FakeEmailProvider aplica a mesma regra (via process.env real, sem rede) ---
