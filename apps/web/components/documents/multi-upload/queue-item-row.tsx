@@ -21,7 +21,7 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const EDITABLE_KIND_STATUSES = new Set(["PENDENTE"]);
+const EDITABLE_KIND_STATUSES = new Set(["PENDENTE", "REJEITADO"]);
 const REMOVABLE_STATUSES = new Set(["PENDENTE"]);
 const RETRYABLE_STATUSES = new Set(["ERRO"]);
 
@@ -50,7 +50,10 @@ export function QueueItemRow({
   // documental (CRONOGRAMA_BASELINE, aplicado em addFiles); permitir
   // trocar para outro tipo aqui seria semanticamente incoerente (um
   // binário do MS Project não pode virar "Contrato"/"Aditivo"/etc.).
-  const canEditKind = EDITABLE_KIND_STATUSES.has(item.status) && !isMppFile(item.descriptor);
+  const canEditKind =
+    EDITABLE_KIND_STATUSES.has(item.status) &&
+    !isMppFile(item.descriptor) &&
+    (item.status !== "REJEITADO" || !item.kind);
   const canRemove = REMOVABLE_STATUSES.has(item.status);
   const canRetry = RETRYABLE_STATUSES.has(item.status);
 

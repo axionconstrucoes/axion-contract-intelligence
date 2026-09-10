@@ -173,9 +173,29 @@ export function useDocumentUploadQueue(
 
   const setItemKind = useCallback(
     (id: string, kind: MultiUploadDocumentKind) => {
-      updateItem(id, { kind });
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.id !== id) return item;
+
+          const wasRejectedOnlyBecauseKindWasMissing =
+            item.status === "REJEITADO" &&
+            !item.kind &&
+            item.errorMessage?.includes("selecione o tipo documental");
+
+          return wasRejectedOnlyBecauseKindWasMissing
+            ? {
+                ...item,
+                kind,
+                status: "PENDENTE",
+                phase: "VALIDACAO",
+                progressPercent: 0,
+                errorMessage: null,
+              }
+            : { ...item, kind };
+        })
+      );
     },
-    [updateItem]
+    [setItems]
   );
 
   const applyKindToAllPending = useCallback(
@@ -196,8 +216,36 @@ export function useDocumentUploadQueue(
   );
 
   const setBatchDefaultKind = useCallback(
-    (kind: MultiUploadDocumentKind) => setBatchDefaultKindState(kind),
-    []
+    (kind: MultiUploadDocumentKind) => {
+      setBatchDefaultKindState(kind);
+
+      // A escolha do padrão também classifica automaticamente os itens
+      // ainda sem tipo. Antes, o usuário precisava descobrir um segundo
+      // botão ("Aplicar a todos") e o envio podia ser iniciado sem tipo.
+      setItems((prev) =>
+        prev.map((item) => {
+          if (item.kind || isMppFile(item.descriptor)) return item;
+
+          if (item.status === "PENDENTE") return { ...item, kind };
+
+          const wasRejectedOnlyBecauseKindWasMissing =
+            item.status === "REJEITADO" &&
+            item.errorMessage?.includes("selecione o tipo documental");
+
+          return wasRejectedOnlyBecauseKindWasMissing
+            ? {
+                ...item,
+                kind,
+                status: "PENDENTE",
+                phase: "VALIDACAO",
+                progressPercent: 0,
+                errorMessage: null,
+              }
+            : item;
+        })
+      );
+    },
+    [setItems]
   );
 
   const getUser = useCallback(async () => {
