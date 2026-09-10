@@ -23,6 +23,7 @@ type AreaResponsiblesRow = {
   project_id: string;
   area: string;
   responsible_direct_user_id: string | null;
+  secondary_responsible_user_id: string | null;
   escalation_1_user_id: string | null;
   escalation_2_user_id: string | null;
   board_user_id: string | null;
@@ -124,6 +125,7 @@ export async function getSlaAreaResponsibles(projectId: string): Promise<SlaArea
 
   const namesByUserId = await resolveProfileNames(supabase, [
     ...rows.map((r) => r.responsible_direct_user_id),
+    ...rows.map((r) => r.secondary_responsible_user_id),
     ...rows.map((r) => r.escalation_1_user_id),
     ...rows.map((r) => r.escalation_2_user_id),
     ...rows.map((r) => r.board_user_id),
@@ -135,6 +137,10 @@ export async function getSlaAreaResponsibles(projectId: string): Promise<SlaArea
     area: row.area as SlaAreaResponsibles["area"],
     responsibleDirectUserId: row.responsible_direct_user_id,
     responsibleDirectName: row.responsible_direct_user_id ? (namesByUserId.get(row.responsible_direct_user_id) ?? null) : null,
+    secondaryResponsibleUserId: row.secondary_responsible_user_id,
+    secondaryResponsibleName: row.secondary_responsible_user_id
+      ? (namesByUserId.get(row.secondary_responsible_user_id) ?? null)
+      : null,
     escalation1UserId: row.escalation_1_user_id,
     escalation1Name: row.escalation_1_user_id ? (namesByUserId.get(row.escalation_1_user_id) ?? null) : null,
     escalation2UserId: row.escalation_2_user_id,

@@ -128,6 +128,7 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
                 projectId={projectId}
                 area={area}
                 responsibleDirectUserId={current?.responsibleDirectUserId ?? null}
+                secondaryResponsibleUserId={current?.secondaryResponsibleUserId ?? null}
                 escalation1UserId={current?.escalation1UserId ?? null}
                 boardUserId={current?.boardUserId ?? null}
                 members={memberOptions}

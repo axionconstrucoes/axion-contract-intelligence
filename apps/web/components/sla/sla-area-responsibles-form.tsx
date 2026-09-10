@@ -16,6 +16,7 @@ export function SlaAreaResponsiblesForm({
   projectId,
   area,
   responsibleDirectUserId,
+  secondaryResponsibleUserId,
   escalation1UserId,
   boardUserId,
   members,
@@ -23,17 +24,25 @@ export function SlaAreaResponsiblesForm({
   projectId: string;
   area: SlaArea;
   responsibleDirectUserId: string | null;
+  secondaryResponsibleUserId: string | null;
   escalation1UserId: string | null;
   boardUserId: string | null;
   members: Array<{ userId: string; name: string }>;
 }) {
+  const supportsSecondaryResponsible = area === "ENGENHARIA" || area === "PLANEJAMENTO";
+  const fullRowClassName = supportsSecondaryResponsible ? "sm:col-span-6" : "sm:col-span-5";
   const [state, formAction, pending] = useActionState(
     configureSlaAreaResponsiblesAction,
     initialConfigureSlaResponsiblesState
   );
 
   return (
-    <form action={formAction} className="grid gap-2 rounded-md border p-3 sm:grid-cols-5 sm:items-end">
+    <form
+      action={formAction}
+      className={`grid gap-2 rounded-md border p-3 sm:items-end ${
+        supportsSecondaryResponsible ? "sm:grid-cols-6" : "sm:grid-cols-5"
+      }`}
+    >
       <input type="hidden" name="projectId" value={projectId} />
       <input type="hidden" name="area" value={area} />
 
@@ -50,6 +59,20 @@ export function SlaAreaResponsiblesForm({
           ))}
         </Select>
       </label>
+
+      {supportsSecondaryResponsible ? (
+        <label className="flex flex-col gap-1 text-xs sm:col-span-1">
+          Nível 1 · Corresponsável
+          <Select name="secondaryResponsibleUserId" defaultValue={secondaryResponsibleUserId ?? ""}>
+            <option value="">Não definido</option>
+            {members.map((m) => (
+              <option key={m.userId} value={m.userId}>
+                {m.name}
+              </option>
+            ))}
+          </Select>
+        </label>
+      ) : null}
 
       <label className="flex flex-col gap-1 text-xs sm:col-span-1">
         Nível 2 · Gerência
@@ -81,11 +104,15 @@ export function SlaAreaResponsiblesForm({
         </Button>
       </div>
 
-      <p className="text-xs text-muted-foreground sm:col-span-5">
+      <p className={`text-xs text-muted-foreground ${fullRowClassName}`}>
         Se o Nível 2 não estiver definido, o alerta será escalonado diretamente para o Nível 3.
       </p>
-      {state.error ? <p className="text-xs text-destructive sm:col-span-5">{state.error}</p> : null}
-      {state.success ? <p className="text-xs text-emerald-600 sm:col-span-5">Salvo.</p> : null}
+      {state.error ? (
+        <p className={`text-xs text-destructive ${fullRowClassName}`}>{state.error}</p>
+      ) : null}
+      {state.success ? (
+        <p className={`text-xs text-emerald-600 ${fullRowClassName}`}>Salvo.</p>
+      ) : null}
     </form>
   );
 }

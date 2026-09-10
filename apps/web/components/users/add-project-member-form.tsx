@@ -6,9 +6,9 @@
 // a autorização no servidor de forma independente da UI.
 //
 // Quando a busca por e-mail não encontra profile (ninguém logou ainda),
-// oferece o pré-cadastro (pre_register_project_member, migration
-// 20260825120500 — ainda não aplicada; a ação retorna erro do Postgres
-// até lá, nunca finge sucesso).
+// oferece o pré-cadastro (pre_register_project_member). O acesso só é
+// ativado quando a pessoa entra no ACC pela primeira vez com o mesmo
+// e-mail corporativo.
 
 import { useActionState, useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
@@ -43,6 +43,8 @@ const AREAS = [
   "ORÇAMENTO",
   "JURÍDICO",
   "PLANEJAMENTO",
+  "COMPRAS",
+  "SSMA/ESG",
 ] as const;
 
 export function AddProjectMemberForm({

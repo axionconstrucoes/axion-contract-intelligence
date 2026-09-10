@@ -45,6 +45,8 @@ const ALLOWED_AREAS = [
   "ORÇAMENTO",
   "JURÍDICO",
   "PLANEJAMENTO",
+  "COMPRAS",
+  "SSMA/ESG",
 ] as const;
 
 function requiredField(formData: FormData, name: string): string {

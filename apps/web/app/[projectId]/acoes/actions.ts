@@ -432,12 +432,26 @@ export async function configureSlaAreaResponsiblesAction(
   try {
     const projectId = requiredField(formData, "projectId");
     const area = requiredField(formData, "area");
+    const responsibleDirectUserId = optionalField(formData, "responsibleDirectUserId");
+    const secondaryResponsibleUserId = optionalField(formData, "secondaryResponsibleUserId");
+
+    if (secondaryResponsibleUserId && area !== "ENGENHARIA" && area !== "PLANEJAMENTO") {
+      return {
+        error: "O corresponsável adicional só pode ser definido para Engenharia ou Planejamento.",
+        success: false,
+      };
+    }
+
+    if (secondaryResponsibleUserId && secondaryResponsibleUserId === responsibleDirectUserId) {
+      return { error: "Selecione pessoas diferentes como responsável e corresponsável.", success: false };
+    }
 
     const { error } = await supabase.from("sla_area_responsibles").upsert(
       {
         project_id: projectId,
         area,
-        responsible_direct_user_id: optionalField(formData, "responsibleDirectUserId"),
+        responsible_direct_user_id: responsibleDirectUserId,
+        secondary_responsible_user_id: secondaryResponsibleUserId,
         escalation_1_user_id: optionalField(formData, "escalation1UserId"),
         // Campo legado do antigo modelo de quatro níveis. A matriz atual
         // usa Nível 1, Nível 2 e Nível 3, portanto este valor é limpo.

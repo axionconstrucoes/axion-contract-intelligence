@@ -134,6 +134,8 @@ export const membershipAreaLabels: Record<MembershipArea, string> = {
   ORÇAMENTO: "Orçamento",
   JURÍDICO: "Jurídico",
   PLANEJAMENTO: "Planejamento",
+  COMPRAS: "Compras",
+  "SSMA/ESG": "SSMA/ESG",
 };
 
 export const memberInvitationStatusLabels: Record<MemberInvitationStatus, string> = {
