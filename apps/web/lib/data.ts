@@ -60,6 +60,8 @@ import {
 import { mapProjectMemberInvitationRow, type ProjectMemberInvitationRow } from "./users/invitation-mapper";
 
 const PROJECT_COLUMNS =
+  "id, code, name, client, status, location, contract_number, start_date, baseline_end_date, workspace_type";
+const LEGACY_PROJECT_COLUMNS =
   "id, code, name, client, status, location, contract_number, start_date, baseline_end_date";
 
 const PROFILE_COLUMNS = "id, name, email, origin, title, avatar_initials";
@@ -139,10 +141,18 @@ function mapEmailRow(row: EmailRow) {
 
 export async function getProjects() {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("projects")
     .select(PROJECT_COLUMNS)
     .order("name", { ascending: true });
+
+  // Compatibilidade de publicação: enquanto a migration jurídica ainda
+  // não tiver sido aplicada, obras existentes continuam acessíveis.
+  if (error?.code === "42703") {
+    const legacy = await supabase.from("projects").select(LEGACY_PROJECT_COLUMNS).order("name", { ascending: true });
+    data = legacy.data?.map((row) => ({ ...row, workspace_type: "OBRA" })) ?? null;
+    error = legacy.error;
+  }
 
   if (error) {
     throw error;
@@ -153,11 +163,21 @@ export async function getProjects() {
 
 export async function getProject(projectId: string) {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("projects")
     .select(PROJECT_COLUMNS)
     .eq("id", projectId)
     .maybeSingle();
+
+  if (error?.code === "42703") {
+    const legacy = await supabase
+      .from("projects")
+      .select(LEGACY_PROJECT_COLUMNS)
+      .eq("id", projectId)
+      .maybeSingle();
+    data = legacy.data ? { ...legacy.data, workspace_type: "OBRA" } : null;
+    error = legacy.error;
+  }
 
   if (error) {
     if (error.code === "22P02") {

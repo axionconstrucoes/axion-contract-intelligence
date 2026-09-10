@@ -2,6 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 function Select({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const title = props.title ?? props["aria-label"];
   return (
     <select
       className={cn(
@@ -9,6 +10,7 @@ function Select({ className, ...props }: React.SelectHTMLAttributes<HTMLSelectEl
         className
       )}
       {...props}
+      title={title}
     />
   );
 }

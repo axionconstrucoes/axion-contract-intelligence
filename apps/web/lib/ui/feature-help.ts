@@ -55,6 +55,14 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
       "Acompanha ações criadas a partir de riscos, findings, solicitações e decisões humanas, incluindo responsável, prazo, SLA e eventual escalonamento.",
   },
   {
+    id: "juridico",
+    title: "Jurídico",
+    shortDescription: "Documentos contratuais e consulta ao especialista jurídico.",
+    description:
+      "Em obras contratadas, reúne contrato-base, anexos, aditivos e consulta jurídica. Antes da contratação, o espaço jurídico permite analisar a minuta com todos os especialistas e consolidação do CEO IA.",
+    humanReview: "Toda análise da IA é apoio à decisão e exige validação humana.",
+  },
+  {
     id: "analise-contratual",
     title: "Análise Contratual",
     shortDescription: "Visão geral das condições e riscos do contrato.",

@@ -26,6 +26,8 @@ export interface CurationInput {
   /** Presente quando a informação chegou por e-mail — usado para checar anexos ainda não processados (seção 7). */
   emailId?: string;
   description: string;
+  /** Na análise pré-contratual, consulta obrigatoriamente todos os especialistas antes da curadoria do CEO IA. */
+  consultAllExperts?: boolean;
 }
 
 /**

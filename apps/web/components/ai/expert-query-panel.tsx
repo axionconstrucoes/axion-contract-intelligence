@@ -196,6 +196,7 @@ export function ExpertQueryPanel({
               required
               rows={2}
               placeholder="Ex.: Qual a melhor estratégia para negociar este aditivo?"
+              title="Descreva o contexto e a pergunta. O especialista usará os documentos e dados disponíveis neste projeto; a resposta exige revisão humana."
             />
           </label>
 

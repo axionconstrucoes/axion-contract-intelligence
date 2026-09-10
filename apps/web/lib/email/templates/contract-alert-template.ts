@@ -33,7 +33,7 @@ export const alertRiskLevelLabels: Record<AlertSeverity, string> = {
 const alertRiskSubjectMarkers: Record<AlertSeverity, string> = {
   BAIXA: "🟢",
   MEDIA: "🔵",
-  ALTA: "🟠",
+  ALTA: "🟡",
   CRITICA: "🔴",
 };
 
@@ -49,14 +49,14 @@ interface BadgeStyle {
 }
 
 // BAIXO: verde · MÉDIO: azul (nunca âmbar/amarelo/laranja-claro) ·
-// ALTO: laranja · CRÍTICO: vermelho — todos com texto branco e destaque
+// ALTO: amarelo · CRÍTICO: vermelho — contraste forte e padronizado.
 // forte, exatamente como especificado. Indicador de STATUS, não hierarquia
 // de texto — por isso não vem de brand-style.ts. Exportado para ser
 // reaproveitado por sla-escalation-template.ts — nunca duplicado.
 export const BADGE_STYLES: Record<AlertSeverity, BadgeStyle> = {
   BAIXA: { background: "#16a34a", color: "#ffffff" },
   MEDIA: { background: "#2563eb", color: "#ffffff" },
-  ALTA: { background: "#f97316", color: "#ffffff" },
+  ALTA: { background: "#FFD600", color: "#000000" },
   CRITICA: { background: "#dc2626", color: "#ffffff" },
 };
 
@@ -331,7 +331,7 @@ export function buildContractAlertEmail(input: ContractAlertEmailInput): Contrac
 
   const confrontationHtml = input.confrontationBlocks.map(confrontationBlockHtml).join("");
 
-  const actionsColumnHtml = `${buildOpenEventButtonHtml(input.eventUrl)}${renderEmailActionButtonsHtml(input.actionButtons)}`;
+  const actionsColumnHtml = `${buildOpenEventButtonHtml(input.eventUrl)}${renderEmailActionButtonsHtml(input.actionButtons, input.summary)}`;
 
   const criticalBannerHtml = input.severity === "CRITICA" ? buildCriticalRiskBannerHtml() : "";
 
