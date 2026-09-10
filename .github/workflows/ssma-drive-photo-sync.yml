@@ -1,9 +1,11 @@
 name: SSMA Drive Photo Sync
 
 on:
-  # Piloto controlado: o agendamento de 15 minutos será habilitado somente
-  # depois de confirmar a primeira escrita real no Drive compartilhado.
+  # Execução manual preservada para testes e reprocessamentos controlados.
   workflow_dispatch:
+  # Piloto real confirmado em 10/09/2026: sincronização automática a cada 2 horas.
+  schedule:
+    - cron: "0 */2 * * *"
 
 concurrency:
   group: ssma-drive-photo-sync
