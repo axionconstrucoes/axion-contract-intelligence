@@ -12,6 +12,7 @@ const createForm = readSource(
 );
 const legalPage = readSource("apps/web/app/[projectId]/juridico/page.tsx");
 const action = readSource("apps/web/app/juridico/actions.ts");
+const actionState = readSource("apps/web/lib/legal/precontract-workspace-state.ts");
 
 let passed = 0;
 
@@ -26,6 +27,11 @@ console.log("\nJURÍDICO PRÉ-CONTRATUAL — UPLOAD DE DOCUMENTOS\n");
 check(
   "a criação permanece na tela e devolve o identificador da análise",
   action.includes("projectId: String(data)") && action.includes('revalidatePath("/juridico")')
+);
+check(
+  "o arquivo use server exporta somente a ação assíncrona",
+  !action.includes("export const initialCreatePrecontractWorkspaceState") &&
+    actionState.includes("initialCreatePrecontractWorkspaceState")
 );
 check(
   "a tela inicial oferece upload múltiplo depois da criação",

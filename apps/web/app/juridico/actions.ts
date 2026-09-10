@@ -2,18 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
-
-export type CreatePrecontractWorkspaceState = {
-  error: string | null;
-  projectId: string | null;
-  projectName: string | null;
-};
-
-export const initialCreatePrecontractWorkspaceState: CreatePrecontractWorkspaceState = {
-  error: null,
-  projectId: null,
-  projectName: null,
-};
+import type { CreatePrecontractWorkspaceState } from "@/lib/legal/precontract-workspace-state";
 
 export async function createPrecontractWorkspaceAction(
   _previousState: CreatePrecontractWorkspaceState,
