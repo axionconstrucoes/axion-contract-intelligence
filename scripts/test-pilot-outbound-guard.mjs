@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 register("./ts-module-resolver.mjs", import.meta.url);
 
-const { applyPilotOutboundGuard, resolveOutboundMode, isValidEmailAddress, ACC_EXPECTED_PILOT_RECIPIENT, PILOT_SUBJECT_PREFIX } =
+const { applyPilotOutboundGuard, resolveOutboundMode, isValidEmailAddress, ACC_EXPECTED_PILOT_RECIPIENT, ACC_PILOT_ALLOWED_RECIPIENTS, PILOT_SUBJECT_PREFIX } =
   await import("../apps/web/lib/email/pilot-outbound-guard");
 const { EmailSendError } = await import("../apps/web/lib/email/email-provider");
 const { FakeEmailProvider } = await import("../apps/web/lib/email/fake-email-provider");
@@ -111,6 +111,21 @@ check("destinatário original é substituído por reynaldo@axion.com.br em modo 
   const guarded = applyPilotOutboundGuard(baseInput, VALID_PILOT_ENV);
   assert(guarded.to === ACC_EXPECTED_PILOT_RECIPIENT, `to obtido: "${guarded.to}"`);
   assert(guarded.to !== baseInput.to);
+});
+
+check("Ricardo Silva permanece como destinatário quando o alerta já é destinado a ele", () => {
+  const guarded = applyPilotOutboundGuard(
+    { ...baseInput, to: "ricardo.silva@axion.com.br" },
+    VALID_PILOT_ENV
+  );
+  assert(guarded.to === "ricardo.silva@axion.com.br", `to obtido: "${guarded.to}"`);
+});
+
+check("allowlist do período de testes contém somente Reynaldo e Ricardo Silva", () => {
+  assert(
+    ACC_PILOT_ALLOWED_RECIPIENTS.join("|") === "reynaldo@axion.com.br|ricardo.silva@axion.com.br",
+    `allowlist obtida: ${ACC_PILOT_ALLOWED_RECIPIENTS.join(", ")}`
+  );
 });
 
 check("destinatário original preservado SOMENTE no objeto de metadados do chamador, nunca no resultado do guard", () => {

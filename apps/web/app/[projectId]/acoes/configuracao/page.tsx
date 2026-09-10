@@ -6,8 +6,9 @@ import { SlaProjectSettingsForm } from "@/components/sla/sla-project-settings-fo
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
-import { getProjectMembers } from "@/lib/data";
-import { slaAreaLabels } from "@/lib/labels";
+import { getProjectMemberInvitations, getProjectMembers } from "@/lib/data";
+import { membershipAreaLabels, slaAreaLabels } from "@/lib/labels";
+import { formatInvitationSelection, formatMemberSelection } from "@/lib/sla/responsible-selection";
 import { resolveBusinessHoursConfig, resolveGenericMatrixRule } from "@/lib/sla/resolve-matrix-rule";
 import {
   getSlaAreaResponsibles,
@@ -30,14 +31,28 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
     notFound();
   }
 
-  const [matrixRules, areaResponsibles, members, projectSettings] = await Promise.all([
+  const [matrixRules, areaResponsibles, members, invitations, projectSettings] = await Promise.all([
     getSlaMatrixRules(projectId),
     getSlaAreaResponsibles(projectId),
     getProjectMembers(projectId),
+    getProjectMemberInvitations(projectId),
     getSlaProjectSettings(projectId),
   ]);
 
-  const memberOptions = members.map((m) => ({ userId: m.userId, name: m.user.name }));
+  const peopleOptions = [
+    ...members
+      .filter((member) => member.status === "ACTIVE")
+      .map((member) => ({
+        value: formatMemberSelection(member.userId),
+        label: `${member.user.name} — ${member.area ? membershipAreaLabels[member.area] : "Sem área"} — ${member.user.email}`,
+      })),
+    ...invitations
+      .filter((invitation) => invitation.status === "PENDING")
+      .map((invitation) => ({
+        value: formatInvitationSelection(invitation.id),
+        label: `${invitation.name} — ${invitation.area ? membershipAreaLabels[invitation.area] : "Sem área"} — ${invitation.email} — Aguardando primeiro login`,
+      })),
+  ].sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   const responsiblesByArea = new Map(areaResponsibles.map((r) => [r.area, r]));
   const businessHoursConfig = resolveBusinessHoursConfig(projectSettings);
 
@@ -128,10 +143,14 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
                 projectId={projectId}
                 area={area}
                 responsibleDirectUserId={current?.responsibleDirectUserId ?? null}
+                responsibleDirectInvitationId={current?.responsibleDirectInvitationId ?? null}
                 secondaryResponsibleUserId={current?.secondaryResponsibleUserId ?? null}
+                secondaryResponsibleInvitationId={current?.secondaryResponsibleInvitationId ?? null}
                 escalation1UserId={current?.escalation1UserId ?? null}
+                escalation1InvitationId={current?.escalation1InvitationId ?? null}
                 boardUserId={current?.boardUserId ?? null}
-                members={memberOptions}
+                boardInvitationId={current?.boardInvitationId ?? null}
+                people={peopleOptions}
               />
             );
           })}

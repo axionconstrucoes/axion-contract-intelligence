@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { slaAreaLabels } from "@/lib/labels";
+import { formatInvitationSelection, formatMemberSelection } from "@/lib/sla/responsible-selection";
 import type { SlaArea } from "@/lib/sla/types";
 import { configureSlaAreaResponsiblesAction } from "@/app/[projectId]/acoes/actions";
 import { initialConfigureSlaResponsiblesState } from "@/app/[projectId]/acoes/actions-state";
@@ -16,21 +17,35 @@ export function SlaAreaResponsiblesForm({
   projectId,
   area,
   responsibleDirectUserId,
+  responsibleDirectInvitationId,
   secondaryResponsibleUserId,
+  secondaryResponsibleInvitationId,
   escalation1UserId,
+  escalation1InvitationId,
   boardUserId,
-  members,
+  boardInvitationId,
+  people,
 }: {
   projectId: string;
   area: SlaArea;
   responsibleDirectUserId: string | null;
+  responsibleDirectInvitationId: string | null;
   secondaryResponsibleUserId: string | null;
+  secondaryResponsibleInvitationId: string | null;
   escalation1UserId: string | null;
+  escalation1InvitationId: string | null;
   boardUserId: string | null;
-  members: Array<{ userId: string; name: string }>;
+  boardInvitationId: string | null;
+  people: Array<{ value: string; label: string }>;
 }) {
   const supportsSecondaryResponsible = area === "ENGENHARIA" || area === "PLANEJAMENTO";
   const fullRowClassName = supportsSecondaryResponsible ? "sm:col-span-6" : "sm:col-span-5";
+  const selectionValue = (userId: string | null, invitationId: string | null) =>
+    userId
+      ? formatMemberSelection(userId)
+      : invitationId
+        ? formatInvitationSelection(invitationId)
+        : "";
   const [state, formAction, pending] = useActionState(
     configureSlaAreaResponsiblesAction,
     initialConfigureSlaResponsiblesState
@@ -50,11 +65,14 @@ export function SlaAreaResponsiblesForm({
 
       <label className="flex flex-col gap-1 text-xs sm:col-span-1">
         Nível 1 · Responsável
-        <Select name="responsibleDirectUserId" defaultValue={responsibleDirectUserId ?? ""}>
+        <Select
+          name="responsibleDirectUserId"
+          defaultValue={selectionValue(responsibleDirectUserId, responsibleDirectInvitationId)}
+        >
           <option value="">Não definido</option>
-          {members.map((m) => (
-            <option key={m.userId} value={m.userId}>
-              {m.name}
+          {people.map((person) => (
+            <option key={person.value} value={person.value}>
+              {person.label}
             </option>
           ))}
         </Select>
@@ -63,11 +81,14 @@ export function SlaAreaResponsiblesForm({
       {supportsSecondaryResponsible ? (
         <label className="flex flex-col gap-1 text-xs sm:col-span-1">
           Nível 1 · Corresponsável
-          <Select name="secondaryResponsibleUserId" defaultValue={secondaryResponsibleUserId ?? ""}>
+          <Select
+            name="secondaryResponsibleUserId"
+            defaultValue={selectionValue(secondaryResponsibleUserId, secondaryResponsibleInvitationId)}
+          >
             <option value="">Não definido</option>
-            {members.map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {m.name}
+            {people.map((person) => (
+              <option key={person.value} value={person.value}>
+                {person.label}
               </option>
             ))}
           </Select>
@@ -76,11 +97,14 @@ export function SlaAreaResponsiblesForm({
 
       <label className="flex flex-col gap-1 text-xs sm:col-span-1">
         Nível 2 · Gerência
-        <Select name="escalation1UserId" defaultValue={escalation1UserId ?? ""}>
+        <Select
+          name="escalation1UserId"
+          defaultValue={selectionValue(escalation1UserId, escalation1InvitationId)}
+        >
           <option value="">Não definido</option>
-          {members.map((m) => (
-            <option key={m.userId} value={m.userId}>
-              {m.name}
+          {people.map((person) => (
+            <option key={person.value} value={person.value}>
+              {person.label}
             </option>
           ))}
         </Select>
@@ -88,11 +112,11 @@ export function SlaAreaResponsiblesForm({
 
       <label className="flex flex-col gap-1 text-xs sm:col-span-1">
         Nível 3 · Diretoria
-        <Select name="boardUserId" defaultValue={boardUserId ?? ""}>
+        <Select name="boardUserId" defaultValue={selectionValue(boardUserId, boardInvitationId)}>
           <option value="">Não definido</option>
-          {members.map((m) => (
-            <option key={m.userId} value={m.userId}>
-              {m.name}
+          {people.map((person) => (
+            <option key={person.value} value={person.value}>
+              {person.label}
             </option>
           ))}
         </Select>
