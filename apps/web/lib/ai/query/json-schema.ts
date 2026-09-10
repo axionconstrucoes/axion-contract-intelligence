@@ -89,11 +89,16 @@ export const EXPERT_QUERY_RESPONSE_JSON_SCHEMA = {
     confidence: { type: "number", minimum: 0, maximum: 1 },
     requiresHumanReview: { const: true },
   },
+  // `scope` NÃO é exigido do provider: é metadado da requisição, não um
+  // fato que o modelo descobre. O servidor sempre o deriva do
+  // ExpertQueryRequest já validado (ver validate-expert-query-response.ts,
+  // ExpectedExpertQueryIdentity.scope). A propriedade continua declarada
+  // acima apenas para que um modelo que opte por ecoá-la não seja barrado
+  // por `additionalProperties: false`.
   required: [
     "expertId",
     "expertName",
     "expertVersion",
-    "scope",
     "question",
     "fatosDocumentados",
     "contextoInternoDeclarado",

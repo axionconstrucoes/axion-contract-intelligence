@@ -498,6 +498,7 @@ await checkAsync(
       expertId: "commercial-director",
       expertName: "Diretor Comercial IA",
       expertVersion: COMMERCIAL_DIRECTOR_VERSION,
+      scope: "EVENT",
     });
     const source = buildGroundingSource({ eventContext: eventContextWithFundacaoFact(), documentedFacts: validated.fatosDocumentados });
     const groundingResult = validateDraftGrounding(validated.rascunhoSugerido.body, source);

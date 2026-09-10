@@ -75,6 +75,9 @@ const identity = {
   expertId: ESG_DIRECTOR_EXPERT_ID,
   expertName: ESG_DIRECTOR_NAME,
   expertVersion: ESG_DIRECTOR_VERSION,
+  // Escopo confiável da consulta — derivado no servidor, nunca lido da
+  // saída do provider (ver scripts/test-expert-query-scope.mjs).
+  scope: "PROJECT",
 };
 
 function validResponseFixture() {

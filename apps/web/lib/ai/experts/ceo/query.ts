@@ -90,6 +90,8 @@ export async function answerCeoQuery(
     expertId: CEO_EXPERT_ID,
     expertName: CEO_NAME,
     expertVersion: CEO_VERSION,
+    // Escopo confiável desta consulta (nunca lido da saída do provider).
+    scope: request.scope,
   });
 
   return {
