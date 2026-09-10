@@ -42,7 +42,11 @@ export async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
 
   const isPublicRoute =
-    request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/auth/callback";
+    request.nextUrl.pathname === "/login" ||
+    request.nextUrl.pathname === "/auth/callback" ||
+    // Chamado sem cookie pelo agendador da Vercel; a própria rota exige
+    // Authorization: Bearer CRON_SECRET e falha fechada se ausente.
+    request.nextUrl.pathname === "/api/cron/weekly-alert-digest";
 
   if (!isPublicRoute && !data?.claims) {
     // Destino original preservado em ?next= para /login devolver o

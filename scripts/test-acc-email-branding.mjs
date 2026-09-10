@@ -159,7 +159,7 @@ check("acc_ia@axion.com.br ainda não é o remetente configurado (não inventamo
 check("subject com nome da obra e nível de risco dinâmicos", () => {
   const subject = buildContractAlertSubject("WEG Fábrica de Arames", "ALTA");
   assert(
-    subject === "ACC - ALERTAS DO CONTRATO - OBRA WEG FÁBRICA DE ARAMES - RISCO ALTO",
+    subject === "🟠 [RISCO ALTO] ACC - OBRA WEG FÁBRICA DE ARAMES",
     `subject inesperado: ${subject}`
   );
 });
@@ -417,6 +417,7 @@ check("banner institucional dos templates usa o nome atual da marca (AXION CONTR
     currentResponsibleName: "Carlos Mendes",
     originalDeadline: "22/08/2026 14:00",
     overdueBy: "2h15min",
+    previousLevelLabel: "Nível 1 · Responsável",
     escalationLevelLabel: "2º Escalão",
     recommendedAction: null,
     eventUrl: "http://localhost:3000/proj-1/ledger/evt-1",

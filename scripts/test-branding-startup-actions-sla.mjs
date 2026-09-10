@@ -352,7 +352,7 @@ check("Matriz de SLA: tabela SEMÂNTICA real — <table>/<thead>/<tbody>, cabeç
   assert(configPageSource.includes("<table"), "deveria existir um elemento <table> real");
   assert(configPageSource.includes("<thead>") && configPageSource.includes("<tbody>"), "deveria ter <thead> e <tbody> reais");
   assert(!/grid grid-cols-\[/.test(configPageSource), "não deveria mais existir o CSS Grid antigo disfarçado de tabela");
-  for (const column of ["Risco", "Unidade", "Assumir", "Responder", "Concluir", "2º escalão", "Diretoria", "Opções", "Ações"]) {
+  for (const column of ["Risco", "Unidade", "Nível 1: assumir", "Responder", "Concluir", "Nível 2", "Nível 3", "Opções", "Ações"]) {
     assert(new RegExp(`<th scope="col"[^>]*>${column}</th>`).test(configPageSource), `coluna '${column}' não encontrada como <th scope="col"> no cabeçalho da tabela de SLA`);
   }
   const tbodyBlock = configPageSource.slice(configPageSource.indexOf("<tbody>"), configPageSource.indexOf("</tbody>"));

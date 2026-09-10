@@ -158,6 +158,9 @@ export default async function UsuariosPage({ params }: { params: Promise<{ proje
             <p className="text-sm text-muted-foreground">
               Configuração exclusiva deste projeto. O Nível 1 trata a ação, o Nível 2 recebe o primeiro escalonamento e o Nível 3 corresponde à Diretoria.
             </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Riscos médios e baixos são reunidos em um único e-mail às quartas-feiras, às 7h. Riscos altos e críticos mantêm o alerta e o escalonamento imediato definidos na matriz.
+            </p>
           </div>
 
           <Card>
