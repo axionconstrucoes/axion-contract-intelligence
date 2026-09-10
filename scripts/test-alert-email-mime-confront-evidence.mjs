@@ -834,7 +834,11 @@ check("remetente/destinatário/assunto/url de evidência são escapados (proteç
 check("guard de piloto, tokens de uso único, permissões e auditoria continuam intocados por esta rodada", () => {
   const pilotGuardSource = readSource("apps/web/lib/email/pilot-outbound-guard.ts");
   assert(pilotGuardSource.includes('ACC_EXPECTED_PILOT_RECIPIENT = "reynaldo@axion.com.br"'), "Reynaldo continua como destinatário de contingência do piloto");
-  assert(pilotGuardSource.includes('"ricardo.silva@axion.com.br"'), "Ricardo Silva deve constar na allowlist do período de testes");
+  for (const email of [
+    "ricardo.silva@axion.com.br",
+    "carlos.evandro@axion.com.br",
+    "rosana.mendes@axion.com.br",
+  ]) assert(pilotGuardSource.includes(`"${email}"`), `${email} deve constar na allowlist do período de testes`);
   const sendEmailSource = readSource("apps/web/lib/email/send-contract-alert-email.ts");
   assert(sendEmailSource.includes("CONTRACT_ALERT_EMAIL_SENT"));
   assert(sendEmailSource.includes('permission !== "ADMINISTRADOR"'));

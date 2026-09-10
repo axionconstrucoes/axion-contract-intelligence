@@ -25,6 +25,8 @@ export const ACC_EXPECTED_PILOT_RECIPIENT = "reynaldo@axion.com.br";
 export const ACC_PILOT_ALLOWED_RECIPIENTS = [
   ACC_EXPECTED_PILOT_RECIPIENT,
   "ricardo.silva@axion.com.br",
+  "carlos.evandro@axion.com.br",
+  "rosana.mendes@axion.com.br",
 ] as const;
 export const PILOT_SUBJECT_PREFIX = "[TESTE CONTROLADO] ";
 
@@ -87,7 +89,7 @@ function ensureSubjectPrefixed(subject: string): string {
 // de sempre: só "production" exato libera o destinatário pretendido;
 // em piloto, ACC_PILOT_RECIPIENT precisa ser válido e bater com o
 // destinatário de contingência autorizado, senão lança antes de qualquer
-// efeito. Se o destinatário original for um dos dois testadores, ele é
+// efeito. Se o destinatário original estiver na lista de testadores, ele é
 // preservado; qualquer outro é redirecionado para Reynaldo.
 export interface ResolvedEmailRecipient {
   mode: "PRODUCTION" | "PILOT";

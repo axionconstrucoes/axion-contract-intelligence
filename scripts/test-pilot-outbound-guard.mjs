@@ -135,9 +135,17 @@ check("Ricardo Silva permanece como destinatário quando o alerta já é destina
   assert(guarded.to === "ricardo.silva@axion.com.br", `to obtido: "${guarded.to}"`);
 });
 
-check("allowlist do período de testes contém somente Reynaldo e Ricardo Silva", () => {
+check("Carlos Evandro e Rosana Mendes permanecem como destinatários quando o alerta já é destinado a eles", () => {
+  for (const email of ["carlos.evandro@axion.com.br", "rosana.mendes@axion.com.br"]) {
+    const guarded = applyPilotOutboundGuard({ ...baseInput, to: email }, VALID_PILOT_ENV);
+    assert(guarded.to === email, `to obtido: "${guarded.to}"`);
+  }
+});
+
+check("allowlist do período de testes contém somente os quatro participantes autorizados", () => {
   assert(
-    ACC_PILOT_ALLOWED_RECIPIENTS.join("|") === "reynaldo@axion.com.br|ricardo.silva@axion.com.br",
+    ACC_PILOT_ALLOWED_RECIPIENTS.join("|") ===
+      "reynaldo@axion.com.br|ricardo.silva@axion.com.br|carlos.evandro@axion.com.br|rosana.mendes@axion.com.br",
     `allowlist obtida: ${ACC_PILOT_ALLOWED_RECIPIENTS.join(", ")}`
   );
 });
