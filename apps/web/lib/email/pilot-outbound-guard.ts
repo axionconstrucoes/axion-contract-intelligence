@@ -11,16 +11,20 @@
 // - Somente o valor EXATO "production" libera destinatários originais.
 // - Ausente, "pilot", vazio ou qualquer outro valor mantém o piloto
 //   ativo — nunca abre a porta por engano.
-// - Em modo piloto, ACC_PILOT_RECIPIENT precisa ser um e-mail válido E
-//   exatamente igual a ACC_EXPECTED_PILOT_RECIPIENT; ausente, inválido
-//   ou diferente bloqueia o envio inteiro (lança antes de qualquer
-//   chamada de rede).
+// - Em modo piloto, somente os destinatários fixos da allowlist podem
+//   receber mensagens. O destinatário de contingência configurado por
+//   ACC_PILOT_RECIPIENT continua sendo Reynaldo; mensagens destinadas a
+//   qualquer outra pessoa são redirecionadas para ele.
 // - Sem qualquer desligamento automático por data/relógio — controlado
 //   inteiramente por configuração de ambiente.
 
 import { EmailSendError, type SendEmailInput } from "./email-provider";
 
 export const ACC_EXPECTED_PILOT_RECIPIENT = "reynaldo@axion.com.br";
+export const ACC_PILOT_ALLOWED_RECIPIENTS = [
+  ACC_EXPECTED_PILOT_RECIPIENT,
+  "ricardo.silva@axion.com.br",
+] as const;
 export const PILOT_SUBJECT_PREFIX = "[TESTE CONTROLADO] ";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -61,9 +65,10 @@ function ensureSubjectPrefixed(subject: string): string {
 // ACC_PILOT_RECIPIENT ou reimplementa esta decisão por conta própria;
 // nenhum outro lugar do projeto pode fazê-lo. Mesma regra fail-closed
 // de sempre: só "production" exato libera o destinatário pretendido;
-// em piloto, ACC_PILOT_RECIPIENT precisa ser válido e bater
-// exatamente com ACC_EXPECTED_PILOT_RECIPIENT, senão lança antes de
-// qualquer efeito.
+// em piloto, ACC_PILOT_RECIPIENT precisa ser válido e bater com o
+// destinatário de contingência autorizado, senão lança antes de qualquer
+// efeito. Se o destinatário original for um dos dois testadores, ele é
+// preservado; qualquer outro é redirecionado para Reynaldo.
 export interface ResolvedEmailRecipient {
   mode: "PRODUCTION" | "PILOT";
   intendedRecipientEmail: string;
@@ -88,7 +93,14 @@ export function resolveEffectiveRecipient(
     );
   }
 
-  return { mode, intendedRecipientEmail, effectiveRecipientEmail: ACC_EXPECTED_PILOT_RECIPIENT };
+  const normalizedIntendedRecipient = intendedRecipientEmail.trim().toLowerCase();
+  const effectiveRecipientEmail = ACC_PILOT_ALLOWED_RECIPIENTS.includes(
+    normalizedIntendedRecipient as (typeof ACC_PILOT_ALLOWED_RECIPIENTS)[number]
+  )
+    ? normalizedIntendedRecipient
+    : ACC_EXPECTED_PILOT_RECIPIENT;
+
+  return { mode, intendedRecipientEmail, effectiveRecipientEmail };
 }
 
 // Único ponto de decisão: chamado obrigatoriamente no início de

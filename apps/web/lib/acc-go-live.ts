@@ -1,10 +1,10 @@
 // Marco operacional PADRÃO do ACC (AXION Acompanhamento de Contratos) —
 // nunca uma regra eterna hardcoded. Fonte única de verdade da data
 // oficial de startup/go-live/assembleia geral/liberação de usuários
-// (quarta-feira, 02/09/2026, America/Sao_Paulo — atualizado nesta
-// rodada a partir de 24/08/2026; ver docs/product-go-live.md para o
-// histórico). O ambiente de teste/validação segue até o fim de
-// 01/09/2026; a remoção da etiqueta "SISTEMA EM TESTE" continua sendo
+// (terça-feira, 22/09/2026, America/Sao_Paulo — atualizado nesta
+// rodada; ver docs/product-go-live.md para o histórico). O ambiente de
+// teste/validação segue até o fim de 21/09/2026; a remoção da etiqueta
+// "SISTEMA EM TESTE" continua sendo
 // SEMPRE manual (ver lib/test-mode.ts — deliberadamente sem
 // desligamento automático por data/relógio), nunca amarrada
 // automaticamente a este marco.
@@ -30,7 +30,7 @@
 //
 // Ver docs/product-go-live.md.
 
-export const ACC_GO_LIVE_DATE = "2026-09-02" as const;
+export const ACC_GO_LIVE_DATE = "2026-09-22" as const;
 
 /** Meia-noite UTC do dia de início operacional, como Date — para comparações/filtros. */
 export function getAccGoLiveDate(): Date {

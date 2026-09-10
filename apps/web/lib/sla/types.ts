@@ -64,14 +64,18 @@ export interface SlaAreaResponsibles {
   projectId: string;
   area: SlaArea;
   responsibleDirectUserId: string | null;
+  responsibleDirectInvitationId: string | null;
   responsibleDirectName: string | null;
   secondaryResponsibleUserId: string | null;
+  secondaryResponsibleInvitationId: string | null;
   secondaryResponsibleName: string | null;
   escalation1UserId: string | null;
+  escalation1InvitationId: string | null;
   escalation1Name: string | null;
   escalation2UserId: string | null;
   escalation2Name: string | null;
   boardUserId: string | null;
+  boardInvitationId: string | null;
   boardName: string | null;
   updatedAt: string;
 }
