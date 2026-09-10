@@ -9,7 +9,7 @@ import { IntegrationCard } from "@/components/integrations/integration-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
-import { getIntegrationConfigs, getProject, getSourceDefinitions } from "@/lib/data";
+import { getIntegrationConfigs, getProject, getProjectMembers, getSourceDefinitions } from "@/lib/data";
 import { getEmailAccounts } from "@/lib/email/inbound/ingestion-controls/get-email-accounts";
 import { getProjectEmailIngestionConfig } from "@/lib/email/inbound/ingestion-controls/get-project-email-ingestion-config";
 import { getLatestEmailSyncRun } from "@/lib/email/inbound/ingestion-controls/get-sync-runs";
@@ -32,7 +32,7 @@ export default async function IntegracoesPage({
   const supabase = await createSupabaseServerClient();
   const sources = getSourceDefinitions();
 
-  const [configs, permission, project, projectStartRow, accounts, ingestionConfig, latestRun, attachmentRows, construmanagerMetadata, construmanagerTransitions, diarioDeObraOverview, diarioDeObraClimateKpi] = await Promise.all([
+  const [configs, permission, project, projectStartRow, accounts, ingestionConfig, latestRun, attachmentRows, construmanagerMetadata, construmanagerTransitions, diarioDeObraOverview, diarioDeObraClimateKpi, members] = await Promise.all([
     getIntegrationConfigs(projectId),
     getCurrentProjectPermission(projectId),
     getProject(projectId),
@@ -47,6 +47,7 @@ export default async function IntegracoesPage({
     // diario_de_obra_* ja restringe a membros do projeto.
     getDiarioDeObraMonitoringOverview(supabase, projectId),
     getDiarioDeObraClimateKpiOverview(supabase, projectId),
+    getProjectMembers(projectId),
   ]);
 
   const canManage = permission === "ADMINISTRADOR";
@@ -56,6 +57,9 @@ export default async function IntegracoesPage({
   const preliminaryCount = ingestionConfig ? await estimateEligibleEmailCount(supabase, projectId, ingestionConfig, projectStartDate) : 0;
   const clientDomain = ingestionConfig?.domains.find((d) => d.domainRole === "CLIENT")?.domain ?? "";
   const accountEmail = accounts.find((a) => a.id === ingestionConfig?.emailAccountId)?.emailAddress ?? "";
+  const budgetUsers = members
+    .filter((member) => member.status === "ACTIVE" && member.area === "ORÇAMENTO")
+    .map((member) => ({ id: member.userId, name: member.user.name }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,6 +82,7 @@ export default async function IntegracoesPage({
               canManage={canManage}
               construmanagerMetadata={source.type === "CONSTRUMANAGER" ? construmanagerMetadata : null}
               construmanagerTransitions={source.type === "CONSTRUMANAGER" ? construmanagerTransitions : null}
+              budgetUsers={source.type === "CONSTRUMANAGER" ? budgetUsers : []}
               diarioDeObraOverview={source.type === "DIARIO_OBRA" ? diarioDeObraOverview : null}
               diarioDeObraClimateKpi={source.type === "DIARIO_OBRA" ? diarioDeObraClimateKpi : null}
             />

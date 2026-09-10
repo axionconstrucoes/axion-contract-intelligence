@@ -20,7 +20,7 @@ não as repete, apenas descreve como elas são aplicadas em código.
 | 1 | CEO IA | `ceo` | **Implementado** — consolidação executiva (`experts/ceo/consolidate.ts`) e consulta conversacional (`experts/ceo/query.ts`) |
 | 2 | **Diretor Comercial IA** | `commercial-director` | **Implementado (v2)** |
 | 3 | Consultor Jurídico IA | `legal-consultant` | **Implementado** — `answerLegalConsultantQuery` (`experts/legal-consultant/query.ts`) |
-| 4 | Diretor de Planejamento IA | `planning-director` | **Implementado** — `answerPlanningDirectorQuery` (`experts/planning-director/query.ts`) |
+| 4 | Diretor de Engenharia IA | `planning-director` (ID técnico preservado) | **Implementado** — consulta dedicada e `answerPlanningDirectorQuery` (`experts/planning-director/query.ts`) |
 | 5 | **Diretor de ESG IA** | `esg-director` | **Implementado (v1)** — ver `docs/esg-obligations.md` |
 
 Os cinco Experts oficiais estão todos em `ExpertId`

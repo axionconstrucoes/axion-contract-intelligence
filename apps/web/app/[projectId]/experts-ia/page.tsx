@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 const EXPERT_ACCESS_HREF: Partial<Record<OfficialExpertId, (projectId: string) => string>> = {
   "commercial-director": (projectId) => `/${projectId}/dashboard`,
   "esg-director": (projectId) => `/${projectId}/esg`,
+  "planning-director": (projectId) => `/${projectId}/experts-ia/diretor-engenharia`,
 };
 
 export const metadata: Metadata = { title: "Experts IA" };

@@ -35,6 +35,14 @@ export interface ConstrumanagerVersionTransition {
   sizeBytes: number | null;
   folderPath: string | null;
   contentStatus: TransitionContentStatus;
+  impactReview: {
+    id: string;
+    scheduleImpact: "SIM" | "NAO" | "INCONCLUSIVO";
+    priceImpact: "SIM" | "NAO" | "INCONCLUSIVO";
+    planningResponse: string;
+    status: "PENDENTE_ORCAMENTO" | "CONCLUIDA";
+    budgetResponse: string | null;
+  } | null;
 }
 
 /**
@@ -128,14 +136,20 @@ export async function getConstrumanagerVersionTransitions(
   supabase: SupabaseClient,
   projectId: string
 ): Promise<ConstrumanagerVersionTransitionsResult> {
-  const { data, error } = await supabase
+  const [{ data, error }, reviewsResult] = await Promise.all([
+    supabase
     .from("construmanager_recent_version_transitions")
     .select(
       "id, construmanager_object_id, document_name, previous_revision, new_revision, detected_at, source_created_at, author_name, size_bytes, folder_path, content_status"
     )
     .eq("project_id", projectId)
     .order("detected_at", { ascending: false })
-    .limit(RECENT_LIMIT);
+    .limit(RECENT_LIMIT),
+    supabase
+      .from("construmanager_version_impact_reviews")
+      .select("id,transition_id,schedule_impact,price_impact,planning_response,status,budget_response")
+      .eq("project_id", projectId),
+  ]);
 
   if (error) {
     const code = (error as { code?: string }).code;
@@ -151,6 +165,11 @@ export async function getConstrumanagerVersionTransitions(
     };
   }
 
+  if (reviewsResult.error && !MISSING_RELATION_CODES.has(reviewsResult.error.code)) {
+    logTransitionFailure(projectId, reviewsResult.error.code, reviewsResult.error.message);
+    return { status: "INDISPONIVEL", reason: "ERRO_DE_CONSULTA" };
+  }
+
   // `data` nulo sem `error` não é um caso previsto pelo driver; tratá-lo
   // como lista vazia mascararia um estado que não sabemos interpretar.
   if (!data) {
@@ -159,25 +178,48 @@ export async function getConstrumanagerVersionTransitions(
   }
 
   const rows = data as unknown as TransitionRow[];
+  const reviews = new Map(
+    ((reviewsResult.error && MISSING_RELATION_CODES.has(reviewsResult.error.code)
+      ? []
+      : reviewsResult.data ?? []) as Array<{
+      id: string;
+      transition_id: string;
+      schedule_impact: "SIM" | "NAO" | "INCONCLUSIVO";
+      price_impact: "SIM" | "NAO" | "INCONCLUSIVO";
+      planning_response: string;
+      status: "PENDENTE_ORCAMENTO" | "CONCLUIDA";
+      budget_response: string | null;
+    }>).map((review) => [review.transition_id, review])
+  );
 
   return {
     status: "OK",
     total: rows.length,
-    items: rows.map((row) => ({
-      id: row.id,
-      objectId: row.construmanager_object_id,
-      documentName: row.document_name,
-      previousRevision: row.previous_revision,
-      newRevision: row.new_revision,
-      detectedAt: row.detected_at,
-      sourceCreatedAt: row.source_created_at,
-      authorName: row.author_name,
-      sizeBytes:
-        row.size_bytes === null || row.size_bytes === undefined
+    items: rows.map((row) => {
+      const review = reviews.get(row.id);
+      return {
+        id: row.id,
+        objectId: row.construmanager_object_id,
+        documentName: row.document_name,
+        previousRevision: row.previous_revision,
+        newRevision: row.new_revision,
+        detectedAt: row.detected_at,
+        sourceCreatedAt: row.source_created_at,
+        authorName: row.author_name,
+        sizeBytes: row.size_bytes === null || row.size_bytes === undefined
           ? null
           : Number(row.size_bytes),
-      folderPath: row.folder_path,
-      contentStatus: normalizeContentStatus(row.content_status),
-    })),
+        folderPath: row.folder_path,
+        contentStatus: normalizeContentStatus(row.content_status),
+        impactReview: review ? {
+          id: review.id,
+          scheduleImpact: review.schedule_impact,
+          priceImpact: review.price_impact,
+          planningResponse: review.planning_response,
+          status: review.status,
+          budgetResponse: review.budget_response,
+        } : null,
+      };
+    }),
   };
 }

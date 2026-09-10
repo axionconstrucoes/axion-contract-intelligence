@@ -55,7 +55,7 @@ function sanitizeSsmaDriveValidationError(error: unknown): string {
   if (message === "ROOT_IS_NOT_A_FOLDER") return "A origem configurada não aponta para uma pasta do Google Drive.";
   if (message.startsWith("MISSING_FOLDERS:")) {
     const count = message.slice("MISSING_FOLDERS:".length).split("|").filter(Boolean).length;
-    return `Estrutura incompleta: ${count} das 11 subpastas obrigatórias não foram encontradas.`;
+    return `Estrutura incompleta: ${count} das 12 subpastas obrigatórias não foram encontradas.`;
   }
   if (message.startsWith("DUPLICATED_FOLDERS:")) {
     return "Estrutura ambígua: há subpastas obrigatórias duplicadas na raiz configurada.";

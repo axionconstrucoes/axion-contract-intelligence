@@ -26,7 +26,7 @@ export function SsmaDriveConnectionCheck({ projectId }: { projectId: string }) {
       </form>
 
       <p className="text-xs">
-        Somente leitura: confirma as 11 subpastas e conta os itens, sem baixar, mover ou alterar arquivos.
+        Somente leitura: confirma as 12 subpastas e conta os itens, sem baixar, mover ou alterar arquivos.
       </p>
 
       {state.checkedAt ? (
@@ -36,7 +36,7 @@ export function SsmaDriveConnectionCheck({ projectId }: { projectId: string }) {
       {state.success ? (
         <div className="flex flex-col gap-2 text-xs text-foreground">
           <p className="font-medium">
-            Estrutura validada: 11/11 pastas · {state.totalFiles} arquivo(s) · {state.totalFolders} subpasta(s).
+            Estrutura validada: 12/12 pastas · {state.totalFiles} arquivo(s) · {state.totalFolders} subpasta(s).
           </p>
           <details>
             <summary className="cursor-pointer font-medium">Ver contagem por pasta</summary>

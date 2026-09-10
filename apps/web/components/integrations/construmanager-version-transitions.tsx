@@ -22,6 +22,7 @@ import type {
   ConstrumanagerVersionTransitionsResult,
   TransitionContentStatus,
 } from "@/lib/integrations/construmanager/get-version-transitions";
+import { ConstrumanagerBudgetResponseForm, ConstrumanagerVersionImpactForm } from "./construmanager-version-impact-form";
 
 /**
  * Destaque da novidade: âmbar sólido, texto branco, negrito.
@@ -70,9 +71,14 @@ function formatBytes(bytes: number | null): string {
   return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[unit]}`;
 }
 
-function TransitionRow({ item }: { item: ConstrumanagerVersionTransition }) {
+function TransitionRow({ item, projectId, budgetUsers }: {
+  item: ConstrumanagerVersionTransition;
+  projectId: string;
+  budgetUsers: Array<{ id: string; name: string }>;
+}) {
   return (
-    <li className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+    <li className="rounded-md border p-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
       <Badge className={cn(VERSION_TRANSITION_BADGE_CLASS)}>
         NOVA VERSÃO VIGENTE
       </Badge>
@@ -109,14 +115,32 @@ function TransitionRow({ item }: { item: ConstrumanagerVersionTransition }) {
       <span className="text-muted-foreground">
         detectado em {formatDateTime(item.detectedAt)}
       </span>
+      </div>
+      {item.impactReview ? (
+        <div className="mt-2 rounded border border-green-300 bg-green-50 p-2 text-xs text-black">
+          <p className="font-bold">ANÁLISE REGISTRADA · {item.impactReview.status === "PENDENTE_ORCAMENTO" ? "Aguardando Orçamento" : "Concluída"}</p>
+          <p>Prazo: {item.impactReview.scheduleImpact} · Preço: {item.impactReview.priceImpact}</p>
+          <p>{item.impactReview.planningResponse}</p>
+          {item.impactReview.budgetResponse ? <p><strong>Resposta do Orçamento:</strong> {item.impactReview.budgetResponse}</p> : null}
+          {item.impactReview.status === "PENDENTE_ORCAMENTO" ? (
+            <ConstrumanagerBudgetResponseForm projectId={projectId} reviewId={item.impactReview.id} />
+          ) : null}
+        </div>
+      ) : (
+        <ConstrumanagerVersionImpactForm projectId={projectId} transitionId={item.id} budgetUsers={budgetUsers} />
+      )}
     </li>
   );
 }
 
 export function ConstrumanagerVersionTransitions({
   result,
+  projectId,
+  budgetUsers,
 }: {
   result: ConstrumanagerVersionTransitionsResult | null;
+  projectId: string;
+  budgetUsers: Array<{ id: string; name: string }>;
 }) {
   // ESTADO C — a consulta falhou. Nunca fingir lista vazia: num
   // monitoramento, silêncio significa "está tudo bem", e é exatamente
@@ -151,7 +175,7 @@ export function ConstrumanagerVersionTransitions({
 
       <ul className="flex flex-col gap-0.5 text-xs">
         {items.map((item) => (
-          <TransitionRow key={item.id} item={item} />
+          <TransitionRow key={item.id} item={item} projectId={projectId} budgetUsers={budgetUsers} />
         ))}
       </ul>
 

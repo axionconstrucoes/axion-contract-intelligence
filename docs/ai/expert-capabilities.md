@@ -13,7 +13,7 @@ linguagem natural; em caso de divergência, **o código é a fonte de
 verdade**.
 
 > Os cinco Experts (CEO IA, Diretor Comercial IA, Consultor Jurídico IA,
-> Diretor de Planejamento IA, Diretor de ESG IA) têm hoje
+> Diretor de Engenharia IA, Diretor de ESG IA) têm hoje
 > `identity.ts`/`query.ts`/`index.ts` reais e `status: "IMPLEMENTED"` em
 > `expert-definitions/definitions.ts` (introduzidos junto com a
 > fundação de curadoria multiagente — ver `docs/ai/experts.md` seção
@@ -30,7 +30,7 @@ verdade**.
 | 1 | CEO IA | `ceo` | **Implementado** | v1 |
 | 2 | Diretor Comercial IA | `commercial-director` | **Implementado** | v2 |
 | 3 | Consultor Jurídico IA | `legal-consultant` | **Implementado** | v1 |
-| 4 | Diretor de Planejamento IA | `planning-director` | **Implementado** | v1 |
+| 4 | Diretor de Engenharia IA | `planning-director` (ID técnico preservado) | **Implementado** | v2 |
 | 5 | Diretor de ESG IA | `esg-director` | **Implementado** | v1 |
 
 `contract-lawyer` ("Advogado Especialista em Contratos") foi rejeitado
@@ -140,7 +140,7 @@ legal) × `CONTRACTUAL_REQUIREMENT` (exigência contratual) ×
 (recomendação da IA) — já modelado como `RequirementSourceKind`
 (`apps/web/lib/ai/query/types.ts`).
 
-## 5. Diretor de Planejamento IA (`planning-director:v1` — planejado, escopo reduzido)
+## 5. Diretor de Engenharia IA (`planning-director:v2` — implementado)
 
 **Missão (reduzida nesta fase):** analisar exclusivamente atrasos e
 acelerações de cronograma que possam gerar consequência econômica ou

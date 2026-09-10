@@ -161,20 +161,19 @@ export const LEGAL_CONSULTANT_DEFINITION: ExpertDefinition = {
 };
 
 // ============================================================
-// Seção 5 — Diretor de Planejamento IA (operacional — consulta
-// conversacional via experts/planning-director/query.ts). Escopo
-// deliberadamente reduzido: só atraso/aceleração com consequência
-// econômica ou contratual relevante.
+// Seção 5 — Diretor de Engenharia IA (identificador técnico legado
+// planning-director; operacional — consulta
+// conversacional via experts/planning-director/query.ts).
 // ============================================================
 
 export const PLANNING_DIRECTOR_DEFINITION: ExpertDefinition = {
   expertId: PLANNING_DIRECTOR_EXPERT_ID,
-  expertName: "Diretor de Planejamento IA",
+  expertName: "Diretor de Engenharia IA",
   version: PLANNING_DIRECTOR_VERSION,
   status: "IMPLEMENTED",
   visualIdentity: { icon: "CalendarClock", colorToken: "cyan" },
   mission:
-    "Analisar exclusivamente atrasos e acelerações de cronograma que possam gerar consequência econômica ou contratual relevante para a AXION.",
+    "Amparar decisões de engenharia em construções industriais, logística e saúde, com foco em execução, novas versões de projeto, prazo, preço e consequência contratual relevante.",
   authorizedSources: [SOURCE_SCHEDULE_ACTIVITIES, SOURCE_CONTRACT_EVENTS, SOURCE_CONTRACT_CHANGES, SOURCE_DOCUMENTS, SOURCE_TIMELINE],
   capabilities: [
     "Identificar atraso ou aceleração relevante",
@@ -186,10 +185,14 @@ export const PLANNING_DIRECTOR_DEFINITION: ExpertDefinition = {
     "Correlacionar evento do Event Ledger com o cronograma",
     "Sugerir comunicação ou ação a partir do impacto identificado",
     "Preparar resumo de impacto (prazo → impacto econômico/contratual → recomendação)",
+    "Analisar novas versões de projeto e separar indícios de impacto em cronograma e preço",
+    "Encaminhar verificação de possível item fora de escopo ao orçamento",
+    "Analisar não conformidades de compras que afetem a execução",
   ],
   typicalQuestions: ["Este atraso pode gerar penalidade?"],
   outputTypes: ["ANALYSIS", "RECOMMENDATION", "RISK_ASSESSMENT", "ACTION_SUGGESTION", "TIMELINE_ANALYSIS"],
   limitations: [
+    "Não substitui projetistas, responsáveis técnicos, SSMA, orçamento, Jurídico ou decisão da Diretoria",
     "Não implementa Lean Construction, Last Planner System, PPC, Pull Planning ou Lookahead nesta fase",
     "Não realiza gestão operacional de produção nem planejamento de produção amplo",
     "Se não houver consequência econômica ou contratual identificável, não aprofunda a análise",

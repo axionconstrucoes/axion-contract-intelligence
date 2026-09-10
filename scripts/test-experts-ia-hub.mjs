@@ -87,7 +87,8 @@ check("página experts-ia só oferece link de acesso (\"Abrir Expert\") para com
   assert(source.includes('"esg-director": (projectId) => `/${projectId}/esg`'));
   assert(!source.includes('"ceo":'), "CEO IA não deveria ter link de acesso — ainda não é operacional");
   assert(!source.includes('"legal-consultant":'), "Consultor Jurídico IA não deveria ter link de acesso");
-  assert(!source.includes('"planning-director":'), "Diretor de Planejamento IA não deveria ter link de acesso");
+  assert(source.includes('"planning-director":'), "Diretor de Engenharia IA deveria ter link de acesso dedicado");
+  assert(source.includes("/experts-ia/diretor-engenharia"), "link dedicado do Diretor de Engenharia IA ausente");
 });
 
 check("página experts-ia nunca conecta um novo LLM nem chama providers (não importa nada de lib/ai/providers/)", () => {

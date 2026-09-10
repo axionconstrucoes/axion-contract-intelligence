@@ -25,9 +25,21 @@ const NEGOTIATION_KEYWORDS = [
   "pagamento",
 ];
 
-const DISPUTE_KEYWORDS = ["disputa", "litígio", "arbitragem", "notificação formal", "inadimplemento", "descumprimento"];
+const DISPUTE_KEYWORDS = [
+  "disputa", "litígio", "arbitragem", "notificação formal", "inadimplemento", "descumprimento",
+  "desentendimento", "animosidade", "hostilidade", "conflito com o cliente",
+];
 
-const SCHEDULE_KEYWORDS = ["atraso", "prazo", "extensão de prazo", "cronograma", "aceleração", "aceleracao"];
+const SCHEDULE_KEYWORDS = [
+  "atraso", "prazo", "extensão de prazo", "cronograma", "aceleração", "aceleracao",
+  "nova versão", "nova versao", "nova revisão", "nova revisao",
+];
+
+const SUPPLY_CHAIN_KEYWORDS = [
+  "devolução", "devolucao", "má qualidade", "ma qualidade", "equipe insuficiente",
+  "funcionários insuficientes", "funcionarios insuficientes", "não conformidade de compras",
+  "nao conformidade de compras", "problema de pagamento", "problemas de pagamento",
+];
 
 const PENALTY_KEYWORDS = ["multa", "penalidade", "paralisação", "paralisacao", "retenção", "retencao"];
 
@@ -56,6 +68,16 @@ function classifyTopic(description: string): { topic: string; primaryExpertIds: 
       primaryExpertIds: [row.primaryExpertId],
       supportingExpertIds: row.supportingExpertIds,
       reason: `Palavra-chave de disputa/notificação formal detectada — roteado por EXPERT_COLLABORATION_MATRIX (tema "${row.topic}").`,
+    };
+  }
+
+  if (containsAny(normalized, SUPPLY_CHAIN_KEYWORDS)) {
+    const row = findMatrixRow("ATRASO COM MULTA")!;
+    return {
+      topic: "NÃO CONFORMIDADE DE COMPRAS",
+      primaryExpertIds: ["planning-director"],
+      supportingExpertIds: Array.from(new Set([...row.supportingExpertIds, "commercial-director"])),
+      reason: "Não conformidade da cadeia de suprimentos detectada — Diretor de Engenharia IA analisa o efeito na execução e Comercial/Jurídico apoiam os impactos.",
     };
   }
 

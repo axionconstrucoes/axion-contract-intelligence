@@ -43,6 +43,7 @@ export const ESG_SSMA_PROJECT_SUBFOLDERS = [
   "09 - RISCOS APONTADOS",
   "10 - LIMPEZA DA OBRA",
   "11 - OUTROS",
+  "12 - OCORRÊNCIAS E ACIDENTES",
 ] as const;
 
 export function isGoogleDriveFolderUrl(value: string): boolean {

@@ -56,7 +56,7 @@ export async function assessScheduleDelayAction(
     projectId,
     eventId,
     recoverability,
-    assessedByLabel: "Diretor de Planejamento IA",
+    assessedByLabel: "Diretor de Engenharia IA",
   });
 
   revalidatePath(`/${projectId}/ledger/${eventId}`);
