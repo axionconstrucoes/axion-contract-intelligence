@@ -36,6 +36,7 @@ export function IntegrationCard({
   canManage,
   construmanagerMetadata,
   construmanagerTransitions,
+  budgetUsers = [],
   diarioDeObraOverview,
   diarioDeObraClimateKpi,
 }: {
@@ -45,6 +46,7 @@ export function IntegrationCard({
   canManage: boolean;
   construmanagerMetadata?: ConstrumanagerMetadataOverview | null;
   construmanagerTransitions?: ConstrumanagerVersionTransitionsResult | null;
+  budgetUsers?: Array<{ id: string; name: string }>;
   diarioDeObraOverview?: DiarioDeObraMonitoringOverview | null;
   diarioDeObraClimateKpi?: ClimaKpiDoPeriodo | null;
 }) {
@@ -141,6 +143,8 @@ export function IntegrationCard({
                 a novidade é a informação mais perecível da tela. */}
             <ConstrumanagerVersionTransitions
               result={construmanagerTransitions ?? null}
+              projectId={projectId}
+              budgetUsers={budgetUsers}
             />
             {/* Escopo somente metadados: o painel de download saiu. A
                 integração observa e informa; não transfere desenho. */}

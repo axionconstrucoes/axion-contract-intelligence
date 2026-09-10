@@ -174,7 +174,7 @@ export const EXPERT_COLLABORATION_MATRIX: ExpertCollaborationRule[] = [
     topic: "DISPUTA",
     primaryExpertId: "legal-consultant",
     supportingExpertIds: ["commercial-director", "planning-director"],
-    condition: "Diretor de Planejamento IA quando houver prazo envolvido",
+    condition: "Diretor de Engenharia IA quando houver prazo ou execução envolvidos",
   },
   {
     topic: "ATRASO COM MULTA",

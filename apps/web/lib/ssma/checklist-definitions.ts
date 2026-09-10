@@ -6,6 +6,7 @@ export type SsmaFieldDefinition = {
   placeholder?: string;
   type: "text" | "number" | "date" | "datetime-local" | "textarea" | "select";
   options?: readonly string[];
+  required?: boolean;
 };
 
 export type SsmaChecklistDefinition = {
@@ -15,6 +16,7 @@ export type SsmaChecklistDefinition = {
   shortTitle: string;
   driveFolder: string;
   independent?: boolean;
+  requiredPhotoActions?: readonly string[];
   fields: readonly SsmaFieldDefinition[];
   checks: readonly string[];
   photoActions: readonly string[];
@@ -204,6 +206,46 @@ export const SSMA_CHECKLISTS: readonly SsmaChecklistDefinition[] = [
     ],
     checks: ["Carga conferida", "Destino autorizado"],
     photoActions: ["Foto da carga", "Anexar comprovante"],
+  },
+  {
+    number: 12,
+    slug: "ocorrencia-acidente",
+    title: "Ocorrência / acidente",
+    shortTitle: "Ocorrência / acidente",
+    driveFolder: "12 - OCORRÊNCIAS E ACIDENTES",
+    independent: true,
+    fields: [
+      {
+        id: "afastamento",
+        label: "Classificação do acidente",
+        type: "select",
+        options: ["Sem afastamento", "Com afastamento"],
+        required: true,
+      },
+      {
+        id: "funcionario",
+        label: "Nome do funcionário",
+        type: "text",
+        placeholder: "Informe o nome completo",
+        required: true,
+      },
+      {
+        id: "causa",
+        label: "Causa informada",
+        type: "textarea",
+        placeholder: "Registre somente os fatos conhecidos; não faça diagnóstico",
+        required: true,
+      },
+      {
+        id: "remocaoEm",
+        label: "Data e hora da remoção",
+        type: "datetime-local",
+        required: true,
+      },
+    ],
+    checks: ["Atendimento inicial registrado", "Comunicação interna conferida"],
+    photoActions: ["Foto do local", "Foto da remoção"],
+    requiredPhotoActions: ["Foto do local", "Foto da remoção"],
   },
 ] as const;
 

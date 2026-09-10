@@ -261,7 +261,7 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
   },
   {
     id: "expert-planning-director",
-    title: "Diretor de Planejamento IA",
+    title: "Diretor de Engenharia IA",
     shortDescription: "Analisa atrasos, antecipações e impactos de prazo.",
     description: "Analisa atrasos, antecipações e impactos de prazo com consequência comercial, econômica ou contratual.",
     humanReview: "A IA analisa e recomenda. Decisões vinculantes permanecem humanas.",

@@ -15,6 +15,7 @@ import {
   Home,
   Send,
   ShieldAlert,
+  Siren,
   Truck,
   UserRound,
   X,
@@ -274,12 +275,12 @@ function DynamicField({ field }: { field: SsmaFieldDefinition }) {
   const className = "mt-1 block min-h-12 w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-3 text-base outline-none focus:border-[#7f1d1d]";
 
   if (field.type === "textarea") {
-    return <textarea name={field.id} placeholder={field.placeholder} rows={3} className={className} />;
+    return <textarea name={field.id} placeholder={field.placeholder} rows={3} required={field.required} className={className} />;
   }
 
   if (field.type === "select") {
     return (
-      <select name={field.id} defaultValue="" className={className}>
+      <select name={field.id} defaultValue="" required={field.required} className={className}>
         <option value="" disabled>
           Selecione
         </option>
@@ -292,7 +293,7 @@ function DynamicField({ field }: { field: SsmaFieldDefinition }) {
     );
   }
 
-  return <input name={field.id} type={field.type} placeholder={field.placeholder} className={className} />;
+  return <input name={field.id} type={field.type} placeholder={field.placeholder} required={field.required} className={className} />;
 }
 
 function ChecklistForm({
@@ -320,6 +321,9 @@ function ChecklistForm({
   }
 
   const allChecksAnswered = definition.checks.every((check) => checks[check]);
+  const allRequiredPhotosSelected = (definition.requiredPhotoActions ?? []).every((action) =>
+    photos.some((photo) => photo.action === action)
+  );
   const showRisk = definition.slug === "fotos-diarias" || definition.slug === "riscos-apontados" || definition.slug === "outros";
 
   return (
@@ -329,7 +333,7 @@ function ChecklistForm({
         className="mx-auto max-w-2xl space-y-5 bg-white p-4 pb-28 sm:my-4 sm:rounded-xl sm:border sm:p-6"
         onSubmit={async (event) => {
           event.preventDefault();
-          if (!allChecksAnswered || submitting) return;
+          if (!allChecksAnswered || !allRequiredPhotosSelected || submitting) return;
 
           const formData = new FormData(event.currentTarget);
           const occurredAtValue = String(formData.get("occurredAt") ?? "");
@@ -352,9 +356,14 @@ function ChecklistForm({
               definition.checks.map((check) => [check, checks[check]])
             );
 
-            const { data: submissionData, error: submissionError } = await supabase.rpc(
-              "create_ssma_form_submission",
-              {
+            const submissionRequest = definition.slug === "ocorrencia-acidente"
+              ? await supabase.rpc("create_ssma_accident_submission", {
+                  p_project_id: projectId,
+                  p_occurred_at: occurredAt.toISOString(),
+                  p_field_values: fieldValues,
+                  p_checklist_values: checklistValues,
+                })
+              : await supabase.rpc("create_ssma_form_submission", {
                 p_project_id: projectId,
                 p_checklist_slug: definition.slug,
                 p_checklist_number: definition.number,
@@ -363,9 +372,16 @@ function ChecklistForm({
                 p_occurred_at: occurredAt.toISOString(),
                 p_field_values: fieldValues,
                 p_checklist_values: checklistValues,
-                p_risk_level: showRisk ? risk : null,
-              }
-            );
+                p_risk_level:
+                  definition.slug === "ocorrencia-acidente"
+                    ? fieldValues.afastamento === "Com afastamento"
+                      ? "CRITICA"
+                      : "ALTA"
+                    : showRisk
+                      ? risk
+                      : null,
+              });
+            const { data: submissionData, error: submissionError } = submissionRequest;
             if (submissionError || !submissionData) {
               throw new Error(submissionError?.message ?? "Não foi possível iniciar o envio.");
             }
@@ -408,6 +424,18 @@ function ChecklistForm({
               p_submission_id: submissionId,
             });
             if (finalizeError) throw new Error("Os arquivos foram enviados, mas o formulário não pôde ser finalizado.");
+            if (definition.slug === "ocorrencia-acidente") {
+              const notificationResponse = await fetch("/api/ssma/accident-notifications", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ submissionId }),
+              });
+              if (!notificationResponse.ok) {
+                throw new Error(
+                  "O acidente foi registrado, mas a comunicação imediata não foi concluída. A Auditoria foi sinalizada."
+                );
+              }
+            }
             onComplete(definition.slug);
           } catch (error) {
             setSubmitError(error instanceof Error ? error.message : "Não foi possível enviar os dados.");
@@ -430,6 +458,7 @@ function ChecklistForm({
           {definition.fields.map((field) => (
             <label key={field.id} className="block text-sm font-bold text-slate-900">
               {field.label}
+              {field.required ? <span aria-hidden="true"> *</span> : null}
               <DynamicField field={field} />
             </label>
           ))}
@@ -495,16 +524,22 @@ function ChecklistForm({
           <p className="text-center text-sm font-semibold text-amber-700">Marque Feito ou NA em todos os itens para enviar.</p>
         ) : null}
 
+        {!allRequiredPhotosSelected ? (
+          <p className="text-center text-sm font-semibold text-amber-700">
+            Inclua uma foto para cada tipo obrigatório antes de enviar.
+          </p>
+        ) : null}
+
         <button
           type="submit"
-          disabled={!allChecksAnswered || submitting}
+          disabled={!allChecksAnswered || !allRequiredPhotosSelected || submitting}
           className="flex min-h-14 w-full items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 text-base font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Send className="size-6" /> {submitting ? "Enviando…" : "Enviar dados"}
         </button>
 
         <p className="text-center text-xs font-medium text-slate-500">
-          Tela {definition.number} de 11 · Registro protegido e auditável
+          Tela {definition.number} de 12 · Registro protegido e auditável
         </p>
       </form>
     </div>
@@ -538,7 +573,7 @@ export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initial
   }
 
   const routine = SSMA_CHECKLISTS.filter((definition) => !definition.independent);
-  const independent = SSMA_CHECKLISTS.find((definition) => definition.independent);
+  const independent = SSMA_CHECKLISTS.filter((definition) => definition.independent);
   const completedRoutine = routine.filter((definition) => completed.has(definition.slug)).length;
 
   return (
@@ -596,21 +631,27 @@ export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initial
           ))}
         </section>
 
-        {independent ? (
-          <button
-            type="button"
-            onClick={() => setActiveSlug(independent.slug)}
-            className="flex min-h-20 w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-[#7f1d1d]"
-          >
-            <Truck className="size-7 shrink-0 text-[#7f1d1d]" />
-            <span className="min-w-0 flex-1">
-              <span className="block font-black text-slate-900">11 Remessa para bota-fora</span>
-              <span className="block text-xs text-slate-600">Tarefa independente</span>
-            </span>
-            <span className="text-sm font-bold text-[#7f1d1d]">Registrar remessa</span>
-            <ChevronRight className="size-5 shrink-0 text-[#7f1d1d]" />
-          </button>
-        ) : null}
+        {independent.map((definition) => {
+          const Icon = definition.slug === "ocorrencia-acidente" ? Siren : Truck;
+          return (
+            <button
+              key={definition.slug}
+              type="button"
+              onClick={() => setActiveSlug(definition.slug)}
+              className="flex min-h-20 w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm hover:border-[#7f1d1d]"
+            >
+              <Icon className="size-7 shrink-0 text-[#7f1d1d]" />
+              <span className="min-w-0 flex-1">
+                <span className="block font-black text-slate-900">
+                  {String(definition.number).padStart(2, "0")} {definition.shortTitle}
+                </span>
+                <span className="block text-xs text-slate-600">Tarefa independente</span>
+              </span>
+              <span className="text-sm font-bold text-[#7f1d1d]">Registrar</span>
+              <ChevronRight className="size-5 shrink-0 text-[#7f1d1d]" />
+            </button>
+          );
+        })}
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-slate-300 bg-white px-2 py-2 text-[11px] font-semibold text-slate-600">

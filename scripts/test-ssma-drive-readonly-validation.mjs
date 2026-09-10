@@ -29,7 +29,7 @@ check("cliente dedicado usa somente get/list", client.includes("DriveReadOnlyFil
 check("consulta inclui Shared Drives", validator.includes("supportsAllDrives: true") && validator.includes("includeItemsFromAllDrives: true"));
 check("consulta exclui lixeira", validator.includes("trashed = false"));
 check("paginação impede contagem parcial", validator.includes("nextPageToken") && validator.includes("while (pageToken)"));
-check("as 11 pastas vêm da política única", validator.includes("ESG_SSMA_PROJECT_SUBFOLDERS.map"));
+check("as 12 pastas vêm da política única", validator.includes("ESG_SSMA_PROJECT_SUBFOLDERS.map"));
 check("pastas ausentes bloqueiam validação", validator.includes("MISSING_FOLDERS"));
 check("pastas duplicadas bloqueiam validação", validator.includes("DUPLICATED_FOLDERS"));
 check("resultado não expõe ids do Drive", !/SsmaDriveFolderInspection[\s\S]{0,220}\bid:/.test(validator));
@@ -41,7 +41,7 @@ check("credencial permanece em variáveis de ambiente", action.includes("isDrive
 check("erros externos são sanitizados", action.includes("sanitizeSsmaDriveValidationError"));
 check("estado retornado contém somente contagens", state.includes("ValidateSsmaDriveState") && state.includes("totalFiles"));
 check("UI declara somente leitura", component.includes("Somente leitura"));
-check("UI mostra 11/11 e contagem por pasta", component.includes("11/11 pastas") && component.includes("Ver contagem por pasta"));
+check("UI mostra 12/12 e contagem por pasta", component.includes("12/12 pastas") && component.includes("Ver contagem por pasta"));
 check("painel aparece apenas para ADMIN no ESG_SSMA", card.includes('source.type === "ESG_SSMA" && canManage'));
 check("caminho padrão é Drive compartilhado > SSMA-ESG > pasta da obra", policy.includes('"Drive compartilhado > SSMA-ESG > pasta da obra"'));
 check("nome da pasta usa código de quatro dígitos, cliente, local e obra", policy.includes("buildEsgSsmaProjectFolderName") && policy.includes('/^\\d{4}$/'));
