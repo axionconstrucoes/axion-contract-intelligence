@@ -7,7 +7,7 @@
     },
     {
       "path": "/api/cron/system-health",
-      "schedule": "*/15 * * * *"
+      "schedule": "30 10 * * *"
     }
   ]
 }
