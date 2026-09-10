@@ -7,11 +7,11 @@ import { ArrowRight, Files } from "lucide-react";
 
 import {
   createPrecontractWorkspaceAction,
-  initialCreatePrecontractWorkspaceState,
 } from "@/app/juridico/actions";
 import { DocumentMultiUploadPanel } from "@/components/documents/multi-upload/document-multi-upload-panel";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { initialCreatePrecontractWorkspaceState } from "@/lib/legal/precontract-workspace-state";
 import { cn } from "@/lib/utils";
 
 export function PrecontractWorkspaceCreateForm() {
