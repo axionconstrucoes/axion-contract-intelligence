@@ -65,6 +65,8 @@ export interface SlaAreaResponsibles {
   area: SlaArea;
   responsibleDirectUserId: string | null;
   responsibleDirectName: string | null;
+  secondaryResponsibleUserId: string | null;
+  secondaryResponsibleName: string | null;
   escalation1UserId: string | null;
   escalation1Name: string | null;
   escalation2UserId: string | null;

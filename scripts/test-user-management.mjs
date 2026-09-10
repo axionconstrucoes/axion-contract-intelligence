@@ -51,8 +51,46 @@ console.log("");
 const VALID_PERMISSIONS = ["ADMINISTRADOR", "GESTOR", "GERENTE", "COLABORADOR", "LEITURA"];
 const VALID_AREAS = [
   "DIRETORIA", "ADMINISTRATIVO", "COMERCIAL", "FINANCEIRO",
-  "ENGENHARIA", "ORÇAMENTO", "JURÍDICO", "PLANEJAMENTO",
+  "ENGENHARIA", "ORÇAMENTO", "JURÍDICO", "PLANEJAMENTO", "COMPRAS", "SSMA/ESG",
 ];
+
+const addMemberFormSource = readSource("apps/web/components/users/add-project-member-form.tsx");
+const userActionsSource = readSource("apps/web/app/[projectId]/usuarios/actions.ts");
+const labelsSource = readSource("apps/web/lib/labels.ts");
+const areaExpansionMigration = readSource("supabase/migrations/20260911113000_add_compras_ssma_esg_membership_areas.sql");
+const secondaryResponsibleMigration = readSource("supabase/migrations/20260911114000_add_secondary_sla_area_responsible.sql");
+const slaResponsiblesFormSource = readSource("apps/web/components/sla/sla-area-responsibles-form.tsx");
+const slaActionsSource = readSource("apps/web/app/[projectId]/acoes/actions.ts");
+
+check("formulário de usuário oferece Compras e SSMA/ESG nos dois fluxos de cadastro", () => {
+  for (const area of ["COMPRAS", "SSMA/ESG"]) {
+    assert(addMemberFormSource.includes(`\"${area}\"`), `área ${area} ausente do formulário`);
+    assert(userActionsSource.includes(`\"${area}\"`), `área ${area} ausente da validação do servidor`);
+    assert(labelsSource.includes(area), `rótulo ${area} ausente`);
+  }
+});
+
+check("banco aceita Compras e SSMA/ESG em memberships, convites e pré-cadastro", () => {
+  for (const area of ["COMPRAS", "SSMA/ESG"]) {
+    const occurrences = areaExpansionMigration.split(`'${area}'`).length - 1;
+    assert(occurrences >= 3, `área ${area} deve constar nos dois CHECKs e na RPC`);
+  }
+  assert(/create or replace function public\.pre_register_project_member/.test(areaExpansionMigration));
+});
+
+check("pré-cadastro deixa o usuário aguardando o primeiro login, sem conceder acesso antecipado", () => {
+  assert(addMemberFormSource.includes("Aguardando primeiro login"));
+  assert(addMemberFormSource.includes("só ganha acesso de fato quando"));
+});
+
+check("Engenharia e Planejamento aceitam um segundo responsável de Nível 1", () => {
+  assert(slaResponsiblesFormSource.includes('area === "ENGENHARIA" || area === "PLANEJAMENTO"'));
+  assert(slaResponsiblesFormSource.includes('name="secondaryResponsibleUserId"'));
+  assert(slaActionsSource.includes("secondary_responsible_user_id: secondaryResponsibleUserId"));
+  assert(secondaryResponsibleMigration.includes("secondary_responsible_user_id"));
+  assert(secondaryResponsibleMigration.includes("area in ('ENGENHARIA', 'PLANEJAMENTO')"));
+  assert(secondaryResponsibleMigration.includes("secondary_responsible_user_id is distinct from responsible_direct_user_id"));
+});
 
 // --- 1. Cargo separado de Área ---
 

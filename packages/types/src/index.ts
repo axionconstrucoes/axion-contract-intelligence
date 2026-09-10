@@ -97,7 +97,9 @@ export type MembershipArea =
   | "ENGENHARIA"
   | "ORÇAMENTO"
   | "JURÍDICO"
-  | "PLANEJAMENTO";
+  | "PLANEJAMENTO"
+  | "COMPRAS"
+  | "SSMA/ESG";
 
 export interface ProjectMembership {
   userId: string;
