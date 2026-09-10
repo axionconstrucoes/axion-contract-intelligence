@@ -344,7 +344,9 @@ await checkAsync("FakeEmailProvider aceita html sem exigir rede e nunca envia me
   // estar configurado neste ambiente. Restaurado logo em seguida para
   // nunca vazar para outros checks deste arquivo.
   const previousOutboundMode = process.env.ACC_OUTBOUND_MODE;
+  const previousPilotRecipient = process.env.ACC_PILOT_RECIPIENT;
   process.env.ACC_OUTBOUND_MODE = "production";
+  process.env.ACC_PILOT_RECIPIENT = "reynaldo@axion.com.br";
   let result;
   try {
     result = await provider.send({
@@ -356,6 +358,7 @@ await checkAsync("FakeEmailProvider aceita html sem exigir rede e nunca envia me
     });
   } finally {
     process.env.ACC_OUTBOUND_MODE = previousOutboundMode;
+    process.env.ACC_PILOT_RECIPIENT = previousPilotRecipient;
   }
   assert(result.provider === "FAKE");
   assert(result.from === "dev-fake-sender@axion.local");

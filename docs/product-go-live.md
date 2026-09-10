@@ -8,6 +8,10 @@ Atualizado nesta rodada a partir de 02/09/2026. Regras associadas a
 este marco:
 
 - ambiente de teste/validação segue até o fim de 21/09/2026;
+- antes de 22/09/2026 em `America/Sao_Paulo`, a trava de e-mail força
+  o modo piloto mesmo se a variável de ambiente tiver sido antecipada;
+- durante esse período, somente `reynaldo@axion.com.br` e
+  `ricardo.silva@axion.com.br` podem receber alertas;
 - assembleia geral/apresentação, startup/go-live e liberação de
   usuários ocorrem em 22/09/2026;
 - a remoção da etiqueta global "SISTEMA EM TESTE" (`lib/test-mode.ts`)

@@ -18,6 +18,7 @@
 // - Sem qualquer desligamento automático por data/relógio — controlado
 //   inteiramente por configuração de ambiente.
 
+import { ACC_GO_LIVE_DATE } from "../acc-go-live";
 import { EmailSendError, type SendEmailInput } from "./email-provider";
 
 export const ACC_EXPECTED_PILOT_RECIPIENT = "reynaldo@axion.com.br";
@@ -36,18 +37,37 @@ export function isValidEmailAddress(value: string): boolean {
 export interface PilotOutboundGuardEnv {
   outboundMode?: string;
   pilotRecipient?: string;
+  now?: Date;
 }
 
 function defaultEnv(): PilotOutboundGuardEnv {
   return {
     outboundMode: process.env.ACC_OUTBOUND_MODE,
     pilotRecipient: process.env.ACC_PILOT_RECIPIENT,
+    now: new Date(),
   };
+}
+
+function dateInSaoPaulo(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 // Único valor que desliga o piloto — qualquer outra coisa (incluindo
 // ausência) mantém a proteção ativa.
 export function resolveOutboundMode(env: PilotOutboundGuardEnv = defaultEnv()): "PRODUCTION" | "PILOT" {
+  // Mesmo que a variável de produção tenha sido ativada antes da hora,
+  // nenhum destinatário externo à allowlist é liberado até o início do
+  // dia 22/09/2026 em São Paulo. Depois do marco, a passagem para
+  // produção continua deliberadamente manual e exige o valor exato.
+  if (dateInSaoPaulo(env.now ?? new Date()) < ACC_GO_LIVE_DATE) {
+    return "PILOT";
+  }
+
   const raw = (env.outboundMode ?? "").trim();
   return raw === "production" ? "PRODUCTION" : "PILOT";
 }
