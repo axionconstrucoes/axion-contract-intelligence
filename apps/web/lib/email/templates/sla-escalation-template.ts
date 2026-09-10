@@ -23,6 +23,7 @@ export interface SlaEscalationEmailInput {
   currentResponsibleName: string | null;
   originalDeadline: string; // já formatado (ex.: "22/08/2026 14:00")
   overdueBy: string; // já formatado (ex.: "2h15min")
+  previousLevelLabel: string;
   escalationLevelLabel: string; // ex.: "2º Escalão", "Diretoria"
   recommendedAction: string | null;
   eventUrl: string;
@@ -87,6 +88,7 @@ export function buildSlaEscalationEmail(input: SlaEscalationEmailInput): SlaEsca
           <td style="padding:0 24px 4px 24px;">
             <p style="margin:0 0 12px 0;color:#000000;font-size:14px;">${escapeHtml(greeting)}</p>
             <h1 style="margin:0 0 4px 0;color:#000000;font-size:18px;">Ação sem resolução foi escalada: ${escapeHtml(input.actionTitle)}</h1>
+            <p style="margin:8px 0 16px 0;color:#000000;font-size:14px;">A pendência não foi resolvida por <strong>${escapeHtml(input.previousLevelLabel)}</strong> dentro do prazo e agora exige acompanhamento de <strong>${escapeHtml(input.escalationLevelLabel)}</strong>.</p>
             <p style="margin:0 0 16px 0;color:#000000;font-size:14px;">Obra: <strong>${escapeHtml(input.projectName)}</strong></p>
           </td>
         </tr>
@@ -96,6 +98,7 @@ export function buildSlaEscalationEmail(input: SlaEscalationEmailInput): SlaEsca
               ${htmlRow("Responsável atual", input.currentResponsibleName)}
               ${htmlRow("Prazo original", input.originalDeadline)}
               ${htmlRow("Tempo excedido", input.overdueBy)}
+              ${htmlRow("Nível anterior", input.previousLevelLabel)}
               ${htmlRow("Nível de escalonamento", input.escalationLevelLabel)}
               ${htmlRow("Ação recomendada", input.recommendedAction)}
             </table>
@@ -124,6 +127,7 @@ export function buildSlaEscalationEmail(input: SlaEscalationEmailInput): SlaEsca
     textRow("Responsável atual", input.currentResponsibleName),
     textRow("Prazo original", input.originalDeadline),
     textRow("Tempo excedido", input.overdueBy),
+    textRow("Nível anterior", input.previousLevelLabel),
     textRow("Nível de escalonamento", input.escalationLevelLabel),
     textRow("Ação recomendada", input.recommendedAction),
   ].filter((row) => row !== "");
@@ -134,6 +138,7 @@ export function buildSlaEscalationEmail(input: SlaEscalationEmailInput): SlaEsca
     "",
     greeting,
     `Ação sem resolução foi escalada: ${input.actionTitle}`,
+    `A pendência não foi resolvida por ${input.previousLevelLabel} dentro do prazo e agora exige acompanhamento de ${input.escalationLevelLabel}.`,
     `Obra: ${input.projectName}`,
     ...(fieldRows.length > 0 ? ["", ...fieldRows] : []),
     "",

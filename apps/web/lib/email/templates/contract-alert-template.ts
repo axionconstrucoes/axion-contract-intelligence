@@ -30,10 +30,17 @@ export const alertRiskLevelLabels: Record<AlertSeverity, string> = {
   CRITICA: "CRÍTICO",
 };
 
+const alertRiskSubjectMarkers: Record<AlertSeverity, string> = {
+  BAIXA: "🟢",
+  MEDIA: "🔵",
+  ALTA: "🟠",
+  CRITICA: "🔴",
+};
+
 // "Serão exportados..." — aqui: "OBRA <NOME> - RISCO <NÍVEL>", ambos
 // dinâmicos. Nunca um valor fixo/genérico.
 export function buildContractAlertSubject(projectName: string, severity: AlertSeverity): string {
-  return `ACC - ALERTAS DO CONTRATO - OBRA ${projectName.toUpperCase()} - RISCO ${alertRiskLevelLabels[severity]}`;
+  return `${alertRiskSubjectMarkers[severity]} [RISCO ${alertRiskLevelLabels[severity]}] ACC - OBRA ${projectName.toUpperCase()}`;
 }
 
 interface BadgeStyle {

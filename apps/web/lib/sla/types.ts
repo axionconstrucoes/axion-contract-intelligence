@@ -135,5 +135,6 @@ export interface SlaActionEscalation {
   toLevel: SlaEscalationLevel;
   reason: SlaEscalationReason;
   notifiedUserId: string | null;
+  notifiedUserName: string | null;
   escalatedAt: string;
 }

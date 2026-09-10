@@ -293,7 +293,7 @@ export const slaAreaLabels: Record<SlaArea, string> = {
 export const slaActionStatusLabels: Record<SlaActionStatus, string> = {
   PENDING: "Pendente",
   ACKNOWLEDGED: "Assumida",
-  IN_PROGRESS: "Em andamento",
+  IN_PROGRESS: "Estudando solução",
   COMPLETED: "Concluída",
   OVERDUE: "Vencida",
   ESCALATED: "Escalada",
@@ -301,10 +301,10 @@ export const slaActionStatusLabels: Record<SlaActionStatus, string> = {
 };
 
 export const slaEscalationLevelLabels: Record<SlaEscalationLevel, string> = {
-  RESPONSAVEL: "Responsável",
-  ESCALAO_1: "1º Escalão",
-  ESCALAO_2: "2º Escalão",
-  DIRETORIA: "Diretoria",
+  RESPONSAVEL: "Nível 1 · Responsável",
+  ESCALAO_1: "Nível 2 · Gerência",
+  ESCALAO_2: "Nível 2 · Gerência",
+  DIRETORIA: "Nível 3 · Diretoria",
 };
 
 export const slaTimeUnitLabels: Record<SlaTimeUnit, string> = {

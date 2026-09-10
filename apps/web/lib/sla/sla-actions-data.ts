@@ -269,6 +269,7 @@ export async function getSlaActionEscalations(actionId: string): Promise<SlaActi
   }
 
   const rows = data as unknown as EscalationRow[];
+  const namesByUserId = await resolveProfileNames(supabase, rows.map((row) => row.notified_user_id));
 
   return rows.map((row) => ({
     id: row.id,
@@ -278,6 +279,7 @@ export async function getSlaActionEscalations(actionId: string): Promise<SlaActi
     toLevel: row.to_level as SlaActionEscalation["toLevel"],
     reason: row.reason as SlaActionEscalation["reason"],
     notifiedUserId: row.notified_user_id,
+    notifiedUserName: row.notified_user_id ? (namesByUserId.get(row.notified_user_id) ?? null) : null,
     escalatedAt: row.escalated_at,
   }));
 }
@@ -297,6 +299,7 @@ export async function getSlaActionEscalationsForProject(projectId: string): Prom
   }
 
   const rows = data as unknown as EscalationRow[];
+  const namesByUserId = await resolveProfileNames(supabase, rows.map((row) => row.notified_user_id));
 
   return rows.map((row) => ({
     id: row.id,
@@ -306,6 +309,7 @@ export async function getSlaActionEscalationsForProject(projectId: string): Prom
     toLevel: row.to_level as SlaActionEscalation["toLevel"],
     reason: row.reason as SlaActionEscalation["reason"],
     notifiedUserId: row.notified_user_id,
+    notifiedUserName: row.notified_user_id ? (namesByUserId.get(row.notified_user_id) ?? null) : null,
     escalatedAt: row.escalated_at,
   }));
 }
