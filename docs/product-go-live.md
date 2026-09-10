@@ -2,14 +2,14 @@
 
 ## Data oficial de início operacional
 
-**02/09/2026, quarta-feira** (`2026-09-02`, America/Sao_Paulo).
+**22/09/2026, terça-feira** (`2026-09-22`, America/Sao_Paulo).
 
-Atualizado nesta rodada a partir de 24/08/2026. Regras associadas a
+Atualizado nesta rodada a partir de 02/09/2026. Regras associadas a
 este marco:
 
-- ambiente de teste/validação segue até o fim de 01/09/2026;
+- ambiente de teste/validação segue até o fim de 21/09/2026;
 - assembleia geral/apresentação, startup/go-live e liberação de
-  usuários ocorrem em 02/09/2026;
+  usuários ocorrem em 22/09/2026;
 - a remoção da etiqueta global "SISTEMA EM TESTE" (`lib/test-mode.ts`)
   continua sendo **sempre manual** (`NEXT_PUBLIC_ACC_TEST_MODE=false` +
   novo deploy) — deliberadamente **não** amarrada automaticamente a
@@ -21,7 +21,7 @@ este marco:
 `apps/web/lib/acc-go-live.ts` — fonte única de verdade:
 
 ```ts
-export const ACC_GO_LIVE_DATE = "2026-09-02" as const;
+export const ACC_GO_LIVE_DATE = "2026-09-22" as const;
 export function getAccGoLiveDate(): Date;      // meia-noite UTC do marco, como Date
 export function isBeforeAccGoLive(date: Date): boolean;
 ```
