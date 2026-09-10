@@ -76,6 +76,9 @@ export function DocumentMultiUploadPanel({ projectId, documents }: Props) {
   }
 
   const hasPending = items.some((item) => item.status === "PENDENTE");
+  const hasPendingWithoutKind = items.some(
+    (item) => item.status === "PENDENTE" && !item.kind
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -154,13 +157,19 @@ export function DocumentMultiUploadPanel({ projectId, documents }: Props) {
 
             <Button
               type="button"
-              disabled={!hasPending}
+              disabled={!hasPending || hasPendingWithoutKind || isRunning}
               onClick={startBatch}
               className="ml-auto"
             >
               {isRunning ? "Enviando lote..." : "Iniciar envio"}
             </Button>
           </div>
+
+          {hasPendingWithoutKind ? (
+            <p className="rounded-md border border-amber-500/50 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+              Antes de iniciar, escolha o tipo documental. Para uma minuta de contrato, selecione <strong>Contrato</strong>. O tipo padrão escolhido acima será aplicado automaticamente aos arquivos ainda sem classificação.
+            </p>
+          ) : null}
 
           <UploadSummaryBar summary={summary} />
 

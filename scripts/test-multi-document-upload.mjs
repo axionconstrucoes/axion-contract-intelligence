@@ -1128,6 +1128,25 @@ check("queue-item-row.tsx: seletor de tipo documental do item mostra o placehold
   assert(rowSource.includes("!isMppFile(item.descriptor)"), "canEditKind deveria excluir arquivos .mpp");
 });
 
+check("painel: não permite iniciar o envio enquanto algum arquivo pendente estiver sem tipo documental", () => {
+  const panelSource = readSource("apps/web/components/documents/multi-upload/document-multi-upload-panel.tsx");
+  assert(panelSource.includes("hasPendingWithoutKind"));
+  assert(panelSource.includes("!hasPending || hasPendingWithoutKind || isRunning"));
+  assert(panelSource.includes("será aplicado automaticamente"));
+});
+
+check("selecionar o tipo padrão classifica automaticamente pendentes e recupera rejeições causadas apenas pela falta de tipo", () => {
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  const setterBody = hookSource.slice(
+    hookSource.indexOf("const setBatchDefaultKind = useCallback("),
+    hookSource.indexOf("const getUser = useCallback(")
+  );
+  assert(setterBody.includes('item.status === "PENDENTE"'));
+  assert(setterBody.includes('item.status === "REJEITADO"'));
+  assert(setterBody.includes('status: "PENDENTE"'));
+  assert(setterBody.includes("selecione o tipo documental"));
+});
+
 check("retry somente de erros: RETRYABLE_STATUSES contém exatamente {ERRO} — DUPLICADO/REJEITADO/CONCLUIDO/AGUARDANDO_ANALISE nunca mostram o botão 'Tentar novamente' (retry nunca reenvia duplicados nem itens já concluídos)", () => {
   const rowSource = readSource("apps/web/components/documents/multi-upload/queue-item-row.tsx");
   const match = rowSource.match(/const RETRYABLE_STATUSES = new Set\(\[([^\]]*)\]\);/);
