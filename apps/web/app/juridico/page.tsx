@@ -2,17 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Scale } from "lucide-react";
 import { InstitutionalBackground } from "@/components/brand/institutional-background";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { PrecontractWorkspaceCreateForm } from "@/components/legal/precontract-workspace-create-form";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { getProjects } from "@/lib/data";
 import { cn } from "@/lib/utils";
-import { createPrecontractWorkspaceAction } from "./actions";
 
 export const metadata: Metadata = { title: "Jurídico pré-contratual" };
 
-export default async function JuridicoPage({ searchParams }: { searchParams: Promise<{ erro?: string }> }) {
-  const [{ erro }, projects] = await Promise.all([searchParams, getProjects()]);
+export default async function JuridicoPage() {
+  const projects = await getProjects();
   const workspaces = projects.filter((project) => project.workspaceType === "PRE_CONTRATUAL");
 
   return (
@@ -27,12 +26,7 @@ export default async function JuridicoPage({ searchParams }: { searchParams: Pro
         <Card>
           <CardHeader><CardTitle>Nova análise pré-contratual</CardTitle></CardHeader>
           <CardContent>
-            <form action={createPrecontractWorkspaceAction} className="grid gap-3 md:grid-cols-[1fr_1fr_auto]">
-              <Input name="name" required placeholder="Nome da oportunidade ou concorrência" title="Identifica a negociação antes de ela se tornar uma obra contratada." />
-              <Input name="client" required placeholder="Cliente" title="Empresa contratante responsável pela minuta em negociação." />
-              <Button type="submit">Criar análise</Button>
-            </form>
-            {erro ? <p className="mt-2 text-sm text-destructive">Não foi possível criar: {decodeURIComponent(erro)}</p> : null}
+            <PrecontractWorkspaceCreateForm />
           </CardContent>
         </Card>
 

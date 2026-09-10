@@ -14,6 +14,10 @@ import { getProject } from "@/lib/data";
 import { computeEscalation } from "@/lib/sla/compute-escalation";
 import { computeSlaDeadlines } from "@/lib/sla/compute-deadlines";
 import { resolveBusinessHoursConfig, resolveMatrixRule } from "@/lib/sla/resolve-matrix-rule";
+import {
+  parseSlaResponsibleSelection,
+  type SlaResponsibleSelection,
+} from "@/lib/sla/responsible-selection";
 import { resolveEscalationDestination } from "@/lib/sla/resolve-escalation-destination";
 import { formatSlaMatrixRuleAuditDetail, validateSlaMatrixRuleValues } from "@/lib/sla/validate-matrix-rule";
 import { formatDurationBetween } from "@/lib/sla/format-duration";
@@ -432,31 +436,79 @@ export async function configureSlaAreaResponsiblesAction(
   try {
     const projectId = requiredField(formData, "projectId");
     const area = requiredField(formData, "area");
-    const responsibleDirectUserId = optionalField(formData, "responsibleDirectUserId");
-    const secondaryResponsibleUserId = optionalField(formData, "secondaryResponsibleUserId");
+    if ((await getCurrentProjectPermission(projectId)) !== "ADMINISTRADOR") {
+      return { error: "Apenas administradores podem alterar a matriz de responsáveis.", success: false };
+    }
 
-    if (secondaryResponsibleUserId && area !== "ENGENHARIA" && area !== "PLANEJAMENTO") {
+    const responsibleDirect = parseSlaResponsibleSelection(optionalField(formData, "responsibleDirectUserId"));
+    const secondaryResponsible = parseSlaResponsibleSelection(optionalField(formData, "secondaryResponsibleUserId"));
+    const escalation1 = parseSlaResponsibleSelection(optionalField(formData, "escalation1UserId"));
+    const board = parseSlaResponsibleSelection(optionalField(formData, "boardUserId"));
+
+    if (secondaryResponsible && area !== "ENGENHARIA" && area !== "PLANEJAMENTO") {
       return {
         error: "O corresponsável adicional só pode ser definido para Engenharia ou Planejamento.",
         success: false,
       };
     }
 
-    if (secondaryResponsibleUserId && secondaryResponsibleUserId === responsibleDirectUserId) {
+    if (
+      secondaryResponsible &&
+      responsibleDirect &&
+      secondaryResponsible.kind === responsibleDirect.kind &&
+      secondaryResponsible.id === responsibleDirect.id
+    ) {
       return { error: "Selecione pessoas diferentes como responsável e corresponsável.", success: false };
     }
+
+    const selections = [responsibleDirect, secondaryResponsible, escalation1, board].filter(
+      (selection): selection is SlaResponsibleSelection => selection !== null
+    );
+    const memberIds = Array.from(new Set(selections.filter((selection) => selection.kind === "member").map((selection) => selection.id)));
+    const invitationIds = Array.from(new Set(selections.filter((selection) => selection.kind === "invitation").map((selection) => selection.id)));
+
+    if (memberIds.length > 0) {
+      const { data, error: membersError } = await supabase
+        .from("project_memberships")
+        .select("user_id")
+        .eq("project_id", projectId)
+        .eq("status", "ACTIVE")
+        .in("user_id", memberIds);
+      if (membersError || (data?.length ?? 0) !== memberIds.length) {
+        return { error: "Um dos usuários selecionados não está ativo neste projeto.", success: false };
+      }
+    }
+
+    if (invitationIds.length > 0) {
+      const { data, error: invitationsError } = await supabase
+        .from("project_member_invitations")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("status", "PENDING")
+        .in("id", invitationIds);
+      if (invitationsError || (data?.length ?? 0) !== invitationIds.length) {
+        return { error: "Um dos pré-cadastros selecionados não está mais aguardando o primeiro login.", success: false };
+      }
+    }
+
+    const memberId = (selection: SlaResponsibleSelection | null) => selection?.kind === "member" ? selection.id : null;
+    const invitationId = (selection: SlaResponsibleSelection | null) => selection?.kind === "invitation" ? selection.id : null;
 
     const { error } = await supabase.from("sla_area_responsibles").upsert(
       {
         project_id: projectId,
         area,
-        responsible_direct_user_id: responsibleDirectUserId,
-        secondary_responsible_user_id: secondaryResponsibleUserId,
-        escalation_1_user_id: optionalField(formData, "escalation1UserId"),
+        responsible_direct_user_id: memberId(responsibleDirect),
+        responsible_direct_invitation_id: invitationId(responsibleDirect),
+        secondary_responsible_user_id: memberId(secondaryResponsible),
+        secondary_responsible_invitation_id: invitationId(secondaryResponsible),
+        escalation_1_user_id: memberId(escalation1),
+        escalation_1_invitation_id: invitationId(escalation1),
         // Campo legado do antigo modelo de quatro níveis. A matriz atual
         // usa Nível 1, Nível 2 e Nível 3, portanto este valor é limpo.
         escalation_2_user_id: null,
-        board_user_id: optionalField(formData, "boardUserId"),
+        board_user_id: memberId(board),
+        board_invitation_id: invitationId(board),
         updated_by_user_id: authData.user.id,
       },
       { onConflict: "project_id,area" }

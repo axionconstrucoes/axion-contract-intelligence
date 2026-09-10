@@ -3,12 +3,14 @@ import Link from "next/link";
 import { FileText, Scale } from "lucide-react";
 import { ExpertQueryPanel } from "@/components/ai/expert-query-panel";
 import { PrecontractCurationPanel } from "@/components/ai/precontract-curation-panel";
+import { DocumentMultiUploadPanel } from "@/components/documents/multi-upload/document-multi-upload-panel";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { initialAskCommercialDirectorState } from "@/lib/ai/expert-query-state";
 import { askLegalConsultantAction } from "@/lib/ai/legal-query-action";
+import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getProject } from "@/lib/data";
 import { getManagedDocuments } from "@/lib/document-management";
 import { cn } from "@/lib/utils";
@@ -19,12 +21,17 @@ const CONTRACTUAL_KINDS = new Set(["CONTRATO_BASE", "ADITIVO"]);
 
 export default async function ProjectLegalPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  const [project, documents] = await Promise.all([getProject(projectId), getManagedDocuments(projectId)]);
+  const [project, documents, permission] = await Promise.all([
+    getProject(projectId),
+    getManagedDocuments(projectId),
+    getCurrentProjectPermission(projectId),
+  ]);
   if (!project) return null;
   const contractualDocuments = documents.filter((document) =>
     CONTRACTUAL_KINDS.has(document.kind) || Boolean(document.parentDocumentId)
   );
   const isPrecontract = project.workspaceType === "PRE_CONTRATUAL";
+  const canUpload = permission === "ADMINISTRADOR" || permission === "GESTOR" || permission === "GERENTE";
 
   return (
     <div className="flex flex-col gap-6">
@@ -41,6 +48,12 @@ export default async function ProjectLegalPage({ params }: { params: Promise<{ p
           <Link href={`/${projectId}/documentos`} className={cn(buttonVariants({ variant: "outline" }))}>Gerenciar documentos</Link>
         </CardHeader>
         <CardContent className="space-y-2">
+          {isPrecontract && canUpload ? (
+            <div className="mb-5 rounded-md border p-4">
+              <p className="mb-3 text-sm font-medium">Carregar documentos para a análise</p>
+              <DocumentMultiUploadPanel projectId={projectId} documents={documents} />
+            </div>
+          ) : null}
           {contractualDocuments.length ? contractualDocuments.map((document) => (
             <div key={document.id} className="flex items-center justify-between rounded-md border p-3" title={document.versions[0]?.summary || `Documento contratual: ${document.title}`}>
               <span className="text-sm font-medium">{document.title}</span>

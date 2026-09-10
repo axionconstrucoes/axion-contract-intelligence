@@ -23,6 +23,7 @@ import {
   slaAreaLabels,
 } from "@/lib/labels";
 import { resolveBusinessHoursConfig, resolveGenericMatrixRule } from "@/lib/sla/resolve-matrix-rule";
+import { formatInvitationSelection, formatMemberSelection } from "@/lib/sla/responsible-selection";
 import { getSlaAreaResponsibles, getSlaMatrixRules, getSlaProjectSettings } from "@/lib/sla/sla-actions-data";
 import type { SlaArea, SlaRiskLevel } from "@/lib/sla/types";
 
@@ -53,7 +54,18 @@ export default async function UsuariosPage({ params }: { params: Promise<{ proje
   const currentUserId = authData.data.user?.id ?? null;
   const projectLabel = project ? `${project.code} — ${project.name}` : "";
   const pendingInvitations = invitations.filter((invitation) => invitation.status === "PENDING");
-  const memberOptions = members.map((member) => ({ userId: member.userId, name: member.user.name }));
+  const peopleOptions = [
+    ...members
+      .filter((member) => member.status === "ACTIVE")
+      .map((member) => ({
+        value: formatMemberSelection(member.userId),
+        label: `${member.user.name} — ${member.area ? membershipAreaLabels[member.area] : "Sem área"} — ${member.user.email}`,
+      })),
+    ...pendingInvitations.map((invitation) => ({
+      value: formatInvitationSelection(invitation.id),
+      label: `${invitation.name} — ${invitation.area ? membershipAreaLabels[invitation.area] : "Sem área"} — ${invitation.email} — Aguardando primeiro login`,
+    })),
+  ].sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   const responsiblesByArea = new Map(areaResponsibles.map((responsible) => [responsible.area, responsible]));
   const businessHoursConfig = resolveBusinessHoursConfig(projectSettings);
 
@@ -179,10 +191,14 @@ export default async function UsuariosPage({ params }: { params: Promise<{ proje
                     projectId={projectId}
                     area={area}
                     responsibleDirectUserId={current?.responsibleDirectUserId ?? null}
+                    responsibleDirectInvitationId={current?.responsibleDirectInvitationId ?? null}
                     secondaryResponsibleUserId={current?.secondaryResponsibleUserId ?? null}
+                    secondaryResponsibleInvitationId={current?.secondaryResponsibleInvitationId ?? null}
                     escalation1UserId={current?.escalation1UserId ?? null}
+                    escalation1InvitationId={current?.escalation1InvitationId ?? null}
                     boardUserId={current?.boardUserId ?? null}
-                    members={memberOptions}
+                    boardInvitationId={current?.boardInvitationId ?? null}
+                    people={peopleOptions}
                   />
                 );
               })}

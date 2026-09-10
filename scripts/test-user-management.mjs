@@ -86,7 +86,8 @@ check("pré-cadastro deixa o usuário aguardando o primeiro login, sem conceder 
 check("Engenharia e Planejamento aceitam um segundo responsável de Nível 1", () => {
   assert(slaResponsiblesFormSource.includes('area === "ENGENHARIA" || area === "PLANEJAMENTO"'));
   assert(slaResponsiblesFormSource.includes('name="secondaryResponsibleUserId"'));
-  assert(slaActionsSource.includes("secondary_responsible_user_id: secondaryResponsibleUserId"));
+  assert(slaActionsSource.includes("secondary_responsible_user_id: memberId(secondaryResponsible)"));
+  assert(slaActionsSource.includes("secondary_responsible_invitation_id: invitationId(secondaryResponsible)"));
   assert(secondaryResponsibleMigration.includes("secondary_responsible_user_id"));
   assert(secondaryResponsibleMigration.includes("area in ('ENGENHARIA', 'PLANEJAMENTO')"));
   assert(secondaryResponsibleMigration.includes("secondary_responsible_user_id is distinct from responsible_direct_user_id"));
