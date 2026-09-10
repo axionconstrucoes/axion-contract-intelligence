@@ -107,7 +107,7 @@ export function buildSlaEscalationEmail(input: SlaEscalationEmailInput): SlaEsca
         <tr>
           <td style="padding:8px 24px 24px 24px;">
             <a href="${escapeHtml(input.eventUrl)}" style="display:inline-block;margin:0 8px 8px 0;padding:10px 18px;background-color:#111827;color:#ffffff;font-size:13px;font-weight:bold;text-decoration:none;border-radius:6px;">Abrir ação no ACC</a>
-            ${renderEmailActionButtonsHtml(input.actionButtons)}
+            ${renderEmailActionButtonsHtml(input.actionButtons, input.actionTitle)}
           </td>
         </tr>
         <tr>

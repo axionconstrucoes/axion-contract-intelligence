@@ -2,6 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 function Textarea({ className, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const title = props.title ?? props["aria-label"] ?? props.placeholder;
   return (
     <textarea
       className={cn(
@@ -9,6 +10,7 @@ function Textarea({ className, ...props }: React.TextareaHTMLAttributes<HTMLText
         className
       )}
       {...props}
+      title={title}
     />
   );
 }

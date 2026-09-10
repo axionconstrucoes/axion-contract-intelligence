@@ -2,6 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
+  const title = props.title ?? props["aria-label"] ?? props.placeholder;
   return (
     <input
       className={cn(
@@ -9,6 +10,7 @@ function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputEleme
         className
       )}
       {...props}
+      title={title}
     />
   );
 }

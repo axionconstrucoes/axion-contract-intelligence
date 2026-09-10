@@ -35,6 +35,7 @@ export type ImplicationCategory =
   | "CLAIMS_CHANGE_ORDERS";
 
 export type ProjectStatus = "ATIVO" | "SUSPENSO" | "ENCERRADO";
+export type ProjectWorkspaceType = "OBRA" | "PRE_CONTRATUAL";
 
 export interface Project {
   id: string;
@@ -46,6 +47,8 @@ export interface Project {
   contractNumber: string | null;
   startDate: string; // ISO date
   baselineEndDate: string; // ISO date
+  /** Distingue uma obra contratada de um espaço jurídico criado antes da contratação. */
+  workspaceType?: ProjectWorkspaceType;
 }
 
 // package_type e texto livre — a taxonomia real de tipos de pacote ainda

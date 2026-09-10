@@ -8,7 +8,7 @@
 // valores como literais soltos em contract-alert-template.ts/
 // render-buttons.ts — sempre importar daqui.
 //
-// Cores semânticas do badge de risco (verde/azul/laranja/vermelho, em
+// Cores semânticas do badge de risco (verde/azul/amarelo/vermelho, em
 // BADGE_STYLES de contract-alert-template.ts) são um caso à parte —
 // indicador de status, não hierarquia de texto — e não vêm daqui.
 

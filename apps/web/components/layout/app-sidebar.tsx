@@ -17,6 +17,7 @@ import {
   PanelLeftOpen,
   Plug,
   Rocket,
+  Scale,
   TimerReset,
   Users,
   type LucideIcon,
@@ -39,6 +40,7 @@ const ICONS_BY_NAME: Record<string, LucideIcon> = {
   PackagePlus,
   Plug,
   Rocket,
+  Scale,
   TimerReset,
   Users,
 };

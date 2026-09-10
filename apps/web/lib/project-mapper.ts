@@ -1,4 +1,4 @@
-import type { Project, ProjectStatus } from "@axion/types";
+import type { Project, ProjectStatus, ProjectWorkspaceType } from "@axion/types";
 
 export type ProjectRow = {
   id: string;
@@ -10,6 +10,7 @@ export type ProjectRow = {
   contract_number: string | null;
   start_date: string;
   baseline_end_date: string;
+  workspace_type?: ProjectWorkspaceType;
 };
 
 export function mapProjectRow(row: ProjectRow): Project {
@@ -23,5 +24,6 @@ export function mapProjectRow(row: ProjectRow): Project {
     contractNumber: row.contract_number,
     startDate: row.start_date,
     baselineEndDate: row.baseline_end_date,
+    workspaceType: row.workspace_type ?? "OBRA",
   };
 }

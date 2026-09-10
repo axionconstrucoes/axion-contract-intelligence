@@ -61,7 +61,10 @@ function toPosition(expertId: OfficialExpertId, response: ExpertQueryResponse): 
 export async function runMultiExpertCuration(supabase: SupabaseClient, input: CurationInput): Promise<MultiExpertCuration> {
   const routing = await decideExpertRouting(supabase, input);
 
-  const routedExpertIds = Array.from(new Set([...routing.primaryExpertIds, ...routing.supportingExpertIds])).filter(
+  const requestedExpertIds: OfficialExpertId[] = input.consultAllExperts
+    ? ["commercial-director", "esg-director", "legal-consultant", "planning-director"]
+    : [...routing.primaryExpertIds, ...routing.supportingExpertIds];
+  const routedExpertIds = Array.from(new Set(requestedExpertIds)).filter(
     (expertId): expertId is Exclude<OfficialExpertId, "ceo"> => expertId !== "ceo"
   );
 

@@ -43,16 +43,19 @@ export const ACC_ACTION_BUTTON_CLASS = "acc-action-btn";
 // do botão — nunca dependente de hover, já que Gmail/Outlook não garantem
 // suporte uniforme a ele. Continua exatamente 1 <a> por botão — mesma
 // URL/token de sempre, nada de link extra.
-export function renderEmailActionButtonsHtml(buttons: EmailActionButton[]): string {
+export function renderEmailActionButtonsHtml(buttons: EmailActionButton[], alertCause?: string): string {
   if (buttons.length === 0) return "";
 
   return buttons
     .map((button, index) => {
       const label = EMAIL_ALERT_ACTION_LABELS[button.action];
       const description = EMAIL_ALERT_ACTION_DESCRIPTIONS[button.action];
+      const hoverDescription = alertCause
+        ? `Causa do alerta: ${alertCause} Ação: ${description}`
+        : description;
       const marginTop = index === 0 ? "0" : "12px";
-      const buttonHtml = `<a href="${escapeHtml(button.url)}" title="${escapeHtml(description)}" aria-label="${escapeHtml(
-        `${label} — ${description}`
+      const buttonHtml = `<a href="${escapeHtml(button.url)}" title="${escapeHtml(hoverDescription)}" aria-label="${escapeHtml(
+        `${label} — ${hoverDescription}`
       )}" class="${ACC_ACTION_BUTTON_CLASS}" style="display:block;width:100%;box-sizing:border-box;margin:${marginTop} 0 0 0;padding:10px 14px;background-color:#ffffff;color:${ACC_COLOR_BODY};font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_BODY};font-weight:bold;text-decoration:none;border-radius:6px;border:1px solid ${ACC_COLOR_HEADING};text-align:center;">${escapeHtml(
         label
       )}</a>`;

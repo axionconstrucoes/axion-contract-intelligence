@@ -23,6 +23,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "ledger", label: "Event Ledger", icon: "BookText", helpId: "event-ledger" },
   { href: "action-requests", label: "Solicitações", icon: "ListChecks", helpId: "solicitacoes" },
   { href: "acoes", label: "Ações e Escalonamentos", icon: "TimerReset", helpId: "acoes-escalonamentos" },
+  { href: "juridico", label: "Jurídico", icon: "Scale", helpId: "juridico" },
   { href: "revisao-contratual", label: "Análise Contratual", icon: "BookText", helpId: "analise-contratual" },
   { href: "revisao-clausulas", label: "Análise de Cláusulas", icon: "BookText", helpId: "analise-clausulas" },
   { href: "documentos", label: "Documentos", icon: "FileStack", helpId: "documentos" },

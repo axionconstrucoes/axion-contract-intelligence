@@ -52,13 +52,14 @@ export function buildWeeklyAlertDigestEmail(input: WeeklyAlertDigestEmailInput) 
   const htmlItems = items
     .map((item) => {
       const risk = RISK[item.riskLevel];
+      const alertCause = item.description || item.title;
       return `
-        <tr>
+        <tr title="Causa do alerta: ${escapeHtml(alertCause)}">
           <td style="padding:12px 0;border-top:1px solid #e5e7eb;vertical-align:top;">
             <span style="display:inline-block;background:${risk.background};color:${risk.color};font-size:11px;font-weight:bold;padding:4px 9px;border-radius:999px;">RISCO ${risk.label}</span>
           </td>
           <td style="padding:12px 0 12px 12px;border-top:1px solid #e5e7eb;vertical-align:top;">
-            <strong style="color:#111827;font-size:14px;">${escapeHtml(item.title)}</strong>
+            <strong title="Causa do alerta: ${escapeHtml(alertCause)}" style="color:#111827;font-size:14px;">${escapeHtml(item.title)}</strong>
             ${item.description ? `<div style="margin-top:3px;color:#4b5563;font-size:12px;">${escapeHtml(item.description)}</div>` : ""}
             ${item.dueAt ? `<div style="margin-top:3px;color:#6b7280;font-size:11px;">Prazo: ${escapeHtml(item.dueAt)}</div>` : ""}
           </td>
