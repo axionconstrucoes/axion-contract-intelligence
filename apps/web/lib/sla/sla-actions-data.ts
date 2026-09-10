@@ -23,10 +23,14 @@ type AreaResponsiblesRow = {
   project_id: string;
   area: string;
   responsible_direct_user_id: string | null;
+  responsible_direct_invitation_id: string | null;
   secondary_responsible_user_id: string | null;
+  secondary_responsible_invitation_id: string | null;
   escalation_1_user_id: string | null;
+  escalation_1_invitation_id: string | null;
   escalation_2_user_id: string | null;
   board_user_id: string | null;
+  board_invitation_id: string | null;
   updated_at: string;
 };
 
@@ -136,16 +140,20 @@ export async function getSlaAreaResponsibles(projectId: string): Promise<SlaArea
     projectId: row.project_id,
     area: row.area as SlaAreaResponsibles["area"],
     responsibleDirectUserId: row.responsible_direct_user_id,
+    responsibleDirectInvitationId: row.responsible_direct_invitation_id,
     responsibleDirectName: row.responsible_direct_user_id ? (namesByUserId.get(row.responsible_direct_user_id) ?? null) : null,
     secondaryResponsibleUserId: row.secondary_responsible_user_id,
+    secondaryResponsibleInvitationId: row.secondary_responsible_invitation_id,
     secondaryResponsibleName: row.secondary_responsible_user_id
       ? (namesByUserId.get(row.secondary_responsible_user_id) ?? null)
       : null,
     escalation1UserId: row.escalation_1_user_id,
+    escalation1InvitationId: row.escalation_1_invitation_id,
     escalation1Name: row.escalation_1_user_id ? (namesByUserId.get(row.escalation_1_user_id) ?? null) : null,
     escalation2UserId: row.escalation_2_user_id,
     escalation2Name: row.escalation_2_user_id ? (namesByUserId.get(row.escalation_2_user_id) ?? null) : null,
     boardUserId: row.board_user_id,
+    boardInvitationId: row.board_invitation_id,
     boardName: row.board_user_id ? (namesByUserId.get(row.board_user_id) ?? null) : null,
     updatedAt: row.updated_at,
   }));
