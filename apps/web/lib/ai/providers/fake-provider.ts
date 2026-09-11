@@ -30,6 +30,12 @@ const SEVERITY_RANK: Record<ExpertSeverity, number> = {
   CRITICAL: 3,
 };
 
+function schemaHasProperty(schema: unknown, property: string): boolean {
+  if (typeof schema !== "object" || schema === null) return false;
+  const properties = (schema as Record<string, unknown>).properties;
+  return typeof properties === "object" && properties !== null && property in properties;
+}
+
 function isExpertSeverity(value: string): value is ExpertSeverity {
   return value === "LOW" || value === "MEDIUM" || value === "HIGH" || value === "CRITICAL";
 }
@@ -177,6 +183,9 @@ export function createFakeAiProvider(): AiProvider {
         rascunhoSugerido: null,
         confidence: eventContext ? deriveConfidence(eventContext) : 0.2,
         requiresHumanReview: true,
+        ...(schemaHasProperty(request.outputSchema, "analiseClausulas")
+          ? { analiseClausulas: [] }
+          : {}),
       };
 
       return {

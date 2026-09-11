@@ -59,16 +59,15 @@ export function PrecontractWorkspaceClient({
         />
       </div>
 
-      <div className="min-w-0">
-        <ExpertQueryPanel
-          projectId={projectId}
-          scope="PROJECT"
-          title="Pergunte ao especialista jurídico"
-          action={askLegalConsultantAction}
-          initialState={initialAskCommercialDirectorState}
-          disabledReason={blockReason}
-        />
-      </div>
+      <ExpertQueryPanel
+        projectId={projectId}
+        scope="PROJECT"
+        title="Pergunte ao especialista jurídico"
+        action={askLegalConsultantAction}
+        initialState={initialAskCommercialDirectorState}
+        disabledReason={blockReason}
+        presentation="legal-clause-comparison"
+      />
     </div>
   );
 }

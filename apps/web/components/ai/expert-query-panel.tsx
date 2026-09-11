@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { AlertTriangle, FlaskConical } from "lucide-react";
+import { AlertTriangle, FlaskConical, HelpCircle } from "lucide-react";
 import { SeverityBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { askCommercialDirectorAction } from "@/lib/ai/expert-query-action";
 import { MISSING_QUERY_CONTEXT_MESSAGE } from "@/lib/ai/expert-query-request";
 import { initialAskCommercialDirectorState, type AskCommercialDirectorState } from "@/lib/ai/expert-query-state";
 import { normalizeProviderMeta } from "@/lib/ai/provider-ui-metadata";
-import type { ExpertQueryScope } from "@/lib/ai/query/types";
+import type { ExpertQueryResponse, ExpertQueryScope, VerifiedLegalClauseComparison } from "@/lib/ai/query/types";
 import type { ContextDocumentCoverage } from "@/lib/ai/context/types";
 
 type AskExpertState = AskCommercialDirectorState;
@@ -157,6 +157,172 @@ function PartialContentNotice({ coverage }: { coverage: ContextDocumentCoverage 
   );
 }
 
+const CLAUSE_ACTION_LABELS: Record<VerifiedLegalClauseComparison["action"], string> = {
+  MODIFY: "Modificar",
+  REMOVE: "Excluir",
+  ADD: "Adicionar",
+};
+
+function ClauseRationaleTooltip({ comparison, index }: { comparison: VerifiedLegalClauseComparison; index: number }) {
+  const tooltipId = `clause-rationale-${index}`;
+  return (
+    <span className="group relative inline-flex">
+      <button
+        type="button"
+        aria-describedby={tooltipId}
+        className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium text-primary outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <HelpCircle className="size-3.5" />
+        Por que alterar?
+      </button>
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className="invisible absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-3rem)] rounded-md border bg-popover p-3 text-left text-xs text-popover-foreground opacity-0 shadow-lg transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+      >
+        <strong className="block text-sm">Fundamento da sugestão</strong>
+        <span className="mt-1 block">{comparison.rationale}</span>
+        <strong className="mt-2 block">Risco que a mudança busca reduzir</strong>
+        <span className="mt-1 block">{comparison.mitigatedRisk}</span>
+        {comparison.legalBasis ? (
+          <>
+            <strong className="mt-2 block">Base jurídica disponível no contexto</strong>
+            <span className="mt-1 block">{comparison.legalBasis}</span>
+          </>
+        ) : null}
+      </span>
+    </span>
+  );
+}
+
+function LegalClauseComparison({ comparisons }: { comparisons: VerifiedLegalClauseComparison[] }) {
+  return (
+    <Section title="Comparação das cláusulas e sugestões">
+      {comparisons.length === 0 ? (
+        <p className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+          Nenhuma alteração de cláusula foi recomendada para a pergunta atual.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {comparisons.map((comparison, index) => (
+            <article
+              key={`${comparison.documentVersionId}-${index}`}
+              className="overflow-visible rounded-lg border"
+            >
+              <header className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">
+                    {comparison.clauseNumber ? `Cláusula ${comparison.clauseNumber}` : "Nova cláusula"}
+                    {comparison.clauseTitle ? ` — ${comparison.clauseTitle}` : ""}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {comparison.documentTitle}
+                    {comparison.versionLabel ? ` · versão ${comparison.versionLabel}` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <SeverityBadge severity={confrontationSeverityToAlertSeverity[comparison.severity]} />
+                  <span className="rounded-full border bg-background px-2 py-1 text-xs font-medium">
+                    {CLAUSE_ACTION_LABELS[comparison.action]}
+                  </span>
+                  <ClauseRationaleTooltip comparison={comparison} index={index} />
+                </div>
+              </header>
+
+              <div className="grid lg:grid-cols-2">
+                <section className="min-w-0 border-b p-4 lg:border-b-0 lg:border-r">
+                  <h5 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Cláusula do contrato
+                  </h5>
+                  <p className="whitespace-pre-wrap text-sm leading-6">
+                    {comparison.originalText ?? "Nova cláusula — não existe redação correspondente no contrato."}
+                  </p>
+                </section>
+                <section className="min-w-0 bg-primary/[0.03] p-4">
+                  <h5 className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                    Sugestão do Consultor Jurídico
+                  </h5>
+                  <p className="whitespace-pre-wrap text-sm leading-6">
+                    {comparison.action === "REMOVE"
+                      ? "Excluir integralmente a cláusula indicada."
+                      : comparison.proposedText}
+                  </p>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Confiança: {Math.round(comparison.confidence * 100)}% · revisão humana obrigatória
+                  </p>
+                </section>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function ExpertResponseDetails({ response, showClauseComparison }: { response: ExpertQueryResponse; showClauseComparison: boolean }) {
+  return (
+    <div className="flex flex-col gap-4 rounded-md border p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <SeverityBadge severity={confrontationSeverityToAlertSeverity[response.severity]} />
+        <span className="text-xs text-muted-foreground">Confiança: {Math.round(response.confidence * 100)}%</span>
+      </div>
+
+      {showClauseComparison && response.analiseClausulas ? (
+        <LegalClauseComparison comparisons={response.analiseClausulas} />
+      ) : null}
+
+      <Section title="Interpretação (sugestão, não fato)"><p className="text-sm">{response.interpretacao}</p></Section>
+      <Section title="Fatos documentados"><BulletList items={response.fatosDocumentados} /></Section>
+
+      {response.contextoInternoDeclarado.length > 0 && (
+        <Section title="Contexto interno declarado (não confirmado documentalmente)">
+          <ul className="flex flex-col gap-2">
+            {response.contextoInternoDeclarado.map((item) => (
+              <li key={item.noteId} className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-sm">
+                <p className="text-xs text-muted-foreground">{item.category} · {item.author}</p><p>{item.text}</p>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      {response.baseContratual.length > 0 && (
+        <Section title="Base contratual"><ul className="flex flex-col gap-1 text-sm">
+          {response.baseContratual.map((basis, i) => <li key={i}>{basis.clauseNumber ? `Cláusula ${basis.clauseNumber} — ` : ""}{basis.clauseTitle ?? "Referência contratual"}</li>)}
+        </ul></Section>
+      )}
+
+      <Section title="Base legal">
+        {response.baseLegal.length === 0 ? <p className="text-sm text-muted-foreground">Base legal oficial não disponível nesta fase (nenhum corpus normativo versionado no projeto).</p> : <BulletList items={response.baseLegal.map((c) => `${c.source.referencia}: ${c.relationToAnalysis}`)} />}
+      </Section>
+
+      {response.praticasNegociais.length > 0 && (
+        <Section title="Práticas negociais / classificações"><ul className="flex flex-col gap-1 text-sm">
+          {response.praticasNegociais.map((item, i) => <li key={i}><span className="mr-1 rounded border px-1 text-xs">{REQUIREMENT_KIND_LABELS[item.kind] ?? item.kind}</span>{item.statement}</li>)}
+        </ul></Section>
+      )}
+
+      <Section title="Riscos"><BulletList items={response.riscos} /></Section>
+      <Section title="Recomendações"><BulletList items={response.recomendacoes} /></Section>
+      {response.acoesSugeridas.length > 0 && <Section title="Ações sugeridas"><BulletList items={response.acoesSugeridas} /></Section>}
+      <Section title="Informações faltantes"><BulletList items={response.informacoesFaltantes} /></Section>
+
+      {response.rascunhoSugerido && (
+        <Section title={`Rascunho sugerido — ${response.rascunhoSugerido.status}`}>
+          <div className="rounded-md border bg-muted/40 p-3 text-sm">
+            {response.rascunhoSugerido.subject && <p className="font-medium">{response.rascunhoSugerido.subject}</p>}
+            <p className="mt-1 whitespace-pre-wrap">{response.rascunhoSugerido.body}</p>
+          </div>
+          <p className="text-xs text-muted-foreground">Rascunho pendente de revisão humana — nada foi enviado.</p>
+        </Section>
+      )}
+      {response.grounding?.performed && <GroundingSummary grounding={response.grounding} />}
+      <p className="text-xs font-medium text-muted-foreground">Revisão humana obrigatória.</p>
+    </div>
+  );
+}
+
 export function ExpertQueryPanel({
   projectId,
   eventId,
@@ -165,6 +331,7 @@ export function ExpertQueryPanel({
   action = askCommercialDirectorAction,
   initialState = initialAskCommercialDirectorState,
   disabledReason = null,
+  presentation = "default",
 }: {
   projectId: string;
   eventId?: string;
@@ -181,9 +348,15 @@ export function ExpertQueryPanel({
    * conteúdo do documento está disponível.
    */
   disabledReason?: string | null;
+  /** Comparacao juridica ocupa a largura das duas colunas no fluxo pre-contratual. */
+  presentation?: "default" | "legal-clause-comparison";
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const { response, error } = state;
+  // Ao iniciar outra consulta, a resposta anterior sai imediatamente da
+  // tela. `useActionState` mantem apenas o resultado mais recente e nao ha
+  // lista/historico persistido.
+  const displayedResponse = pending ? null : response;
   // Contexto da consulta conferido também no cliente: sem escopo
   // reconhecido não há pergunta a enviar, e a UI nunca renderiza um
   // valor cru (nem "undefined") — a mesma mensagem do servidor
@@ -200,7 +373,8 @@ export function ExpertQueryPanel({
   const meta = normalizeProviderMeta(state.meta);
 
   return (
-    <Card className="border-primary/30">
+    <>
+    <Card className="min-w-0 border-primary/30">
       <CardHeader className="gap-2">
         <div className="flex items-center gap-2">
           <CardTitle>{title}</CardTitle>
@@ -266,114 +440,15 @@ export function ExpertQueryPanel({
 
         {state.coverage ? <PartialContentNotice coverage={state.coverage} /> : null}
 
-        {response ? (
-          <div className="flex flex-col gap-4 rounded-md border p-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <SeverityBadge severity={confrontationSeverityToAlertSeverity[response.severity]} />
-              <span className="text-xs text-muted-foreground">
-                Confiança: {Math.round(response.confidence * 100)}%
-              </span>
-            </div>
-
-            <Section title="Interpretação (sugestão, não fato)">
-              <p className="text-sm">{response.interpretacao}</p>
-            </Section>
-
-            <Section title="Fatos documentados">
-              <BulletList items={response.fatosDocumentados} />
-            </Section>
-
-            {response.contextoInternoDeclarado.length > 0 && (
-              <Section title="Contexto interno declarado (não confirmado documentalmente)">
-                <ul className="flex flex-col gap-2">
-                  {response.contextoInternoDeclarado.map((item) => (
-                    <li key={item.noteId} className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2 text-sm">
-                      <p className="text-xs text-muted-foreground">
-                        {item.category} · {item.author}
-                      </p>
-                      <p>{item.text}</p>
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
-
-            {response.baseContratual.length > 0 && (
-              <Section title="Base contratual">
-                <ul className="flex flex-col gap-1 text-sm">
-                  {response.baseContratual.map((basis, i) => (
-                    <li key={i}>
-                      {basis.clauseNumber ? `Cláusula ${basis.clauseNumber} — ` : ""}
-                      {basis.clauseTitle ?? "Referência contratual"}
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
-
-            <Section title="Base legal">
-              {response.baseLegal.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Base legal oficial não disponível nesta fase (nenhum corpus normativo versionado no projeto).
-                </p>
-              ) : (
-                <BulletList items={response.baseLegal.map((c) => `${c.source.referencia}: ${c.relationToAnalysis}`)} />
-              )}
-            </Section>
-
-            {response.praticasNegociais.length > 0 && (
-              <Section title="Práticas negociais / classificações">
-                <ul className="flex flex-col gap-1 text-sm">
-                  {response.praticasNegociais.map((item, i) => (
-                    <li key={i}>
-                      <span className="mr-1 rounded border px-1 text-xs">
-                        {REQUIREMENT_KIND_LABELS[item.kind] ?? item.kind}
-                      </span>
-                      {item.statement}
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
-
-            <Section title="Riscos">
-              <BulletList items={response.riscos} />
-            </Section>
-
-            <Section title="Recomendações">
-              <BulletList items={response.recomendacoes} />
-            </Section>
-
-            {response.acoesSugeridas.length > 0 && (
-              <Section title="Ações sugeridas">
-                <BulletList items={response.acoesSugeridas} />
-              </Section>
-            )}
-
-            <Section title="Informações faltantes">
-              <BulletList items={response.informacoesFaltantes} />
-            </Section>
-
-            {response.rascunhoSugerido && (
-              <Section title={`Rascunho sugerido — ${response.rascunhoSugerido.status}`}>
-                <div className="rounded-md border bg-muted/40 p-3 text-sm">
-                  {response.rascunhoSugerido.subject && (
-                    <p className="font-medium">{response.rascunhoSugerido.subject}</p>
-                  )}
-                  <p className="mt-1 whitespace-pre-wrap">{response.rascunhoSugerido.body}</p>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Rascunho pendente de revisão humana — nada foi enviado.
-                </p>
-              </Section>
-            )}
-
-            {response.grounding?.performed && <GroundingSummary grounding={response.grounding} />}
-
-            <p className="text-xs font-medium text-muted-foreground">Revisão humana obrigatória.</p>
-          </div>
-        ) : null}
+        {displayedResponse && presentation === "default" ? <ExpertResponseDetails response={displayedResponse} showClauseComparison={false} /> : null}
       </CardContent>
     </Card>
+    {displayedResponse && presentation === "legal-clause-comparison" ? (
+      <Card className="border-primary/30 lg:col-span-2">
+        <CardHeader><CardTitle>Análise comparativa do Consultor Jurídico</CardTitle></CardHeader>
+        <CardContent><ExpertResponseDetails response={displayedResponse} showClauseComparison /></CardContent>
+      </Card>
+    ) : null}
+    </>
   );
 }

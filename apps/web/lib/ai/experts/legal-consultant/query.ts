@@ -31,6 +31,10 @@ import {
   LEGAL_CONSULTANT_NAME,
   LEGAL_CONSULTANT_VERSION,
 } from "./identity";
+import {
+  LEGAL_CONSULTANT_DOCUMENT_QUERY_RESPONSE_JSON_SCHEMA,
+  validateLegalClauseComparisons,
+} from "./clause-comparison";
 
 const IMPLEMENTED_SCOPES: ExpertQueryScope[] = ["PROJECT", "EVENT"];
 
@@ -136,16 +140,29 @@ export async function answerLegalConsultantQuery(
     question,
     eventContext,
     projectContext,
-    outputSchema: EXPERT_QUERY_RESPONSE_JSON_SCHEMA,
+    outputSchema:
+      options.requireContractualDocuments === true
+        ? LEGAL_CONSULTANT_DOCUMENT_QUERY_RESPONSE_JSON_SCHEMA
+        : EXPERT_QUERY_RESPONSE_JSON_SCHEMA,
   });
 
-  const validated = validateExpertQueryResponse(response.output, {
+  const validatedBase = validateExpertQueryResponse(response.output, {
     expertId: LEGAL_CONSULTANT_EXPERT_ID,
     expertName: LEGAL_CONSULTANT_NAME,
     expertVersion: LEGAL_CONSULTANT_VERSION,
     // Escopo confiável desta consulta (nunca lido da saída do provider).
     scope: request.scope,
   });
+  const validated: ExpertQueryResponse =
+    options.requireContractualDocuments === true
+      ? {
+          ...validatedBase,
+          analiseClausulas: validateLegalClauseComparisons(
+            (response.output as Record<string, unknown>).analiseClausulas,
+            projectContext?.contractualDocuments ?? []
+          ),
+        }
+      : validatedBase;
 
   // Guardrail de grounding: só roda para o provider real (Anthropic) —
   // ver commentário equivalente em experts/commercial-director/query.ts.

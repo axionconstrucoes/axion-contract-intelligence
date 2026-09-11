@@ -87,6 +87,33 @@ export interface ExpertQueryDraft {
   status: "DRAFT_PENDING_REVIEW";
 }
 
+export type LegalClauseChangeAction = "MODIFY" | "REMOVE" | "ADD";
+
+/**
+ * Comparacao juridica verificada contra uma versao documental que o
+ * servidor realmente carregou. `documentTitle`, `versionLabel` e
+ * `sourceVerified` nunca sao aceitos do provider: sao derivados do
+ * contexto autorizado depois de conferir que `originalText` pertence ao
+ * documento indicado.
+ */
+export interface VerifiedLegalClauseComparison {
+  documentId: string;
+  documentVersionId: string;
+  documentTitle: string;
+  versionLabel: string | null;
+  clauseNumber: string | null;
+  clauseTitle: string | null;
+  originalText: string | null;
+  proposedText: string | null;
+  action: LegalClauseChangeAction;
+  rationale: string;
+  mitigatedRisk: string;
+  legalBasis: string | null;
+  severity: ExpertSeverity;
+  confidence: number;
+  sourceVerified: true;
+}
+
 /**
  * Resposta estruturada de uma consulta conversacional. Nunca texto livre
  * como única resposta — cada seção é renderizada separadamente na UI.
@@ -111,6 +138,8 @@ export interface ExpertQueryResponse {
   rascunhoSugerido: ExpertQueryDraft | null;
   confidence: number;
   requiresHumanReview: true;
+  /** Presente na consulta pre-contratual com documentos; nunca persistido. */
+  analiseClausulas?: VerifiedLegalClauseComparison[];
   /** Ver ExpertAssessment.grounding (../types.ts) — mesma extensão compatível, nunca lida do provider. */
   grounding?: ResponseGroundingSummary | null;
 }
