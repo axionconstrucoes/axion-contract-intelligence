@@ -18,7 +18,9 @@ import {
   NOT_PERFORMED_GROUNDING_SUMMARY,
   validateDraftGrounding,
 } from "../../grounding/index";
+import { ExpertQuerySafeError } from "../../expert-query-request";
 import { resolveAiProviderForExpert } from "../../providers/resolve-provider-for-expert";
+import type { ContextDocumentCoverage } from "../../context/types";
 import type { AiProvider } from "../../providers/types";
 import { EXPERT_QUERY_RESPONSE_JSON_SCHEMA } from "../../query/json-schema";
 import { validateExpertQueryResponse } from "../../query/validate-expert-query-response";
@@ -34,6 +36,8 @@ const IMPLEMENTED_SCOPES: ExpertQueryScope[] = ["PROJECT", "EVENT"];
 
 export interface LegalConsultantQueryResult {
   response: ExpertQueryResponse;
+  /** Cobertura documental calculada no servidor (null fora do fluxo pre-contratual). */
+  documentCoverage: ContextDocumentCoverage | null;
   audit: {
     expertId: typeof LEGAL_CONSULTANT_EXPERT_ID;
     expertVersion: typeof LEGAL_CONSULTANT_VERSION;
@@ -64,10 +68,25 @@ export interface LegalConsultantQueryResult {
  * buildProjectAnalysisContext, ambos genéricos e reutilizados) e chama o
  * provider — nunca escreve, nunca envia nada.
  */
+export interface LegalConsultantQueryOptions {
+  /**
+   * Carrega o texto dos documentos contratuais no contexto e EXIGE que
+   * exista pelo menos um legivel. Usado pela analise juridica
+   * pre-contratual (/{projectId}/juridico): sem contrato lido, a
+   * consulta falha explicitamente em vez de produzir uma resposta
+   * generica que pareceria fundamentada.
+   *
+   * Default `false` para nao alterar o comportamento de quem ja
+   * chamava esta funcao (ver ai/curation/run-multi-expert-curation.ts).
+   */
+  requireContractualDocuments?: boolean;
+}
+
 export async function answerLegalConsultantQuery(
   supabase: SupabaseClient,
   request: ExpertQueryRequest,
-  provider: AiProvider = resolveAiProviderForExpert(LEGAL_CONSULTANT_EXPERT_ID)
+  provider: AiProvider = resolveAiProviderForExpert(LEGAL_CONSULTANT_EXPERT_ID),
+  options: LegalConsultantQueryOptions = {}
 ): Promise<LegalConsultantQueryResult> {
   if (!IMPLEMENTED_SCOPES.includes(request.scope)) {
     throw new Error(
@@ -92,7 +111,21 @@ export async function answerLegalConsultantQuery(
       : null;
 
   const projectContext =
-    request.scope === "PROJECT" ? await buildProjectAnalysisContext(supabase, { projectId: request.projectId }) : null;
+    request.scope === "PROJECT"
+      ? await buildProjectAnalysisContext(supabase, {
+          projectId: request.projectId,
+          includeContractualDocuments: options.requireContractualDocuments === true,
+        })
+      : null;
+
+  // Fail closed: sem conteudo contratual lido, nenhuma consulta e feita.
+  // O provider nem chega a ser chamado - o contrario produziria uma
+  // resposta apoiada so em metadados, com aparencia de analise juridica.
+  if (options.requireContractualDocuments === true && (projectContext?.contractualDocuments.length ?? 0) === 0) {
+    throw new ExpertQuerySafeError(
+      "Nenhum documento desta analise pode ser lido. Envie o contrato ou a minuta em PDF, DOCX ou TXT com texto selecionavel antes de consultar o especialista juridico."
+    );
+  }
 
   const response = await provider.answerQuery({
     expertId: LEGAL_CONSULTANT_EXPERT_ID,
@@ -171,6 +204,7 @@ export async function answerLegalConsultantQuery(
 
   return {
     response: finalResponse,
+    documentCoverage: projectContext?.documentCoverage ?? null,
     audit: {
       expertId: LEGAL_CONSULTANT_EXPERT_ID,
       expertVersion: LEGAL_CONSULTANT_VERSION,

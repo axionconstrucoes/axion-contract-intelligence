@@ -164,6 +164,60 @@ export interface ContextEsgObligationSummary {
  * retrieval/ranking — nesta fase a seleção é só "N eventos mais
  * recentes", sem ranking por relevância.
  */
+/**
+ * Documento contratual da base documental do projeto, com o TEXTO
+ * efetivamente extraido do arquivo (PDF/DOCX/TXT). Existe para que o
+ * Consultor Juridico opine sobre a minuta real, e nao apenas sobre
+ * metadados do projeto.
+ *
+ * `truncated` nunca e omitido: quando o texto excede o orcamento de
+ * contexto, o corte e declarado ao Expert. Um contrato cortado em
+ * silencio faria a IA concluir sobre um documento que ela nao viu
+ * inteiro.
+ */
+export interface ContextContractualDocument {
+  documentId: string;
+  documentVersionId: string;
+  title: string;
+  kind: string;
+  versionLabel: string | null;
+  fileName: string;
+  pageCount: number | null;
+  /** Total de caracteres do documento ORIGINAL, antes de qualquer corte. */
+  characterCount: number;
+  text: string;
+  truncated: boolean;
+  omittedCharacters: number;
+}
+
+/**
+ * Documento da base documental que NAO pode ser lido, com o motivo. Vai
+ * ao contexto de proposito: o Expert precisa saber que existe documento
+ * fora da analise, em vez de concluir sobre uma base incompleta sem
+ * perceber.
+ */
+export interface ContextUnreadableDocument {
+  documentId: string;
+  title: string;
+  fileName: string;
+  reason: string;
+}
+
+/**
+ * Cobertura da base contratual nesta consulta. Metadado CALCULADO PELO
+ * SERVIDOR - e a unica fonte do aviso de conteudo parcial mostrado ao
+ * usuario. Nunca depende de o modelo mencionar que faltou texto.
+ */
+export interface ContextDocumentCoverage {
+  availableCount: number;
+  includedCount: number;
+  omittedCount: number;
+  unreadableCount: number;
+  includedCharacters: number;
+  omittedCharacters: number;
+  truncated: boolean;
+}
+
 export interface ProjectAnalysisContext {
   projectId: string;
   project: {
@@ -177,6 +231,22 @@ export interface ProjectAnalysisContext {
   eventsTotalCount: number;
   esgObligations: ContextEsgObligationSummary[];
   esgObligationsTotalCount: number;
+  /**
+   * Tipo do espaco: "OBRA" (contrato assinado) ou "PRE_CONTRATUAL"
+   * (negociacao de minuta). O Expert precisa saber em qual dos dois esta
+   * opinando.
+   */
+  workspaceType: string;
+  /**
+   * Base contratual com texto real. Preenchida somente quando quem monta
+   * o contexto pede (`includeContractualDocuments`) - o escopo PROJECT
+   * dos demais Experts continua leve, sem texto de contrato.
+   */
+  contractualDocuments: ContextContractualDocument[];
+  unreadableDocuments: ContextUnreadableDocument[];
+  /** Documentos legiveis que nao couberam no orcamento de contexto. */
+  omittedForBudget: ContextUnreadableDocument[];
+  documentCoverage: ContextDocumentCoverage;
 }
 
 /**

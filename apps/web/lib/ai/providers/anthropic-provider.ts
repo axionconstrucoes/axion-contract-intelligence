@@ -251,11 +251,245 @@ function raceWithHardTimeout<T>(promise: Promise<T>, timeoutMs: number, controll
   });
 }
 
-async function callAnthropic(
+/**
+ * Campos exigidos pelo schema que faltaram ou vieram vazios na saída.
+ * Só olha o primeiro nível: é o suficiente para dizer ao modelo o que
+ * refazer, e a validação de verdade continua sendo os validadores
+ * TypeScript depois (nunca esta função).
+ */
+/**
+ * ESCOPO DESTA CHECAGEM — leia antes de confiar nela.
+ *
+ * `findSchemaViolations` NÃO valida o JSON Schema inteiro. Ela detecta
+ * apenas o subconjunto de problemas ESTRUTURAIS E REPARÁVEIS do primeiro
+ * nível da saída, que é o que faz sentido pedir ao modelo para refazer:
+ *
+ *   - campo de `required` ausente (undefined);
+ *   - `null` quando o schema NÃO admite null;
+ *   - string vazia quando o schema não declara `minLength: 0`;
+ *   - tipo errado (string onde se espera array, número onde se espera
+ *     objeto, etc.);
+ *   - valor fora do `enum` declarado;
+ *   - array obrigatório vazio quando o schema exige `minItems`;
+ *   - objeto que não traz os próprios `required` internos (um nível).
+ *
+ * O que ela deliberadamente NÃO faz: validar `$ref`, `allOf`,
+ * `patternProperties`, `format`, aninhamento profundo, unicidade de
+ * array, dependências entre campos. Nada disso vira repetição.
+ *
+ * A validação que DECIDE se a resposta é aceita continua sendo, sempre,
+ * o validador TypeScript do Expert (validate-expert-query-response.ts /
+ * validate-expert-assessment.ts), que roda depois e falha fechado. Esta
+ * função só escolhe se vale a pena gastar UMA segunda chamada.
+ *
+ * Casos NÃO reparáveis por repetição — tratados antes, em
+ * extractToolUseInput, que LANÇA e nunca chega aqui:
+ *   - `stop_reason: "max_tokens"` (resposta truncada);
+ *   - `stop_reason: "refusal"`;
+ *   - ausência do bloco tool_use esperado.
+ * Repetir esses casos com o mesmo contexto tenderia ao mesmo resultado,
+ * e a mensagem própria de cada um é mais útil que uma nova tentativa.
+ */
+export interface SchemaViolation {
+  field: string;
+  problem: string;
+}
+
+function typeMatches(value: unknown, expected: string): boolean {
+  switch (expected) {
+    case "string":
+      return typeof value === "string";
+    case "number":
+    case "integer":
+      return typeof value === "number" && Number.isFinite(value);
+    case "boolean":
+      return typeof value === "boolean";
+    case "array":
+      return Array.isArray(value);
+    case "object":
+      return typeof value === "object" && value !== null && !Array.isArray(value);
+    case "null":
+      return value === null;
+    default:
+      return true;
+  }
+}
+
+function schemaAllowsNull(fieldSchema: unknown): boolean {
+  if (typeof fieldSchema !== "object" || fieldSchema === null) return false;
+  const schema = fieldSchema as Record<string, unknown>;
+
+  if (schema.type === "null") return true;
+  if (Array.isArray(schema.type) && schema.type.includes("null")) return true;
+  if ("const" in schema && schema.const === null) return true;
+
+  for (const key of ["oneOf", "anyOf"]) {
+    const variants = schema[key];
+    if (Array.isArray(variants) && variants.some((variant) => schemaAllowsNull(variant))) return true;
+  }
+
+  return false;
+}
+
+/** Variantes de oneOf/anyOf que não são `null` — usadas para checar tipo. */
+function nonNullVariants(fieldSchema: Record<string, unknown>): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const key of ["oneOf", "anyOf"]) {
+    const variants = fieldSchema[key];
+    if (!Array.isArray(variants)) continue;
+    for (const variant of variants) {
+      if (typeof variant === "object" && variant !== null && (variant as Record<string, unknown>).type !== "null") {
+        out.push(variant as Record<string, unknown>);
+      }
+    }
+  }
+  return out;
+}
+
+function violationFor(field: string, value: unknown, fieldSchema: unknown): SchemaViolation | null {
+  // Campo obrigatorio sem `properties` declarado: ainda assim uma string
+  // vazia e uma violacao — "obrigatorio" nunca significa "pode vir em
+  // branco".
+  if (typeof fieldSchema !== "object" || fieldSchema === null) {
+    if (typeof value === "string" && value.trim() === "") return { field, problem: "string vazia" };
+    return null;
+  }
+  const schema = fieldSchema as Record<string, unknown>;
+
+  // `const` declarado (ex.: requiresHumanReview: true).
+  if ("const" in schema && value !== schema.const) {
+    return { field, problem: `deve ser exatamente ${JSON.stringify(schema.const)}` };
+  }
+
+  // Tipo: aceita `type` direto ou a variante não-nula de oneOf/anyOf.
+  const variants = nonNullVariants(schema);
+  const candidates = variants.length > 0 ? variants : [schema];
+  const typeOk = candidates.some((candidate) => {
+    const expected = candidate.type;
+    if (typeof expected === "string") return typeMatches(value, expected);
+    if (Array.isArray(expected)) return expected.some((t) => typeof t === "string" && typeMatches(value, t));
+    return true;
+  });
+
+  if (!typeOk) {
+    const expected = candidates.map((candidate) => candidate.type).filter(Boolean).join(" | ");
+    return { field, problem: `tipo inválido (esperado ${expected || "conforme o schema"})` };
+  }
+
+  const effective = candidates.find((candidate) => {
+    const expected = candidate.type;
+    if (typeof expected === "string") return typeMatches(value, expected);
+    if (Array.isArray(expected)) return expected.some((t) => typeof t === "string" && typeMatches(value, t));
+    return true;
+  }) ?? schema;
+
+  // Enum.
+  const enumValues = effective.enum ?? schema.enum;
+  if (Array.isArray(enumValues) && !enumValues.includes(value as never)) {
+    return { field, problem: `valor fora do conjunto permitido (${enumValues.join(", ")})` };
+  }
+
+  // String vazia — proibida salvo minLength: 0 explícito.
+  if (typeof value === "string" && value.trim() === "" && effective.minLength !== 0 && schema.minLength !== 0) {
+    return { field, problem: "string vazia" };
+  }
+
+  // Array obrigatoriamente não vazio.
+  if (Array.isArray(value)) {
+    const minItems = typeof effective.minItems === "number" ? effective.minItems : schema.minItems;
+    if (typeof minItems === "number" && value.length < minItems) {
+      return { field, problem: `array com menos de ${minItems} item(ns)` };
+    }
+  }
+
+  // Objeto incompleto — um nível de `required` interno.
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    const innerRequired = effective.required ?? schema.required;
+    if (Array.isArray(innerRequired)) {
+      const record = value as Record<string, unknown>;
+      const faltando = (innerRequired as string[]).filter((key) => record[key] === undefined);
+      if (faltando.length > 0) {
+        return { field, problem: `objeto incompleto (faltam: ${faltando.join(", ")})` };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Violações estruturais reparáveis no primeiro nível. Ver o bloco de
+ * ESCOPO acima: isto NÃO é um validador de JSON Schema.
+ */
+export function findSchemaViolations(
+  output: unknown,
+  outputSchema: Record<string, unknown>
+): SchemaViolation[] {
+  const required = Array.isArray(outputSchema.required) ? (outputSchema.required as string[]) : [];
+  if (required.length === 0) return [];
+
+  if (typeof output !== "object" || output === null || Array.isArray(output)) {
+    return [{ field: "(raiz)", problem: "a saída não é um objeto JSON" }];
+  }
+
+  const record = output as Record<string, unknown>;
+  const properties =
+    typeof outputSchema.properties === "object" && outputSchema.properties !== null
+      ? (outputSchema.properties as Record<string, unknown>)
+      : {};
+
+  const violations: SchemaViolation[] = [];
+
+  for (const field of required) {
+    const value = record[field];
+    const fieldSchema = properties[field];
+
+    if (value === undefined) {
+      violations.push({ field, problem: "ausente" });
+      continue;
+    }
+
+    if (value === null) {
+      if (!schemaAllowsNull(fieldSchema)) violations.push({ field, problem: "null não permitido pelo schema" });
+      continue;
+    }
+
+    const violation = violationFor(field, value, fieldSchema);
+    if (violation) violations.push(violation);
+  }
+
+  return violations;
+}
+
+/** Compatibilidade: só os nomes dos campos com violação. */
+export function findMissingRequiredFields(
+  output: unknown,
+  outputSchema: Record<string, unknown>
+): string[] {
+  return findSchemaViolations(output, outputSchema).map((violation) => violation.field);
+}
+
+function sumUsage(
+  first: AiProviderResponse["usage"],
+  second: AiProviderResponse["usage"]
+): AiProviderResponse["usage"] {
+  if (!first) return second ?? null;
+  if (!second) return first;
+
+  const add = (a: number | null, b: number | null) => (a === null && b === null ? null : (a ?? 0) + (b ?? 0));
+
+  return {
+    inputTokens: add(first.inputTokens, second.inputTokens),
+    outputTokens: add(first.outputTokens, second.outputTokens),
+  };
+}
+
+/** Uma única chamada — sem repetição alguma. */
+async function callAnthropicOnce(
   client: AnthropicMessagesClient,
   config: Pick<AnthropicProviderConfig, "model" | "maxTokens" | "timeoutMs">,
   systemPrompt: string,
-  userContent: string,
+  messages: Array<{ role: "user"; content: string }>,
   outputSchema: Record<string, unknown>
 ): Promise<AiProviderResponse> {
   const controller = new AbortController();
@@ -268,12 +502,22 @@ async function callAnthropic(
           model: config.model,
           max_tokens: config.maxTokens,
           system: systemPrompt,
-          messages: [{ role: "user", content: userContent }],
+          messages,
           tools: [
             {
               name: TOOL_NAME,
               description: "Emite a saída estruturada exigida pelo ACC para este Expert — nunca texto livre.",
               input_schema: outputSchema,
+              // strict: a API passa a garantir a validação do schema da
+              // ferramenta (ver Tool.strict no @anthropic-ai/sdk
+              // instalado: "When true, guarantees schema validation on
+              // tool names and inputs"). Reduz drasticamente a saída
+              // incompleta — mas NÃO substitui os validadores TypeScript,
+              // que continuam rodando depois: uma resposta truncada por
+              // max_tokens, por exemplo, nunca chega a ser validada pela
+              // API, e é justamente esse caso que produzia
+              // "Campo obrigatório ausente ou vazio: severity".
+              strict: true,
             },
           ],
           tool_choice: { type: "tool", name: TOOL_NAME },
@@ -285,6 +529,9 @@ async function callAnthropic(
       controller
     );
   } catch (error) {
+    // Autenticação, rede, timeout e rate limit saem por AQUI — e são
+    // lançados, nunca repetidos por este módulo (o SDK já tem sua própria
+    // política de retry para o que faz sentido repetir).
     throw wrapAnthropicError(error);
   }
 
@@ -302,11 +549,67 @@ async function callAnthropic(
 }
 
 /**
- * Cria o provider real Anthropic. Fail-closed: sem `overrides.config`,
- * carrega a configuração de environment variables imediatamente
- * (loadAnthropicConfig) — nunca completa parcialmente. `overrides`
- * existe só para testes (injeção de config/client falsos, sem rede).
+ * Chamada com NO MÁXIMO uma repetição, e só quando a saída violar o
+ * schema (campo obrigatório ausente ou vazio). Nunca repete por erro de
+ * autenticação, rede, timeout ou rate limit — esses lançam em
+ * callAnthropicOnce e nem chegam aqui.
+ *
+ * A repetição reenvia EXATAMENTE o mesmo contexto autorizado e acrescenta
+ * quais campos faltaram. Se a segunda resposta também violar o schema,
+ * devolvemos a segunda saída como está: quem decide é o validador
+ * TypeScript do Expert, que falha fechado com mensagem própria. Nada é
+ * inventado aqui — em especial, `severity` nunca é preenchido por este
+ * código, e `required` não é afrouxado.
+ *
+ * Loop infinito é impossível por construção: este caminho chama
+ * callAnthropicOnce duas vezes e nunca a si mesmo.
  */
+async function callAnthropic(
+  client: AnthropicMessagesClient,
+  config: Pick<AnthropicProviderConfig, "model" | "maxTokens" | "timeoutMs">,
+  systemPrompt: string,
+  userContent: string,
+  outputSchema: Record<string, unknown>
+): Promise<AiProviderResponse> {
+  const first = await callAnthropicOnce(
+    client,
+    config,
+    systemPrompt,
+    [{ role: "user", content: userContent }],
+    outputSchema
+  );
+
+  const violations = findSchemaViolations(first.output, outputSchema);
+  if (violations.length === 0) return first;
+
+  const descricao = violations.map((violation) => `${violation.field} (${violation.problem})`).join("; ");
+  console.error("[anthropic] saída fora do schema, repetindo uma única vez:", descricao);
+
+  const retryContent = [
+    userContent,
+    "",
+    "A resposta anterior foi RECUSADA porque a chamada de ferramenta veio fora do schema exigido.",
+    `Problemas encontrados: ${descricao}.`,
+    "Responda de novo, com TODOS os campos obrigatórios preenchidos, usando exatamente o mesmo contexto autorizado " +
+      "acima. Não invente fato nenhum para preencher um campo — se algo não puder ser determinado a partir do " +
+      "contexto, use o campo apropriado de informação faltante.",
+  ].join("\n");
+
+  const second = await callAnthropicOnce(
+    client,
+    config,
+    systemPrompt,
+    [{ role: "user", content: retryContent }],
+    outputSchema
+  );
+
+  return {
+    ...second,
+    // Uso acumulado das DUAS tentativas — a auditoria nunca subestima o custo.
+    usage: sumUsage(first.usage, second.usage),
+  };
+}
+
 export function createAnthropicAiProvider(overrides?: AnthropicAiProviderOverrides): AiProvider {
   const config = overrides?.config ?? loadAnthropicConfig();
   const client: AnthropicMessagesClient =

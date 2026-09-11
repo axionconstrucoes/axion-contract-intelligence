@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { FlaskConical } from "lucide-react";
+import { AlertTriangle, FlaskConical } from "lucide-react";
 import { SeverityBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { MISSING_QUERY_CONTEXT_MESSAGE } from "@/lib/ai/expert-query-request";
 import { initialAskCommercialDirectorState, type AskCommercialDirectorState } from "@/lib/ai/expert-query-state";
 import { normalizeProviderMeta } from "@/lib/ai/provider-ui-metadata";
 import type { ExpertQueryScope } from "@/lib/ai/query/types";
+import type { ContextDocumentCoverage } from "@/lib/ai/context/types";
 
 type AskExpertState = AskCommercialDirectorState;
 type AskExpertAction = (state: AskExpertState, formData: FormData) => Promise<AskExpertState>;
@@ -127,6 +128,35 @@ function GroundingSummary({
   );
 }
 
+/**
+ * Aviso de conteúdo parcial. A fonte é SEMPRE o metadado calculado no
+ * servidor (ContextDocumentCoverage) — nunca a resposta do modelo. O
+ * Anthropic não tem como saber que houve corte: ele recebe o texto já
+ * truncado. Depender de ele mencionar seria depender de quem não sabe.
+ */
+function PartialContentNotice({ coverage }: { coverage: ContextDocumentCoverage }) {
+  if (!coverage.truncated) return null;
+
+  return (
+    <div className="flex items-start gap-2 rounded-md border border-severity-alta/40 bg-severity-alta/10 p-3 text-sm text-severity-alta">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+      <div className="flex flex-col gap-1">
+        <p className="font-medium">
+          Análise realizada com conteúdo parcial: parte dos documentos excedeu o limite de contexto. Confirme as
+          cláusulas diretamente nos arquivos originais.
+        </p>
+        <p className="text-xs">
+          Documentos incluídos: {coverage.includedCount} de {coverage.availableCount}
+          {coverage.omittedCount > 0 ? ` · Documentos omitidos: ${coverage.omittedCount}` : ""}
+          {coverage.unreadableCount > 0 ? ` · Não legíveis: ${coverage.unreadableCount}` : ""}
+          {" · "}
+          Caracteres omitidos: {coverage.omittedCharacters.toLocaleString("pt-BR")}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function ExpertQueryPanel({
   projectId,
   eventId,
@@ -134,6 +164,7 @@ export function ExpertQueryPanel({
   title = "Diretor Comercial IA",
   action = askCommercialDirectorAction,
   initialState = initialAskCommercialDirectorState,
+  disabledReason = null,
 }: {
   projectId: string;
   eventId?: string;
@@ -143,6 +174,13 @@ export function ExpertQueryPanel({
   /** Server Action deste Expert (ver askCommercialDirectorAction/askEsgDirectorAction) — mesmo contrato de estado. */
   action?: AskExpertAction;
   initialState?: AskExpertState;
+  /**
+   * Quando preenchido, a consulta fica bloqueada E o motivo é exibido —
+   * nunca um botão desabilitado sem explicação. Usado pela análise
+   * jurídica pré-contratual, que só libera "Consultar" depois que o
+   * conteúdo do documento está disponível.
+   */
+  disabledReason?: string | null;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const { response, error } = state;
@@ -216,11 +254,17 @@ export function ExpertQueryPanel({
 
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
-          <Button type="submit" disabled={pending} className="self-start">
+          {disabledReason ? (
+            <p className="rounded-md border bg-muted/40 p-2.5 text-sm text-muted-foreground">{disabledReason}</p>
+          ) : null}
+
+          <Button type="submit" disabled={pending || Boolean(disabledReason)} className="self-start">
             {pending ? "Consultando…" : "Consultar"}
           </Button>
         </form>
         )}
+
+        {state.coverage ? <PartialContentNotice coverage={state.coverage} /> : null}
 
         {response ? (
           <div className="flex flex-col gap-4 rounded-md border p-4">

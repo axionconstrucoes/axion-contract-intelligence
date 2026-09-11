@@ -38,9 +38,18 @@ check(
   createForm.includes("DocumentMultiUploadPanel") &&
     createForm.includes("Carregar documentos para a análise")
 );
+// A análise já criada passou a usar um CARD ÚNICO de documento
+// (PrecontractWorkspaceClient → PrecontractDocumentCard), no lugar do
+// DocumentMultiUploadPanel: a tela jurídica precisa de um documento
+// legível para liberar a consulta, com estados Enviando/Processando/
+// Pronto/Erro e percentual real — algo que o painel múltiplo genérico
+// não expressa. O painel múltiplo continua intacto em /documentos e na
+// criação da análise (asserção acima). A intenção original deste teste
+// — "a análise já criada também permite enviar documento, respeitando a
+// permissão" — segue coberta, agora pelo componente novo.
 check(
-  "a análise já criada também oferece upload múltiplo",
-  legalPage.includes("DocumentMultiUploadPanel") && legalPage.includes("isPrecontract && canUpload")
+  "a análise já criada também oferece envio de documento",
+  legalPage.includes("PrecontractWorkspaceClient") && legalPage.includes("canUpload={canUpload}")
 );
 check(
   "o upload respeita a permissão documental do projeto",
