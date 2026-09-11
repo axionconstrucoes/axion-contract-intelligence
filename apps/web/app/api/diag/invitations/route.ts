@@ -12,16 +12,24 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
   const { data, error } = await supabase
     .from("project_member_invitations")
     .select("id", { count: "exact" })
     .eq("project_id", projectId);
 
   const count = data?.length ?? 0;
+  const authenticated = Boolean(user);
 
   console.info("[diag:getProjectMemberInvitations]", {
     projectId,
+    authenticated,
     count,
+    authErrorCode: authError?.code ?? null,
     errorCode: error?.code ?? null,
     errorMessage: error?.message?.slice(0, 200) ?? null,
   });
@@ -31,12 +39,20 @@ export async function GET(request: Request) {
       {
         ok: false,
         projectId,
+        authenticated,
         count,
+        authErrorCode: authError?.code ?? null,
         errorCode: error.code ?? null,
       },
       { status: 500 }
     );
   }
 
-  return NextResponse.json({ ok: true, projectId, count });
+  return NextResponse.json({
+    ok: true,
+    projectId,
+    authenticated,
+    count,
+    authErrorCode: authError?.code ?? null,
+  });
 }
