@@ -8,7 +8,15 @@
 // duplicado aqui.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ContextEsgObligationSummary, ProjectAnalysisContext, ProjectContextEventSummary } from "./types";
+import type {
+  ContextContractualDocument,
+  ContextEsgObligationSummary,
+  ContextDocumentCoverage,
+  ContextUnreadableDocument,
+  ProjectAnalysisContext,
+  ProjectContextEventSummary,
+} from "./types";
+import { loadPrecontractDocumentTexts } from "../../documents/extraction/load-precontract-document-texts";
 
 const MAX_EVENTS = 50;
 const MAX_ESG_OBLIGATIONS = 100;
@@ -19,6 +27,7 @@ type ProjectRow = {
   client: string;
   status: string;
   contract_number: string | null;
+  workspace_type: string | null;
 };
 
 type EventRow = {
@@ -147,8 +156,68 @@ async function buildEsgObligationsSummary(
   return { obligations, totalCount: totalCount ?? obligations.length };
 }
 
+/**
+ * Carrega a base contratual com TEXTO real. O rateio do orcamento entre
+ * documentos e a declaracao de cada corte vivem em
+ * documents/extraction/load-precontract-document-texts.ts — aqui so
+ * traduzimos o resultado para a forma do contexto do Expert.
+ */
+async function buildContractualDocuments(
+  supabase: SupabaseClient,
+  projectId: string
+): Promise<{
+  documents: ContextContractualDocument[];
+  unreadable: ContextUnreadableDocument[];
+  omittedForBudget: ContextUnreadableDocument[];
+  coverage: ContextDocumentCoverage;
+}> {
+  const loaded = await loadPrecontractDocumentTexts(supabase, { projectId });
+
+  const toRef = (failure: { documentId: string; title: string; fileName: string; reason: string }) => ({
+    documentId: failure.documentId,
+    title: failure.title,
+    fileName: failure.fileName,
+    reason: failure.reason,
+  });
+
+  return {
+    documents: loaded.documents.map((document) => ({
+      documentId: document.documentId,
+      documentVersionId: document.documentVersionId,
+      title: document.title,
+      kind: document.kind,
+      versionLabel: document.versionLabel,
+      fileName: document.fileName,
+      pageCount: document.pageCount,
+      characterCount: document.characterCount,
+      text: document.text,
+      truncated: document.truncated,
+      omittedCharacters: document.omittedCharacters,
+    })),
+    unreadable: loaded.failures.map(toRef),
+    omittedForBudget: loaded.omittedForBudget.map(toRef),
+    coverage: {
+      availableCount: loaded.availableCount,
+      includedCount: loaded.documents.length,
+      omittedCount: loaded.omittedForBudget.length,
+      unreadableCount: loaded.failures.length,
+      includedCharacters: loaded.includedCharacters,
+      omittedCharacters: loaded.omittedCharacters,
+      truncated: loaded.truncated,
+    },
+  };
+}
+
 export interface BuildProjectAnalysisContextInput {
   projectId: string;
+  /**
+   * Carrega o TEXTO dos documentos contratuais do projeto. Default
+   * `false`: o escopo PROJECT dos demais Experts (Comercial, ESG,
+   * Planejamento, CEO) continua exatamente como era, sem texto de
+   * contrato no payload. Somente o fluxo juridico pre-contratual pede
+   * `true` - ver experts/legal-consultant/query.ts.
+   */
+  includeContractualDocuments?: boolean;
 }
 
 export async function buildProjectAnalysisContext(
@@ -159,7 +228,7 @@ export async function buildProjectAnalysisContext(
 
   const { data: projectData, error: projectError } = await supabase
     .from("projects")
-    .select("id,name,client,status,contract_number")
+    .select("id,name,client,status,contract_number,workspace_type")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -221,6 +290,23 @@ export async function buildProjectAnalysisContext(
 
   const esgSummary = await buildEsgObligationsSummary(supabase, projectId);
 
+  const contractual = input.includeContractualDocuments
+    ? await buildContractualDocuments(supabase, projectId)
+    : {
+        documents: [],
+        unreadable: [],
+        omittedForBudget: [],
+        coverage: {
+          availableCount: 0,
+          includedCount: 0,
+          omittedCount: 0,
+          unreadableCount: 0,
+          includedCharacters: 0,
+          omittedCharacters: 0,
+          truncated: false,
+        },
+      };
+
   return {
     projectId,
     project: {
@@ -234,5 +320,10 @@ export async function buildProjectAnalysisContext(
     eventsTotalCount: eventsTotalCount ?? events.length,
     esgObligations: esgSummary.obligations,
     esgObligationsTotalCount: esgSummary.totalCount,
+    workspaceType: projectRow.workspace_type ?? "OBRA",
+    contractualDocuments: contractual.documents,
+    unreadableDocuments: contractual.unreadable,
+    omittedForBudget: contractual.omittedForBudget,
+    documentCoverage: contractual.coverage,
   };
 }

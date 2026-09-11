@@ -19,7 +19,22 @@ const nextConfig: NextConfig = {
   // mensagens grandes, que corta primeiro o que vem no fim do e-mail —
   // e a assinatura com o logo é sempre anexada por último).
   outputFileTracingIncludes: {
-    "/*": ["public/branding/acc-logo.png"],
+    "/*": [
+      "public/branding/acc-logo.png",
+      // Fontes padrão (base-14) do pdfjs-dist, usadas pela extração de
+      // texto de minutas em PDF que não embutem a fonte. O caminho é
+      // montado em runtime a partir de process.cwd() (ver
+      // resolveStandardFontDataUrl em
+      // lib/documents/extraction/extract-document-text.ts). O caminho é
+      // derivado de require.resolve("pdfjs-dist/package.json") —
+      // especificador literal, que o @vercel/nft rastreia — mas os
+      // .pfb são lidos em runtime pelo próprio pdfjs, não importados,
+      // então a inclusão dos arquivos é declarada aqui. Os dois padrões
+      // cobrem o hoisting do npm workspaces (node_modules na raiz) e a
+      // instalação local da app.
+      "../../node_modules/pdfjs-dist/standard_fonts/**",
+      "node_modules/pdfjs-dist/standard_fonts/**",
+    ],
   },
 };
 

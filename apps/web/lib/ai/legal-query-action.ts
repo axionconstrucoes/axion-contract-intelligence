@@ -32,16 +32,43 @@ export async function askLegalConsultantAction(
   }
 
   const supabase = await createSupabaseServerClient();
+
+  // Workspace revalidado no servidor tambem no caminho da CONSULTA (nao
+  // so no upload): o contexto documental so e montado para um espaco
+  // PRE_CONTRATUAL de fato. Falhou: nao carrega documento, nao extrai,
+  // nao chama provider.
+  const { data: projectRow, error: projectError } = await supabase
+    .from("projects")
+    .select("id,workspace_type")
+    .eq("id", projectId)
+    .maybeSingle();
+
+  if (projectError || !projectRow) {
+    return { response: null, error: MISSING_QUERY_CONTEXT_MESSAGE, meta: null };
+  }
+
+  if ((projectRow as { workspace_type?: string }).workspace_type !== "PRE_CONTRATUAL") {
+    return {
+      response: null,
+      error: "Este espaço não é uma análise jurídica pré-contratual.",
+      meta: null,
+    };
+  }
   try {
-    const result = await answerLegalConsultantQuery(supabase, {
-      scope: "PROJECT",
-      projectId,
-      question,
-    });
+    const result = await answerLegalConsultantQuery(
+      supabase,
+      { scope: "PROJECT", projectId, question },
+      undefined,
+      // A analise pre-contratual so responde com o texto do contrato/minuta
+      // em maos. Sem documento legivel, answerLegalConsultantQuery lanca um
+      // ExpertQuerySafeError e o provider nem e chamado.
+      { requireContractualDocuments: true }
+    );
     return {
       response: result.response,
       error: null,
       meta: buildAiProviderUiMetadata(result.audit.providerId, result.audit.model),
+      coverage: result.documentCoverage,
     };
   } catch (error) {
     return {

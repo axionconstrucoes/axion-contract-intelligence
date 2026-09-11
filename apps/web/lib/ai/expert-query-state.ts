@@ -14,6 +14,7 @@
 
 import type { AiProviderUiMetadata } from "./provider-ui-metadata";
 import type { ExpertQueryResponse } from "./query/types";
+import type { ContextDocumentCoverage } from "./context/types";
 
 export type AskExpertQueryMeta = AiProviderUiMetadata;
 
@@ -31,10 +32,19 @@ export type AskCommercialDirectorState = {
    * `normalizeProviderMeta` em `provider-ui-metadata.ts`.
    */
   meta: AskExpertQueryMeta | null | undefined;
+  /**
+   * Cobertura documental CALCULADA NO SERVIDOR — a unica fonte do aviso
+   * de "conteudo parcial" na UI. Nunca vem da resposta do modelo:
+   * depender de o Anthropic mencionar o truncamento seria depender de
+   * quem nem sabe que houve corte. Opcional porque so o fluxo juridico
+   * pre-contratual a preenche.
+   */
+  coverage?: ContextDocumentCoverage | null;
 };
 
 export const initialAskCommercialDirectorState: AskCommercialDirectorState = {
   response: null,
   error: null,
   meta: null,
+  coverage: null,
 };
