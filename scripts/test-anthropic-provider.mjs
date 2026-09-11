@@ -132,7 +132,7 @@ check("loadAnthropicConfig usa defaults conservadores quando ANTHROPIC_MAX_TOKEN
   try {
     const config = loadAnthropicConfig();
     assert(config.maxTokens === 4096, `maxTokens default esperado 4096, obtido ${config.maxTokens}`);
-    assert(config.timeoutMs === 60000, `timeoutMs default esperado 60000, obtido ${config.timeoutMs}`);
+    assert(config.timeoutMs === 180000, `timeoutMs default esperado 180000, obtido ${config.timeoutMs}`);
     assert(config.model === "claude-test-model");
   } finally {
     clearAnthropicEnv();
@@ -672,9 +672,13 @@ await checkAsync("erro 404 (modelo inexistente) do client é tratado com mensage
 await checkAsync(
   'request que NUNCA resolve ("pendurado") é cancelada pelo timeout de aplicação — nunca fica pendurada indefinidamente',
   async () => {
+    let callCount = 0;
     const client = {
       messages: {
-        create: () => new Promise(() => {}), // nunca resolve nem rejeita — simula o incidente real
+        create: () => {
+          callCount += 1;
+          return new Promise(() => {}); // nunca resolve nem rejeita — simula o incidente real
+        },
       },
     };
     const shortTimeoutConfig = { ...FAKE_CONFIG, timeoutMs: 80 };
@@ -697,6 +701,7 @@ await checkAsync(
     const elapsedMs = Date.now() - startedAt;
     assert(elapsedMs < 2000, `deveria ter cancelado perto de 80ms, levou ${elapsedMs}ms — timeout de aplicação não está funcionando`);
     assert(error.message.toLowerCase().includes("timeout"));
+    assert(callCount === 1, `timeout nao pode disparar repeticao estrutural; chamadas observadas: ${callCount}`);
   }
 );
 
