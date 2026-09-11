@@ -36,20 +36,14 @@ export async function GET(request: Request) {
   const claims = decodeJwtPayload(session?.access_token);
 
   const [invitationsResult, membershipResult, projectResult, rpcResult] = await Promise.all([
-    supabase
-      .from("project_member_invitations")
-      .select("id", { count: "exact" })
-      .eq("project_id", projectId),
+    supabase.from("project_member_invitations").select("id", { count: "exact" }).eq("project_id", projectId),
     supabase
       .from("project_memberships")
       .select("user_id", { count: "exact" })
       .eq("project_id", projectId)
       .eq("user_id", user?.id ?? "00000000-0000-0000-0000-000000000000")
       .eq("status", "ACTIVE"),
-    supabase
-      .from("projects")
-      .select("id", { count: "exact" })
-      .eq("id", projectId),
+    supabase.from("projects").select("id", { count: "exact" }).eq("id", projectId),
     supabase.rpc("is_project_member", { p_project_id: projectId }),
   ]);
 
@@ -59,10 +53,32 @@ export async function GET(request: Request) {
   const isProjectMember = typeof rpcResult.data === "boolean" ? rpcResult.data : null;
   const authenticated = Boolean(user);
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
+
+  let explicitBearerProjectCount: number | null = null;
+  let explicitBearerStatus: number | null = null;
+  if (session?.access_token && supabaseUrl && publishableKey) {
+    const direct = await fetch(
+      `${supabaseUrl}/rest/v1/projects?id=eq.${encodeURIComponent(projectId)}&select=id`,
+      {
+        headers: {
+          apikey: publishableKey,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: "no-store",
+      }
+    );
+    explicitBearerStatus = direct.status;
+    if (direct.ok) {
+      const body = (await direct.json()) as unknown[];
+      explicitBearerProjectCount = Array.isArray(body) ? body.length : null;
+    }
+  }
+
   let supabaseHost: string | null = null;
   try {
-    const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    supabaseHost = raw ? new URL(raw).host : null;
+    supabaseHost = supabaseUrl ? new URL(supabaseUrl).host : null;
   } catch {
     supabaseHost = "invalid_url";
   }
@@ -74,30 +90,7 @@ export async function GET(request: Request) {
     iss: typeof claims?.iss === "string" ? claims.iss : null,
   };
 
-  console.info("[diag:getProjectMemberInvitations]", {
-    projectId,
-    authenticated,
-    userId: user?.id ?? null,
-    supabaseHost,
-    projectCount,
-    membershipCount,
-    invitationCount,
-    isProjectMember,
-    claims: safeClaims,
-    authErrorCode: userResult.error?.code ?? null,
-    sessionErrorCode: sessionResult.error?.code ?? null,
-    projectErrorCode: projectResult.error?.code ?? null,
-    invitationsErrorCode: invitationsResult.error?.code ?? null,
-    membershipErrorCode: membershipResult.error?.code ?? null,
-    rpcErrorCode: rpcResult.error?.code ?? null,
-  });
-
-  const error =
-    invitationsResult.error ??
-    membershipResult.error ??
-    projectResult.error ??
-    rpcResult.error;
-
+  const error = invitationsResult.error ?? membershipResult.error ?? projectResult.error ?? rpcResult.error;
   if (error) {
     return NextResponse.json(
       {
@@ -110,6 +103,8 @@ export async function GET(request: Request) {
         membershipCount,
         invitationCount,
         isProjectMember,
+        explicitBearerProjectCount,
+        explicitBearerStatus,
         claims: safeClaims,
         authErrorCode: userResult.error?.code ?? null,
         sessionErrorCode: sessionResult.error?.code ?? null,
@@ -129,6 +124,8 @@ export async function GET(request: Request) {
     membershipCount,
     invitationCount,
     isProjectMember,
+    explicitBearerProjectCount,
+    explicitBearerStatus,
     claims: safeClaims,
     authErrorCode: userResult.error?.code ?? null,
     sessionErrorCode: sessionResult.error?.code ?? null,
