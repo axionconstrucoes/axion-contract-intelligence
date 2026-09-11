@@ -21,6 +21,11 @@ import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Jurídico" };
 
+// Server Actions desta pagina podem aguardar a analise estruturada de um
+// contrato completo. Deve permanecer acima do timeout rigido do provider
+// Anthropic (180 s) para que o app encerre e sanitize o erro primeiro.
+export const maxDuration = 300;
+
 const CONTRACTUAL_KINDS = new Set(["CONTRATO_BASE", "ADITIVO"]);
 
 export default async function ProjectLegalPage({ params }: { params: Promise<{ projectId: string }> }) {

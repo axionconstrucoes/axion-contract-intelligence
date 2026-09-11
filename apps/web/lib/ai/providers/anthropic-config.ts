@@ -12,7 +12,12 @@ export interface AnthropicProviderConfig {
 }
 
 const DEFAULT_MAX_TOKENS = 4096;
-const DEFAULT_TIMEOUT_MS = 60_000;
+// O contexto juridico documental (contrato + comparacoes de clausulas)
+// ultrapassou o antigo prazo de 60 s em producao em 2026-09-11. Mantemos
+// um limite rigido, mas com folga para a resposta estruturada terminar.
+// A pagina /[projectId]/juridico declara maxDuration=300 s, portanto o
+// timeout de aplicacao continua menor que o limite da funcao na Vercel.
+const DEFAULT_TIMEOUT_MS = 180_000;
 
 function readPositiveNumber(raw: string | undefined, envVarName: string, fallback: number): number {
   if (raw === undefined || raw.trim() === "") {
