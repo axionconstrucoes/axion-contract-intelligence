@@ -19,11 +19,7 @@ function decodeJwtPayload(token: string | undefined) {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const projectId = url.searchParams.get("projectId")?.trim() ?? "";
-
-  if (!projectId) {
-    return NextResponse.json({ ok: false, error: "missing_project_id" }, { status: 400 });
-  }
+  const requestedProjectId = url.searchParams.get("projectId")?.trim() ?? null;
 
   const supabase = await createSupabaseServerClient();
   const [userResult, sessionResult] = await Promise.all([
@@ -35,50 +31,50 @@ export async function GET(request: Request) {
   const session = sessionResult.data.session;
   const claims = decodeJwtPayload(session?.access_token);
 
-  const [invitationsResult, membershipResult, projectResult, rpcResult] = await Promise.all([
-    supabase.from("project_member_invitations").select("id", { count: "exact" }).eq("project_id", projectId),
+  const projectByName = await supabase
+    .from("projects")
+    .select("id, name")
+    .ilike("name", "%Fábrica de Fios%")
+    .limit(1)
+    .maybeSingle();
+
+  const resolvedProjectId = projectByName.data?.id ?? null;
+
+  if (!resolvedProjectId) {
+    return NextResponse.json({
+      ok: false,
+      requestedProjectId,
+      resolvedProjectId: null,
+      authenticated: Boolean(user),
+      userId: user?.id ?? null,
+      projectLookupErrorCode: projectByName.error?.code ?? null,
+      error: "project_not_visible_by_name",
+    });
+  }
+
+  const [invitationsResult, membershipResult, rpcResult] = await Promise.all([
+    supabase
+      .from("project_member_invitations")
+      .select("id", { count: "exact" })
+      .eq("project_id", resolvedProjectId),
     supabase
       .from("project_memberships")
       .select("user_id", { count: "exact" })
-      .eq("project_id", projectId)
+      .eq("project_id", resolvedProjectId)
       .eq("user_id", user?.id ?? "00000000-0000-0000-0000-000000000000")
       .eq("status", "ACTIVE"),
-    supabase.from("projects").select("id", { count: "exact" }).eq("id", projectId),
-    supabase.rpc("is_project_member", { p_project_id: projectId }),
+    supabase.rpc("is_project_member", { p_project_id: resolvedProjectId }),
   ]);
 
   const invitationCount = invitationsResult.data?.length ?? 0;
   const membershipCount = membershipResult.data?.length ?? 0;
-  const projectCount = projectResult.data?.length ?? 0;
   const isProjectMember = typeof rpcResult.data === "boolean" ? rpcResult.data : null;
   const authenticated = Boolean(user);
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-  const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
-
-  let explicitBearerProjectCount: number | null = null;
-  let explicitBearerStatus: number | null = null;
-  if (session?.access_token && supabaseUrl && publishableKey) {
-    const direct = await fetch(
-      `${supabaseUrl}/rest/v1/projects?id=eq.${encodeURIComponent(projectId)}&select=id`,
-      {
-        headers: {
-          apikey: publishableKey,
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        cache: "no-store",
-      }
-    );
-    explicitBearerStatus = direct.status;
-    if (direct.ok) {
-      const body = (await direct.json()) as unknown[];
-      explicitBearerProjectCount = Array.isArray(body) ? body.length : null;
-    }
-  }
-
   let supabaseHost: string | null = null;
   try {
-    supabaseHost = supabaseUrl ? new URL(supabaseUrl).host : null;
+    const raw = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    supabaseHost = raw ? new URL(raw).host : null;
   } catch {
     supabaseHost = "invalid_url";
   }
@@ -90,44 +86,23 @@ export async function GET(request: Request) {
     iss: typeof claims?.iss === "string" ? claims.iss : null,
   };
 
-  const error = invitationsResult.error ?? membershipResult.error ?? projectResult.error ?? rpcResult.error;
-  if (error) {
-    return NextResponse.json(
-      {
-        ok: false,
-        projectId,
-        authenticated,
-        userId: user?.id ?? null,
-        supabaseHost,
-        projectCount,
-        membershipCount,
-        invitationCount,
-        isProjectMember,
-        explicitBearerProjectCount,
-        explicitBearerStatus,
-        claims: safeClaims,
-        authErrorCode: userResult.error?.code ?? null,
-        sessionErrorCode: sessionResult.error?.code ?? null,
-        errorCode: error.code ?? null,
-      },
-      { status: 500 }
-    );
-  }
+  const error = invitationsResult.error ?? membershipResult.error ?? rpcResult.error;
 
   return NextResponse.json({
-    ok: true,
-    projectId,
+    ok: !error,
+    requestedProjectId,
+    resolvedProjectId,
+    sameProjectId: requestedProjectId ? requestedProjectId === resolvedProjectId : null,
+    projectName: projectByName.data?.name ?? null,
     authenticated,
     userId: user?.id ?? null,
     supabaseHost,
-    projectCount,
     membershipCount,
     invitationCount,
     isProjectMember,
-    explicitBearerProjectCount,
-    explicitBearerStatus,
     claims: safeClaims,
     authErrorCode: userResult.error?.code ?? null,
     sessionErrorCode: sessionResult.error?.code ?? null,
-  });
+    errorCode: error?.code ?? null,
+  }, { status: error ? 500 : 200 });
 }
