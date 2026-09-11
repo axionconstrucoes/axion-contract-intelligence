@@ -29,6 +29,7 @@ const { validateExpertQueryResponse, ExpertQueryValidationError, MISSING_QUERY_S
 );
 const { EXPERT_QUERY_RESPONSE_JSON_SCHEMA } = await import("../apps/web/lib/ai/query/json-schema");
 const {
+  ExpertQuerySafeError,
   MISSING_QUERY_CONTEXT_MESSAGE,
   MISSING_QUESTION_MESSAGE,
   parseExpertQueryForm,
@@ -349,12 +350,100 @@ check("eventId residual é descartado no escopo PROJECT (nunca contamina a consu
   assert(parsed.request.eventId === undefined, "eventId não deveria sobreviver ao escopo PROJECT");
 });
 
-check("mensagem de erro exibida nunca contém 'undefined'", () => {
-  const fallback = "Falha ao consultar o especialista.";
-  assert(resolveExpertQueryErrorMessage(new Error("scope inválido: undefined"), fallback) === fallback);
-  assert(resolveExpertQueryErrorMessage(new Error("   "), fallback) === fallback);
-  assert(resolveExpertQueryErrorMessage(undefined, fallback) === fallback);
-  assert(resolveExpertQueryErrorMessage(new Error("Pergunta vazia."), fallback) === "Pergunta vazia.");
+// --- 2b. Sanitizador FAIL-CLOSED de mensagens de erro -----------------
+// Nenhuma mensagem tecnica arbitraria pode chegar a interface. So passa
+// o que foi deliberadamente redigido para a tela: ExpertQuerySafeError
+// (tipado) ou uma das constantes deste modulo (igualdade exata).
+
+const FALLBACK = "Falha ao consultar o especialista.";
+
+const LEAKY_ERRORS = [
+  ["scope invalido: undefined (bug original)", new Error("scope inválido: undefined")],
+  ["[object Object] (a regex antiga nao pegava por causa do limite de palavra)", new Error("Falha: [object Object]")],
+  [
+    "erro Postgres/Supabase",
+    new Error('duplicate key value violates unique constraint "contract_events_pkey" (code 23505)'),
+  ],
+  [
+    "erro Supabase com nome de tabela/coluna",
+    new Error('relation "esg_obligation_submissions" does not exist: column risk_level'),
+  ],
+  ["erro HTTP do Anthropic", new Error("Erro da API Anthropic (HTTP 401): authentication_error")],
+  ["rate limit do Anthropic", new Error("Rate limit da API Anthropic atingido (HTTP 429)")],
+  ["timeout de rede", new Error("fetch failed: ECONNREFUSED 10.0.0.1:5432")],
+  [
+    "stack trace",
+    Object.assign(new Error("TypeError: Cannot read properties of undefined (reading 'id')"), {
+      stack: ["TypeError", "    at buildProjectAnalysisContext (/var/task/apps/web/lib/ai/context.js:42:11)"].join("\n"),
+    }),
+  ],
+  ["nome de variavel de ambiente", new Error("ANTHROPIC_API_KEY ausente em process.env")],
+  ["fragmento com cara de credencial", new Error("Invalid API key: sk-ant-api03-XXXXXXXXXXXX")],
+  ["objeto que nao e Error", { message: "falha interna do banco", code: "PGRST301" }],
+  ["string solta", "erro cru de implementacao"],
+  ["null", null],
+  ["undefined", undefined],
+  ["Error com mensagem vazia", new Error("")],
+  ["Error so com espacos", new Error("   ")],
+];
+
+for (const [label, thrown] of LEAKY_ERRORS) {
+  check(`sanitizador fail-closed: ${label} nunca chega a UI`, () => {
+    const shown = resolveExpertQueryErrorMessage(thrown, FALLBACK);
+    assert(shown === FALLBACK, `deveria devolver o fallback, devolveu: ${JSON.stringify(shown)}`);
+  });
+}
+
+check("nenhuma mensagem vazada sobrevive: varredura agregada", () => {
+  for (const [label, thrown] of LEAKY_ERRORS) {
+    const shown = resolveExpertQueryErrorMessage(thrown, FALLBACK);
+    const raw = thrown instanceof Error ? thrown.message : String(thrown ?? "");
+    if (raw.trim()) {
+      assert(!shown.includes(raw.trim()), `mensagem crua vazou (${label}): ${shown}`);
+    }
+    assert(!/undefined|\[object Object\]|HTTP \d{3}|process\.env|sk-ant|at .+\.js:\d+/.test(shown), `padrao tecnico vazou (${label}): ${shown}`);
+  }
+});
+
+check("mensagens seguras passam SOMENTE por mecanismo explicito e tipado", () => {
+  // 1. ExpertQuerySafeError - o mecanismo tipado.
+  const safe = new ExpertQuerySafeError("Este espaco ainda nao possui documentos para analisar.");
+  assert(resolveExpertQueryErrorMessage(safe, FALLBACK) === "Este espaco ainda nao possui documentos para analisar.");
+
+  // 2. Constantes deste modulo, por igualdade exata.
+  assert(resolveExpertQueryErrorMessage(new Error(MISSING_QUERY_CONTEXT_MESSAGE), FALLBACK) === MISSING_QUERY_CONTEXT_MESSAGE);
+  assert(resolveExpertQueryErrorMessage(new Error(MISSING_QUESTION_MESSAGE), FALLBACK) === MISSING_QUESTION_MESSAGE);
+  assert(resolveExpertQueryErrorMessage(new Error(MISSING_QUERY_SCOPE_MESSAGE), FALLBACK) === MISSING_QUERY_SCOPE_MESSAGE);
+
+  // 3. Quase-igual nao basta: nenhuma correspondencia parcial/prefixo.
+  assert(
+    resolveExpertQueryErrorMessage(new Error(`${MISSING_QUERY_CONTEXT_MESSAGE} Detalhe: coluna project_id nula.`), FALLBACK) === FALLBACK,
+    "prefixo seguro + cauda tecnica nunca pode passar"
+  );
+
+  // 4. ExpertQuerySafeError vazio cai no fallback, nunca em string vazia.
+  assert(resolveExpertQueryErrorMessage(new ExpertQuerySafeError("   "), FALLBACK) === FALLBACK);
+});
+
+check("a abordagem antiga por palavra proibida era furada - prova do motivo da troca", () => {
+  // Reconstruida aqui exatamente como era, para documentar por que foi
+  // abandonada. O limite de palavra nao casa entre "[" e "o" (nem entre
+  // "]" e o fim), entao justamente "[object Object]" escapava do filtro.
+  const OLD_FILTER = new RegExp("\\b(undefined|null|NaN|\\[object Object\\])\\b");
+
+  assert(!OLD_FILTER.test("Falha: [object Object]"), "a regex antiga deixava passar [object Object]");
+  // E, por ser fail-open, qualquer mensagem tecnica sem essas palavras passava inteira.
+  assert(!OLD_FILTER.test("Erro da API Anthropic (HTTP 401): authentication_error"), "a regex antiga deixava passar erro do provider");
+  assert(!OLD_FILTER.test('relation "esg_obligation_submissions" does not exist'), "a regex antiga deixava passar erro do Postgres");
+
+  // O sanitizador atual barra os tres.
+  for (const leak of [
+    "Falha: [object Object]",
+    "Erro da API Anthropic (HTTP 401): authentication_error",
+    'relation "esg_obligation_submissions" does not exist',
+  ]) {
+    assert(resolveExpertQueryErrorMessage(new Error(leak), FALLBACK) === FALLBACK, `ainda vaza: ${leak}`);
+  }
 });
 
 // --- 3. Fluxo completo (Expert + provider) ----------------------------

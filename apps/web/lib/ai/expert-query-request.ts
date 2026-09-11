@@ -17,6 +17,7 @@
 // incoerente nunca vira uma consulta "no projeto errado".
 
 import type { ExpertQueryRequest, ExpertQueryScope } from "./query/types";
+import { MISSING_QUERY_SCOPE_MESSAGE } from "./query/validate-expert-query-response";
 
 /**
  * Escopos que os Server Actions aceitam vindos de um formulário. Os
@@ -86,13 +87,73 @@ export function parseExpertQueryForm(formData: FormData): ParsedExpertQueryForm 
 }
 
 /**
- * Mensagem de erro exibível na UI. Nunca deixa vazar "undefined"/"null"
- * de uma mensagem técnica para a tela — nesse caso usa o fallback do
- * Expert chamador.
+ * Erro cuja mensagem foi ESCRITA PARA O USUÁRIO e por isso pode ser
+ * exibida como está. É o único mecanismo pelo qual um texto produzido
+ * dentro do `try` de um Server Action chega à tela — nunca a mensagem
+ * de um erro qualquer.
+ *
+ * Use somente para texto redigido pensando em quem lê a tela: sem
+ * identificador técnico, sem nome de tabela/coluna/variável de
+ * ambiente, sem status HTTP, sem stack. Qualquer outra falha deve
+ * continuar sendo um `Error` comum — ela vira o fallback do Expert
+ * chamador.
+ */
+export class ExpertQuerySafeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ExpertQuerySafeError";
+  }
+}
+
+/**
+ * Mensagens que este próprio código produz e que já são seguras por
+ * construção. Comparadas por IGUALDADE EXATA — não é um filtro por
+ * palavra proibida, é o reconhecimento das constantes que nós mesmos
+ * redigimos para a tela.
+ */
+const SAFE_MESSAGES: readonly string[] = [
+  MISSING_QUERY_CONTEXT_MESSAGE,
+  MISSING_QUESTION_MESSAGE,
+  MISSING_QUERY_SCOPE_MESSAGE,
+];
+
+/**
+ * Mensagem de erro exibível na UI — FAIL-CLOSED.
+ *
+ * A primeira versão era fail-open: devolvia qualquer `error.message`
+ * que não casasse com uma lista de palavras proibidas
+ * (`undefined|null|NaN|[object Object]`). Isso ainda deixava passar
+ * mensagem de Postgres/Supabase, erro HTTP do Anthropic, falha de rede,
+ * stack trace e nome de variável interna. Pior: a própria regex era
+ * frustrada pelos `\b` ao redor de `[object Object]`, que começa e
+ * termina em caractere não alfanumérico — o limite de palavra não casa
+ * ali, então nem o caso que ela pretendia cobrir era confiável.
+ *
+ * Agora só chega à tela o que foi deliberadamente redigido para ela:
+ *   1. um `ExpertQuerySafeError` (mecanismo explícito e tipado); ou
+ *   2. uma das constantes de mensagem deste módulo (igualdade exata).
+ *
+ * Todo o resto vira o `fallback` do Expert chamador. O erro real é
+ * registrado no log do servidor (nome + mensagem) para diagnóstico —
+ * nunca no retorno para o navegador. Nenhum valor de configuração é
+ * logado aqui, e os erros do provider real já nascem sem a API key (ver
+ * providers/anthropic-provider.ts, wrapAnthropicError).
  */
 export function resolveExpertQueryErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ExpertQuerySafeError) {
+    const safeMessage = error.message.trim();
+    return safeMessage || fallback;
+  }
+
   const message = error instanceof Error ? error.message.trim() : "";
-  if (!message) return fallback;
-  if (/\b(undefined|null|NaN|\[object Object\])\b/.test(message)) return fallback;
-  return message;
+  if (message && SAFE_MESSAGES.includes(message)) {
+    return message;
+  }
+
+  console.error("[expert-query] erro não exibível ao usuário:", {
+    name: error instanceof Error ? error.name : typeof error,
+    message: message || "(sem mensagem)",
+  });
+
+  return fallback;
 }
