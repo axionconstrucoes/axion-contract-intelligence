@@ -331,6 +331,7 @@ await checkAsync("PAYLOAD: o texto do contrato chega efetivamente ao provider", 
           rascunhoSugerido: null,
           confidence: 0.4,
           requiresHumanReview: true,
+          analiseClausulas: [],
         },
       };
     },
@@ -469,6 +470,7 @@ await checkAsync("SEM PERSISTENCIA: a consulta juridica nao escreve nada no banc
             rascunhoSugerido: null,
             confidence: 0.4,
             requiresHumanReview: true,
+            analiseClausulas: [],
           },
         };
       },
@@ -924,6 +926,7 @@ await checkAsync("COBERTURA: a consulta juridica expoe o metadado de truncamento
             rascunhoSugerido: null,
             confidence: 0.4,
             requiresHumanReview: true,
+            analiseClausulas: [],
           },
         };
       },

@@ -65,8 +65,8 @@ const { CLIENT_SOURCE_CONFRONTATION_VERSION, CLIENT_SOURCE_CONFRONTATION_INSTRUC
   "../apps/web/lib/additionals/confrontation/identity.ts"
 );
 
-check("versão do Expert foi incrementada (v1 -> v2 -> v3) junto com a mudança de prompt", () => {
-  assert(LEGAL_CONSULTANT_VERSION === "v3", `esperado v3, obtido ${LEGAL_CONSULTANT_VERSION}`);
+check("versão do Expert foi incrementada (v1 -> v2 -> v3 -> v4) junto com a mudança de prompt", () => {
+  assert(LEGAL_CONSULTANT_VERSION === "v4", `esperado v4, obtido ${LEGAL_CONSULTANT_VERSION}`);
   assert(LEGAL_CONSULTANT_INSTRUCTIONS.includes(LEGAL_CONSULTANT_VERSION), "as instruções deveriam referenciar a versão atual");
 });
 

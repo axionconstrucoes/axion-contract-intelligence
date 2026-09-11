@@ -31,6 +31,9 @@ const repoRoot = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url
 const readSource = (rel) => readFileSync(nodePath.join(repoRoot, rel), "utf8");
 
 const { EXPERT_QUERY_RESPONSE_JSON_SCHEMA } = await import("../apps/web/lib/ai/query/json-schema");
+const { LEGAL_CONSULTANT_DOCUMENT_QUERY_RESPONSE_JSON_SCHEMA } = await import(
+  "../apps/web/lib/ai/experts/legal-consultant/clause-comparison"
+);
 const { COMMERCIAL_DIRECTOR_ASSESSMENT_JSON_SCHEMA } = await import(
   "../apps/web/lib/ai/experts/commercial-director/json-schema"
 );
@@ -94,6 +97,7 @@ function strictEstaAtivo(source) {
 
 const SCHEMAS = [
   ["EXPERT_QUERY_RESPONSE_JSON_SCHEMA (5 Experts, consulta)", EXPERT_QUERY_RESPONSE_JSON_SCHEMA],
+  ["LEGAL_CONSULTANT_DOCUMENT_QUERY_RESPONSE_JSON_SCHEMA (juridico documental)", LEGAL_CONSULTANT_DOCUMENT_QUERY_RESPONSE_JSON_SCHEMA],
   ["COMMERCIAL_DIRECTOR_ASSESSMENT_JSON_SCHEMA (assessment)", COMMERCIAL_DIRECTOR_ASSESSMENT_JSON_SCHEMA],
 ];
 if (CEO_CURATION_JSON_SCHEMA) SCHEMAS.push(["CEO_CURATION_JSON_SCHEMA (curadoria)", CEO_CURATION_JSON_SCHEMA]);
