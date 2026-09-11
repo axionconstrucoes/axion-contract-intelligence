@@ -186,6 +186,9 @@ async function buildContractualDocuments(
       documentVersionId: document.documentVersionId,
       title: document.title,
       kind: document.kind,
+      // Papel documental resolvido no carregador (CONTRATO x CRONOGRAMA):
+      // e o que impede o Expert de ler data de planilha como clausula.
+      documentRole: document.documentRole,
       versionLabel: document.versionLabel,
       fileName: document.fileName,
       pageCount: document.pageCount,

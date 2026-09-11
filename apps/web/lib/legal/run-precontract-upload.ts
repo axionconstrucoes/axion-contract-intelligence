@@ -16,7 +16,7 @@ import {
 } from "@/lib/documents/multi-upload/queue-core";
 import type { ExistingDocumentSnapshot } from "@/lib/documents/multi-upload/types";
 import { removeOrphanedStorageObject } from "@/lib/documents/multi-upload/storage-cleanup";
-import { resolveExtractionFormat } from "@/lib/documents/extraction/document-format";
+import { resolveExtractionFormat, unsupportedFormatDetail } from "@/lib/documents/extraction/document-format";
 import {
   uploadTimeoutForSize,
   UPLOAD_FAILURE_MESSAGES,
@@ -130,9 +130,11 @@ export async function runPrecontractUpload(
     };
   };
 
-  // 0. Formato: recusa antes de qualquer byte sair do navegador.
+  // 0. Formato: recusa antes de qualquer byte sair do navegador. O
+  // motivo vem de document-format.ts (fonte única), e no caso do .mpp
+  // diz como exportar em .xlsx em vez de só recusar.
   if (resolveExtractionFormat(params.mimeType, params.fileName) === null) {
-    return fail("Formato não suportado para análise jurídica. Envie PDF, DOCX ou TXT.");
+    return fail(unsupportedFormatDetail(params.mimeType, params.fileName));
   }
 
   const session = await deps.getSession();

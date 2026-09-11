@@ -61,8 +61,8 @@ interface VersionRow {
   original_file_name: string | null;
   mime_type: string | null;
   documents:
-    | { id: string; project_id: string; title: string; deleted_at: string | null }
-    | { id: string; project_id: string; title: string; deleted_at: string | null }[];
+    | { id: string; project_id: string; kind: string; title: string; deleted_at: string | null }
+    | { id: string; project_id: string; kind: string; title: string; deleted_at: string | null }[];
 }
 
 /**
@@ -193,7 +193,7 @@ export async function verifyPrecontractDocumentAction(
 
   const { data, error } = await supabase
     .from("document_versions")
-    .select("id,document_id,file_path,storage_bucket,original_file_name,mime_type,documents!inner(id,project_id,title,deleted_at)")
+    .select("id,document_id,file_path,storage_bucket,original_file_name,mime_type,documents!inner(id,project_id,kind,title,deleted_at)")
     .eq("id", documentVersionId)
     .eq("documents.project_id", projectId)
     .is("documents.deleted_at", null)
@@ -250,7 +250,7 @@ export async function verifyPrecontractDocumentsBatchAction(
   const { data: versionsData, error: versionsError } = await supabase
     .from("document_versions")
     .select(
-      "id,document_id,version_index,version_label,file_path,storage_bucket,original_file_name,mime_type,file_size_bytes,documents!inner(id,project_id,title,deleted_at)"
+      "id,document_id,version_index,version_label,file_path,storage_bucket,original_file_name,mime_type,file_size_bytes,documents!inner(id,project_id,kind,title,deleted_at)"
     )
     .in("document_id", documentIds)
     .eq("documents.project_id", projectId)
@@ -285,6 +285,7 @@ export async function verifyPrecontractDocumentsBatchAction(
       documentId,
       documentVersionId: version.id,
       title: documentRow?.title ?? "Documento",
+      kind: documentRow?.kind ?? "CONTRATO_BASE",
       fileName: version.original_file_name ?? documentRow?.title ?? "Documento",
       versionLabel: version.version_label,
       sizeBytes: version.file_size_bytes ?? 0,

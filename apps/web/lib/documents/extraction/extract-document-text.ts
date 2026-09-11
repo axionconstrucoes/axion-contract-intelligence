@@ -23,8 +23,12 @@ import { loadPdfjs, resolveStandardFontDataUrl } from "./pdf-runtime";
 
 // Formato: reexportado do modulo PURO (sem node:*), que o caminho de
 // upload no navegador tambem usa. Ver document-format.ts.
-import { resolveExtractionFormat, type SupportedExtractionFormat } from "./document-format";
-export { resolveExtractionFormat, resolveStandardFontDataUrl };
+import {
+  resolveExtractionFormat,
+  unsupportedFormatDetail,
+  type SupportedExtractionFormat,
+} from "./document-format";
+export { resolveExtractionFormat, resolveStandardFontDataUrl, unsupportedFormatDetail };
 export type { SupportedExtractionFormat };
 
 const MAX_SEGMENT_CHARS = 5000;
@@ -32,7 +36,7 @@ const MAX_SEGMENT_CHARS = 5000;
 
 export interface ExtractedDocumentText {
   /** Identificador do extrator usado — mesma convenção do script offline. */
-  extractor: "pdfjs-dist" | "mammoth" | "plain-text";
+  extractor: "pdfjs-dist" | "mammoth" | "plain-text" | "exceljs";
   extractorVersion: string;
   format: SupportedExtractionFormat;
   pageCount: number | null;
@@ -123,9 +127,9 @@ export async function extractDocumentText(input: {
   const format = resolveExtractionFormat(input.mimeType, input.fileName);
 
   if (format === null) {
-    throw new UnsupportedDocumentFormatError(
-      `Formato não suportado para análise jurídica: "${input.fileName}". Envie PDF, DOCX ou TXT.`
-    );
+    // Motivo vem de document-format.ts — mesma mensagem que o navegador
+    // já mostraria antes do upload, inclusive o caso específico do .mpp.
+    throw new UnsupportedDocumentFormatError(unsupportedFormatDetail(input.mimeType, input.fileName));
   }
 
   let text: string;
@@ -140,6 +144,12 @@ export async function extractDocumentText(input: {
   } else if (format === "DOCX") {
     text = (await extractDocx(input.buffer)).text;
     extractor = "mammoth";
+  } else if (format === "XLSX") {
+    // Import dinâmico pelo mesmo motivo do mammoth: exceljs só é
+    // carregado quando alguém de fato envia uma planilha.
+    const { extractXlsxText } = await import("./extract-xlsx-text");
+    text = (await extractXlsxText(input.buffer)).text;
+    extractor = "exceljs";
   } else {
     text = normalizeText(Buffer.from(input.buffer).toString("utf8"));
     extractor = "plain-text";
@@ -147,7 +157,9 @@ export async function extractDocumentText(input: {
 
   if (!text) {
     throw new EmptyDocumentTextError(
-      `Nenhum texto pôde ser extraído de "${input.fileName}". O arquivo pode ser um PDF digitalizado sem OCR.`
+      format === "XLSX"
+        ? `Nenhum conteúdo pôde ser lido de "${input.fileName}". A planilha parece estar vazia.`
+        : `Nenhum texto pôde ser extraído de "${input.fileName}". O arquivo pode ser um PDF digitalizado sem OCR.`
     );
   }
 

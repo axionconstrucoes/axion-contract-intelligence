@@ -33,11 +33,19 @@ import {
   extractDocumentText,
   truncateForContext,
 } from "./extract-document-text";
-import { resolveExtractionFormat } from "./document-format";
+import { resolveExtractionFormat, unsupportedFormatDetail } from "./document-format";
 
 const STORAGE_BUCKET = "project-documents";
 
-/** Tipos documentais que compõem a base contratual de uma negociação. */
+/**
+ * Tipos documentais que compõem a base contratual de uma negociação —
+ * incluindo o CRONOGRAMA, que é de onde saem as datas-limite.
+ *
+ * O cronograma entra porque as regras de prazo do Consultor Jurídico
+ * (extensão day-for-day, multa por atraso, proporcionalidade da mora)
+ * não valem nada sem data. Mas ele NÃO é cláusula: ver
+ * `resolveDocumentRole` e `ContextContractualDocument.documentRole`.
+ */
 const CONTRACTUAL_KINDS = [
   "CONTRATO_BASE",
   "ADITIVO",
@@ -48,7 +56,29 @@ const CONTRACTUAL_KINDS = [
   "PLANILHA_CONTRATUAL",
   "ESPECIFICACAO",
   "CLARIFICACAO_CLIENTE",
+  "CRONOGRAMA_BASELINE",
+  "CRONOGRAMA_REVISAO",
 ] as const;
+
+/** Tipos documentais que são cronograma, não texto contratual. */
+const SCHEDULE_KINDS: readonly string[] = ["CRONOGRAMA_BASELINE", "CRONOGRAMA_REVISAO"];
+
+/**
+ * Papel do documento no contexto do Expert. Existe para impedir o erro
+ * que a inclusão do cronograma cria: uma data lida de uma planilha NÃO é
+ * uma obrigação contratual. "Término em 30/06" numa aba de cronograma é
+ * um PLANEJAMENTO; só vira prazo exigível se uma cláusula do contrato
+ * disser que aquele cronograma é vinculante.
+ *
+ * Sem esta marcação, o modelo recebe o texto da planilha misturado ao do
+ * contrato e não tem como distinguir — passaria a afirmar prazo
+ * contratual a partir de linha de planilha.
+ */
+export type ContractualDocumentRole = "CONTRATO" | "CRONOGRAMA";
+
+export function resolveDocumentRole(kind: string): ContractualDocumentRole {
+  return SCHEDULE_KINDS.includes(kind) ? "CRONOGRAMA" : "CONTRATO";
+}
 
 /**
  * Teto explícito de documentos considerados por consulta. Documentar o
@@ -94,6 +124,8 @@ export interface PrecontractDocumentText {
   documentVersionId: string;
   title: string;
   kind: string;
+  /** CONTRATO ou CRONOGRAMA — ver resolveDocumentRole. */
+  documentRole: ContractualDocumentRole;
   versionLabel: string | null;
   fileName: string;
   pageCount: number | null;
@@ -296,7 +328,7 @@ export async function loadPrecontractDocumentTexts(
         documentId: document.id,
         title: document.title,
         fileName,
-        reason: "Formato não suportado para leitura (use PDF, DOCX ou TXT).",
+        reason: unsupportedFormatDetail(version.mime_type, fileName),
       });
       continue;
     }
@@ -362,6 +394,7 @@ export async function loadPrecontractDocumentTexts(
       documentVersionId: item.documentVersionId,
       title: item.title,
       kind: item.kind,
+      documentRole: resolveDocumentRole(item.kind),
       versionLabel: item.versionLabel,
       fileName: item.fileName,
       pageCount: item.pageCount,

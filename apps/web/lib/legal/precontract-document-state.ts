@@ -83,6 +83,13 @@ export interface BatchVerifiedDocument {
   documentId: string;
   documentVersionId: string;
   title: string;
+  /**
+   * Tipo documental REAL, vindo do servidor. Antes era fixado em
+   * "CONTRATO_BASE" na hidratacao — o que so nao aparecia porque todos os
+   * tipos aceitos eram contratuais. Com o cronograma na lista, fixar o
+   * tipo faria a tela rotular a planilha como "Contrato base" apos um F5.
+   */
+  kind: string;
   fileName: string;
   versionLabel: string | null;
   sizeBytes: number;
@@ -108,7 +115,7 @@ export function itemsFromBatchVerification(
   return documents.map((document) => ({
     id: `existing:${document.documentVersionId}`,
     fileName: document.fileName,
-    kind: "CONTRATO_BASE",
+    kind: document.kind,
     sizeBytes: document.sizeBytes,
     status: document.status,
     uploadPercent: 100,
@@ -193,7 +200,7 @@ export function precontractQueryBlockReason(items: readonly PrecontractDocumentI
     return "Processando documento — a consulta é liberada quando o conteúdo estiver disponível.";
   }
   if (items.length > 0 && items.every((item) => item.status === "ERRO" || item.status === "DUPLICADO")) {
-    return "Nenhum documento pôde ser lido. Envie um PDF, DOCX ou TXT com texto selecionável.";
+    return "Nenhum documento pôde ser lido. Envie um PDF, DOCX ou TXT com texto selecionável — ou o cronograma em XLSX.";
   }
 
   return "Envie um documento da negociação para consultar o especialista jurídico.";

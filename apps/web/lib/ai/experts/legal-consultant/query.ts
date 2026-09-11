@@ -127,7 +127,7 @@ export async function answerLegalConsultantQuery(
   // resposta apoiada so em metadados, com aparencia de analise juridica.
   if (options.requireContractualDocuments === true && (projectContext?.contractualDocuments.length ?? 0) === 0) {
     throw new ExpertQuerySafeError(
-      "Nenhum documento desta analise pode ser lido. Envie o contrato ou a minuta em PDF, DOCX ou TXT com texto selecionavel antes de consultar o especialista juridico."
+      "Nenhum documento desta analise pode ser lido. Envie o contrato ou a minuta em PDF, DOCX ou TXT com texto selecionavel (ou o cronograma em XLSX) antes de consultar o especialista juridico."
     );
   }
 
