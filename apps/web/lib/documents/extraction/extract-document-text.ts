@@ -87,7 +87,8 @@ async function extractPdf(buffer: ArrayBuffer): Promise<{ text: string; pageCoun
     // Nenhuma fonte do SISTEMA é carregada (nada depende do que está
     // instalado na máquina); as base-14 vêm do próprio pdfjs-dist.
     useSystemFonts: false,
-    ...(standardFontDataUrl ? { standardFontDataUrl } : {}),
+    // Sempre presente: resolvePdfAssets lanca se as fontes faltarem.
+    standardFontDataUrl,
   }).promise;
 
   const pages: string[] = [];

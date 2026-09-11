@@ -35,8 +35,7 @@
 // alcançado um dia, ele falha alto e aparece no log — em vez de devolver
 // um recorte errado em silêncio.
 
-import { createRequire } from "node:module";
-import path from "node:path";
+import { PdfAssetsUnavailableError, resolvePdfAssets, __resetPdfAssetsForTests } from "./pdf-assets";
 
 const LOG_PREFIX = "[extract-document-text]";
 
@@ -390,51 +389,51 @@ export function loadPdfjs(): Promise<PdfjsModule> {
     console.info(`${LOG_PREFIX} DOMMatrix/Path2D via polyfill interno (sem @napi-rs/canvas).`);
   }
 
-  pdfjsPromise = import("pdfjs-dist/legacy/build/pdf.mjs").catch((error) => {
-    // Falha no carregamento não pode envenenar o cache: a próxima
-    // requisição tenta de novo.
-    pdfjsPromise = null;
-    throw error;
-  });
+  // Assets resolvidos ANTES do import: se worker ou fontes faltarem, a
+  // falha acontece aqui, com erro técnico claro no log do servidor, e
+  // nunca vira uma extração degradada em silêncio.
+  const assets = resolvePdfAssets();
+
+  pdfjsPromise = import("pdfjs-dist/legacy/build/pdf.mjs")
+    .then((pdfjs) => {
+      // Em Node o pdfjs usa `GlobalWorkerOptions.workerSrc ||=
+      // "./pdf.worker.mjs"` e faz `await import(workerSrc)` — relativo AO
+      // MÓDULO. Fixamos aqui uma URL file:// inequívoca, em vez de
+      // depender de onde o módulo acabou parando. Idempotente: uma
+      // configuração válida já existente NUNCA é substituída.
+      const atual = pdfjs.GlobalWorkerOptions.workerSrc;
+      const jaConfigurado = typeof atual === "string" && atual.startsWith("file://");
+
+      if (!jaConfigurado) {
+        pdfjs.GlobalWorkerOptions.workerSrc = assets.workerSrc;
+        console.info(`${LOG_PREFIX} worker do pdfjs configurado por URL de arquivo.`);
+      }
+
+      return pdfjs;
+    })
+    .catch((error) => {
+      // Falha no carregamento não pode envenenar o cache: a próxima
+      // requisição tenta de novo.
+      pdfjsPromise = null;
+      throw error;
+    });
 
   return pdfjsPromise;
 }
 
-let cachedStandardFontDataUrl: string | null | undefined;
-
 /**
- * Diretório das fontes padrão (base-14) do pdfjs, necessário quando o PDF
- * não embute a fonte — caso comum em minuta gerada por Word/Google Docs.
- *
- * Resolução ESTÁTICA do pacote: o especificador é literal, então o
- * @vercel/nft rastreia. Os .pfb são lidos em runtime pelo próprio pdfjs,
- * por isso a inclusão dos arquivos é declarada em next.config.ts.
+ * Diretório das fontes base-14 do pdfjs, com barra final. Lança quando
+ * as fontes não estão disponíveis — nenhuma análise parcial silenciosa.
  */
-export function resolveStandardFontDataUrl(): string | null {
-  if (cachedStandardFontDataUrl !== undefined) return cachedStandardFontDataUrl;
-
-  try {
-    const require = createRequire(import.meta.url);
-    const packageJson = require.resolve("pdfjs-dist/package.json");
-    const fontsDir = path.join(path.dirname(packageJson), "standard_fonts");
-
-    // O pdfjs valida a URL da factory e exige barra final "/", nunca
-    // path.sep (no Windows a barra invertida é recusada).
-    cachedStandardFontDataUrl = `${fontsDir.split(path.sep).join("/")}/`;
-    return cachedStandardFontDataUrl;
-  } catch (error) {
-    console.warn(
-      `${LOG_PREFIX} standard_fonts do pdfjs não encontrado — PDFs sem fonte embutida podem degradar:`,
-      error instanceof Error ? error.message : String(error)
-    );
-    cachedStandardFontDataUrl = null;
-    return null;
-  }
+export function resolveStandardFontDataUrl(): string {
+  return resolvePdfAssets().standardFontDataUrl;
 }
+
+export { PdfAssetsUnavailableError, resolvePdfAssets };
 
 /** Só para teste: zera a memoização entre cenários. */
 export function __resetPdfRuntimeForTests(): void {
   installResult = null;
   pdfjsPromise = null;
-  cachedStandardFontDataUrl = undefined;
+  __resetPdfAssetsForTests();
 }
