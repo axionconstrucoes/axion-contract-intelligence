@@ -35,7 +35,7 @@ export async function GET(request: Request) {
   const session = sessionResult.data.session;
   const claims = decodeJwtPayload(session?.access_token);
 
-  const [invitationsResult, membershipResult] = await Promise.all([
+  const [invitationsResult, membershipResult, projectResult, rpcResult] = await Promise.all([
     supabase
       .from("project_member_invitations")
       .select("id", { count: "exact" })
@@ -46,10 +46,17 @@ export async function GET(request: Request) {
       .eq("project_id", projectId)
       .eq("user_id", user?.id ?? "00000000-0000-0000-0000-000000000000")
       .eq("status", "ACTIVE"),
+    supabase
+      .from("projects")
+      .select("id", { count: "exact" })
+      .eq("id", projectId),
+    supabase.rpc("is_project_member", { p_project_id: projectId }),
   ]);
 
   const invitationCount = invitationsResult.data?.length ?? 0;
   const membershipCount = membershipResult.data?.length ?? 0;
+  const projectCount = projectResult.data?.length ?? 0;
+  const isProjectMember = typeof rpcResult.data === "boolean" ? rpcResult.data : null;
   const authenticated = Boolean(user);
 
   let supabaseHost: string | null = null;
@@ -72,16 +79,25 @@ export async function GET(request: Request) {
     authenticated,
     userId: user?.id ?? null,
     supabaseHost,
+    projectCount,
     membershipCount,
     invitationCount,
+    isProjectMember,
     claims: safeClaims,
     authErrorCode: userResult.error?.code ?? null,
     sessionErrorCode: sessionResult.error?.code ?? null,
+    projectErrorCode: projectResult.error?.code ?? null,
     invitationsErrorCode: invitationsResult.error?.code ?? null,
     membershipErrorCode: membershipResult.error?.code ?? null,
+    rpcErrorCode: rpcResult.error?.code ?? null,
   });
 
-  const error = invitationsResult.error ?? membershipResult.error;
+  const error =
+    invitationsResult.error ??
+    membershipResult.error ??
+    projectResult.error ??
+    rpcResult.error;
+
   if (error) {
     return NextResponse.json(
       {
@@ -90,8 +106,10 @@ export async function GET(request: Request) {
         authenticated,
         userId: user?.id ?? null,
         supabaseHost,
+        projectCount,
         membershipCount,
         invitationCount,
+        isProjectMember,
         claims: safeClaims,
         authErrorCode: userResult.error?.code ?? null,
         sessionErrorCode: sessionResult.error?.code ?? null,
@@ -107,8 +125,10 @@ export async function GET(request: Request) {
     authenticated,
     userId: user?.id ?? null,
     supabaseHost,
+    projectCount,
     membershipCount,
     invitationCount,
+    isProjectMember,
     claims: safeClaims,
     authErrorCode: userResult.error?.code ?? null,
     sessionErrorCode: sessionResult.error?.code ?? null,
