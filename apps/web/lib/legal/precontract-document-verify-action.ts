@@ -40,6 +40,9 @@ import type {
   VerifyPrecontractDocumentResult,
 } from "./precontract-document-state";
 
+const INDIVIDUAL_PREFIX = "[precontract-verify-individual]";
+const BATCH_PREFIX = "[precontract-verify-batch]";
+
 const GENERIC_FAILURE = "Não foi possível processar este documento. Tente novamente ou envie outro arquivo.";
 const MISSING_CONTEXT = "Não foi possível identificar o contexto desta análise. Recarregue a página e tente novamente.";
 
@@ -98,7 +101,10 @@ async function authorizeWorkspace(
 async function verifyVersionRow(
   supabase: SupabaseClient,
   projectId: string,
-  version: VersionRow
+  version: VersionRow,
+  // Prefixo de quem chamou: sem isto, individual e lote logavam o mesmo
+  // rotulo e a investigacao do Preview nao distinguia os dois caminhos.
+  logPrefix: string
 ): Promise<VerifyPrecontractDocumentResult> {
   const documentRow = Array.isArray(version.documents) ? version.documents[0] : version.documents;
 
@@ -117,7 +123,7 @@ async function verifyVersionRow(
   // Bucket: sem fallback silencioso. Ausente ou diferente do bucket
   // autorizado para documentos de projeto, recusa antes do download.
   if (version.storage_bucket !== STORAGE_BUCKET) {
-    console.error("[precontract-verify] bucket inesperado — download recusado:", {
+    console.error(`${logPrefix} bucket inesperado — download recusado:`, {
       documentVersionId: version.id,
       bucket: version.storage_bucket,
     });
@@ -127,7 +133,7 @@ async function verifyVersionRow(
   // Prefixo do path conferido EXPLICITAMENTE. Falhou: não baixa, não
   // extrai, não chega ao provider.
   if (!isStoragePathInsideProject(version.file_path, projectId)) {
-    console.error("[precontract-verify] path fora do projeto — download recusado");
+    console.error(`${logPrefix} path fora do projeto — download recusado`);
     return failure("Documento não encontrado nesta análise.");
   }
 
@@ -137,7 +143,7 @@ async function verifyVersionRow(
       .download(version.file_path);
 
     if (downloadError || !file) {
-      console.error("[precontract-verify] falha no download:", downloadError?.message);
+      console.error(`${logPrefix} falha no download:`, downloadError?.message);
       return failure(GENERIC_FAILURE);
     }
 
@@ -162,7 +168,7 @@ async function verifyVersionRow(
     }
 
     console.error(
-      "[precontract-verify] erro não exibível ao usuário:",
+      `${logPrefix} erro não exibível ao usuário:`,
       error instanceof Error ? { name: error.name, message: error.message } : { name: typeof error }
     );
     return failure(GENERIC_FAILURE);
@@ -194,13 +200,13 @@ export async function verifyPrecontractDocumentAction(
     .maybeSingle();
 
   if (error) {
-    console.error("[precontract-verify] falha ao validar vínculo documento/projeto:", error.message);
+    console.error(`${INDIVIDUAL_PREFIX} falha ao validar vínculo documento/projeto:`, error.message);
     return failure(GENERIC_FAILURE);
   }
 
   if (!data) return failure("Documento não encontrado nesta análise.");
 
-  return verifyVersionRow(supabase, projectId, data as unknown as VersionRow);
+  return verifyVersionRow(supabase, projectId, data as unknown as VersionRow, INDIVIDUAL_PREFIX);
 }
 
 /**
@@ -234,7 +240,7 @@ export async function verifyPrecontractDocumentsBatchAction(
     .limit(MAX_DOCUMENTS);
 
   if (documentsError) {
-    console.error("[precontract-verify-batch] falha ao listar documentos:", documentsError.message);
+    console.error(`${BATCH_PREFIX} falha ao listar documentos:`, documentsError.message);
     return { ok: false, message: GENERIC_FAILURE, documents: [] };
   }
 
@@ -252,7 +258,7 @@ export async function verifyPrecontractDocumentsBatchAction(
     .order("version_index", { ascending: false });
 
   if (versionsError) {
-    console.error("[precontract-verify-batch] falha ao listar versões:", versionsError.message);
+    console.error(`${BATCH_PREFIX} falha ao listar versões:`, versionsError.message);
     return { ok: false, message: GENERIC_FAILURE, documents: [] };
   }
 
@@ -273,7 +279,7 @@ export async function verifyPrecontractDocumentsBatchAction(
     if (!version) continue;
 
     const documentRow = Array.isArray(version.documents) ? version.documents[0] : version.documents;
-    const verification = await verifyVersionRow(supabase, projectId, version);
+    const verification = await verifyVersionRow(supabase, projectId, version, BATCH_PREFIX);
 
     documents.push({
       documentId,

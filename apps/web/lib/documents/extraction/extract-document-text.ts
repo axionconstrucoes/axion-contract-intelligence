@@ -19,13 +19,12 @@
 // uso: quem chama e Server Action/Server Component, e nada aqui le
 // variavel de ambiente nem secret.
 
-import { createRequire } from "node:module";
-import path from "node:path";
+import { loadPdfjs, resolveStandardFontDataUrl } from "./pdf-runtime";
 
 // Formato: reexportado do modulo PURO (sem node:*), que o caminho de
 // upload no navegador tambem usa. Ver document-format.ts.
 import { resolveExtractionFormat, type SupportedExtractionFormat } from "./document-format";
-export { resolveExtractionFormat };
+export { resolveExtractionFormat, resolveStandardFontDataUrl };
 export type { SupportedExtractionFormat };
 
 const MAX_SEGMENT_CHARS = 5000;
@@ -75,54 +74,11 @@ function normalizeText(value: string): string {
     .trim();
 }
 
-/**
- * Diretorio das fontes padrao (Type1 base-14) que o pdfjs precisa quando
- * o PDF NAO embute a fonte — caso comum em minuta gerada por Word/Google
- * Docs com Helvetica/Times. Sem isto o pdfjs emite
- * "Ensure that the `standardFontDataUrl` API parameter is provided" e a
- * extracao pode degradar em PDFs de fonte incomum.
- *
- * Resolvido em RUNTIME a partir de process.cwd() — nunca um caminho
- * absoluto da maquina de quem escreveu o codigo. Sao testadas as duas
- * posicoes possiveis no monorepo (node_modules da app e da raiz), porque
- * o npm workspaces hoista a dependencia para a raiz.
- *
- * Os arquivos entram no bundle da Vercel por outputFileTracingIncludes
- * (ver apps/web/next.config.ts): o @vercel/nft nao consegue rastrear um
- * caminho montado dinamicamente, entao a inclusao e declarada la.
- */
-let cachedStandardFontDataUrl: string | null | undefined;
-
-export function resolveStandardFontDataUrl(): string | null {
-  if (cachedStandardFontDataUrl !== undefined) return cachedStandardFontDataUrl;
-
-  try {
-    // Resolucao ESTATICA do pacote: o especificador e literal, entao o
-    // @vercel/nft consegue rastrear e inclui pdfjs-dist no bundle. A
-    // tentativa anterior usava existsSync sobre caminhos montados em
-    // runtime, o que disparava "Dynamic filesystem access causes tracing
-    // of the whole project" — tracing do repositorio inteiro no bundle.
-    const require = createRequire(import.meta.url);
-    const packageJson = require.resolve("pdfjs-dist/package.json");
-    const fontsDir = path.join(path.dirname(packageJson), "standard_fonts");
-
-    // O pdfjs valida a URL da factory e exige barra final "/", nunca
-    // path.sep (no Windows a barra invertida e recusada).
-    cachedStandardFontDataUrl = `${fontsDir.split(path.sep).join("/")}/`;
-    return cachedStandardFontDataUrl;
-  } catch (error) {
-    console.warn(
-      "[extract-document-text] standard_fonts do pdfjs nao encontrado — PDFs sem fonte embutida podem degradar:",
-      error instanceof Error ? error.message : String(error)
-    );
-    cachedStandardFontDataUrl = null;
-    return null;
-  }
-}
-
 async function extractPdf(buffer: ArrayBuffer): Promise<{ text: string; pageCount: number }> {
-  // Build "legacy": é o que funciona em Node (sem DOM/worker de browser).
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  // loadPdfjs instala DOMMatrix/Path2D ANTES do import e memoiza o
+  // carregamento — ver pdf-runtime.ts para a medição de quais operações
+  // o pdfjs realmente usa na extração de texto.
+  const pdfjs = await loadPdfjs();
 
   const standardFontDataUrl = resolveStandardFontDataUrl();
 
