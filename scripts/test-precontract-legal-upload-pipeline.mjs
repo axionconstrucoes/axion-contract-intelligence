@@ -848,7 +848,12 @@ function validQueryOutput() {
   return { expertId: "commercial-director", severity: "LOW", interpretacao: "ok" };
 }
 
-await checkAsync("PROVIDER: tool-call sai com strict: true", async () => {
+// Esta asercao afirmava `strict: true`. Ela codificava a regressao: com
+// strict ativo, a API recusa os nossos schemas (que usam oneOf) com
+// HTTP 400 "tools.0.custom: Schema type 'oneOf' is not supported", e
+// 100% das consultas em producao quebraram. Invertida, com o motivo.
+// O invariante completo vive em test-anthropic-schema-compatibility.mjs.
+await checkAsync("PROVIDER: tool-call NAO envia strict (incompativel com oneOf nos schemas)", async () => {
   const client = fakeAnthropicClient([toolUseMessage(validQueryOutput())]);
   const provider = createAnthropicAiProvider({ client, config: PROVIDER_CONFIG });
 
@@ -863,8 +868,9 @@ await checkAsync("PROVIDER: tool-call sai com strict: true", async () => {
   });
 
   const tool = client.calls[0].tools[0];
-  assert(tool.strict === true, "strict: true precisa ir na tool");
+  assert(tool.strict === undefined, "strict nao pode ser enviado enquanto os schemas usarem oneOf");
   assert(tool.input_schema === QUERY_OUTPUT_SCHEMA, "o schema do Expert e usado como esta");
+  assert(tool.name === "emit_expert_structured_output", "o nome da ferramenta e fixo");
   assert(client.calls.length === 1, "saida valida nunca repete");
 });
 

@@ -508,16 +508,38 @@ async function callAnthropicOnce(
               name: TOOL_NAME,
               description: "Emite a saída estruturada exigida pelo ACC para este Expert — nunca texto livre.",
               input_schema: outputSchema,
-              // strict: a API passa a garantir a validação do schema da
-              // ferramenta (ver Tool.strict no @anthropic-ai/sdk
-              // instalado: "When true, guarantees schema validation on
-              // tool names and inputs"). Reduz drasticamente a saída
-              // incompleta — mas NÃO substitui os validadores TypeScript,
-              // que continuam rodando depois: uma resposta truncada por
-              // max_tokens, por exemplo, nunca chega a ser validada pela
-              // API, e é justamente esse caso que produzia
-              // "Campo obrigatório ausente ou vazio: severity".
-              strict: true,
+              // `strict: true` NÃO pode ser ativado com os schemas atuais.
+              //
+              // Ele foi ligado no PR #54 para reduzir saída incompleta
+              // (o erro "Campo obrigatório ausente ou vazio: severity"),
+              // e derrubou 100% das consultas em produção:
+              //
+              //   HTTP 400 invalid_request_error
+              //   tools.0.custom: Schema type 'oneOf' is not supported
+              //   (request_id req_011Cew2sDM1vPmb5oaXW52VE)
+              //
+              // Com `strict`, a API exige um subconjunto restrito de JSON
+              // Schema que não aceita `oneOf` — e três schemas nossos o
+              // usam de propósito, para impedir combinações inválidas:
+              //   query/json-schema.ts ............. rascunhoSugerido
+              //   commercial-director/json-schema.ts  draftCommunication
+              //   schemas/json-schema-fragments.ts .. fieldValueSchema()
+              //
+              // O último é o mais sensível: o `oneOf` é justamente o que
+              // impede o modelo de combinar status "AVAILABLE" com
+              // value/basis nulos. Reescrevê-lo para caber em `strict`
+              // enfraqueceria uma garantia de governança — o oposto do
+              // que `strict` deveria trazer.
+              //
+              // A saída incompleta continua coberta sem `strict`, por
+              // duas camadas que permanecem ativas: a repetição única
+              // controlada (findSchemaViolations, abaixo) e o validador
+              // TypeScript do Expert, fail-closed. `severity` segue em
+              // `required` e nunca é preenchido por este código.
+              //
+              // Reativar exige reescrever os três schemas E o teste
+              // scripts/test-anthropic-schema-compatibility.mjs, que
+              // guarda este invariante.
             },
           ],
           tool_choice: { type: "tool", name: TOOL_NAME },
