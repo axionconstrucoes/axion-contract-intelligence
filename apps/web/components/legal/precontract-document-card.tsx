@@ -1,6 +1,7 @@
 "use client";
 
-// Card único da análise jurídica pré-contratual: arrastar/selecionar,
+// Card único da análise jurídica pré-contratual: arrastar/selecionar
+// (um ou vários arquivos de uma vez, cada um com sua própria linha),
 // nome do arquivo, tipo documental, barra e percentual REAL de upload, e
 // os estados Enviando / Processando / Pronto / Erro (mais
 // "Aguardando sua confirmação" e "Documento duplicado", que o pipeline
@@ -58,6 +59,15 @@ export function PrecontractDocumentCard({
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Seleção múltipla: cada arquivo entra no pipeline por conta própria
+  // (mesmo `onAddFile` de sempre, uma vez por arquivo) — a validação de
+  // formato, a deduplicação por hash e o versionamento continuam sendo
+  // feitos por arquivo em runPrecontractUpload. Nada muda no pipeline.
+  const addFiles = (list: FileList | null | undefined) => {
+    if (!list) return;
+    for (const file of Array.from(list)) onAddFile(file, kind);
+  };
+
   return (
     <Card>
       <CardHeader className="gap-1">
@@ -98,8 +108,7 @@ export function PrecontractDocumentCard({
               onDrop={(event) => {
                 event.preventDefault();
                 setDragging(false);
-                const file = event.dataTransfer.files?.[0];
-                if (file) onAddFile(file, kind);
+                addFiles(event.dataTransfer.files);
               }}
               onClick={() => inputRef.current?.click()}
               role="button"
@@ -112,16 +121,18 @@ export function PrecontractDocumentCard({
               }`}
             >
               <UploadCloud className="size-6 text-muted-foreground" />
-              <p className="text-sm font-medium">Arraste o documento aqui ou clique para selecionar</p>
-              <p className="text-xs text-muted-foreground">PDF, DOCX ou TXT com texto selecionável</p>
+              <p className="text-sm font-medium">Arraste os documentos aqui ou clique para selecionar</p>
+              <p className="text-xs text-muted-foreground">
+                PDF, DOCX ou TXT com texto selecionável · é possível selecionar vários de uma vez
+              </p>
               <input
                 ref={inputRef}
                 type="file"
                 accept={ACCEPTED}
+                multiple
                 className="hidden"
                 onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  if (file) onAddFile(file, kind);
+                  addFiles(event.target.files);
                   event.target.value = "";
                 }}
               />

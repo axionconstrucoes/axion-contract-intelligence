@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { BrainCircuit } from "lucide-react";
+import { BrainCircuit, Loader2 } from "lucide-react";
+import { AiPendingIndicator } from "@/components/ai/ai-pending-indicator";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,7 +21,10 @@ function List({ items }: { items: string[] }) {
 
 export function PrecontractCurationPanel({ projectId }: { projectId: string }) {
   const [state, action, pending] = useActionState(runPrecontractCurationAction, INITIAL_STATE);
-  const curation = state.result?.executiveCuration;
+  // Mesma regra do ExpertQueryPanel: durante nova consulta, o resultado
+  // anterior sai da tela — só a consulta atual é exibida.
+  const displayedResult = pending ? null : state.result;
+  const curation = displayedResult?.executiveCuration;
 
   return (
     <Card className="border-primary/30">
@@ -43,14 +47,26 @@ export function PrecontractCurationPanel({ projectId }: { projectId: string }) {
               placeholder="Ex.: Avaliar riscos e alternativas para negociar a cláusula de multas por atraso."
             />
           </label>
-          {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
-          <Button type="submit" disabled={pending}>{pending ? "Consultando todos os especialistas…" : "Consultar todos os especialistas"}</Button>
+          {!pending && state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
+          <Button type="submit" disabled={pending}>
+            {pending ? (
+              <>
+                <Loader2 className="animate-spin" aria-hidden="true" />
+                Consultando todos os especialistas…
+              </>
+            ) : (
+              "Consultar todos os especialistas"
+            )}
+          </Button>
+          {pending ? (
+            <AiPendingIndicator message="Consultando Jurídico, Comercial, Engenharia/Planejamento e ESG/SSMA e consolidando via CEO IA. Isso pode levar algum tempo — aguarde nesta tela." />
+          ) : null}
         </form>
 
-        {state.result && curation ? (
+        {displayedResult && curation ? (
           <div className="space-y-4 rounded-md border p-4">
             <div><h3 className="font-semibold">Síntese do CEO IA</h3><p className="text-sm">{curation.situacao}</p></div>
-            <div><h3 className="text-sm font-semibold">Especialistas consultados</h3><p className="text-sm text-muted-foreground">{state.result.expertResults.map((item) => item.response.expertName).join(" · ")}</p></div>
+            <div><h3 className="text-sm font-semibold">Especialistas consultados</h3><p className="text-sm text-muted-foreground">{displayedResult.expertResults.map((item) => item.response.expertName).join(" · ")}</p></div>
             <div><h3 className="text-sm font-semibold">Riscos</h3><List items={curation.riscos} /></div>
             <div><h3 className="text-sm font-semibold">Alternativas de negociação</h3><List items={curation.alternativas} /></div>
             <div><h3 className="text-sm font-semibold">Recomendação</h3><p className="text-sm">{curation.recomendacao}</p></div>

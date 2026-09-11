@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { FlaskConical } from "lucide-react";
+import { FlaskConical, Loader2 } from "lucide-react";
+import { AiPendingIndicator } from "@/components/ai/ai-pending-indicator";
 import { SeverityBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +21,10 @@ import { initialRunMultiExpertCurationState } from "@/app/[projectId]/ledger/[ev
  */
 export function RunMultiExpertCurationButton({ projectId, eventId }: { projectId: string; eventId: string }) {
   const [state, formAction, pending] = useActionState(runMultiExpertCurationAction, initialRunMultiExpertCurationState);
+  // Mesma regra do ExpertQueryPanel: ao disparar nova análise, o
+  // resultado anterior sai da tela — só a execução atual é exibida. O
+  // registro em Auditoria continua sendo feito pela Server Action.
+  const displayedResult = pending ? null : state.success;
 
   return (
     <Card>
@@ -37,39 +42,50 @@ export function RunMultiExpertCurationButton({ projectId, eventId }: { projectId
           <input type="hidden" name="projectId" value={projectId} />
           <input type="hidden" name="eventId" value={eventId} />
           <Button type="submit" variant="outline" size="sm" disabled={pending} className="self-start">
-            {pending ? "Executando análise…" : "Executar análise multiagente"}
+            {pending ? (
+              <>
+                <Loader2 className="animate-spin" aria-hidden="true" />
+                Executando análise…
+              </>
+            ) : (
+              "Executar análise multiagente"
+            )}
           </Button>
         </form>
 
-        {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
+        {pending ? (
+          <AiPendingIndicator message="Consultando os Experts IA e consolidando via CEO IA. Isso pode levar algum tempo — aguarde nesta tela." />
+        ) : null}
 
-        {state.success ? (
+        {!pending && state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
+
+        {displayedResult ? (
           <div className="flex flex-col gap-3 rounded-md border bg-muted/30 p-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium uppercase text-muted-foreground">Tema roteado</span>
-              <span>{state.success.routing.topic}</span>
-              <SeverityBadge severity={confrontationSeverityToAlertSeverity[state.success.executiveCuration.overallSeverity]} />
+              <span>{displayedResult.routing.topic}</span>
+              <SeverityBadge severity={confrontationSeverityToAlertSeverity[displayedResult.executiveCuration.overallSeverity]} />
             </div>
 
             <div>
               <p className="text-xs font-medium uppercase text-muted-foreground">Experts consultados</p>
               <p className="mt-0.5">
-                {state.success.expertResults.length > 0
-                  ? state.success.expertResults.map((r) => r.response.expertName).join(", ")
+                {displayedResult.expertResults.length > 0
+                  ? displayedResult.expertResults.map((r) => r.response.expertName).join(", ")
                   : "Nenhum — roteamento não selecionou um especialista para este tema."}
               </p>
             </div>
 
             <div>
               <p className="text-xs font-medium uppercase text-muted-foreground">Situação (CEO IA)</p>
-              <p className="mt-0.5">{state.success.executiveCuration.situacao}</p>
+              <p className="mt-0.5">{displayedResult.executiveCuration.situacao}</p>
             </div>
 
-            {state.success.executiveCuration.divergencias.length > 0 ? (
+            {displayedResult.executiveCuration.divergencias.length > 0 ? (
               <div>
                 <p className="text-xs font-medium uppercase text-muted-foreground">Divergências entre Experts</p>
                 <ul className="mt-0.5 list-disc space-y-1 pl-5">
-                  {state.success.executiveCuration.divergencias.map((d, i) => (
+                  {displayedResult.executiveCuration.divergencias.map((d, i) => (
                     <li key={i}>
                       <span className="font-medium">{d.topic}:</span> {d.probableReason}
                     </li>
@@ -80,14 +96,14 @@ export function RunMultiExpertCurationButton({ projectId, eventId }: { projectId
 
             <div>
               <p className="text-xs font-medium uppercase text-muted-foreground">Recomendação do CEO IA</p>
-              <p className="mt-0.5">{state.success.executiveCuration.recomendacao}</p>
+              <p className="mt-0.5">{displayedResult.executiveCuration.recomendacao}</p>
             </div>
 
-            {state.success.executiveCuration.decisoesHumanasNecessarias.length > 0 ? (
+            {displayedResult.executiveCuration.decisoesHumanasNecessarias.length > 0 ? (
               <div className="rounded border border-severity-alta/40 bg-severity-alta/10 p-2 text-severity-alta">
                 <p className="text-xs font-medium uppercase">Decisões humanas necessárias</p>
                 <ul className="mt-0.5 list-disc space-y-1 pl-5">
-                  {state.success.executiveCuration.decisoesHumanasNecessarias.map((d, i) => (
+                  {displayedResult.executiveCuration.decisoesHumanasNecessarias.map((d, i) => (
                     <li key={i}>{d}</li>
                   ))}
                 </ul>
@@ -96,7 +112,7 @@ export function RunMultiExpertCurationButton({ projectId, eventId }: { projectId
 
             <p className="text-xs text-muted-foreground">
               Análise de IA — nunca substitui decisão humana. Registrada em Auditoria (
-              {new Date(state.success.audit.generatedAt).toLocaleString("pt-BR")}).
+              {new Date(displayedResult.audit.generatedAt).toLocaleString("pt-BR")}).
             </p>
           </div>
         ) : null}

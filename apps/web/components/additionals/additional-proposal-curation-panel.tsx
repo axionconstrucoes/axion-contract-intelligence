@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
+import { Loader2 } from "lucide-react";
+import { AiPendingIndicator } from "@/components/ai/ai-pending-indicator";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "@/components/shared/badges";
 import { expertIconClassName, resolveExpertIcon } from "@/components/ai/expert-visual-identity";
@@ -18,6 +20,9 @@ import { confrontationSeverityToAlertSeverity } from "@/lib/labels";
  */
 export function AdditionalProposalCurationPanel({ proposalId }: { proposalId: string }) {
   const [state, formAction, pending] = useActionState(runAdditionalProposalCurationAction, initialRunAdditionalProposalCurationState);
+  // Mesma regra do ExpertQueryPanel: ao disparar nova análise, o
+  // resultado anterior sai da tela — só a execução atual é exibida.
+  const displayedResult = pending ? null : state.result;
 
   return (
     <div className="flex flex-col gap-4 rounded-md border p-4">
@@ -29,17 +34,28 @@ export function AdditionalProposalCurationPanel({ proposalId }: { proposalId: st
         <form action={formAction}>
           <input type="hidden" name="proposalId" value={proposalId} />
           <Button type="submit" size="sm" variant="outline" disabled={pending}>
-            {pending ? "Analisando…" : "Analisar com Experts IA"}
+            {pending ? (
+              <>
+                <Loader2 className="animate-spin" aria-hidden="true" />
+                Analisando…
+              </>
+            ) : (
+              "Analisar com Experts IA"
+            )}
           </Button>
         </form>
       </div>
 
-      {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
+      {pending ? (
+        <AiPendingIndicator message="Consultando Comercial, Planejamento e Jurídico e consolidando via CEO IA. Isso pode levar algum tempo — aguarde nesta tela." />
+      ) : null}
 
-      {state.result ? (
+      {!pending && state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
+
+      {displayedResult ? (
         <div className="flex flex-col gap-3">
           <div className="grid gap-3 sm:grid-cols-3">
-            {state.result.expertResults.map(({ expertId, response }) => {
+            {displayedResult.expertResults.map(({ expertId, response }) => {
               const definition = OFFICIAL_EXPERT_DEFINITIONS[expertId];
               const Icon = resolveExpertIcon(definition.visualIdentity);
               return (
@@ -60,12 +76,12 @@ export function AdditionalProposalCurationPanel({ proposalId }: { proposalId: st
           <div className="rounded-md border border-purple-500/30 bg-purple-500/5 p-3 text-xs">
             <p className="mb-1.5 font-medium">Consolidação executiva — CEO IA</p>
             <p className="mb-1">
-              <strong>Situação:</strong> {state.result.executiveCuration.situacao}
+              <strong>Situação:</strong> {displayedResult.executiveCuration.situacao}
             </p>
-            {state.result.executiveCuration.divergencias.length > 0 ? (
+            {displayedResult.executiveCuration.divergencias.length > 0 ? (
               <div className="mb-1 rounded bg-severity-alta/10 p-2">
                 <p className="font-medium text-severity-alta">CONFLITO ENTRE ESPECIALISTAS</p>
-                {state.result.executiveCuration.divergencias.map((d, i) => (
+                {displayedResult.executiveCuration.divergencias.map((d, i) => (
                   <div key={i} className="mt-1">
                     <p>{d.topic}</p>
                     {d.positions.map((p, j) => (
@@ -79,13 +95,13 @@ export function AdditionalProposalCurationPanel({ proposalId }: { proposalId: st
               </div>
             ) : null}
             <p className="mb-1">
-              <strong>Recomendação:</strong> {state.result.executiveCuration.recomendacao}
+              <strong>Recomendação:</strong> {displayedResult.executiveCuration.recomendacao}
             </p>
-            {state.result.executiveCuration.decisoesHumanasNecessarias.length > 0 ? (
+            {displayedResult.executiveCuration.decisoesHumanasNecessarias.length > 0 ? (
               <div>
                 <strong>Decisões humanas necessárias:</strong>
                 <ul className="ml-4 list-disc">
-                  {state.result.executiveCuration.decisoesHumanasNecessarias.map((d, i) => (
+                  {displayedResult.executiveCuration.decisoesHumanasNecessarias.map((d, i) => (
                     <li key={i}>{d}</li>
                   ))}
                 </ul>
