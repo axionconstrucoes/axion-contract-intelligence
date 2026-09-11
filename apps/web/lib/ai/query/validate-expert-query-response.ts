@@ -162,7 +162,29 @@ export interface ExpectedExpertQueryIdentity {
   expertId: ExpertId;
   expertName: string;
   expertVersion: string;
+  /**
+   * Escopo CONFIÁVEL desta consulta — sempre o `scope` do
+   * ExpertQueryRequest já validado no servidor (ver
+   * experts/<expert>/query.ts), nunca um valor lido da resposta do
+   * provider e nunca um valor livre vindo do navegador.
+   *
+   * O provider (LLM real) não é fonte de verdade para metadado de
+   * requisição: ele não "descobre" o escopo, ele apenas recebe o
+   * contexto que o servidor montou a partir dele. Quando o modelo
+   * omitia este campo, a resposta inteira era descartada com
+   * "scope inválido: undefined" — mesmo estando correta. Aqui o escopo
+   * passou a ser derivado do servidor, na mesma linha do que já era
+   * feito com `grounding` (nunca lido do provider).
+   */
+  scope: ExpertQueryScope;
 }
+
+/**
+ * Mensagem exibida quando nem o servidor consegue determinar o escopo
+ * da consulta — nunca expõe "undefined" ao usuário.
+ */
+export const MISSING_QUERY_SCOPE_MESSAGE =
+  "Não foi possível identificar o contexto desta análise. Recarregue a página e tente novamente.";
 
 /**
  * Valida a saída bruta de um provider como ExpertQueryResponse. Lança
@@ -192,9 +214,19 @@ export function validateExpertQueryResponse(
     fail(`expertVersion inesperado: "${expertVersion}" (esperado "${expected.expertVersion}")`);
   }
 
-  const scope = candidate.scope;
-  if (typeof scope !== "string" || !VALID_SCOPES.includes(scope as ExpertQueryScope)) {
-    fail(`scope inválido: ${String(scope)}`);
+  // Escopo: SEMPRE o do servidor (expected.scope). O que o provider
+  // eventualmente devolveu só é usado para detectar contradição — nunca
+  // como fonte. Ausência no provider não é erro; divergência é.
+  if (!VALID_SCOPES.includes(expected.scope)) {
+    fail(MISSING_QUERY_SCOPE_MESSAGE);
+  }
+
+  const providerScope = candidate.scope;
+  if (providerScope !== undefined && providerScope !== null && providerScope !== expected.scope) {
+    fail(
+      `scope divergente: o provider respondeu ${JSON.stringify(providerScope)}, mas esta consulta foi montada no ` +
+        `escopo "${expected.scope}". Nenhuma resposta é aceita fora do contexto autorizado da consulta.`
+    );
   }
 
   const severity = requireString(candidate.severity, "severity");
@@ -206,7 +238,8 @@ export function validateExpertQueryResponse(
     expertId: expertId as ExpertId,
     expertName,
     expertVersion,
-    scope: scope as ExpertQueryScope,
+    // Derivado do contexto confiável do servidor, nunca da saída do provider.
+    scope: expected.scope,
     question: requireString(candidate.question, "question"),
     fatosDocumentados: requireStringArray(candidate.fatosDocumentados, "fatosDocumentados"),
     contextoInternoDeclarado: validateContextoInternoDeclarado(candidate.contextoInternoDeclarado),

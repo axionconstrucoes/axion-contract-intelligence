@@ -110,6 +110,8 @@ export async function answerPlanningDirectorQuery(
     expertId: PLANNING_DIRECTOR_EXPERT_ID,
     expertName: PLANNING_DIRECTOR_NAME,
     expertVersion: PLANNING_DIRECTOR_VERSION,
+    // Escopo confiável desta consulta (nunca lido da saída do provider).
+    scope: request.scope,
   });
 
   // Guardrail de grounding: só roda para o provider real (Anthropic) —

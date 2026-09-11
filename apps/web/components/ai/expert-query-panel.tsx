@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { confrontationSeverityToAlertSeverity } from "@/lib/labels";
 import { askCommercialDirectorAction } from "@/lib/ai/expert-query-action";
+import { MISSING_QUERY_CONTEXT_MESSAGE } from "@/lib/ai/expert-query-request";
 import { initialAskCommercialDirectorState, type AskCommercialDirectorState } from "@/lib/ai/expert-query-state";
 import { normalizeProviderMeta } from "@/lib/ai/provider-ui-metadata";
 import type { ExpertQueryScope } from "@/lib/ai/query/types";
@@ -145,6 +146,14 @@ export function ExpertQueryPanel({
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const { response, error } = state;
+  // Contexto da consulta conferido também no cliente: sem escopo
+  // reconhecido não há pergunta a enviar, e a UI nunca renderiza um
+  // valor cru (nem "undefined") — a mesma mensagem do servidor
+  // (MISSING_QUERY_CONTEXT_MESSAGE) é reaproveitada, nunca duplicada.
+  // A validação que vale continua sendo a do servidor: este bloco só
+  // evita uma ida e volta inútil.
+  const hasValidScope = scope === "PROJECT" || scope === "EVENT";
+  const hasQueryContext = hasValidScope && Boolean(projectId) && (scope !== "EVENT" || Boolean(eventId));
   // Normaliza null E undefined em um único ponto (normalizeProviderMeta)
   // — nenhum acesso a `meta.*` acontece antes desta linha, e nunca via
   // non-null assertion. Ver expert-query-action.ts
@@ -184,6 +193,11 @@ export function ExpertQueryPanel({
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
+        {!hasQueryContext ? (
+          <p className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+            {MISSING_QUERY_CONTEXT_MESSAGE}
+          </p>
+        ) : (
         <form action={formAction} className="flex flex-col gap-3">
           <input type="hidden" name="projectId" value={projectId} />
           <input type="hidden" name="scope" value={scope} />
@@ -206,6 +220,7 @@ export function ExpertQueryPanel({
             {pending ? "Consultando…" : "Consultar"}
           </Button>
         </form>
+        )}
 
         {response ? (
           <div className="flex flex-col gap-4 rounded-md border p-4">

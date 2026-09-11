@@ -7,8 +7,9 @@
 
 import { createSupabaseServerClient } from "@axion/db/server";
 import { answerEsgDirectorQuery } from "./experts/esg-director/query";
+import { parseExpertQueryForm, resolveExpertQueryErrorMessage } from "./expert-query-request";
 import { buildAiProviderUiMetadata, type AiProviderUiMetadata } from "./provider-ui-metadata";
-import type { ExpertQueryResponse, ExpertQueryScope } from "./query/types";
+import type { ExpertQueryResponse } from "./query/types";
 
 export type AskEsgDirectorState = {
   response: ExpertQueryResponse | null;
@@ -17,47 +18,20 @@ export type AskEsgDirectorState = {
   meta: AiProviderUiMetadata | null | undefined;
 };
 
-function optionalField(formData: FormData, name: string): string | null {
-  const value = String(formData.get(name) ?? "").trim();
-  return value || null;
-}
-
 export async function askEsgDirectorAction(
   _prevState: AskEsgDirectorState,
   formData: FormData
 ): Promise<AskEsgDirectorState> {
-  const projectId = optionalField(formData, "projectId");
-  const scopeRaw = optionalField(formData, "scope");
-  const eventId = optionalField(formData, "eventId");
-  const question = optionalField(formData, "question");
+  const parsed = parseExpertQueryForm(formData);
 
-  if (!projectId) {
-    return { response: null, error: "Projeto ausente. Recarregue a página e tente novamente.", meta: null };
-  }
-
-  if (scopeRaw !== "PROJECT" && scopeRaw !== "EVENT") {
-    return { response: null, error: "Escopo de consulta inválido.", meta: null };
-  }
-
-  if (!question) {
-    return { response: null, error: "Digite uma pergunta.", meta: null };
-  }
-
-  const scope = scopeRaw as ExpertQueryScope;
-
-  if (scope === "EVENT" && !eventId) {
-    return { response: null, error: "Evento ausente para consulta de escopo EVENT.", meta: null };
+  if (!parsed.ok) {
+    return { response: null, error: parsed.error, meta: null };
   }
 
   const supabase = await createSupabaseServerClient();
 
   try {
-    const result = await answerEsgDirectorQuery(supabase, {
-      scope,
-      projectId,
-      eventId: eventId ?? undefined,
-      question,
-    });
+    const result = await answerEsgDirectorQuery(supabase, parsed.request);
 
     return {
       response: result.response,
@@ -67,7 +41,7 @@ export async function askEsgDirectorAction(
   } catch (error) {
     return {
       response: null,
-      error: error instanceof Error ? error.message : "Falha ao consultar o Diretor de ESG IA.",
+      error: resolveExpertQueryErrorMessage(error, "Falha ao consultar o Diretor de ESG IA."),
       meta: null,
     };
   }

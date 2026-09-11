@@ -110,6 +110,8 @@ export async function answerLegalConsultantQuery(
     expertId: LEGAL_CONSULTANT_EXPERT_ID,
     expertName: LEGAL_CONSULTANT_NAME,
     expertVersion: LEGAL_CONSULTANT_VERSION,
+    // Escopo confiável desta consulta (nunca lido da saída do provider).
+    scope: request.scope,
   });
 
   // Guardrail de grounding: só roda para o provider real (Anthropic) —

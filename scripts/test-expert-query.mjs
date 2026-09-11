@@ -73,10 +73,14 @@ async function assertRejects(promise, message) {
   throw new Error(message ?? "esperado rejeição, mas resolveu");
 }
 
+// `scope` faz parte da identidade esperada da resposta: ele vem do
+// ExpertQueryRequest validado no servidor, nunca da saída do provider.
+// Ver scripts/test-expert-query-scope.mjs para a regressão completa.
 const identity = {
   expertId: COMMERCIAL_DIRECTOR_EXPERT_ID,
   expertName: COMMERCIAL_DIRECTOR_NAME,
   expertVersion: COMMERCIAL_DIRECTOR_VERSION,
+  scope: "EVENT",
 };
 
 function validResponseFixture() {
@@ -126,7 +130,7 @@ check("confidence fora de 0..1 falha", () => {
   assertThrows(() => validateExpertQueryResponse(fixture, identity), ExpertQueryValidationError);
 });
 
-check("scope inválido falha", () => {
+check("scope inválido declarado pelo provider falha", () => {
   const fixture = validResponseFixture();
   fixture.scope = "GALAXY";
   assertThrows(() => validateExpertQueryResponse(fixture, identity), ExpertQueryValidationError);

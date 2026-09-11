@@ -4,60 +4,40 @@
 // Comercial IA" — reutilizável em qualquer página (evento ou projeto),
 // sem arquitetura paralela. Nenhuma lógica de negócio é duplicada aqui:
 // answerCommercialDirectorQuery já reutiliza os context builders
-// genéricos e o provider abstrato.
+// genéricos e o provider abstrato, e a validação do contexto do
+// formulário vive em ./expert-query-request.ts (compartilhada com os
+// demais Experts).
 
 import { createSupabaseServerClient } from "@axion/db/server";
 import { answerCommercialDirectorQuery } from "./experts/commercial-director/query";
+import {
+  parseExpertQueryForm,
+  resolveExpertQueryErrorMessage,
+} from "./expert-query-request";
 import type { AskCommercialDirectorState } from "./expert-query-state";
 import { buildAiProviderUiMetadata } from "./provider-ui-metadata";
-import type { ExpertQueryScope } from "./query/types";
 
 // Este módulo é "use server" — só pode exportar funções async (Server
 // Actions). Tipos e o estado inicial vivem em ./expert-query-state.ts
 // (nunca aqui), justamente para nunca reintroduzir "A 'use server' file
 // can only export async functions, found object."
 
-function optionalField(formData: FormData, name: string): string | null {
-  const value = String(formData.get(name) ?? "").trim();
-  return value || null;
-}
+const FALLBACK_ERROR = "Falha ao consultar o Diretor Comercial IA.";
 
 export async function askCommercialDirectorAction(
   _prevState: AskCommercialDirectorState,
   formData: FormData
 ): Promise<AskCommercialDirectorState> {
-  const projectId = optionalField(formData, "projectId");
-  const scopeRaw = optionalField(formData, "scope");
-  const eventId = optionalField(formData, "eventId");
-  const question = optionalField(formData, "question");
+  const parsed = parseExpertQueryForm(formData);
 
-  if (!projectId) {
-    return { response: null, error: "Projeto ausente. Recarregue a página e tente novamente.", meta: null };
-  }
-
-  if (scopeRaw !== "PROJECT" && scopeRaw !== "EVENT") {
-    return { response: null, error: "Escopo de consulta inválido.", meta: null };
-  }
-
-  if (!question) {
-    return { response: null, error: "Digite uma pergunta.", meta: null };
-  }
-
-  const scope = scopeRaw as ExpertQueryScope;
-
-  if (scope === "EVENT" && !eventId) {
-    return { response: null, error: "Evento ausente para consulta de escopo EVENT.", meta: null };
+  if (!parsed.ok) {
+    return { response: null, error: parsed.error, meta: null };
   }
 
   const supabase = await createSupabaseServerClient();
 
   try {
-    const result = await answerCommercialDirectorQuery(supabase, {
-      scope,
-      projectId,
-      eventId: eventId ?? undefined,
-      question,
-    });
+    const result = await answerCommercialDirectorQuery(supabase, parsed.request);
 
     return {
       response: result.response,
@@ -67,7 +47,7 @@ export async function askCommercialDirectorAction(
   } catch (error) {
     return {
       response: null,
-      error: error instanceof Error ? error.message : "Falha ao consultar o Diretor Comercial IA.",
+      error: resolveExpertQueryErrorMessage(error, FALLBACK_ERROR),
       meta: null,
     };
   }

@@ -116,6 +116,8 @@ export async function answerEsgDirectorQuery(
     expertId: ESG_DIRECTOR_EXPERT_ID,
     expertName: ESG_DIRECTOR_NAME,
     expertVersion: ESG_DIRECTOR_VERSION,
+    // Escopo confiável desta consulta (nunca lido da saída do provider).
+    scope: request.scope,
   });
 
   return {
