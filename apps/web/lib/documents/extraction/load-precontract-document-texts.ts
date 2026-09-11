@@ -77,7 +77,12 @@ interface VersionRow {
   document_id: string;
   version_index: number;
   version_label: string | null;
-  storage_path: string | null;
+  // Nomes REAIS das colunas em document_versions: `file_path` e
+  // `storage_bucket`. Nao existe `storage_path` nesta tabela — esse
+  // nome pertence a email_attachments/contract_attachments, e usa-lo
+  // aqui fazia o Postgres recusar o SELECT inteiro com 42703.
+  file_path: string | null;
+  storage_bucket: string | null;
   original_file_name: string | null;
   mime_type: string | null;
   file_size_bytes: number | null;
@@ -121,14 +126,17 @@ export interface PrecontractDocumentLoadResult {
 }
 
 /**
- * Baixa um objeto do bucket. O prefixo do path é conferido pelo chamador
- * ANTES — esta função nunca recebe um path não verificado.
+ * Baixa um objeto usando o bucket REGISTRADO NA PRÓPRIA VERSÃO — mesma
+ * abordagem de scripts/process-document-version.mjs. O prefixo do path e
+ * o bucket já foram conferidos pelo chamador; esta função nunca recebe
+ * um par (bucket, path) não verificado.
  */
 async function downloadStorageObject(
   supabase: SupabaseClient,
-  storagePath: string
+  bucket: string,
+  filePath: string
 ): Promise<ArrayBuffer> {
-  const { data, error } = await supabase.storage.from(STORAGE_BUCKET).download(storagePath);
+  const { data, error } = await supabase.storage.from(bucket).download(filePath);
 
   if (error || !data) {
     throw new Error(`Falha ao baixar o documento do armazenamento: ${error?.message ?? "sem detalhe"}`);
@@ -213,7 +221,7 @@ export async function loadPrecontractDocumentTexts(
   const { data: versionsData, error: versionsError } = await supabase
     .from("document_versions")
     .select(
-      "id,document_id,version_index,version_label,storage_path,original_file_name,mime_type,file_size_bytes,processing_status"
+      "id,document_id,version_index,version_label,file_path,storage_bucket,original_file_name,mime_type,file_size_bytes,processing_status"
     )
     .in(
       "document_id",
@@ -244,7 +252,7 @@ export async function loadPrecontractDocumentTexts(
     const version = currentByDocument.get(document.id);
     const fileName = version?.original_file_name ?? document.title;
 
-    if (!version || !version.storage_path) {
+    if (!version || !version.file_path) {
       failures.push({
         documentId: document.id,
         title: document.title,
@@ -254,8 +262,25 @@ export async function loadPrecontractDocumentTexts(
       continue;
     }
 
+    // Bucket: nunca um fallback silencioso. Ausente ou diferente do
+    // bucket autorizado para documentos de projeto, o documento e
+    // recusado ANTES de qualquer download.
+    if (version.storage_bucket !== STORAGE_BUCKET) {
+      console.error(
+        "[precontract-context] bucket inesperado para o documento — download recusado:",
+        { documentId: document.id, bucket: version.storage_bucket }
+      );
+      failures.push({
+        documentId: document.id,
+        title: document.title,
+        fileName,
+        reason: "Documento armazenado fora do repositório autorizado desta análise.",
+      });
+      continue;
+    }
+
     // Isolamento explícito antes de qualquer download.
-    if (!isStoragePathInsideProject(version.storage_path, projectId)) {
+    if (!isStoragePathInsideProject(version.file_path, projectId)) {
       console.error("[precontract-context] path fora do projeto — download recusado:", document.id);
       failures.push({
         documentId: document.id,
@@ -277,7 +302,7 @@ export async function loadPrecontractDocumentTexts(
     }
 
     try {
-      const buffer = await downloadStorageObject(supabase, version.storage_path);
+      const buffer = await downloadStorageObject(supabase, version.storage_bucket, version.file_path);
       const result = await extractDocumentText({ buffer, mimeType: version.mime_type, fileName });
 
       extracted.push({

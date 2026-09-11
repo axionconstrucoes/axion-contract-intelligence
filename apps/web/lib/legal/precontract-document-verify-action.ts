@@ -50,7 +50,11 @@ function failure(message: string): VerifyPrecontractDocumentResult {
 interface VersionRow {
   id: string;
   document_id: string;
-  storage_path: string | null;
+  // Nomes REAIS em document_versions. `storage_path` NAO existe nesta
+  // tabela (pertence a email_attachments/contract_attachments) e fazia
+  // o Postgres recusar o SELECT inteiro com 42703.
+  file_path: string | null;
+  storage_bucket: string | null;
   original_file_name: string | null;
   mime_type: string | null;
   documents:
@@ -108,19 +112,29 @@ async function verifyVersionRow(
     return failure("Documento não encontrado nesta análise.");
   }
 
-  if (!version.storage_path) return failure("Documento sem arquivo armazenado.");
+  if (!version.file_path) return failure("Documento sem arquivo armazenado.");
+
+  // Bucket: sem fallback silencioso. Ausente ou diferente do bucket
+  // autorizado para documentos de projeto, recusa antes do download.
+  if (version.storage_bucket !== STORAGE_BUCKET) {
+    console.error("[precontract-verify] bucket inesperado — download recusado:", {
+      documentVersionId: version.id,
+      bucket: version.storage_bucket,
+    });
+    return failure("Documento armazenado fora do repositório autorizado desta análise.");
+  }
 
   // Prefixo do path conferido EXPLICITAMENTE. Falhou: não baixa, não
   // extrai, não chega ao provider.
-  if (!isStoragePathInsideProject(version.storage_path, projectId)) {
+  if (!isStoragePathInsideProject(version.file_path, projectId)) {
     console.error("[precontract-verify] path fora do projeto — download recusado");
     return failure("Documento não encontrado nesta análise.");
   }
 
   try {
     const { data: file, error: downloadError } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .download(version.storage_path);
+      .from(version.storage_bucket)
+      .download(version.file_path);
 
     if (downloadError || !file) {
       console.error("[precontract-verify] falha no download:", downloadError?.message);
@@ -173,7 +187,7 @@ export async function verifyPrecontractDocumentAction(
 
   const { data, error } = await supabase
     .from("document_versions")
-    .select("id,document_id,storage_path,original_file_name,mime_type,documents!inner(id,project_id,title,deleted_at)")
+    .select("id,document_id,file_path,storage_bucket,original_file_name,mime_type,documents!inner(id,project_id,title,deleted_at)")
     .eq("id", documentVersionId)
     .eq("documents.project_id", projectId)
     .is("documents.deleted_at", null)
@@ -230,7 +244,7 @@ export async function verifyPrecontractDocumentsBatchAction(
   const { data: versionsData, error: versionsError } = await supabase
     .from("document_versions")
     .select(
-      "id,document_id,version_index,version_label,storage_path,original_file_name,mime_type,file_size_bytes,documents!inner(id,project_id,title,deleted_at)"
+      "id,document_id,version_index,version_label,file_path,storage_bucket,original_file_name,mime_type,file_size_bytes,documents!inner(id,project_id,title,deleted_at)"
     )
     .in("document_id", documentIds)
     .eq("documents.project_id", projectId)

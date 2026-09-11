@@ -43,6 +43,9 @@ const {
 } = await import("../apps/web/lib/legal/precontract-upload-transport");
 const { createAnthropicAiProvider } = await import("../apps/web/lib/ai/providers/anthropic-provider");
 const { validateExpertQueryResponse } = await import("../apps/web/lib/ai/query/validate-expert-query-response");
+const { loadPrecontractDocumentTexts } = await import(
+  "../apps/web/lib/documents/extraction/load-precontract-document-texts"
+);
 
 let passed = 0;
 let failed = 0;
@@ -1190,6 +1193,144 @@ await checkAsync("SCHEMA: tool-use ausente LANCA e nunca vira repeticao", async 
 
   assert(lancou, "deveria lancar");
   assert(client.calls.length === 1, "tool-use ausente nunca e repetido");
+});
+
+// --- 13. Colunas reais de document_versions (regressao 42703) --------
+//
+// O Preview do PR #54 falhou com:
+//   column document_versions.storage_path does not exist
+// Os tres fluxos juridicos consultavam `storage_path`, que existe em
+// email_attachments/contract_attachments mas NAO em document_versions —
+// la os nomes sao `file_path` e `storage_bucket`.
+//
+// Os stubs nao pegaram porque as fixtures repetiam a mesma suposicao
+// errada do codigo: um stub que espelha a crenca do autor testa o autor
+// contra ele mesmo. Por isso, alem do comportamento, a guarda abaixo
+// inspeciona os SELECTs literais dos tres fluxos.
+
+const { readFileSync } = await import("node:fs");
+const { fileURLToPath } = await import("node:url");
+const nodePath = await import("node:path");
+const repoRoot = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), "..");
+const readSource = (relativePath) => readFileSync(nodePath.join(repoRoot, relativePath), "utf8");
+
+const FLUXOS_JURIDICOS = [
+  "apps/web/lib/documents/extraction/load-precontract-document-texts.ts",
+  "apps/web/lib/legal/precontract-document-verify-action.ts",
+];
+
+/** Extrai os SELECTs literais que consultam document_versions. */
+function selectsDeDocumentVersions(source) {
+  const selects = [];
+  const regex = /\.select\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g;
+  let match;
+  while ((match = regex.exec(source)) !== null) {
+    const literal = match[1].slice(1, -1);
+    if (literal.includes("document_id") || literal.includes("version_index")) selects.push(literal);
+  }
+  return selects;
+}
+
+for (const relativePath of FLUXOS_JURIDICOS) {
+  check(`COLUNAS: ${nodePath.basename(relativePath)} nunca consulta storage_path em document_versions`, () => {
+    const source = readSource(relativePath);
+
+    // O nome errado nao pode aparecer em SELECT nem em acesso de campo.
+    const usos = source.match(/\bstorage_path\b/g) ?? [];
+    const emComentario = (source.match(/\/\/[^\n]*\bstorage_path\b/g) ?? []).length;
+    assert(
+      usos.length === emComentario,
+      `storage_path usado fora de comentario em ${relativePath} (${usos.length} ocorrencia(s), ${emComentario} em comentario)`
+    );
+
+    const selects = selectsDeDocumentVersions(source);
+    assert(selects.length > 0, `nenhum SELECT de document_versions encontrado em ${relativePath}`);
+
+    for (const select of selects) {
+      assert(!select.includes("storage_path"), `SELECT com coluna inexistente: ${select}`);
+      assert(select.includes("file_path"), `SELECT sem file_path: ${select}`);
+      assert(select.includes("storage_bucket"), `SELECT sem storage_bucket: ${select}`);
+    }
+  });
+}
+
+check("COLUNAS: os nomes usados batem com os do codigo pre-existente e do worker offline", () => {
+  // Fontes de verdade independentes do meu codigo: o mapeamento que ja
+  // existia antes desta feature e o script que processa versoes.
+  const documentManagement = readSource("apps/web/lib/document-management.ts");
+  const worker = readSource("scripts/process-document-version.mjs");
+
+  assert(documentManagement.includes("version.file_path"), "document-management le file_path");
+  assert(documentManagement.includes("version.storage_bucket"), "document-management le storage_bucket");
+  assert(worker.includes("file_path"), "o worker offline usa file_path");
+  assert(worker.includes("storage_bucket"), "o worker offline usa storage_bucket");
+});
+
+await checkAsync("COLUNAS: o download usa o bucket REGISTRADO NA VERSAO, nunca uma constante presumida", async () => {
+  const bucketsUsados = [];
+  const caminho = `${PROJECT}/doc-b/ver-b/minuta.txt`;
+
+  const supabase = {
+    from() {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        in: () => builder,
+        is: () => builder,
+        order: () => builder,
+        limit: () => builder,
+        maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        then: (resolve) => Promise.resolve({ data: [], error: null }).then(resolve),
+      };
+      return builder;
+    },
+    storage: {
+      from(bucket) {
+        bucketsUsados.push(bucket);
+        return { download: () => Promise.resolve({ data: null, error: { message: "nao usado" } }) };
+      },
+    },
+  };
+
+  // Exercita o loader com um projeto sem documentos: o que importa aqui e
+  // que a assinatura exige (bucket, path) e nao um bucket fixo.
+  const resultado = await loadPrecontractDocumentTexts(supabase, { projectId: PROJECT });
+  assert(resultado.documents.length === 0 && resultado.availableCount === 0);
+
+  const fonte = readSource("apps/web/lib/documents/extraction/load-precontract-document-texts.ts");
+  assert(
+    /\.from\(\s*bucket\s*\)/.test(fonte),
+    "o download precisa usar o bucket recebido da linha, nao uma constante"
+  );
+  assert(
+    /version\.storage_bucket/.test(fonte),
+    "o bucket precisa vir de version.storage_bucket"
+  );
+  assert(caminho.startsWith(`${PROJECT}/`), "sanity check do proprio teste");
+});
+
+check("COLUNAS: bucket ausente ou diferente do autorizado e recusado, sem fallback", () => {
+  for (const relativePath of FLUXOS_JURIDICOS) {
+    const source = readSource(relativePath);
+    assert(
+      /storage_bucket !== STORAGE_BUCKET/.test(source),
+      `${relativePath} precisa recusar bucket diferente do autorizado`
+    );
+    // Fallback silencioso proibido: nada de `?? STORAGE_BUCKET`.
+    assert(
+      !/storage_bucket\s*\?\?\s*STORAGE_BUCKET/.test(source),
+      `${relativePath} nao pode cair em bucket padrao quando a coluna vem nula`
+    );
+  }
+});
+
+check("COLUNAS: a validacao de prefixo do path continua ativa nos dois fluxos", () => {
+  for (const relativePath of FLUXOS_JURIDICOS) {
+    assert(
+      readSource(relativePath).includes("isStoragePathInsideProject"),
+      `${relativePath} perdeu a checagem de prefixo do projeto`
+    );
+  }
 });
 
 console.log("");

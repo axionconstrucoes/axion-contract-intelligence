@@ -40,24 +40,35 @@ export function PrecontractWorkspaceClient({
   const blockReason = precontractQueryBlockReason(items);
 
   return (
-    <>
-      <PrecontractDocumentCard
-        canUpload={canUpload}
-        items={items}
-        onAddFile={addFile}
-        onCancel={cancelUpload}
-        onResolveDecision={resolveDecision}
-        onRetry={retry}
-      />
+    // Duas colunas a partir de lg: documento a esquerda, consulta a
+    // direita. `items-start` impede que um card estique para acompanhar
+    // a altura do outro (a resposta do especialista cresce muito), e
+    // `min-w-0` deixa o conteudo longo encolher em vez de estourar a
+    // grade. Abaixo de lg os cards empilham na ordem natural do DOM —
+    // documento primeiro, que e a ordem do fluxo: sem documento legivel
+    // a consulta nem fica disponivel.
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+      <div className="min-w-0">
+        <PrecontractDocumentCard
+          canUpload={canUpload}
+          items={items}
+          onAddFile={addFile}
+          onCancel={cancelUpload}
+          onResolveDecision={resolveDecision}
+          onRetry={retry}
+        />
+      </div>
 
-      <ExpertQueryPanel
-        projectId={projectId}
-        scope="PROJECT"
-        title="Pergunte ao especialista jurídico"
-        action={askLegalConsultantAction}
-        initialState={initialAskCommercialDirectorState}
-        disabledReason={blockReason}
-      />
-    </>
+      <div className="min-w-0">
+        <ExpertQueryPanel
+          projectId={projectId}
+          scope="PROJECT"
+          title="Pergunte ao especialista jurídico"
+          action={askLegalConsultantAction}
+          initialState={initialAskCommercialDirectorState}
+          disabledReason={blockReason}
+        />
+      </div>
+    </div>
   );
 }
