@@ -3,6 +3,20 @@ import { createSupabaseServerClient } from "@axion/db/server";
 
 export const dynamic = "force-dynamic";
 
+function decodeJwtPayload(token: string | undefined) {
+  if (!token) return null;
+
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    return JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const projectId = url.searchParams.get("projectId")?.trim() ?? "";
@@ -12,10 +26,14 @@ export async function GET(request: Request) {
   }
 
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  const [userResult, sessionResult] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.auth.getSession(),
+  ]);
+
+  const user = userResult.data.user;
+  const session = sessionResult.data.session;
+  const claims = decodeJwtPayload(session?.access_token);
 
   const [invitationsResult, membershipResult] = await Promise.all([
     supabase
@@ -42,6 +60,13 @@ export async function GET(request: Request) {
     supabaseHost = "invalid_url";
   }
 
+  const safeClaims = {
+    sub: typeof claims?.sub === "string" ? claims.sub : null,
+    role: typeof claims?.role === "string" ? claims.role : null,
+    aud: typeof claims?.aud === "string" || Array.isArray(claims?.aud) ? claims.aud : null,
+    iss: typeof claims?.iss === "string" ? claims.iss : null,
+  };
+
   console.info("[diag:getProjectMemberInvitations]", {
     projectId,
     authenticated,
@@ -49,7 +74,9 @@ export async function GET(request: Request) {
     supabaseHost,
     membershipCount,
     invitationCount,
-    authErrorCode: authError?.code ?? null,
+    claims: safeClaims,
+    authErrorCode: userResult.error?.code ?? null,
+    sessionErrorCode: sessionResult.error?.code ?? null,
     invitationsErrorCode: invitationsResult.error?.code ?? null,
     membershipErrorCode: membershipResult.error?.code ?? null,
   });
@@ -65,7 +92,9 @@ export async function GET(request: Request) {
         supabaseHost,
         membershipCount,
         invitationCount,
-        authErrorCode: authError?.code ?? null,
+        claims: safeClaims,
+        authErrorCode: userResult.error?.code ?? null,
+        sessionErrorCode: sessionResult.error?.code ?? null,
         errorCode: error.code ?? null,
       },
       { status: 500 }
@@ -80,6 +109,8 @@ export async function GET(request: Request) {
     supabaseHost,
     membershipCount,
     invitationCount,
-    authErrorCode: authError?.code ?? null,
+    claims: safeClaims,
+    authErrorCode: userResult.error?.code ?? null,
+    sessionErrorCode: sessionResult.error?.code ?? null,
   });
 }
