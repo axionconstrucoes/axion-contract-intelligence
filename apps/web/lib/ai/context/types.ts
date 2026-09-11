@@ -180,6 +180,16 @@ export interface ContextContractualDocument {
   documentVersionId: string;
   title: string;
   kind: string;
+  /**
+   * CONTRATO ou CRONOGRAMA. Vai ao contexto de propósito: sem isto, o
+   * texto de uma planilha de cronograma chega ao modelo indistinguível
+   * do texto do contrato, e uma data de PLANEJAMENTO ("término em
+   * 30/06", linha 42 da planilha) viraria afirmação de prazo
+   * CONTRATUAL. Data de cronograma só é exigível se uma cláusula disser
+   * que aquele cronograma vincula. Ver resolveDocumentRole em
+   * documents/extraction/load-precontract-document-texts.ts.
+   */
+  documentRole: "CONTRATO" | "CRONOGRAMA";
   versionLabel: string | null;
   fileName: string;
   pageCount: number | null;

@@ -21,7 +21,12 @@ import {
   type PrecontractDocumentStatus,
 } from "@/lib/legal/precontract-document-state";
 
-const ACCEPTED = ".pdf,.docx,.txt";
+// .mpp entra no accept DE PROPOSITO, mesmo sem parser: o usuario tem o
+// cronograma nesse formato e precisa ser informado do caminho de saida
+// (exportar em .xlsx) no momento em que tenta enviar — nao descobrir
+// depois que a analise ignorou as datas. A recusa vem de
+// unsupportedFormatDetail, com a instrucao de exportacao.
+const ACCEPTED = ".pdf,.docx,.txt,.xlsx,.mpp";
 
 const STATUS_STYLES: Record<PrecontractDocumentStatus, string> = {
   OCIOSO: "text-muted-foreground",
@@ -33,7 +38,15 @@ const STATUS_STYLES: Record<PrecontractDocumentStatus, string> = {
   ERRO: "text-destructive",
 };
 
-const KIND_OPTIONS = ["CONTRATO_BASE", "ADITIVO", "EDITAL", "PROPOSTA_COMERCIAL", "PROPOSTA_TECNICA"] as const;
+const KIND_OPTIONS = [
+  "CONTRATO_BASE",
+  "ADITIVO",
+  "EDITAL",
+  "PROPOSTA_COMERCIAL",
+  "PROPOSTA_TECNICA",
+  "CRONOGRAMA_BASELINE",
+  "CRONOGRAMA_REVISAO",
+] as const;
 
 function kindLabel(kind: string): string {
   return documentKindLabels[kind as keyof typeof documentKindLabels] ?? kind;
@@ -66,8 +79,8 @@ export function PrecontractDocumentCard({
           Documento da negociação
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Contrato, minuta ou aditivo em PDF, DOCX ou TXT. O especialista jurídico responde a partir do texto deste
-          documento.
+          Contrato, minuta ou aditivo em PDF, DOCX ou TXT — e o cronograma em XLSX, de onde saem as datas-limite. O
+          especialista jurídico responde a partir do conteúdo destes documentos.
         </p>
       </CardHeader>
 
@@ -113,7 +126,9 @@ export function PrecontractDocumentCard({
             >
               <UploadCloud className="size-6 text-muted-foreground" />
               <p className="text-sm font-medium">Arraste o documento aqui ou clique para selecionar</p>
-              <p className="text-xs text-muted-foreground">PDF, DOCX ou TXT com texto selecionável</p>
+              <p className="text-xs text-muted-foreground">
+                PDF, DOCX ou TXT com texto selecionável — ou XLSX para o cronograma
+              </p>
               <input
                 ref={inputRef}
                 type="file"

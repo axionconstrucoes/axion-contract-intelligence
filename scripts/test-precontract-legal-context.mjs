@@ -581,7 +581,21 @@ check("ESTADOS: formatos aceitos sao reconhecidos, os demais sao recusados", () 
   assert(resolveExtractionFormat(null, "minuta.docx") === "DOCX");
   assert(resolveExtractionFormat("text/plain", "notas.txt") === "TXT");
   assert(resolveExtractionFormat("image/png", "foto.png") === null, "PNG nunca e tratado como documento legivel");
-  assert(resolveExtractionFormat(null, "planilha.xlsx") === null, "XLSX fora do escopo juridico desta tela");
+
+  // ASSERCAO INVERTIDA DE PROPOSITO. Ate aqui XLSX era recusado ("fora do
+  // escopo juridico desta tela"), o que deixou de ser verdade: o
+  // cronograma em planilha entrou no escopo justamente para dar DATA as
+  // regras de prazo do Consultor Juridico (extensao day-for-day, multa
+  // por atraso, proporcionalidade da mora), que sem data nao decidem
+  // nada. A assercao antiga travava exatamente a mudanca pedida.
+  assert(
+    resolveExtractionFormat("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "crono.xlsx") === "XLSX",
+    "XLSX por MIME"
+  );
+  assert(resolveExtractionFormat(null, "cronograma.xlsx") === "XLSX", "XLSX por extensao");
+
+  // .mpp continua SEM parser — e isso e um resultado, nao um esquecimento.
+  assert(resolveExtractionFormat("application/vnd.ms-project", "crono.mpp") === null, "MPP nao tem parser JS viavel");
 });
 
 await checkAsync("ESTADOS: documento com formato nao suportado vira falha declarada, nao some", async () => {

@@ -10,7 +10,10 @@
 // "the chunking context does not support external modules (request:
 // node:fs)". Foi exatamente o que aconteceu.
 
-export type SupportedExtractionFormat = "PDF" | "DOCX" | "TXT";
+export type SupportedExtractionFormat = "PDF" | "DOCX" | "TXT" | "XLSX";
+
+/** Rótulo dos formatos legíveis, para mensagem ao usuário. Fonte única. */
+export const SUPPORTED_FORMATS_LABEL = "PDF, DOCX, TXT ou XLSX";
 
 function resolveExtension(fileName: string): string {
   return String(fileName ?? "").split(".").pop()?.toLowerCase() ?? "";
@@ -35,6 +38,43 @@ export function resolveExtractionFormat(
     return "DOCX";
   }
   if (mimeType === "text/plain" || extension === "txt") return "TXT";
+  if (
+    mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    extension === "xlsx"
+  ) {
+    return "XLSX";
+  }
 
   return null;
+}
+
+/**
+ * `.mpp` (Microsoft Project) é formato binário proprietário (contêiner
+ * OLE) e NÃO existe parser JavaScript viável para ele. O arquivo até
+ * poderia ser guardado, mas nenhuma data sairia dele — e um cronograma
+ * armazenado que o especialista não lê é pior do que uma recusa: passa
+ * a impressão de que as datas entraram na análise.
+ *
+ * Por isso a recusa é explícita e diz o caminho de saída (exportar em
+ * .xlsx pelo próprio MS Project), em vez da mensagem genérica.
+ */
+export function isMicrosoftProjectFile(mimeType: string | null, fileName: string): boolean {
+  return mimeType === "application/vnd.ms-project" || resolveExtension(fileName) === "mpp";
+}
+
+/**
+ * Motivo exibível de um formato recusado. Única fonte da mensagem, usada
+ * tanto no navegador (antes do upload) quanto no servidor (extração) —
+ * sem isto, o mesmo arquivo era recusado com dois textos diferentes
+ * dependendo de onde a recusa acontecia.
+ */
+export function unsupportedFormatDetail(mimeType: string | null, fileName: string): string {
+  if (isMicrosoftProjectFile(mimeType, fileName)) {
+    return (
+      `O AXION não lê datas do formato .mpp (Microsoft Project). Exporte o cronograma ` +
+      `em .xlsx (no MS Project: Arquivo › Salvar como › Pasta de Trabalho do Excel) e envie a planilha.`
+    );
+  }
+
+  return `Formato não suportado para análise jurídica: "${fileName}". Envie ${SUPPORTED_FORMATS_LABEL}.`;
 }
