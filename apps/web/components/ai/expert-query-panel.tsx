@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState } from "react";
-import { AlertTriangle, FlaskConical, HelpCircle } from "lucide-react";
+import { AlertTriangle, FlaskConical, HelpCircle, Loader2 } from "lucide-react";
+import { AiPendingIndicator } from "@/components/ai/ai-pending-indicator";
 import { SeverityBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -426,19 +427,30 @@ export function ExpertQueryPanel({
             />
           </label>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {!pending && error ? <p className="text-sm text-destructive">{error}</p> : null}
 
           {disabledReason ? (
             <p className="rounded-md border bg-muted/40 p-2.5 text-sm text-muted-foreground">{disabledReason}</p>
           ) : null}
 
           <Button type="submit" disabled={pending || Boolean(disabledReason)} className="self-start">
-            {pending ? "Consultando…" : "Consultar"}
+            {pending ? (
+              <>
+                <Loader2 className="animate-spin" aria-hidden="true" />
+                Consultando…
+              </>
+            ) : (
+              "Consultar"
+            )}
           </Button>
+
+          {/* Enquanto `pending`, a resposta anterior já saiu da tela
+              (displayedResponse) — este aviso ocupa o lugar dela. */}
+          {pending ? <AiPendingIndicator /> : null}
         </form>
         )}
 
-        {state.coverage ? <PartialContentNotice coverage={state.coverage} /> : null}
+        {!pending && state.coverage ? <PartialContentNotice coverage={state.coverage} /> : null}
 
         {displayedResponse && presentation === "default" ? <ExpertResponseDetails response={displayedResponse} showClauseComparison={false} /> : null}
       </CardContent>
