@@ -125,7 +125,7 @@ export function DocumentMultiUploadPanel({ projectId, documents }: Props) {
         <>
           <div className="flex flex-wrap items-end gap-3">
             <label className="flex flex-col gap-1.5 text-sm">
-              <span className="font-medium">Tipo documental padrão do lote</span>
+              <span className="font-medium">Tipo para aplicar ao lote</span>
               <Select
                 value={batchDefaultKind}
                 onChange={(event) =>
@@ -153,7 +153,7 @@ export function DocumentMultiUploadPanel({ projectId, documents }: Props) {
               disabled={!hasPending || !batchDefaultKind}
               onClick={() => applyKindToAllPending(batchDefaultKind)}
             >
-              Aplicar a todos ainda aguardando
+              Aplicar aos arquivos aguardando
             </Button>
 
             <Button
@@ -168,7 +168,7 @@ export function DocumentMultiUploadPanel({ projectId, documents }: Props) {
 
           {hasPendingWithoutKind ? (
             <p className="rounded-md border border-amber-500/50 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
-              Antes de iniciar, escolha o tipo documental. Para uma minuta de contrato, selecione <strong>Contrato</strong>. O tipo padrão escolhido acima será aplicado automaticamente aos arquivos ainda sem classificação.
+              Antes de iniciar, confirme o tipo documental de cada arquivo. Você pode selecionar o tipo individualmente em cada item ou escolher um tipo acima e clicar em <strong>Aplicar aos arquivos aguardando</strong>. Nenhum tipo é atribuído automaticamente, exceto arquivos .mpp, identificados como cronograma baseline.
             </p>
           ) : null}
 
