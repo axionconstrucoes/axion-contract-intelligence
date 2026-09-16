@@ -24,7 +24,14 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const EDITABLE_KIND_STATUSES = new Set(["PENDENTE", "REJEITADO"]);
+// ERRO precisa continuar editável: sem isso, um item que falhou por ter
+// sido enviado com o tipo documental errado (ex.: "Contrato" quando na
+// verdade era "Aditivo Contratual", disparando SINGLE_ACTIVE_CONTRACT_BASE
+// contra um Contrato-base já existente) nunca poderia ser corrigido — o
+// seletor ficava desabilitado, "Tentar novamente" reenviava sempre o
+// MESMO tipo já salvo no item (retryItem nunca altera kind, só
+// status/fase/progresso), e o erro se repetia para sempre.
+const EDITABLE_KIND_STATUSES = new Set(["PENDENTE", "REJEITADO", "ERRO"]);
 const RETRYABLE_STATUSES = new Set(["ERRO"]);
 
 type Props = {

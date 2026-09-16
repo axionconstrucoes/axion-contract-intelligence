@@ -1378,6 +1378,156 @@ check("linha da fila: botão 'Remover' agora aparece junto de 'Tentar novamente'
   assert(canRemoveQueueItem("ERRO") && new Set(["ERRO"]).has("ERRO"));
 });
 
+// --- 8. Aditivo Contratual deve coexistir com Contrato-base ativo (retry com kind editável) ---
+//
+// Bug relatado: "WEG LINHARES - ADITIVO 01 - REV03.pdf" selecionado como
+// ADITIVO continuava sendo rejeitado com SINGLE_ACTIVE_CONTRACT_BASE.
+// Causa raiz comprovada (não backend): EDITABLE_KIND_STATUSES não
+// incluía "ERRO" — o seletor de tipo ficava desabilitado no card ERRO,
+// então o usuário nunca conseguia de fato trocar o kind antes de
+// "Tentar novamente" (retryItem nunca altera kind, só reenvia o que já
+// estava salvo). A regra SQL em si (trigger enforce_single_active_
+// contract_base) sempre esteve correta — só bloqueia kind='CONTRATO_BASE'.
+
+const singleActiveContractBaseMigration = readSource(
+  "supabase/migrations/20260829170000_single_active_contract_base_per_project.sql"
+);
+
+check("(1) SQL: a regra de contrato-base único só se aplica a kind = 'CONTRATO_BASE' — early return para qualquer outro kind, ADITIVO incluso", () => {
+  assert(
+    /if new\.kind <> 'CONTRATO_BASE' then\s*\n\s*return new;\s*\n\s*end if;/.test(singleActiveContractBaseMigration),
+    "o trigger deveria sair imediatamente (return new, sem checar nada) para qualquer kind diferente de CONTRATO_BASE"
+  );
+});
+
+check("(1) SQL: CONTRATO_BASE novo/restaurado com outro CONTRATO_BASE ativo no mesmo projeto -> raise exception SINGLE_ACTIVE_CONTRACT_BASE", () => {
+  assert(
+    /if exists \(\s*\n\s*select 1\s*\n\s*from public\.documents d\s*\n\s*where d\.project_id = new\.project_id\s*\n\s*and d\.kind = 'CONTRATO_BASE'\s*\n\s*and d\.deleted_at is null\s*\n\s*and d\.id <> new\.id\s*\n\s*\) then\s*\n\s*raise exception\s*\n\s*'SINGLE_ACTIVE_CONTRACT_BASE:/.test(singleActiveContractBaseMigration),
+    "a condição de bloqueio deveria continuar escopada por project_id + kind='CONTRATO_BASE' + deleted_at is null + id diferente"
+  );
+});
+
+check("(1) SQL: register_project_document_upload aceita 'ADITIVO' como p_kind válido (não é isso que a regra de contrato-base único deveria bloquear)", () => {
+  const uploadMigration = readSource("supabase/migrations/20260825130000_multi_document_upload_foundation.sql");
+  assert(/'CONTRATO_BASE', 'ADITIVO',/.test(uploadMigration), "ADITIVO deveria continuar na allowlist de p_kind da RPC");
+});
+
+check("(1)/(2) SQL: o INSERT em public.documents grava p_kind sem nenhum remapeamento (nunca força CONTRATO_BASE nem 'promove' ADITIVO) — o trigger vê exatamente o kind escolhido no frontend", () => {
+  const uploadMigration = readSource("supabase/migrations/20260825130000_multi_document_upload_foundation.sql");
+  const insertBlock = uploadMigration.slice(
+    uploadMigration.indexOf("insert into public.documents ("),
+    uploadMigration.indexOf("v_is_new_document := true;")
+  );
+  assert(/p_kind/.test(insertBlock), "o INSERT deveria gravar exatamente p_kind, sem transformação");
+});
+
+check("(2) canônico: o valor exato do tipo documental 'Aditivo Contratual' é 'ADITIVO' — nunca 'ADITIVO_CONTRATUAL' nem outro literal — mesmo valor em MultiUploadDocumentKind, DocumentKind (@axion/types) e na allowlist da RPC", () => {
+  const typesSource = readSource("apps/web/lib/documents/multi-upload/types.ts");
+  assert(/\| "ADITIVO"/.test(typesSource), "MultiUploadDocumentKind deveria conter exatamente \"ADITIVO\"");
+  assert(!/ADITIVO_CONTRATUAL/.test(typesSource), "não deveria existir o literal ADITIVO_CONTRATUAL em nenhum lugar da fila");
+  const kindOption = MULTI_UPLOAD_DOCUMENT_KINDS.find((k) => k.label === "Aditivo Contratual");
+  assert(kindOption?.value === "ADITIVO", `o rótulo 'Aditivo Contratual' deveria mapear para o value \"ADITIVO\", obtido ${kindOption?.value}`);
+});
+
+check("(f) EDITABLE_KIND_STATUSES agora inclui ERRO — causa raiz do defeito relatado (antes só PENDENTE/REJEITADO); o seletor de tipo documental volta a ficar editável depois de uma falha, para QUALQUER tipo documental (não só Aditivo — a correção não discrimina por kind)", () => {
+  const rowSource = readSource("apps/web/components/documents/multi-upload/queue-item-row.tsx");
+  assert(
+    /const EDITABLE_KIND_STATUSES = new Set\(\["PENDENTE", "REJEITADO", "ERRO"\]\);/.test(rowSource),
+    "EDITABLE_KIND_STATUSES deveria agora conter PENDENTE, REJEITADO e ERRO"
+  );
+});
+
+check("(3) fluxo completo: item ERRO com kind=CONTRATO_BASE tem o tipo corrigido para ADITIVO (simulando setItemKind, sem guarda de status) e SOBREVIVE ao retry (simulando retryItem, que reseta status/fase/progresso mas nunca sobrescreve kind)", () => {
+  // Simula exatamente as duas transformações reais do hook, na ordem em
+  // que a UI as aciona: 1) usuário troca o tipo (setItemKind: sem guarda
+  // de status, só um caso especial para REJEITADO+kind vazio, que não
+  // se aplica aqui) — 2) usuário clica "Tentar novamente" (retryItem:
+  // reseta status/fase/progresso/erro/classificação, nunca toca kind).
+  const original = {
+    id: "erro-weg-aditivo",
+    status: "ERRO",
+    kind: "CONTRATO_BASE", // valor errado que causou o SINGLE_ACTIVE_CONTRACT_BASE
+    errorMessage: 'WEG LINHARES - ADITIVO 01 - REV03.pdf não foi importado: este projeto já tem um Contrato-base ativo — abra o card existente e use "Adicionar nova versão" em vez de enviar um novo Contrato-base.',
+  };
+
+  // setItemKind (réplica fiel de use-document-upload-queue.ts)
+  function simulateSetItemKind(item, kind) {
+    const wasRejectedOnlyBecauseKindWasMissing =
+      item.status === "REJEITADO" &&
+      !item.kind &&
+      item.errorMessage?.includes("selecione o tipo documental");
+    return wasRejectedOnlyBecauseKindWasMissing
+      ? { ...item, kind, status: "PENDENTE", errorMessage: null }
+      : { ...item, kind };
+  }
+
+  // retryItem (réplica fiel — note a AUSÊNCIA de qualquer campo `kind`)
+  function simulateRetryItem(item) {
+    return {
+      ...item,
+      status: "PENDENTE",
+      phase: "VALIDACAO",
+      progressPercent: 0,
+      errorMessage: null,
+      classification: null,
+      matchedDocumentId: null,
+      matchedDocumentTitle: null,
+      sha256Hash: null,
+      documentVersionId: null,
+    };
+  }
+
+  const afterKindChange = simulateSetItemKind(original, "ADITIVO");
+  assert(afterKindChange.kind === "ADITIVO", "trocar o tipo deveria persistir ADITIVO no item, mesmo em status ERRO");
+
+  const afterRetry = simulateRetryItem(afterKindChange);
+  assert(afterRetry.kind === "ADITIVO", "(4) retry NUNCA deveria reverter/reutilizar o tipo antigo (CONTRATO_BASE) — deveria preservar o tipo atualmente selecionado (ADITIVO)");
+  assert(afterRetry.status === "PENDENTE", "retry deveria reentrar no pipeline do zero");
+  assert(afterRetry.errorMessage === null, "retry deveria limpar a mensagem de erro anterior");
+});
+
+check("(4) retryItem (código real) nunca sobrescreve `kind` — o objeto de transição não contém nenhuma atribuição a kind, então ele é sempre herdado do item ATUAL (após qualquer correção feita pelo usuário), nunca reconstruído com um valor antigo", () => {
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  const retryItemBody = hookSource.slice(
+    hookSource.indexOf("const retryItem = useCallback("),
+    hookSource.indexOf("const confirmVersionDecision = useCallback(")
+  );
+  assert(retryItemBody.length > 0, "não encontrei o corpo de retryItem para inspecionar");
+  assert(!/\bkind:/.test(retryItemBody), "retryItem não deveria atribuir kind explicitamente — deveria herdar sempre o valor atual do item via spread (...item)");
+  assert(/\.\.\.item,/.test(retryItemBody), "retryItem deveria espalhar (...item) antes de sobrescrever status/fase/progresso, preservando kind");
+});
+
+check("(3) setItemKind (código real) nunca tem guarda de status impedindo a troca — funciona em PENDENTE, REJEITADO e ERRO igualmente (a única restrição de edição está na UI, em EDITABLE_KIND_STATUSES, não no hook)", () => {
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  const setItemKindBody = hookSource.slice(
+    hookSource.indexOf("const setItemKind = useCallback("),
+    hookSource.indexOf("const applyKindToAllPending = useCallback(")
+  );
+  assert(setItemKindBody.length > 0, "não encontrei o corpo de setItemKind para inspecionar");
+  assert(!/item\.status !== "PENDENTE"|item\.status === "ERRO" &&.*return item/.test(setItemKindBody), "setItemKind não deveria ter nenhuma guarda que bloqueie ERRO");
+});
+
+check("(5) nenhuma regressão: canRemoveQueueItem/REMOVABLE_STATUSES (correção anterior, PR #62) permanecem intocados por esta correção — Remover e Editar tipo são decisões independentes", () => {
+  assert(REMOVABLE_STATUSES.includes("PENDENTE") && REMOVABLE_STATUSES.includes("ERRO"));
+  assert(canRemoveQueueItem("ERRO") === true);
+});
+
+check("(5) nenhuma regressão: EDITABLE_KIND_STATUSES continua BLOQUEANDO edição de tipo para status que nunca deveriam permitir (CONCLUIDO, PROCESSANDO, DUPLICADO, AGUARDANDO_*) — a correção só abriu ERRO, não abriu geral", () => {
+  const rowSource = readSource("apps/web/components/documents/multi-upload/queue-item-row.tsx");
+  const editableSetLiteral = rowSource.match(/const EDITABLE_KIND_STATUSES = new Set\((\[[^\]]*\])\);/)?.[1];
+  assert(editableSetLiteral, "não encontrei o literal de EDITABLE_KIND_STATUSES");
+  const editableStatuses = JSON.parse(editableSetLiteral);
+  assert(editableStatuses.length === 3, `esperado exatamente 3 status editáveis (PENDENTE, REJEITADO, ERRO), obtido ${editableStatuses.length}: ${editableStatuses.join(", ")}`);
+  for (const status of ["CONCLUIDO", "PROCESSANDO", "DUPLICADO", "AGUARDANDO_ANALISE", "AGUARDANDO_DECISAO_VERSAO", "AGUARDANDO_DECISAO_CONFLITO", "VALIDANDO", "CALCULANDO_HASH", "ENVIANDO", "REGISTRANDO"]) {
+    assert(!editableStatuses.includes(status), `${status} nunca deveria se tornar editável por esta correção`);
+  }
+});
+
+check("(5) nenhuma regressão: .mpp continua com o seletor bloqueado mesmo em ERRO — isMppFile permanece parte da condição canEditKind, ERRO não abre exceção para esse caso", () => {
+  const rowSource = readSource("apps/web/components/documents/multi-upload/queue-item-row.tsx");
+  assert(/EDITABLE_KIND_STATUSES\.has\(item\.status\) &&\s*\n\s*!isMppFile\(item\.descriptor\)/.test(rowSource), "canEditKind deveria continuar combinando EDITABLE_KIND_STATUSES com !isMppFile, nunca um OR que abra exceção para .mpp");
+});
+
 console.log("");
 console.log("======================================");
 console.log("LIMITAÇÃO CONHECIDA (reportada, não corrigida nesta rodada): o índice único é PARCIAL");
