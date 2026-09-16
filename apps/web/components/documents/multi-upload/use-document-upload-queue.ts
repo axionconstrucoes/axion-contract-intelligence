@@ -71,9 +71,9 @@ export function useDocumentUploadQueue(
 ) {
   const itemsRef = useRef<QueueItem[]>([]);
   const [items, setItemsState] = useState<QueueItem[]>([]);
-  // "" (não selecionado) — nunca mais um kind pré-escolhido por
-  // padrão; ver isMppFile/suggestedKindForDescriptor abaixo para a
-  // única exceção (o próprio arquivo .mpp dita o tipo).
+  // O seletor do lote é apenas uma ferramenta de preenchimento em massa.
+  // Ele nunca define silenciosamente o tipo de um novo arquivo. A única
+  // exceção automática continua sendo .mpp -> CRONOGRAMA_BASELINE.
   const [batchDefaultKind, setBatchDefaultKindState] =
     useState<MultiUploadDocumentKind>("");
   const [isRunning, setIsRunning] = useState(false);
@@ -137,11 +137,10 @@ export function useDocumentUploadQueue(
         toAdd.push({
           id,
           descriptor: entry.descriptor,
-          // .mpp sempre dita o próprio tipo (CRONOGRAMA_BASELINE) —
-          // nunca herda o default do lote; qualquer outro arquivo
-          // começa em batchDefaultKind, que agora é "" até o usuário
-          // escolher (nunca mais CONTRATO_BASE implícito).
-          kind: suggestedKindForDescriptor(entry.descriptor) ?? batchDefaultKind,
+          // .mpp dita o próprio tipo; qualquer outro arquivo começa sem
+          // tipo e exige confirmação individual ou aplicação em massa
+          // explicitamente acionada pelo usuário.
+          kind: suggestedKindForDescriptor(entry.descriptor) ?? "",
           status: "PENDENTE",
           phase: "VALIDACAO",
           progressPercent: 0,
@@ -159,7 +158,7 @@ export function useDocumentUploadQueue(
         setItems((prev) => [...prev, ...toAdd]);
       }
     },
-    [batchDefaultKind, setItems]
+    [setItems]
   );
 
   // Remove SÓ do estado local em memória (itemsRef/setItems) — nunca
@@ -253,35 +252,11 @@ export function useDocumentUploadQueue(
 
   const setBatchDefaultKind = useCallback(
     (kind: MultiUploadDocumentKind) => {
+      // Selecionar um tipo aqui apenas prepara a ação explícita do botão
+      // "Aplicar a todos". Não altera nenhum item da fila por si só.
       setBatchDefaultKindState(kind);
-
-      // A escolha do padrão também classifica automaticamente os itens
-      // ainda sem tipo. Antes, o usuário precisava descobrir um segundo
-      // botão ("Aplicar a todos") e o envio podia ser iniciado sem tipo.
-      setItems((prev) =>
-        prev.map((item) => {
-          if (item.kind || isMppFile(item.descriptor)) return item;
-
-          if (item.status === "PENDENTE") return { ...item, kind };
-
-          const wasRejectedOnlyBecauseKindWasMissing =
-            item.status === "REJEITADO" &&
-            item.errorMessage?.includes("selecione o tipo documental");
-
-          return wasRejectedOnlyBecauseKindWasMissing
-            ? {
-                ...item,
-                kind,
-                status: "PENDENTE",
-                phase: "VALIDACAO",
-                progressPercent: 0,
-                errorMessage: null,
-              }
-            : item;
-        })
-      );
     },
-    [setItems]
+    []
   );
 
   const getUser = useCallback(async () => {
