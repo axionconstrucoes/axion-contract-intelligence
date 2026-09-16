@@ -20,6 +20,7 @@ import { createSupabaseBrowserClient } from "@axion/db/browser";
 import {
   buildDescriptor,
   buildImportErrorMessage,
+  canRemoveQueueItem,
   classifyCandidate,
   classifyStorageUploadError,
   computeBatchSummary,
@@ -29,6 +30,7 @@ import {
   mergeNewFiles,
   nextVersionLabel,
   progressForPhase,
+  removeErroredItems,
   sanitizeFileName,
   suggestedKindForDescriptor,
   toExistingDocumentSnapshots,
@@ -160,16 +162,50 @@ export function useDocumentUploadQueue(
     [batchDefaultKind, setItems]
   );
 
+  // Remove SÓ do estado local em memória (itemsRef/setItems) — nunca
+  // chama Storage/RPC/DELETE. canRemoveQueueItem (queue-core.ts) é a
+  // MESMA checagem que decide, na linha da fila, se o botão "Remover"
+  // aparece — nunca dois critérios divergentes entre UI e hook (essa
+  // divergência era exatamente o defeito relatado: ERRO nunca tinha
+  // "Remover" porque só a linha via um Set desatualizado).
+  const forgetHashIndexEntry = useCallback((item: QueueItem) => {
+    if (
+      item.sha256Hash &&
+      batchHashIndexRef.current.get(item.sha256Hash) === item.id
+    ) {
+      // Sem isso, um arquivo idêntico re-adicionado depois de remover
+      // este item ERRO seria classificado como "duplicado dentro do
+      // lote" contra um item que nem existe mais na fila.
+      batchHashIndexRef.current.delete(item.sha256Hash);
+    }
+  }, []);
+
   const removeItem = useCallback(
     (id: string) => {
       const target = itemsRef.current.find((item) => item.id === id);
-      if (!target || target.status !== "PENDENTE") return;
+      if (!target || !canRemoveQueueItem(target.status)) return;
 
       filesRef.current.delete(id);
+      forgetHashIndexEntry(target);
       setItems((prev) => prev.filter((item) => item.id !== id));
     },
-    [setItems]
+    [setItems, forgetHashIndexEntry]
   );
+
+  // "Limpar todos os erros" (Progresso geral): remove só os itens
+  // ERRO da fila local — CONCLUIDO/PROCESSANDO/DUPLICADO/REJEITADO/
+  // AGUARDANDO_* e qualquer item em voo nunca são tocados aqui.
+  // removeErroredItems (queue-core.ts) é pura — decide só QUAIS itens
+  // sobrevivem; a limpeza de filesRef/batchHashIndexRef, que precisa
+  // de I/O local (refs), é feita aqui, no hook.
+  const clearAllErrors = useCallback(() => {
+    for (const item of itemsRef.current) {
+      if (item.status !== "ERRO") continue;
+      filesRef.current.delete(item.id);
+      forgetHashIndexEntry(item);
+    }
+    setItems((prev) => removeErroredItems(prev));
+  }, [setItems, forgetHashIndexEntry]);
 
   const setItemKind = useCallback(
     (id: string, kind: MultiUploadDocumentKind) => {
@@ -778,6 +814,7 @@ export function useDocumentUploadQueue(
     isRunning,
     addFiles,
     removeItem,
+    clearAllErrors,
     setItemKind,
     applyKindToAllPending,
     setBatchDefaultKind,

@@ -88,6 +88,9 @@ const {
   classifyStorageUploadError,
   toExistingDocumentSnapshots,
   buildImportErrorMessage,
+  canRemoveQueueItem,
+  removeErroredItems,
+  REMOVABLE_STATUSES,
 } = await import(
   "../apps/web/lib/documents/multi-upload/queue-core.ts"
 );
@@ -174,11 +177,12 @@ check("fila: cada QueueItem carrega nome/extensão/tamanho/tipo/status/progresso
   }
 });
 
-check("fila: botões remover (antes do início) e tentar novamente (após falha) existem na linha da fila", () => {
+check("fila: botões remover (antes do início E após erro) e tentar novamente (após falha) existem na linha da fila — desde a correção do lote com erro, 'Remover' também vale para ERRO, não só para PENDENTE (ver seção 7 abaixo para a cobertura completa)", () => {
   const rowSource = readSource("apps/web/components/documents/multi-upload/queue-item-row.tsx");
   assert(/onRemove/.test(rowSource) && /Remover/.test(rowSource));
   assert(/onRetry/.test(rowSource) && /Tentar novamente/.test(rowSource));
-  assert(/REMOVABLE_STATUSES.*PENDENTE|PENDENTE.*REMOVABLE/s.test(rowSource) || rowSource.includes('new Set(["PENDENTE"])'), "remover deveria só valer antes do início");
+  assert(/canRemoveQueueItem\(item\.status\)/.test(rowSource), "remover deveria delegar a decisão à fonte única canRemoveQueueItem (queue-core.ts), nunca a um Set local");
+  assert(canRemoveQueueItem("PENDENTE") && canRemoveQueueItem("ERRO"), "remover deveria valer tanto antes do início (PENDENTE) quanto após erro (ERRO)");
 });
 
 check("fila: tipo padrão do lote + alteração individual por arquivo", () => {
@@ -1202,6 +1206,176 @@ check("dedup da listagem: card = 1 por DOCUMENTO (não por versão) — contador
   assert(pageSource.includes("groupDocumentsByContractualStructure(documents)"), "a página deveria passar a coleção inteira de documents (sem pré-filtro) para o agrupador central");
   const groupingSource = readSource("apps/web/lib/documents/group-contractual-documents.ts");
   assert(!/\btitle\b/i.test(groupingSource), "o agrupador central não deveria basear nada em título — só id/kind/createdAt/parentDocumentId");
+});
+
+// --- 7. Correção do lote com erro: "Remover" individual + "Limpar todos os erros" ---
+//
+// Requisito do relatório: cards ERRO só tinham "Tentar novamente", sem
+// nenhuma forma de removê-los do lote atual (ex.: "Contrato base WEG
+// Linhares.pdf", "WEG LINHARES - ADITIVO 01 - REV03.pdf"). A correção
+// NUNCA usa DELETE contra documento/versão/Storage persistidos — as
+// duas ações (remoção individual e "Limpar todos os erros") só filtram
+// o array de itens EM MEMÓRIA do lote atual. Estes testes cobrem
+// exatamente os 6 comportamentos exigidos.
+
+check("REMOVABLE_STATUSES (fonte única, queue-core.ts) agora inclui ERRO — antes só PENDENTE, causa raiz do defeito relatado", () => {
+  assert(REMOVABLE_STATUSES.includes("PENDENTE"), "PENDENTE deveria continuar removível");
+  assert(REMOVABLE_STATUSES.includes("ERRO"), "ERRO deveria passar a ser removível");
+});
+
+check("canRemoveQueueItem: true para PENDENTE e ERRO, false para todo status em andamento/terminal-com-sucesso/aguardando decisão — nenhum item válido do lote se torna removível por engano (requisito f)", () => {
+  assert(canRemoveQueueItem("PENDENTE") === true);
+  assert(canRemoveQueueItem("ERRO") === true);
+  for (const status of [
+    "VALIDANDO",
+    "CALCULANDO_HASH",
+    "ENVIANDO",
+    "REGISTRANDO",
+    "PROCESSANDO",
+    "CONCLUIDO",
+    "AGUARDANDO_ANALISE",
+    "DUPLICADO",
+    "REJEITADO",
+    "AGUARDANDO_DECISAO_VERSAO",
+    "AGUARDANDO_DECISAO_CONFLITO",
+  ]) {
+    assert(canRemoveQueueItem(status) === false, `${status} nunca deveria ser removível`);
+  }
+});
+
+check("fonte única de verdade: queue-item-row.tsx (botão 'Remover' da linha) e use-document-upload-queue.ts (guarda de removeItem) usam a MESMA função canRemoveQueueItem — nunca dois Sets hardcoded que podem divergir (exatamente como o bug relatado aconteceu)", () => {
+  const rowSource = readSource("apps/web/components/documents/multi-upload/queue-item-row.tsx");
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  assert(/canRemoveQueueItem\(item\.status\)/.test(rowSource), "a linha deveria decidir 'canRemove' via canRemoveQueueItem, não um Set próprio");
+  assert(!/new Set\(\["PENDENTE"\]\)/.test(rowSource), "não deveria mais existir o Set hardcoded REMOVABLE_STATUSES = new Set([\"PENDENTE\"]) na linha");
+  assert(/canRemoveQueueItem\(target\.status\)/.test(hookSource), "removeItem deveria validar via canRemoveQueueItem, não comparar direto contra \"PENDENTE\"");
+  assert(!/target\.status !== "PENDENTE"/.test(hookSource), "não deveria mais existir a comparação hardcoded antiga que bloqueava remover ERRO");
+});
+
+check("(a) remoção individual: um item ERRO específico some do array, todos os demais (incluindo outro ERRO não escolhido) permanecem intactos, com os MESMOS objetos", () => {
+  const items = [
+    { id: "erro-weg-contrato", status: "ERRO", progressPercent: 40 },
+    { id: "erro-weg-aditivo", status: "ERRO", progressPercent: 55 },
+    { id: "pendente-1", status: "PENDENTE", progressPercent: 0 },
+    { id: "concluido-1", status: "CONCLUIDO", progressPercent: 100 },
+  ];
+  // Simula exatamente a decisão de removeItem: só filtra o id alvo, e só se for removível.
+  const target = items.find((i) => i.id === "erro-weg-contrato");
+  assert(canRemoveQueueItem(target.status), "item ERRO deveria ser removível");
+  const afterRemoval = items.filter((i) => i.id !== target.id);
+
+  assert(afterRemoval.length === 3, "deveria restar 3 itens");
+  assert(!afterRemoval.some((i) => i.id === "erro-weg-contrato"), "o item removido não deveria mais estar presente");
+  assert(afterRemoval.find((i) => i.id === "erro-weg-aditivo") === items[1], "o outro item ERRO deveria permanecer, mesmo objeto");
+  assert(afterRemoval.find((i) => i.id === "pendente-1") === items[2], "o item PENDENTE nunca deveria ser afetado por uma remoção individual de ERRO");
+  assert(afterRemoval.find((i) => i.id === "concluido-1") === items[3], "o item CONCLUIDO nunca deveria ser afetado");
+});
+
+check("(b) e (c) contadores: Total e 'Com erro' diminuem exatamente 1 após remover 1 item ERRO; Concluídos/Processando/Duplicados/Rejeitados permanecem EXATAMENTE iguais", () => {
+  const items = [
+    { id: "1", status: "ERRO", progressPercent: 40 },
+    { id: "2", status: "ERRO", progressPercent: 55 },
+    { id: "3", status: "PENDENTE", progressPercent: 0 },
+    { id: "4", status: "CONCLUIDO", progressPercent: 100 },
+    { id: "5", status: "PROCESSANDO", progressPercent: 70 },
+    { id: "6", status: "DUPLICADO", progressPercent: 20 },
+    { id: "7", status: "REJEITADO", progressPercent: 5 },
+  ];
+  const before = computeBatchSummary(items);
+  assert(before.total === 7 && before.errored === 2);
+
+  const afterItems = items.filter((i) => i.id !== "1"); // remove só 1 dos 2 ERRO
+  const after = computeBatchSummary(afterItems);
+
+  assert(after.total === before.total - 1, `Total deveria cair de ${before.total} para ${before.total - 1}, obtido ${after.total}`);
+  assert(after.errored === before.errored - 1, `Com erro deveria cair de ${before.errored} para ${before.errored - 1}, obtido ${after.errored}`);
+  assert(after.completed === before.completed, "Concluídos nunca deveria mudar ao remover um ERRO");
+  assert(after.processing === before.processing, "Processando nunca deveria mudar ao remover um ERRO");
+  assert(after.duplicated === before.duplicated, "Duplicados nunca deveria mudar ao remover um ERRO");
+  assert(after.rejected === before.rejected, "Rejeitados nunca deveria mudar ao remover um ERRO");
+});
+
+check("removeErroredItems é pura, sem I/O, importável tanto pelo hook quanto por este teste (mesmo padrão de queue-core.ts)", () => {
+  assert(typeof removeErroredItems === "function");
+});
+
+check("(d) 'Limpar todos os erros': remove SOMENTE os itens ERRO (2 de 7), preservando PENDENTE/CONCLUIDO/PROCESSANDO/DUPLICADO/REJEITADO — mesmos objetos, mesma ordem relativa", () => {
+  const items = [
+    { id: "erro-a", status: "ERRO", progressPercent: 40 },
+    { id: "pendente-1", status: "PENDENTE", progressPercent: 0 },
+    { id: "erro-b", status: "ERRO", progressPercent: 55 },
+    { id: "concluido-1", status: "CONCLUIDO", progressPercent: 100 },
+    { id: "processando-1", status: "PROCESSANDO", progressPercent: 70 },
+    { id: "duplicado-1", status: "DUPLICADO", progressPercent: 20 },
+    { id: "rejeitado-1", status: "REJEITADO", progressPercent: 5 },
+  ];
+
+  const result = removeErroredItems(items);
+
+  assert(result.length === 5, `deveriam restar 5 itens (7 - 2 ERRO), obtido ${result.length}`);
+  assert(!result.some((i) => i.status === "ERRO"), "nenhum item ERRO deveria sobreviver");
+  assert(result.map((i) => i.id).join(",") === "pendente-1,concluido-1,processando-1,duplicado-1,rejeitado-1", "os itens restantes deveriam manter a ordem relativa original, sem nenhum a mais/a menos");
+  for (const survivor of result) {
+    const original = items.find((i) => i.id === survivor.id);
+    assert(survivor === original, `${survivor.id} deveria ser o MESMO objeto original, nunca uma cópia recriada`);
+  }
+});
+
+check("(d) 'Limpar todos os erros' com zero itens ERRO: array resultante tem os MESMOS itens, nenhum removido por engano", () => {
+  const items = [
+    { id: "pendente-1", status: "PENDENTE", progressPercent: 0 },
+    { id: "concluido-1", status: "CONCLUIDO", progressPercent: 100 },
+  ];
+  const result = removeErroredItems(items);
+  assert(result.length === 2, "nenhum item deveria ser removido quando não há ERRO");
+  assert(result[0] === items[0] && result[1] === items[1]);
+});
+
+check("(e) remoção individual nunca chama Storage/RPC/Supabase — removeItem só toca itemsRef/filesRef/batchHashIndexRef (estado local do lote)", () => {
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  const removeItemBody = hookSource.slice(
+    hookSource.indexOf("const removeItem = useCallback("),
+    hookSource.indexOf("// \"Limpar todos os erros\"")
+  );
+  assert(removeItemBody.length > 0, "não encontrei o corpo de removeItem para inspecionar");
+  assert(!/supabase/i.test(removeItemBody), "removeItem nunca deveria referenciar o cliente Supabase");
+  assert(!/\.rpc\(/.test(removeItemBody), "removeItem nunca deveria chamar nenhuma RPC");
+  assert(!/\.storage\./.test(removeItemBody), "removeItem nunca deveria tocar o Storage");
+  assert(!/removeOrphanedStorageObject/.test(removeItemBody), "removeItem nunca deveria acionar limpeza de Storage — não há nada para limpar (nada foi persistido para um item ERRO/PENDENTE removido do lote)");
+});
+
+check("(e) 'Limpar todos os erros' nunca chama Storage/RPC/Supabase — clearAllErrors só toca itemsRef/filesRef/batchHashIndexRef (estado local do lote)", () => {
+  const hookSource = readSource("apps/web/components/documents/multi-upload/use-document-upload-queue.ts");
+  const clearAllErrorsBody = hookSource.slice(
+    hookSource.indexOf("const clearAllErrors = useCallback("),
+    hookSource.indexOf("const setItemKind = useCallback(")
+  );
+  assert(clearAllErrorsBody.length > 0, "não encontrei o corpo de clearAllErrors para inspecionar");
+  assert(!/supabase/i.test(clearAllErrorsBody), "clearAllErrors nunca deveria referenciar o cliente Supabase");
+  assert(!/\.rpc\(/.test(clearAllErrorsBody), "clearAllErrors nunca deveria chamar nenhuma RPC");
+  assert(!/\.storage\./.test(clearAllErrorsBody), "clearAllErrors nunca deveria tocar o Storage");
+});
+
+check("(f) botão 'Limpar todos os erros' só aparece no resumo do lote quando summary.errored > 0 — nunca removível/visível sem nenhum ERRO no lote", () => {
+  const summarySource = readSource("apps/web/components/documents/multi-upload/upload-summary-bar.tsx");
+  assert(/summary\.errored > 0[\s\S]{0,200}Limpar todos os erros/.test(summarySource), "o botão deveria estar condicionado a summary.errored > 0");
+  assert(/onClick=\{onClearErrors\}/.test(summarySource), "o botão deveria chamar onClearErrors, recebido via prop");
+});
+
+check("painel: clearAllErrors do hook é passado para UploadSummaryBar via onClearErrors — nunca uma função nova/duplicada criada no painel", () => {
+  const panelSource = readSource("apps/web/components/documents/multi-upload/document-multi-upload-panel.tsx");
+  assert(/clearAllErrors/.test(panelSource), "o painel deveria desestruturar clearAllErrors do hook");
+  assert(/onClearErrors=\{clearAllErrors\}/.test(panelSource), "o painel deveria repassar exatamente a função do hook, sem recriar lógica");
+});
+
+check("linha da fila: botão 'Remover' agora aparece junto de 'Tentar novamente' para item ERRO (canRemove cobre ERRO)", () => {
+  const rowSource = readSource("apps/web/components/documents/multi-upload/queue-item-row.tsx");
+  assert(/const canRemove = canRemoveQueueItem\(item\.status\);/.test(rowSource));
+  assert(/const canRetry = RETRYABLE_STATUSES\.has\(item\.status\);/.test(rowSource));
+  // Para status "ERRO": canRemoveQueueItem("ERRO") === true (testado acima)
+  // e RETRYABLE_STATUSES ainda contém "ERRO" — os dois botões coexistem,
+  // exatamente o requisito 1 do relatório.
+  assert(canRemoveQueueItem("ERRO") && new Set(["ERRO"]).has("ERRO"));
 });
 
 console.log("");

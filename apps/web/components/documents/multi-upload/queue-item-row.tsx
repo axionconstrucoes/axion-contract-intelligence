@@ -4,7 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Select } from "@/components/ui/select";
-import { isMppFile } from "@/lib/documents/multi-upload/queue-core";
+import {
+  canRemoveQueueItem,
+  isMppFile,
+} from "@/lib/documents/multi-upload/queue-core";
 import { MULTI_UPLOAD_DOCUMENT_KINDS } from "@/lib/documents/multi-upload/types";
 import type {
   MultiUploadDocumentKind,
@@ -22,7 +25,6 @@ function formatBytes(bytes: number) {
 }
 
 const EDITABLE_KIND_STATUSES = new Set(["PENDENTE", "REJEITADO"]);
-const REMOVABLE_STATUSES = new Set(["PENDENTE"]);
 const RETRYABLE_STATUSES = new Set(["ERRO"]);
 
 type Props = {
@@ -54,7 +56,7 @@ export function QueueItemRow({
     EDITABLE_KIND_STATUSES.has(item.status) &&
     !isMppFile(item.descriptor) &&
     (item.status !== "REJEITADO" || !item.kind);
-  const canRemove = REMOVABLE_STATUSES.has(item.status);
+  const canRemove = canRemoveQueueItem(item.status);
   const canRetry = RETRYABLE_STATUSES.has(item.status);
 
   return (
