@@ -3,14 +3,11 @@ import { withActiveDocumentFilter } from "../../../documents/active-document-fil
 
 export type ScheduleSourceStatus = "MISSING_MPP" | "MPP_PRESENT_NOT_EXTRACTED";
 
-const DIRECT_SCHEDULE_TERMS = [
-  "cronograma",
+const DIRECT_ASSESSMENT_TERMS = [
   "atraso",
   "caminho critico",
   "critical path",
   "folga",
-  "baseline",
-  "linha de base",
   "replanejamento",
   "reprogramacao",
   "recuperacao de prazo",
@@ -22,6 +19,8 @@ const DIRECT_SCHEDULE_TERMS = [
   "data projetada de termino",
   "data projetada de conclusao",
 ];
+
+const SCHEDULE_NOUNS = ["prazo", "cronograma", "baseline", "linha de base"];
 
 const ANALYTICAL_TERMS = [
   "analisar",
@@ -47,19 +46,19 @@ function normalizeText(value: string): string {
 }
 
 /**
- * Identifica pedido de avaliação FORMAL de cronograma/prazo. "Qual é o prazo
- * contratual?" deliberadamente não entra aqui: consulta de cláusula/prazo
- * contratual não depende de Microsoft Project.
+ * Identifica pedido de avaliação FORMAL de cronograma/prazo. Consultas
+ * meramente administrativas/informativas, como "existe cronograma cadastrado?"
+ * ou "qual é o prazo contratual?", deliberadamente não entram aqui.
  */
 export function isFormalScheduleAssessmentQuestion(question: string): boolean {
   const normalized = normalizeText(question);
 
-  if (DIRECT_SCHEDULE_TERMS.some((term) => normalized.includes(term))) {
+  if (DIRECT_ASSESSMENT_TERMS.some((term) => normalized.includes(term))) {
     return true;
   }
 
   return (
-    normalized.includes("prazo") &&
+    SCHEDULE_NOUNS.some((term) => normalized.includes(term)) &&
     ANALYTICAL_TERMS.some((term) => normalized.includes(term))
   );
 }
