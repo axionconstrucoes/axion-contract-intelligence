@@ -1,9 +1,18 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import type { BatchSummary } from "@/lib/documents/multi-upload/types";
 
-export function UploadSummaryBar({ summary }: { summary: BatchSummary }) {
+type Props = {
+  summary: BatchSummary;
+  // Remove SÓ os itens ERRO do estado local do lote (nunca toca em
+  // documento/versão/Storage já persistidos) — ver clearAllErrors em
+  // use-document-upload-queue.ts.
+  onClearErrors: () => void;
+};
+
+export function UploadSummaryBar({ summary, onClearErrors }: Props) {
   if (summary.total === 0) return null;
 
   return (
@@ -15,7 +24,7 @@ export function UploadSummaryBar({ summary }: { summary: BatchSummary }) {
 
       <Progress value={summary.overallPercent} />
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
         <span>Total: {summary.total}</span>
         <span>Concluídos: {summary.completed}</span>
         {summary.pendingReview > 0 ? (
@@ -25,6 +34,18 @@ export function UploadSummaryBar({ summary }: { summary: BatchSummary }) {
         <span>Duplicados: {summary.duplicated}</span>
         <span>Rejeitados: {summary.rejected}</span>
         <span>Com erro: {summary.errored}</span>
+
+        {summary.errored > 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={onClearErrors}
+          >
+            Limpar todos os erros
+          </Button>
+        ) : null}
       </div>
     </div>
   );

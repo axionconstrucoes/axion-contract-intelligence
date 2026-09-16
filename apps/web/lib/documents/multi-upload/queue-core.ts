@@ -356,6 +356,37 @@ export function buildImportErrorMessage(
   return `${fileName} não foi importado: ${reason}.`;
 }
 
+// Fonte única de verdade para "este item pode ser removido do lote
+// agora" — usada tanto pela linha da fila (queue-item-row.tsx, decide
+// se mostra o botão "Remover") quanto pelo hook (use-document-upload-queue.ts,
+// decide se a remoção é aceita). Antes da correção do lote com erro,
+// cada arquivo mantinha seu PRÓPRIO Set hardcoded ("PENDENTE" num
+// lugar, "PENDENTE" no outro) — os dois podiam divergir silenciosamente,
+// exatamente a causa raiz do defeito relatado (ERRO nunca aparecia como
+// removível na linha, mesmo que o hook por acaso permitisse). Nunca
+// remove nada persistido — só decide se este item da FILA EM MEMÓRIA
+// pode sair do array local.
+export const REMOVABLE_STATUSES: readonly QueueItemStatus[] = [
+  "PENDENTE",
+  "ERRO",
+];
+
+export function canRemoveQueueItem(status: QueueItemStatus): boolean {
+  return REMOVABLE_STATUSES.includes(status);
+}
+
+// "Limpar todos os erros" (Progresso geral): remove SÓ os itens com
+// status ERRO do array local — nunca toca em CONCLUIDO/PROCESSANDO/
+// DUPLICADO/REJEITADO/AGUARDANDO_* etc., e nunca chama nenhuma API de
+// Storage/Supabase (função pura, sem I/O). O chamador (hook) ainda
+// precisa limpar filesRef/batchHashIndexRef para os ids removidos —
+// esta função só decide QUAIS itens sobrevivem no array.
+export function removeErroredItems<T extends Pick<QueueItem, "status">>(
+  items: readonly T[]
+): T[] {
+  return items.filter((item) => item.status !== "ERRO");
+}
+
 // Todo status TERMINAL (nenhum trabalho automático resta para o item,
 // com sucesso ou não) conta como 100% do PESO deste item no progresso
 // GERAL do lote — mesmo quando seu progressPercent individual (usado só

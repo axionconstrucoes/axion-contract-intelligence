@@ -38,6 +38,7 @@ export function DocumentMultiUploadPanel({ projectId, documents }: Props) {
     isRunning,
     addFiles,
     removeItem,
+    clearAllErrors,
     setItemKind,
     applyKindToAllPending,
     setBatchDefaultKind,
@@ -171,7 +172,7 @@ export function DocumentMultiUploadPanel({ projectId, documents }: Props) {
             </p>
           ) : null}
 
-          <UploadSummaryBar summary={summary} />
+          <UploadSummaryBar summary={summary} onClearErrors={clearAllErrors} />
 
           <div className="flex flex-col gap-2">
             {items.map((item) => (
