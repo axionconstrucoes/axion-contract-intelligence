@@ -29,6 +29,11 @@ import {
   PLANNING_DIRECTOR_NAME,
   PLANNING_DIRECTOR_VERSION,
 } from "./identity";
+import {
+  isFormalScheduleAssessmentQuestion,
+  resolveScheduleSourceStatus,
+  scheduleSourceBlockingMessage,
+} from "./schedule-source-guard";
 
 const IMPLEMENTED_SCOPES: ExpertQueryScope[] = ["PROJECT", "EVENT"];
 
@@ -79,6 +84,19 @@ export async function answerPlanningDirectorQuery(
   const question = request.question.trim();
   if (!question) {
     throw new Error("Pergunta vazia.");
+  }
+
+  // Avaliação formal de prazo/cronograma é fail-closed. O arquivo oficial
+  // precisa ser um Microsoft Project .mpp REAL (extensão do original, não
+  // apenas um kind atribuído manualmente). Nesta fase o MPP é armazenado,
+  // mas ainda não possui extração estruturada; por isso, mesmo quando
+  // localizado, não chamamos o modelo para inventar atividades/vínculos.
+  if (isFormalScheduleAssessmentQuestion(question)) {
+    const scheduleSourceStatus = await resolveScheduleSourceStatus(
+      supabase,
+      request.projectId
+    );
+    throw new Error(scheduleSourceBlockingMessage(scheduleSourceStatus));
   }
 
   const eventContext =
