@@ -7,6 +7,7 @@ import { createSupabaseServerClient } from "@axion/db/server";
 
 import { getAppBaseUrl } from "@/lib/app-base-url";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
+import { isWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import { issueEmailAlertActionButtons } from "@/lib/email-actions/issue-tokens";
 import { EmailSendError } from "@/lib/email/email-provider";
 import { sendSlaEscalationEmail } from "@/lib/email/send-sla-escalation-email";
@@ -565,6 +566,20 @@ export async function processSlaEscalationsAction(
     let escalatedCount = 0;
     const baseUrl = getAppBaseUrl();
 
+    // Ações vinculadas a um alerta de risco: a ENTREGA do e-mail passa pela
+    // outbox comum (mesma idempotency_key do motor horário e das ações
+    // humanas) — o botão manual nunca gera um segundo e-mail. Sem a feature
+    // (tabelas novas ausentes), o fluxo antigo continua intacto.
+    const riskCaseByActionId = new Map<string, string>();
+    if (isWeeklyReportsEnabled() && openActions.length > 0) {
+      const { data: linked } = await supabase
+        .from("risk_alert_cases")
+        .select("id,sla_action_id")
+        .eq("project_id", projectId)
+        .in("sla_action_id", openActions.map((a) => a.id));
+      for (const row of linked ?? []) if (row.sla_action_id) riskCaseByActionId.set(row.sla_action_id as string, row.id as string);
+    }
+
     for (const action of openActions) {
       const rule = resolveMatrixRule(matrixRules, action.riskLevel, action.area);
       const result = computeEscalation({
@@ -602,6 +617,23 @@ export async function processSlaEscalationsAction(
       }
 
       escalatedCount += 1;
+
+      if (rule.notifyByEmail && project && riskCaseByActionId.has(action.id)) {
+        // Origem MANUAL na outbox; envio pelo worker; chave idêntica ao motor.
+        if (destination.userId) {
+          const { data: enqueued, error: enqueueError } = await supabase.rpc("enqueue_manual_escalation_email", {
+            p_action_id: action.id,
+            p_level: destination.level,
+            p_recipient_user_id: destination.userId,
+          });
+          if (enqueueError) throw new Error(`Falha ao enfileirar escalonamento: ${enqueueError.message}`);
+          // A RPC só enfileira com risk_alert_case vinculado; se o caso sumiu
+          // entre a consulta e a chamada, a ação volta ao fluxo antigo abaixo.
+          if ((enqueued as { skipped?: string } | null)?.skipped !== "NO_RISK_ALERT_CASE") continue;
+        } else {
+          continue;
+        }
+      }
 
       if (rule.notifyByEmail && project) {
         const notifiedUserId = destination.userId;
