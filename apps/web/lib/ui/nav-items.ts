@@ -31,8 +31,12 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "action-requests", label: "Solicitações", icon: "ListChecks", helpId: "solicitacoes" },
   { href: "acoes", label: "Ações e Escalonamentos", icon: "TimerReset", helpId: "acoes-escalonamentos" },
   { href: "juridico", label: "Jurídico", icon: "Scale", helpId: "juridico" },
-  { href: "revisao-contratual", label: "Análise Contratual", icon: "BookText", helpId: "analise-contratual" },
-  { href: "revisao-clausulas", label: "Análise de Cláusulas", icon: "BookText", helpId: "analise-clausulas" },
+  // "Análise Contratual" (revisao-contratual) e "Análise de Cláusulas"
+  // (revisao-clausulas) saíram da barra lateral: o Expert Jurídico da
+  // página inicial é o ponto único para análise de contratos antes da
+  // negociação/assinatura e consultas jurídicas sob demanda. Rotas,
+  // páginas, APIs, dados, permissões, histórico e ajuda (feature-help)
+  // continuam existindo — nada foi apagado, só a entrada de navegação.
   { href: "documentos", label: "Documentos", icon: "FileStack", helpId: "documentos" },
   // Dashboard financeiro alimentado só pela aba FINANCEIRO da planilha do
   // relatório semanal (weekly_report_sheets). Visível apenas para quem
