@@ -26,7 +26,7 @@ on:
         required: false
         default: ""
       phase:
-        description: "Fase: all | intake | compare | alerts"
+        description: "Fase: all | intake | promote | compare | classify | workbook | alerts | replies"
         required: false
         default: "all"
 

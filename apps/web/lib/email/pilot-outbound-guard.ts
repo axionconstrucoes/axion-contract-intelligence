@@ -19,6 +19,7 @@
 //   inteiramente por configuração de ambiente.
 
 import { ACC_GO_LIVE_DATE } from "../acc-go-live";
+import { ALERT_REPLY_MAILBOX_ENV, validateAlertReplyTo, type AlertReplyToRejection } from "./alert-reply-address";
 import { EmailSendError, type SendEmailInput } from "./email-provider";
 
 export const ACC_EXPECTED_PILOT_RECIPIENT = "reynaldo@axion.com.br";
@@ -30,6 +31,36 @@ export const ACC_PILOT_ALLOWED_RECIPIENTS = [
 ] as const;
 export const PILOT_SUBJECT_PREFIX = "[TESTE CONTROLADO] ";
 
+// Extensão CONTROLADA da allowlist do piloto por ambiente — ponto único.
+// ACC_PILOT_ADDITIONAL_RECIPIENTS = lista separada por vírgula de
+// e-mails corporativos (mesmo domínio do destinatário piloto) que também
+// podem receber a própria mensagem em modo piloto (ex.: novos
+// participantes de um piloto específico). Regras fail-closed: entradas
+// inválidas ou fora do domínio corporativo são IGNORADAS (nunca
+// liberadas), o valor nunca é gravado em nenhum arquivo do repositório e
+// a allowlist de cada fluxo (ex.: alertas de risco, por user_id) continua
+// sendo a restrição efetiva — esta lista só decide o redirecionamento do
+// provider. Sem a variável, comportamento idêntico ao anterior.
+export const ACC_PILOT_ADDITIONAL_RECIPIENTS_ENV = "ACC_PILOT_ADDITIONAL_RECIPIENTS";
+const ACC_PILOT_CORPORATE_DOMAIN = ACC_EXPECTED_PILOT_RECIPIENT.split("@")[1];
+
+export function parsePilotAdditionalRecipients(rawValue: string | undefined): string[] {
+  if (!rawValue) return [];
+  return Array.from(
+    new Set(
+      rawValue
+        .split(",")
+        .map((item) => item.trim().toLowerCase())
+        .filter((item) => isValidEmailAddress(item) && item.split("@")[1] === ACC_PILOT_CORPORATE_DOMAIN)
+    )
+  );
+}
+
+/** Allowlist efetiva do provider em modo piloto: fixa + adicionais válidos do ambiente. */
+export function resolvePilotAllowedRecipients(env: Pick<PilotOutboundGuardEnv, "additionalRecipients"> = defaultEnv()): string[] {
+  return Array.from(new Set([...ACC_PILOT_ALLOWED_RECIPIENTS, ...parsePilotAdditionalRecipients(env.additionalRecipients)]));
+}
+
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function isValidEmailAddress(value: string): boolean {
@@ -39,6 +70,12 @@ export function isValidEmailAddress(value: string): boolean {
 export interface PilotOutboundGuardEnv {
   outboundMode?: string;
   pilotRecipient?: string;
+  /** Conteúdo de ACC_PILOT_ADDITIONAL_RECIPIENTS (ver parsePilotAdditionalRecipients). */
+  additionalRecipients?: string;
+  /** Caixa inbound OFICIAL do ACC (GOOGLE_GMAIL_INBOUND_MAILBOX) — única caixa admitida no Reply-To dos alertas. */
+  alertReplyMailbox?: string;
+  /** Registro de Reply-To removido (motivo apenas — nunca endereço/token). Default: console.warn. */
+  onReplyToRemoved?: (reason: ReplyToRemovalReason) => void;
   now?: Date;
 }
 
@@ -46,8 +83,55 @@ function defaultEnv(): PilotOutboundGuardEnv {
   return {
     outboundMode: process.env.ACC_OUTBOUND_MODE,
     pilotRecipient: process.env.ACC_PILOT_RECIPIENT,
+    additionalRecipients: process.env[ACC_PILOT_ADDITIONAL_RECIPIENTS_ENV],
+    alertReplyMailbox: process.env[ALERT_REPLY_MAILBOX_ENV],
     now: new Date(),
   };
+}
+
+// ------------------------------------------------------------------
+// Reply-To: caminho PRINCIPAL da resposta pelo corpo do e-mail aos
+// alertas de risco. Preservado SOMENTE quando todas valem:
+//   - a mensagem declara replyToContext de uma conversa de alerta
+//     (outbox + conversa válidas — ids UUID);
+//   - o endereço é exatamente <caixa-acc>+alerta-<token>@<domínio da caixa>
+//     (caixa = GOOGLE_GMAIL_INBOUND_MAILBOX, monitorada pelo worker);
+//   - sem CR/LF, sem caracteres de injeção, domínio/caixa permitidos,
+//     token opaco válido (nunca um id previsível).
+// Qualquer outro Reply-To (externo, arbitrário, sem contexto) é removido
+// e o motivo registrado — sem endereço nem token no log. O destinatário
+// final continua sendo decidido por resolveEffectiveRecipient (o Reply-To
+// nunca redireciona a mensagem para uma pessoa). Fallback de correlação
+// quando removido: In-Reply-To / References / código visível.
+// ------------------------------------------------------------------
+export type ReplyToRemovalReason = "REPLY_CONTEXT_MISSING" | "REPLY_CONTEXT_INVALID" | AlertReplyToRejection;
+
+export interface GuardedReplyTo {
+  replyTo: string | undefined;
+  removedReason: ReplyToRemovalReason | null;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function resolveGuardedReplyTo(input: Pick<SendEmailInput, "replyTo" | "replyToContext">, env: Pick<PilotOutboundGuardEnv, "alertReplyMailbox"> = defaultEnv()): GuardedReplyTo {
+  if (input.replyTo === undefined || input.replyTo === null || input.replyTo === "") return { replyTo: undefined, removedReason: null };
+  const context = input.replyToContext;
+  if (!context) return { replyTo: undefined, removedReason: "REPLY_CONTEXT_MISSING" };
+  if (context.kind !== "RISK_ALERT_CONVERSATION" || !UUID_PATTERN.test(context.outboxId ?? "") || !UUID_PATTERN.test(context.conversationId ?? "")) {
+    return { replyTo: undefined, removedReason: "REPLY_CONTEXT_INVALID" };
+  }
+  const validation = validateAlertReplyTo(input.replyTo, env.alertReplyMailbox);
+  if (!validation.ok) return { replyTo: undefined, removedReason: validation.reason };
+  return { replyTo: validation.address, removedReason: null };
+}
+
+function reportReplyToRemoved(env: PilotOutboundGuardEnv, reason: ReplyToRemovalReason): void {
+  if (env.onReplyToRemoved) {
+    env.onReplyToRemoved(reason);
+    return;
+  }
+  // Só o motivo: nunca o endereço original, nunca o token.
+  console.warn(`[pilot-outbound-guard] Reply-To removido (${reason}).`);
 }
 
 function dateInSaoPaulo(date: Date): string {
@@ -116,9 +200,7 @@ export function resolveEffectiveRecipient(
   }
 
   const normalizedIntendedRecipient = intendedRecipientEmail.trim().toLowerCase();
-  const effectiveRecipientEmail = ACC_PILOT_ALLOWED_RECIPIENTS.includes(
-    normalizedIntendedRecipient as (typeof ACC_PILOT_ALLOWED_RECIPIENTS)[number]
-  )
+  const effectiveRecipientEmail = resolvePilotAllowedRecipients(env).includes(normalizedIntendedRecipient)
     ? normalizedIntendedRecipient
     : ACC_EXPECTED_PILOT_RECIPIENT;
 
@@ -128,8 +210,9 @@ export function resolveEffectiveRecipient(
 // Único ponto de decisão: chamado obrigatoriamente no início de
 // GmailEmailProvider.send() e FakeEmailProvider.send() — nunca depois
 // de qualquer efeito colateral (chamada de rede, construção de MIME).
-// Em modo produção, devolve o input intocado. Em modo piloto, devolve
-// uma cópia com to/subject/replyTo reescritos e cc/bcc removidos
+// Em modo produção, devolve o input intocado (salvo validação do
+// Reply-To de conversas de alerta). Em modo piloto, devolve uma cópia com
+// to/subject reescritos, Reply-To validado/removido e cc/bcc removidos
 // (defensivo — SendEmailInput não tem esses campos hoje, mas isso
 // impede uma regressão silenciosa se forem adicionados no futuro sem
 // atualizar este arquivo). O destinatário originalmente pretendido
@@ -141,13 +224,24 @@ export function applyPilotOutboundGuard(input: SendEmailInput, env: PilotOutboun
   const resolved = resolveEffectiveRecipient(input.to, env);
 
   if (resolved.mode === "PRODUCTION") {
-    return input;
+    // Fluxos legados (sem replyToContext) seguem intocados. Mensagens de
+    // conversa de alerta têm o Reply-To validado também em produção — um
+    // Reply-To externo/arbitrário nunca sai com a identidade do ACC.
+    if (!input.replyToContext) return input;
+    const replyTo = resolveGuardedReplyTo(input, env);
+    if (replyTo.removedReason) reportReplyToRemoved(env, replyTo.removedReason);
+    return { ...input, replyTo: replyTo.replyTo };
   }
 
   const guarded = { ...input } as SendEmailInput & Record<string, unknown>;
   guarded.to = resolved.effectiveRecipientEmail;
   guarded.subject = ensureSubjectPrefixed(input.subject);
-  guarded.replyTo = undefined;
+  // Reply-To: só o endereço opaco da própria caixa do ACC sobrevive — e
+  // somente para conversas de alerta (ver resolveGuardedReplyTo). O
+  // destinatário efetivo já foi decidido acima; o Reply-To nunca o altera.
+  const replyTo = resolveGuardedReplyTo(input, env);
+  if (replyTo.removedReason) reportReplyToRemoved(env, replyTo.removedReason);
+  guarded.replyTo = replyTo.replyTo;
   // Defensivo: SendEmailInput não declara cc/bcc hoje — se forem
   // adicionados no futuro sem atualizar este guard, o teste estrutural
   // em scripts/test-pilot-outbound-guard.mjs falha antes que isso vire

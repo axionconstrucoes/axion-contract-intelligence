@@ -25,6 +25,14 @@
 //   alerts  : cria o alerta único de ausência quando o prazo semanal
 //             do projeto passou sem cronograma recebido (RECEIVED_DUPLICATE
 //             conta como recebido).
+//   replies : captura (Gmail) as RESPOSTAS por e-mail aos alertas de risco
+//             -> alert_email_messages e as processa (filtro/correlação/
+//             autorização/classificação/ação formal via RPC). Duas buscas:
+//             (a) mensagens enviadas ao Reply-To opaco da caixa oficial
+//                 (<caixa>+alerta-<token>@...) — caminho PRINCIPAL;
+//             (b) threads dos alertas enviados — fallback (In-Reply-To/
+//                 References). Nunca envia e-mail (quem envia é a outbox
+//             no worker Vercel).
 //
 // Leitura Gmail restrita ao mínimo: query já filtra remetente/anexo/
 // janela; só metadados (cabeçalhos) e o anexo .mpp são baixados; corpo
@@ -71,6 +79,10 @@ const {
   toCandidateAttachments,
 } = await import("../apps/web/lib/schedule/weekly-ingestion/supabase-store");
 const { extractEmailAddresses } = await import("../apps/web/lib/email/inbound/gmail-inbound-policy");
+const { createSupabaseRiskAlertStore } = await import("../apps/web/lib/risk-alerts/supabase-store");
+const { processAlertReplies } = await import("../apps/web/lib/risk-alerts/replies/process-alert-replies");
+const { extractInboundFromGmail } = await import("../apps/web/lib/risk-alerts/replies/gmail-reply-extract");
+const { extractReplyTokens, hashReplyToken } = await import("../apps/web/lib/risk-alerts/replies/reply-pipeline");
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
@@ -78,7 +90,7 @@ const projectIdArg = args.find((arg) => !arg.startsWith("--")) ?? null;
 const phaseArg = (args.find((arg) => arg.startsWith("--phase=")) ?? "--phase=all").split("=")[1];
 const limitArg = args.find((arg) => arg.startsWith("--limit="));
 const limit = limitArg ? Number(limitArg.split("=")[1]) : 50;
-const phases = new Set(phaseArg === "all" ? ["intake", "promote", "compare", "classify", "workbook", "alerts"] : [phaseArg]);
+const phases = new Set(phaseArg === "all" ? ["intake", "promote", "compare", "classify", "workbook", "alerts", "replies"] : [phaseArg]);
 
 function required(name) {
   const value = process.env[name]?.trim();
@@ -330,6 +342,123 @@ if (phases.has("alerts") && apply) {
   }
 }
 
+// ------------------------------------------------------------------
+// FASE 7 — RESPOSTAS POR E-MAIL AOS ALERTAS DE RISCO
+// ------------------------------------------------------------------
+if (phases.has("replies") && apply) {
+  const { google } = await import("googleapis");
+  const auth = new google.auth.OAuth2(required("GOOGLE_GMAIL_INBOUND_CLIENT_ID"), required("GOOGLE_GMAIL_INBOUND_CLIENT_SECRET"));
+  auth.setCredentials({ refresh_token: required("GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN") });
+  const gmail = google.gmail({ version: "v1", auth });
+  const mailbox = required("GOOGLE_GMAIL_INBOUND_MAILBOX").toLowerCase();
+  const riskStore = createSupabaseRiskAlertStore(supabase);
+  summary.replies = { threads: 0, replyToMatches: 0, captured: 0, processed: [] };
+
+  for (const config of configs) {
+    // Threads dos alertas já enviados deste projeto.
+    const { data: conversations } = await supabase
+      .from("alert_email_conversations")
+      .select("id,case_id,provider_thread_id")
+      .eq("project_id", config.projectId)
+      .not("provider_thread_id", "is", null);
+    const { data: known } = await supabase.from("alert_email_messages").select("provider_message_id").eq("project_id", config.projectId);
+    const knownIds = new Set((known ?? []).map((row) => row.provider_message_id));
+    // Índice hash(token do Reply-To) -> conversa (o token em si nunca é
+    // persistido; o hash do endereço recebido é comparado com o gravado).
+    const { data: outboundTokens } = await supabase
+      .from("alert_email_messages")
+      .select("reply_token_hash,conversation_id,case_id")
+      .eq("project_id", config.projectId)
+      .eq("direction", "OUTBOUND")
+      .not("reply_token_hash", "is", null);
+    const conversationByTokenHash = new Map((outboundTokens ?? []).map((row) => [row.reply_token_hash, { id: row.conversation_id, case_id: row.case_id }]));
+
+    const insertInbound = async (conversation, message) => {
+      if (!message.id || knownIds.has(message.id)) return;
+      const extracted = extractInboundFromGmail(message, mailbox);
+      if (!extracted || extracted.isSentByMailbox) return; // mensagens do próprio ACC nunca viram "resposta"
+      const { error } = await supabase.from("alert_email_messages").insert({
+        project_id: config.projectId,
+        conversation_id: conversation.id,
+        case_id: conversation.case_id,
+        direction: "INBOUND",
+        provider: "GMAIL",
+        provider_message_id: extracted.providerMessageId,
+        provider_thread_id: extracted.providerThreadId,
+        message_id_header: extracted.headers.messageId,
+        in_reply_to_header: extracted.headers.inReplyTo,
+        references_header: extracted.headers.references.join(" "),
+        reply_to_header: extracted.headers.replyTo,
+        sender_email: extracted.headers.from,
+        recipients: [...extracted.headers.to, ...(extracted.headers.cc ?? [])],
+        subject: extracted.headers.subject,
+        body_original: extracted.bodyOriginal,
+        auto_submitted: Boolean(extracted.headers.autoSubmitted && extracted.headers.autoSubmitted.toLowerCase() !== "no"),
+        authentication_results: extracted.headers.authenticationResults,
+        status: "RECEIVED",
+        received_at: extracted.receivedAt,
+      });
+      if (!error) {
+        knownIds.add(message.id);
+        summary.replies.captured += 1;
+      } else if (error.code !== "23505") {
+        throw new Error(`Falha ao registrar resposta: ${error.message}`);
+      }
+    };
+
+    // (a) Caminho principal: respostas endereçadas ao Reply-To opaco da
+    //     caixa oficial. A busca é por prefixo do plus-address; o token de
+    //     cada mensagem é resolvido pelo hash — sem hash conhecido, a
+    //     mensagem fica para a correlação por thread (b) ou revisão humana.
+    if (conversationByTokenHash.size > 0) {
+      const [local] = mailbox.split("@");
+      let pageToken;
+      do {
+        let page;
+        try {
+          page = await gmail.users.messages.list({ userId: "me", q: `to:${local}+alerta- newer_than:30d -from:me`, maxResults: 100, pageToken });
+        } catch {
+          break; // busca indisponível — o fallback por thread continua
+        }
+        for (const stub of page.data.messages ?? []) {
+          if (!stub.id || knownIds.has(stub.id)) continue;
+          let full;
+          try {
+            full = await gmail.users.messages.get({ userId: "me", id: stub.id, format: "full" });
+          } catch {
+            continue;
+          }
+          const headers = full.data.payload?.headers ?? [];
+          const addressed = headers.filter((h) => /^(to|cc|delivered-to)$/i.test(h.name ?? "")).map((h) => h.value ?? "");
+          const tokens = extractReplyTokens(addressed.flatMap((v) => v.split(",")));
+          const matches = Array.from(new Set(tokens.map((t) => conversationByTokenHash.get(hashReplyToken(t))).filter(Boolean)));
+          if (matches.length !== 1) continue; // sem token deste projeto (ou ambíguo): fica para (b)/revisão
+          summary.replies.replyToMatches += 1;
+          await insertInbound(matches[0], full.data);
+        }
+        pageToken = page.data.nextPageToken ?? undefined;
+      } while (pageToken);
+    }
+
+    // (b) Fallback: threads dos alertas enviados (In-Reply-To/References).
+    for (const conversation of conversations ?? []) {
+      summary.replies.threads += 1;
+      let thread;
+      try {
+        thread = await gmail.users.threads.get({ userId: "me", id: conversation.provider_thread_id, format: "full" });
+      } catch {
+        continue; // thread indisponível — próxima rodada
+      }
+      for (const message of thread.data.messages ?? []) {
+        await insertInbound(conversation, message);
+      }
+    }
+    // Processamento (puro + store): nunca loga corpo — só contagens.
+    const outcome = await processAlertReplies(riskStore, config.projectId, new Date().toISOString(), [mailbox]);
+    summary.replies.processed.push(outcome);
+  }
+}
+
 console.log("");
 console.log("RESULTADO");
 console.log("---------");
@@ -346,5 +475,9 @@ if (summary.comparisons) console.table([summary.comparisons]);
 if (summary.classification) console.table([summary.classification]);
 if (summary.workbooks) console.table([summary.workbooks]);
 if (Object.keys(summary.alerts).length > 0) console.table([summary.alerts]);
+if (summary.replies) {
+  console.table([{ threads: summary.replies.threads, viaReplyTo: summary.replies.replyToMatches, capturadas: summary.replies.captured }]);
+  if (summary.replies.processed.length) console.table(summary.replies.processed);
+}
 console.log("");
 console.log("INGESTÃO SEMANAL concluída.");
