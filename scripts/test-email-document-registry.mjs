@@ -38,7 +38,10 @@ const { NAV_ITEMS } = await import("../apps/web/lib/ui/nav-items");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
-const readSource = (relative) => readFileSync(path.join(repoRoot, relative), "utf8");
+// Fontes lidas como texto são normalizadas para LF: o repositório guarda LF,
+// mas checkouts com autocrlf materializam CRLF — as asserções comparam
+// literais multilinha e não podem depender do fim de linha do checkout.
+const readSource = (relative) => readFileSync(path.join(repoRoot, relative), "utf8").replace(/\r\n?/g, "\n");
 const MIGRATION = "supabase/migrations/20260920120000_weekly_schedule_email_ingestion_foundation.sql";
 
 let passed = 0;
