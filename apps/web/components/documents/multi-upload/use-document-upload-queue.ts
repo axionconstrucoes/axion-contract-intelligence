@@ -299,7 +299,7 @@ export function useDocumentUploadQueue(
         updateItem(itemId, { status: "ENVIANDO", phase: "UPLOAD" });
 
         const uploadMimeType =
-          current.descriptor.mimeType ?? file.type || undefined;
+          current.descriptor.mimeType ?? file.type ?? undefined;
 
         const uploadFile =
           uploadMimeType && file.type !== uploadMimeType
