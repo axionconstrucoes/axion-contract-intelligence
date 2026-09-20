@@ -88,6 +88,8 @@ export interface RiskCaseRecord {
   currentLevel: SlaEscalationLevel;
   currentResponsibleUserId: string | null;
   previousResponsibleUserId: string | null;
+  /** Limite de escalonamento já registrado (uma única vez; sem novo e-mail). */
+  topLevelReachedAt: string | null;
   visibleCode: string;
 }
 
@@ -230,11 +232,19 @@ export interface PlannedAuditEvent {
   detail: string;
 }
 
+/** Prazo da Diretoria (boardAfterValue) vencido: registrar TOP_LEVEL_REACHED uma única vez — sem destinatário, sem e-mail. */
+export interface PlannedTopLevelReached {
+  caseKey: string;
+  slaActionId: string;
+  reasons: string[];
+}
+
 export interface RiskAlertPlan {
   blockedReason: RiskSuppressionReason | null;
   caseUpserts: PlannedCaseUpsert[];
   slaActionCreates: PlannedSlaActionCreate[];
   escalations: PlannedEscalation[];
+  topLevelReached: PlannedTopLevelReached[];
   outbox: PlannedOutboxEntry[];
   audit: PlannedAuditEvent[];
   digestWindow: { key: string; isOpen: boolean } | null;
@@ -298,7 +308,7 @@ export const ALERT_STATE_LABELS: Record<AlertState, string> = {
   RESOLUTION_PROPOSED: "Resolução proposta (revisão humana)",
   RESOLVED: "Resolvido",
   REVIEW_REQUIRED: "Revisão humana necessária",
-  TOP_LEVEL_REACHED: "Nível máximo atingido (Diretoria informada)",
+  TOP_LEVEL_REACHED: "Limite de escalonamento atingido",
 };
 
 export type ExpertId = "planning-director" | "commercial-director" | "esg-director" | "legal-consultant" | "ceo";

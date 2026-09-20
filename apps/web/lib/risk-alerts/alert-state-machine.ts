@@ -16,6 +16,11 @@
 // Bloqueios: resolver duas vezes, devolver duas vezes, encaminhar
 // resolvido, mais de um responsável ativo, ação expirada assumir
 // responsabilidade, escalonamento duplicado, Nível 4 fictício.
+//
+// CADEIA ÚNICA (a mesma do motor por prazo, compute-escalation.ts):
+// RESPONSAVEL -> ESCALAO_1 -> DIRETORIA -> TOP_LEVEL_REACHED. ESCALAO_2
+// é legado (só leitura): um caso histórico nesse nível avança
+// diretamente para DIRETORIA; nenhum novo evento/outbox usa ESCALAO_2.
 
 import { slaEscalationLevelLabels } from "@/lib/labels";
 import { computePolicyDeadlines, matrixPolicySnapshot, type MatrixPolicy } from "@/lib/sla/resolve-matrix-policy";
@@ -196,10 +201,12 @@ export interface AlertTransitionError {
 export type ApplyAlertActionResult = AlertTransition | AlertTransitionError;
 
 const LEVEL_ORDER: SlaEscalationLevel[] = ["RESPONSAVEL", "ESCALAO_1", "DIRETORIA"];
+/** Chave única do evento de limite — a mesma no caminho imediato e no caminho por prazo (registra uma só vez). */
+export const TOP_LEVEL_EVENT_DISCRIMINATOR = "once";
 
 /** Próximo nível a partir do NÍVEL ATUAL do alerta; null quando já está no topo. */
 export function nextHierarchyLevel(current: SlaEscalationLevel): SlaEscalationLevel | null {
-  if (current === "ESCALAO_2") return "DIRETORIA"; // legado tratado como Nível 2
+  if (current === "ESCALAO_2") return "DIRETORIA"; // legado (só leitura) tratado como Nível 2
   const index = LEVEL_ORDER.indexOf(current);
   return index >= 0 && index < LEVEL_ORDER.length - 1 ? LEVEL_ORDER[index + 1] : null;
 }
@@ -383,7 +390,7 @@ export function applyAlertAction(input: ApplyAlertActionInput): ApplyAlertAction
       // Já na Diretoria: sem Nível 4; registra TOP_LEVEL_REACHED uma única vez, sem novo e-mail.
       topLevelReached = true;
       if (!snapshot.topLevelReachedAt) {
-        events.push(baseEvent("TOP_LEVEL_REACHED", toState, { fromLevel: currentLevel, toLevel: currentLevel, idempotencyKey: eventKey(caseId, "TOP_LEVEL_REACHED", "once") }));
+        events.push(baseEvent("TOP_LEVEL_REACHED", toState, { fromLevel: currentLevel, toLevel: currentLevel, idempotencyKey: eventKey(caseId, "TOP_LEVEL_REACHED", TOP_LEVEL_EVENT_DISCRIMINATOR) }));
       }
       caseUpdate.topLevelReached = true;
     } else if (!snapshot.escalatedLevels.includes(next)) {
@@ -426,6 +433,52 @@ export function applyAlertAction(input: ApplyAlertActionInput): ApplyAlertAction
     escalation,
     topLevelReached,
     outbox,
+  };
+}
+
+/**
+ * Prazo da Diretoria (boardAfterValue) vencido sem ação: registra
+ * TOP_LEVEL_REACHED uma única vez (evento de sistema + top_level_reached_at).
+ * Sem destinatário, sem outbox, sem novo e-mail; estado do caso preservado.
+ * null quando não há nada a registrar (não está na Diretoria, já registrado
+ * ou já resolvido) — reexecuções são idempotentes.
+ */
+export function applyScheduledTopLevel(input: { now: string; snapshot: AlertCaseSnapshot; reasons: string[] }): AlertTransition | null {
+  const { snapshot } = input;
+  if (snapshot.topLevelReachedAt || TERMINAL_STATES.has(snapshot.state)) return null;
+  if (nextHierarchyLevel(snapshot.currentLevel) !== null) return null; // só quando já está no topo (DIRETORIA)
+  const caseId = snapshot.id;
+  return {
+    ok: true,
+    action: null,
+    summary: "Limite de escalonamento atingido — prazo da Diretoria vencido",
+    expectedState: snapshot.state,
+    events: [
+      {
+        actionType: "TOP_LEVEL_REACHED",
+        actorUserId: null,
+        origin: "SYSTEM",
+        fromState: snapshot.state,
+        toState: snapshot.state,
+        fromLevel: snapshot.currentLevel,
+        toLevel: snapshot.currentLevel,
+        text: input.reasons.join(" ") || "Prazo da Diretoria vencido sem ação.",
+        justification: null,
+        evidence: null,
+        forecastAt: null,
+        targetUserId: null,
+        expertId: null,
+        expertRouting: null,
+        messageId: null,
+        idempotencyKey: eventKey(caseId, "TOP_LEVEL_REACHED", TOP_LEVEL_EVENT_DISCRIMINATOR),
+      },
+    ],
+    caseUpdate: { state: snapshot.state, topLevelReached: true },
+    forward: null,
+    closeActiveForwardAs: null,
+    escalation: null,
+    topLevelReached: true,
+    outbox: [],
   };
 }
 

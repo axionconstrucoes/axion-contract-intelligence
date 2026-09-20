@@ -11,7 +11,9 @@
 //     (quarta-feira 07:00 no timezone do projeto), por destinatário.
 //   - HIGH/CRITICAL: imediato ao surgir ou ao subir/alterar; escalonamento
 //     Nível 1 -> 2 -> 3 pelos prazos da Matriz via computeEscalation
-//     (motor existente), destino via resolveEscalationDestination.
+//     (motor existente), destino via resolveEscalationDestination; após o
+//     prazo da Diretoria (boardAfterValue) => TOP_LEVEL_REACHED registrado
+//     uma única vez (sem destinatário, sem e-mail). ESCALAO_2 nunca é criado.
 //   - Allowlist do piloto por user_id: fora dela => PILOT_RECIPIENT_SUPPRESSED.
 //   - Sem Matriz suficiente => CONFIGURATION_REVIEW_REQUIRED, sem envio.
 //   - Idempotência: chave por evento × estado × nível × destinatário × janela.
@@ -20,7 +22,7 @@ import { slaEscalationLevelLabels } from "@/lib/labels";
 import { computeEscalation } from "@/lib/sla/compute-escalation";
 import { resolveEscalationDestination } from "@/lib/sla/resolve-escalation-destination";
 import { computePolicyDeadlines, matrixPolicySnapshot, type MatrixPolicy } from "@/lib/sla/resolve-matrix-policy";
-import type { SlaArea, SlaAreaResponsibles, SlaRiskLevel } from "@/lib/sla/types";
+import type { SlaArea, SlaAreaResponsibles, SlaEscalationLevel, SlaRiskLevel } from "@/lib/sla/types";
 
 import { caseKeyOf } from "./collect-risk-cases";
 import { resolveDigestWindow } from "./digest-window";
@@ -71,7 +73,7 @@ export interface PlanRiskAlertsInput {
 }
 
 function emptyPlan(blockedReason: RiskSuppressionReason | null): RiskAlertPlan {
-  return { blockedReason, caseUpserts: [], slaActionCreates: [], escalations: [], outbox: [], audit: [], digestWindow: null };
+  return { blockedReason, caseUpserts: [], slaActionCreates: [], escalations: [], topLevelReached: [], outbox: [], audit: [], digestWindow: null };
 }
 
 function isSlaRisk(level: RiskCaseLevel): level is SlaRiskLevel {
@@ -98,6 +100,11 @@ export function evaluateRecipient(
   const corporateDomain = (config.senderDomain ?? DEFAULT_CORPORATE_EMAIL_DOMAIN).toLowerCase().replace(/^@/, "");
   if (emailDomain(profile.email) !== corporateDomain) return { ...base, status: "SUPPRESSED", suppressionReason: "EMAIL_NOT_CORPORATE" };
   return { ...base, status: "PENDING", suppressionReason: null };
+}
+
+/** true quando o nível atual já é o topo da cadeia (DIRETORIA). */
+function nextLevelIsNone(level: SlaEscalationLevel): boolean {
+  return level === "DIRETORIA";
 }
 
 function responsiblesLike(policy: MatrixPolicy): SlaAreaResponsibles {
@@ -264,6 +271,17 @@ export function planRiskAlerts(input: PlanRiskAlertsInput): RiskAlertPlan {
         rule: policy.rule,
         businessHoursConfig: policy.businessHours,
       });
+      if (result.topLevelReached && !result.shouldEscalate && existing && !existing.topLevelReachedAt && nextLevelIsNone(linked.currentEscalationLevel)) {
+        // Diretoria também deixou o prazo vencer: limite da cadeia, sem Nível 4,
+        // sem novo destinatário — só registro (idempotente pelo evento único).
+        plan.topLevelReached.push({ caseKey, slaActionId: linked.id, reasons: result.reasons });
+        plan.audit.push({
+          action: "RISK_ALERT_TOP_LEVEL_REACHED",
+          entityType: "RISK_ALERT_CASE",
+          entityId: existing.id,
+          detail: `${result.reasons.join(" ")} Limite de escalonamento atingido — nenhum novo destinatário.`,
+        });
+      }
       if (result.shouldEscalate && result.reason) {
         const destination = resolveEscalationDestination(result.recommendedLevel, responsiblesLike(policy));
         plan.escalations.push({
