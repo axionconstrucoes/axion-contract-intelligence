@@ -3,11 +3,12 @@
 import { useActionState, useState } from "react";
 import { linkDocumentAsContractualAttachmentAction } from "@/app/[projectId]/documentos/actions";
 import { initialLinkContractualAttachmentState } from "@/app/[projectId]/documentos/actions-state";
+import { LinkStatusIcon } from "@/components/documents/link-status-icon";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { getLinkStatusAppearance, resolveLinkStatus } from "@/lib/documents/link-status-appearance";
 import { documentKindLabels } from "@/lib/labels";
-import { Link2 } from "lucide-react";
 
 // Mesmos limites da CHECK constraint
 // documents_contractual_incorporation_basis_length_check (migration
@@ -55,6 +56,13 @@ export function LinkExistingDocumentToParentControl({
   const [childDocumentId, setChildDocumentId] = useState("");
   const [basis, setBasis] = useState("");
   const canSubmit = childDocumentId !== "" && basis.trim().length >= MIN_INCORPORATION_BASIS_LENGTH;
+  // Os candidatos são sempre documentos DESVINCULADOS — o ícone nasce
+  // vermelho. Quando a Server Action confirma o vínculo, vira verde na
+  // hora (estado real mudou), antes mesmo de a revalidação mover o
+  // documento para a coluna de anexos.
+  const linkStatus = resolveLinkStatus({ linkedOnLoad: false, lastActionSucceeded: state.success });
+  const appearance = getLinkStatusAppearance(linkStatus);
+  const tooltip = linkStatus === "unlinked" ? "Vincular" : appearance.statusLabel;
 
   if (candidateDocuments.length === 0) {
     return (
@@ -109,12 +117,13 @@ export function LinkExistingDocumentToParentControl({
       <Button
         type="submit"
         size="icon"
-        title="Vincular"
-        aria-label="Vincular"
+        title={tooltip}
+        aria-label={tooltip}
+        data-link-status={linkStatus}
         disabled={pending || !canSubmit}
-        className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-300 disabled:text-white"
+        className={`${appearance.triggerClassName} ${appearance.disabledClassName}`}
       >
-        <Link2 className="h-5 w-5" aria-hidden="true" />
+        <LinkStatusIcon status={linkStatus} />
       </Button>
     </form>
   );
