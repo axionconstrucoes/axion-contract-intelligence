@@ -62,6 +62,39 @@ export function buildGroundingSource(input: BuildGroundingSourceInput): Groundin
     }
   }
 
+  const scheduleContext =
+    eventContext?.schedule ?? projectContext?.schedule ?? null;
+
+  if (scheduleContext) {
+    for (const version of scheduleContext.versions) {
+      sourceTexts.push(
+        version.documentTitle,
+        version.fileName,
+        version.versionType
+      );
+
+      for (const activity of version.activities) {
+        sourceTexts.push(
+          activity.name,
+          activity.wbs ?? "",
+          activity.plannedStart ?? "",
+          activity.plannedEnd ?? "",
+          activity.baselineStart ?? "",
+          activity.baselineEnd ?? "",
+          activity.status
+        );
+      }
+
+      for (const relation of version.relations) {
+        sourceTexts.push(
+          relation.predecessorName ?? "",
+          relation.successorName ?? "",
+          relation.relationType
+        );
+      }
+    }
+  }
+
   for (const fact of documentedFacts ?? []) {
     sourceTexts.push(fact);
   }

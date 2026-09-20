@@ -34,6 +34,7 @@ import {
   resolveScheduleSourceStatus,
   scheduleSourceBlockingMessage,
 } from "./schedule-source-guard";
+import { loadExtractedScheduleContext } from "./schedule-context";
 
 const IMPLEMENTED_SCOPES: ExpertQueryScope[] = ["PROJECT", "EVENT"];
 
@@ -91,12 +92,31 @@ export async function answerPlanningDirectorQuery(
   // apenas um kind atribuído manualmente). Nesta fase o MPP é armazenado,
   // mas ainda não possui extração estruturada; por isso, mesmo quando
   // localizado, não chamamos o modelo para inventar atividades/vínculos.
-  if (isFormalScheduleAssessmentQuestion(question)) {
+  const isFormalScheduleAssessment =
+    isFormalScheduleAssessmentQuestion(question);
+
+  let scheduleContext = null;
+
+  if (isFormalScheduleAssessment) {
     const scheduleSourceStatus = await resolveScheduleSourceStatus(
       supabase,
       request.projectId
     );
-    throw new Error(scheduleSourceBlockingMessage(scheduleSourceStatus));
+
+    if (scheduleSourceStatus !== "MPP_EXTRACTED") {
+      throw new Error(scheduleSourceBlockingMessage(scheduleSourceStatus));
+    }
+
+    scheduleContext = await loadExtractedScheduleContext(
+      supabase,
+      request.projectId
+    );
+
+    if (!scheduleContext || scheduleContext.versions.length === 0) {
+      throw new Error(
+        "Cronograma MPP marcado como extraido, mas os dados estruturados nao puderam ser carregados."
+      );
+    }
   }
 
   const eventContext =
@@ -112,6 +132,14 @@ export async function answerPlanningDirectorQuery(
   const projectContext =
     request.scope === "PROJECT" ? await buildProjectAnalysisContext(supabase, { projectId: request.projectId }) : null;
 
+  const eventContextWithSchedule = eventContext
+    ? { ...eventContext, schedule: scheduleContext }
+    : null;
+
+  const projectContextWithSchedule = projectContext
+    ? { ...projectContext, schedule: scheduleContext }
+    : null;
+
   const response = await provider.answerQuery({
     expertId: PLANNING_DIRECTOR_EXPERT_ID,
     expertName: PLANNING_DIRECTOR_NAME,
@@ -119,8 +147,8 @@ export async function answerPlanningDirectorQuery(
     instructions: PLANNING_DIRECTOR_INSTRUCTIONS,
     scope: request.scope,
     question,
-    eventContext,
-    projectContext,
+    eventContext: eventContextWithSchedule,
+    projectContext: projectContextWithSchedule,
     outputSchema: EXPERT_QUERY_RESPONSE_JSON_SCHEMA,
   });
 
@@ -140,8 +168,8 @@ export async function answerPlanningDirectorQuery(
   if (response.providerId === "anthropic" && validated.rascunhoSugerido) {
     const draft = validated.rascunhoSugerido;
     const source = buildGroundingSource({
-      eventContext,
-      projectContext,
+      eventContext: eventContextWithSchedule,
+      projectContext: projectContextWithSchedule,
       documentedFacts: validated.fatosDocumentados,
       contractualBasis: validated.baseContratual,
       legalCitations: validated.baseLegal,
