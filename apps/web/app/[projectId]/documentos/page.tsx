@@ -25,10 +25,9 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
-import {
-  getClauses,
-  getScheduleActivities,
-} from "@/lib/data";
+import { createSupabaseServerClient } from "@axion/db/server";
+import { loadExtractedScheduleContext } from "@/lib/ai/experts/planning-director/schedule-context";
+import { getClauses } from "@/lib/data";
 import { getContractAttachmentCounts, getManagedDocuments, getTrashedDocuments } from "@/lib/document-management";
 import { isContractAttachmentEligibleKind } from "@/lib/documents/contract-attachments/is-contract-attachment-eligible-kind";
 import {
@@ -52,21 +51,40 @@ export default async function DocumentosPage({
 }) {
   const { projectId } = await params;
 
+  const supabase = await createSupabaseServerClient();
+
   const [
     documents,
     clauses,
-    scheduleActivities,
+    scheduleContext,
     permission,
     emailAttachmentRows,
     trashedDocuments,
   ] = await Promise.all([
     getManagedDocuments(projectId),
     getClauses(projectId),
-    getScheduleActivities(projectId),
+    loadExtractedScheduleContext(supabase, projectId),
     getCurrentProjectPermission(projectId),
     getEmailAttachmentRegistryForProject(projectId),
     getTrashedDocuments(projectId),
   ]);
+
+  // A aba Cronograma deve exibir exatamente a mesma fonte MPP estruturada
+  // usada pelo Diretor de Planejamento IA. Não depende de lifecycle_status
+  // legado; basta a versão MPP vigente estar processada e EXTRACTED.
+  const scheduleActivities =
+    scheduleContext?.versions.flatMap((version) =>
+      version.activities.map((activity) => ({
+        id: activity.id,
+        name: activity.name,
+        baselineStart: activity.baselineStart,
+        baselineEnd: activity.baselineEnd,
+        currentStart: activity.plannedStart,
+        currentEnd: activity.plannedEnd,
+        status: activity.status,
+        isCritical: activity.isCritical,
+      }))
+    ) ?? [];
 
   // Decisão de negócio (não a hierarquia global de
   // has_project_permission): ADMINISTRADOR, GESTOR e GERENTE podem
@@ -319,33 +337,26 @@ export default async function DocumentosPage({
                         {activity.name}
                       </CardTitle>
 
-                      <Badge variant="outline">
-                        {
-                          scheduleStatusLabels[
-                            activity.status
-                          ]
-                        }
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {activity.isCritical ? (
+                          <Badge className="bg-red-600 text-white hover:bg-red-600">Crítica</Badge>
+                        ) : null}
+                        <Badge variant="outline">
+                          {scheduleStatusLabels[activity.status as keyof typeof scheduleStatusLabels] ?? activity.status}
+                        </Badge>
+                      </div>
                     </CardHeader>
 
                     <CardContent className="text-sm text-muted-foreground">
                       Baseline:{" "}
-                      {formatDate(
-                        activity.baselineStart
-                      )}{" "}
+                      {activity.baselineStart ? formatDate(activity.baselineStart) : "—"}{" "}
                       –{" "}
-                      {formatDate(
-                        activity.baselineEnd
-                      )}
+                      {activity.baselineEnd ? formatDate(activity.baselineEnd) : "—"}
                       <br />
                       Atual:{" "}
-                      {formatDate(
-                        activity.currentStart
-                      )}{" "}
+                      {activity.currentStart ? formatDate(activity.currentStart) : "—"}{" "}
                       –{" "}
-                      {formatDate(
-                        activity.currentEnd
-                      )}
+                      {activity.currentEnd ? formatDate(activity.currentEnd) : "—"}
                     </CardContent>
                   </Card>
                 )
