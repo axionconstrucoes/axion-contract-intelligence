@@ -375,7 +375,8 @@ pelo worker.
 
 Migration `20260921090000_pilot_risk_alert_delivery.sql` (aditiva) +
 `apps/web/lib/risk-alerts/**`, `apps/web/app/api/cron/risk-alerts`
-(cron horário, `vercel.json`), painel somente leitura em
+(rota protegida, disparada de hora em hora pelo workflow GitHub — ver
+9.6), painel somente leitura em
 `/[projectId]/acoes/configuracao`. Tudo atrás de
 `ACC_WEEKLY_REPORTS_ENABLED` **e** de `risk_alerts_enabled` por projeto
 (default `false`).
@@ -447,12 +448,19 @@ e-mail corporativo. Qualquer falta ⇒ não envia e registra o motivo. O
 guard global do piloto (`pilot-outbound-guard.ts`) continua sendo a
 segunda camada nos providers.
 
-**Worker**: `GET /api/cron/risk-alerts` (Bearer `CRON_SECRET`), cron
-`15 * * * *` UTC; cada execução avalia ALTO/CRÍTICO e escalonamentos e
-decide localmente se a janela do consolidado (quarta 07:00) está aberta
-— nunca fixa 10:00 UTC. `?dryRun=1` = só plano, nenhuma escrita/envio;
-`?projectId=` restringe. Concorrência: idempotência por chave + `for
-update` na RPC de escalonamento. Flag desligada ⇒ 204 sem consulta.
+**Worker**: `GET /api/cron/risk-alerts` (Bearer `CRON_SECRET`, só no
+header Authorization, comparação em tempo constante; query string nunca
+autentica), chamado de hora em hora pelo job `risk-alerts` do workflow
+GitHub `weekly-schedule-email-ingestion.yml` (cron `20 * * * *` UTC —
+**não** há entrada em `vercel.json`: o plano Vercel atual admite só 2
+crons diários, e os 2 existentes foram preservados). Cada execução
+avalia ALTO/CRÍTICO e escalonamentos e decide localmente se a janela do
+consolidado (quarta 07:00) está aberta — nunca fixa 10:00 UTC; nenhuma
+regra de horário local fica no YAML. `?dryRun=1` = só plano, nenhuma
+escrita/envio; `?projectId=` restringe. Concorrência: 409 para chamada
+simultânea na mesma instância + idempotência por chave + `for update`
+na RPC de escalonamento + `concurrency` do workflow. Flag desligada ⇒
+204 sem consulta.
 
 **Auditoria** (`audit_log_entries`, SYSTEM): regra da Matriz usada
 (snapshot na outbox), destinatários calculados/permitidos/suprimidos,
@@ -616,6 +624,37 @@ RESOLVED, REVIEW_REQUIRED, TOP_LEVEL_REACHED.
   informada uma vez, sem e-mail duplicado). Ação e escalonamento são
   eventos distintos, ambos auditados; idempotente por nível; respeita
   Matriz e allowlist. LOW/MEDIUM nunca escalam por essas ações.
+
+### 9.6 Gatilho horário pelo GitHub Actions e configuração de ativação
+
+Job `risk-alerts` (`needs: ingest`, roda depois da captura de respostas):
+só quando `vars.ACC_WEEKLY_REPORTS_ENABLED == 'true'` e (agendado ou
+manual com fase `all`). Antes da chamada valida, **sem imprimir
+valores**, flag `true`, `ACC_APP_BASE_URL` não vazio (https) e
+`CRON_SECRET` não vazio — faltando algo, falha de forma sanitizada e não
+chama nada. Comando: `curl --silent --show-error --fail-with-body
+--max-time 120 --retry 2 --retry-delay 5 -H "Authorization: Bearer
+${CRON_SECRET}" "${ACC_APP_BASE_URL}/api/cron/risk-alerts"` — o segredo
+só no header (nunca URL, query string, echo, output, artifact ou log).
+A cada hora: flag `false`/ausente ⇒ não chama; ALTO/CRÍTICO ⇒
+processado na próxima execução horária; BAIXO/MÉDIO ⇒ o motor decide se
+é quarta ≥ 07:00 America/Sao_Paulo.
+
+**Antes da ativação (nada disso existe hoje; nenhum valor foi criado):**
+
+| Onde | Tipo | Nome | Valor |
+| --- | --- | --- | --- |
+| GitHub | Variable | `ACC_WEEKLY_REPORTS_ENABLED` | `true` |
+| GitHub | Variable | `ACC_APP_BASE_URL` | `https://acc.axion.com.br` |
+| GitHub | Secret | `CRON_SECRET` | mesmo valor configurado no Vercel |
+| Vercel | Env | `ACC_WEEKLY_REPORTS_ENABLED` | `true` |
+| Vercel | Env | `CRON_SECRET` | mesmo valor |
+| Vercel | Env | `GOOGLE_GMAIL_INBOUND_MAILBOX` | caixa inbound oficial |
+| Vercel | Env | `ACC_PILOT_ADDITIONAL_RECIPIENTS` | participante adicional do piloto |
+
+Além disso: migration `20260921090000` aplicada e validada, projeto
+piloto confirmado, Níveis 1 e 3 completos, regras explícitas salvas,
+severity map gravado. Manter a feature desligada até a validação completa.
 
 ## 8. Testes
 

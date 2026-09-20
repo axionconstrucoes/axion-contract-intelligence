@@ -27,6 +27,7 @@ const { resolveMatrixPolicy } = await import("../apps/web/lib/sla/resolve-matrix
 const { evaluatePilotReadiness, SUGGESTED_INGESTION_ALERT_SEVERITY } = await import("../apps/web/lib/risk-alerts/pilot-readiness");
 const { describeSuppression } = await import("../apps/web/lib/risk-alerts/plan-risk-alerts");
 const { isActionTokenValid, hashActionToken, generateActionToken } = await import("../apps/web/lib/risk-alerts/action-links");
+const { isCronRequestAuthorized } = await import("../apps/web/lib/cron/cron-request-auth");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
@@ -477,6 +478,77 @@ await check("S8. Projetos isolados: policies por is_project_member; RPC checa me
   assert(worker.includes('.eq("project_id", config.projectId)\n      .eq("direction", "OUTBOUND")') && worker.includes("if (matches.length !== 1) continue;"));
   const store = readSource("apps/web/lib/risk-alerts/supabase-store.ts");
   assert((store.match(/\.eq\("project_id", projectId\)/g) ?? []).length >= 10);
+});
+
+// ================================================================== CRON / WORKFLOW
+const WORKFLOW = ".github/workflows/weekly-schedule-email-ingestion.yml";
+const cronStep = () => readSource(WORKFLOW).split("  risk-alerts:")[1] ?? "";
+await check("W1. vercel.json tem exatamente dois crons, ambos preservados; risk-alerts fora; rota continua existindo", () => {
+  const vercel = JSON.parse(readSource("apps/web/vercel.json"));
+  assert(vercel.crons.length === 2);
+  assert(vercel.crons[0].path === "/api/cron/weekly-alert-digest" && vercel.crons[0].schedule === "0 10 * * 3");
+  assert(vercel.crons[1].path === "/api/cron/system-health" && vercel.crons[1].schedule === "30 10 * * *");
+  assert(!vercel.crons.some((c) => c.path === "/api/cron/risk-alerts"));
+  const route = readSource("apps/web/app/api/cron/risk-alerts/route.ts");
+  assert(route.includes("export async function GET(request: Request)") && route.includes("runRiskAlertCycle("));
+});
+await check("W2. Workflow existente é horário, chama /api/cron/risk-alerts, só com a feature flag, URL de vars.ACC_APP_BASE_URL e secret de secrets.CRON_SECRET", () => {
+  const workflow = readSource(WORKFLOW);
+  assert(workflow.includes('- cron: "20 * * * *"'), "horário");
+  assert((workflow.match(/^  [a-z-]+:\n/gm) ?? []).length >= 2 && workflow.includes("  risk-alerts:"));
+  const step = cronStep();
+  assert(step.includes('"${ACC_APP_BASE_URL%/}/api/cron/risk-alerts"'));
+  assert(step.includes("if: ${{ !cancelled() && vars.ACC_WEEKLY_REPORTS_ENABLED == 'true' &&"), "job condicionado à flag");
+  assert(step.includes("ACC_APP_BASE_URL: ${{ vars.ACC_APP_BASE_URL }}") && step.includes("CRON_SECRET: ${{ secrets.CRON_SECRET }}"));
+  assert(!workflow.includes("secrets.ACC_APP_BASE_URL") && !workflow.includes("vars.CRON_SECRET"));
+});
+await check("W3. Secret vai somente no header Authorization Bearer; nunca em URL, echo, output, artifact ou log", () => {
+  const step = cronStep();
+  assert(step.includes('-H "Authorization: Bearer ${CRON_SECRET}"'));
+  const occurrences = step.match(/CRON_SECRET/g) ?? [];
+  // env mapping, validação de presença, header — nada mais.
+  assert(occurrences.length === 5, `usos de CRON_SECRET: ${occurrences.length}`);
+  assert(!/api\/cron\/risk-alerts[^"\n]*(secret|token|CRON)/i.test(step), "nunca na URL/query string");
+  assert(!/echo[^\n]*\$\{?CRON_SECRET|::set-output|GITHUB_OUTPUT|GITHUB_ENV|upload-artifact|set -x|::add-mask/.test(step), "sem echo/output/artifact do segredo");
+  assert(step.includes("--output /dev/null") && step.includes("--silent --show-error --fail-with-body") && step.includes("--max-time 120 --retry 2 --retry-delay 5"));
+});
+await check("W4. Configuração ausente impede a chamada (falha sanitizada); feature desligada impede a chamada; nenhuma regra de horário local no YAML", () => {
+  const step = cronStep();
+  assert(step.includes('if [ "${ACC_WEEKLY_REPORTS_ENABLED:-}" != "true" ]; then') && step.includes("exit 0"));
+  assert(step.includes('if [ -z "${ACC_APP_BASE_URL:-}" ]; then') && step.includes('if [ -z "${CRON_SECRET:-}" ]; then') && step.includes("exit 1"));
+  assert(step.includes("https://*) ;;"), "só https");
+  assert(step.indexOf("if [ -z \"${CRON_SECRET:-}\" ]") < step.indexOf("status=$(curl"), "validação antes da chamada");
+  assert(!/echo[^\n]*\$\{?(ACC_APP_BASE_URL|CRON_SECRET)/.test(step), "mensagens sem valores");
+  assert(!/Sao_Paulo|07:00|TZ=/.test(readSource(WORKFLOW).replace(/^\s*#.*$/gm, "")), "timezone só no motor (comentários fora)");
+  assert(readSource("apps/web/lib/risk-alerts/digest-window.ts").includes("America/Sao_Paulo") || readSource("apps/web/lib/risk-alerts/types.ts").includes("DIGEST_HOUR_LOCAL"));
+});
+await check("W5. Rota: sem secret => 401; secret incorreto => 401; query string nunca autentica; comparação em tempo constante", () => {
+  const secret = "segredo-de-teste-nao-real-1234567890";
+  const req = (headers = {}, url = "https://acc.example.test/api/cron/risk-alerts") => new Request(url, { headers });
+  assert(isCronRequestAuthorized(req(), secret) === false, "ausente");
+  assert(isCronRequestAuthorized(req({ authorization: "Bearer errado" }), secret) === false, "incorreto");
+  assert(isCronRequestAuthorized(req({ authorization: `Bearer ${secret}x` }), secret) === false, "prefixo correto mas maior");
+  assert(isCronRequestAuthorized(req({ authorization: secret }), secret) === false, "sem esquema Bearer");
+  assert(isCronRequestAuthorized(req({}, `https://acc.example.test/api/cron/risk-alerts?secret=${secret}&token=${secret}`), secret) === false, "query string não autentica");
+  assert(isCronRequestAuthorized(req({ authorization: `Bearer ${secret}` }), secret) === true);
+  assert(isCronRequestAuthorized(req({ authorization: `Bearer ${secret}` }), undefined) === false && isCronRequestAuthorized(req({ authorization: "Bearer " }), "   ") === false, "sem CRON_SECRET configurado nada passa");
+  const auth = readSource("apps/web/lib/cron/cron-request-auth.ts");
+  assert(auth.includes("timingSafeEqual(presented, expected)") && !/searchParams|console\./.test(auth));
+  const route = readSource("apps/web/app/api/cron/risk-alerts/route.ts");
+  assert(route.includes("isCronRequestAuthorized(request, process.env.CRON_SECRET)") && !/console\.|searchParams\.get\("(secret|token|key)"\)/.test(route), "header nunca registrado; query string nunca lida como segredo");
+});
+await check("W6. Feature desligada retorna 204 antes do banco; execução idempotente (409 concorrente + chaves únicas); nenhum e-mail real; nenhum workflow executado", () => {
+  const route = readSource("apps/web/app/api/cron/risk-alerts/route.ts");
+  const authIdx = route.indexOf("isCronRequestAuthorized(");
+  const flagIdx = route.indexOf("if (!isWeeklyReportsEnabled()) {");
+  const runIdx = route.indexOf("runRiskAlertCycle(");
+  assert(authIdx > 0 && authIdx < flagIdx && flagIdx < runIdx && route.includes("return new Response(null, { status: 204 });"));
+  assert(route.includes("if (inFlight) {") && route.includes("status: 409") && route.includes("inFlight = false;"));
+  const cycle = readSource("apps/web/lib/risk-alerts/run-risk-alert-cycle.ts");
+  assert(cycle.includes("if (!featureEnabled) return result; // nenhuma consulta ao banco"));
+  assert(cycle.includes("existingIdempotencyKeys") && cycle.includes("sentKeys.has(row.idempotencyKey)"));
+  assert(!/fetch\(\s*["'`]https?:/.test(route + cycle), "rota/ciclo não chamam rede própria — provider fake nos testes");
+  assert(!process.env.GITHUB_ACTIONS && !process.env.CRON_SECRET, "teste local: nenhum workflow/segredo real em uso");
 });
 
 console.log("");

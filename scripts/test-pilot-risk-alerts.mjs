@@ -232,8 +232,9 @@ await check("12. Consolidado só na quarta-feira ≥ 07:00 America/Sao_Paulo (UT
   const early = plan({ now: WEDNESDAY_0630_SP, responsibles: responsibles({ responsibleDirectUserId: U_PILOT_A }), cases: [riskCase({ riskLevel: "MEDIUM", fingerprint: "fp-med" })] });
   assert(early.outbox.length === 0 && early.digestWindow.isOpen === false);
   const vercel = JSON.parse(readSource("apps/web/vercel.json"));
-  const cron = vercel.crons.find((c) => c.path === "/api/cron/risk-alerts");
-  assert(cron && /^\d+ \* \* \* \*$/.test(cron.schedule), "cron horário (a janela local é decidida pelo ciclo)");
+  assert(!vercel.crons.some((c) => c.path === "/api/cron/risk-alerts"), "sem cron Vercel (limite do plano) — gatilho pelo workflow GitHub");
+  const workflow = readSource(".github/workflows/weekly-schedule-email-ingestion.yml");
+  assert(/cron: "\d+ \* \* \* \*"/.test(workflow) && workflow.includes("/api/cron/risk-alerts"), "gatilho horário (a janela local é decidida pelo ciclo)");
 });
 await check("13. High envia imediatamente (cria ação SLA com prazos da Matriz)", () => {
   const result = plan();
@@ -393,7 +394,7 @@ await check("27. Feature desligada não envia (planejador bloqueia; cron respond
   const result = plan({ featureEnabled: false });
   assert(result.blockedReason === "FEATURE_DISABLED" && result.outbox.length === 0 && result.caseUpserts.length === 0);
   const route = readSource("apps/web/app/api/cron/risk-alerts/route.ts");
-  assert(route.includes("if (!isWeeklyReportsEnabled())") && route.includes("status: 204") && route.includes("Bearer ${cronSecret}"));
+  assert(route.includes("if (!isWeeklyReportsEnabled())") && route.includes("status: 204") && route.includes("isCronRequestAuthorized(request, process.env.CRON_SECRET)"));
   const cycle = readSource("apps/web/lib/risk-alerts/run-risk-alert-cycle.ts");
   assert(/if \(!featureEnabled\) return result;/.test(cycle) && cycle.indexOf("if (!featureEnabled) return result;") < cycle.indexOf("createSupabaseRiskAlertStore("));
 });
