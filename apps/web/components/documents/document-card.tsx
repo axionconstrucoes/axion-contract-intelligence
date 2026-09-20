@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ManagedDocument } from "@/lib/document-management";
 import { getDocumentKindCardAppearance } from "@/lib/documents/document-kind-card-appearance";
 import { documentKindLabels, formatDate } from "@/lib/labels";
+import { Unlink2 } from "lucide-react";
 
 // Cartão completo de um documento (título, badge de tipo, todas as
 // versões com metadados/download, formulário de nova versão) — extraído
@@ -210,7 +211,13 @@ export function DocumentCard({
 
           {contractualParentOptions && contractualParentOptions.length > 0 ? (
             <details className="rounded-md border p-2">
-              <summary className="cursor-pointer text-sm font-medium">Vincular como anexo contratual</summary>
+              <summary
+                title="Desvinculado — clique para vincular"
+                aria-label="Desvinculado — clique para vincular"
+                className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 [&::-webkit-details-marker]:hidden"
+              >
+                <Unlink2 className="h-5 w-5" aria-hidden="true" />
+              </summary>
 
               <div className="pt-2">
                 <LinkContractualAttachmentControl
