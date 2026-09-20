@@ -55,7 +55,7 @@ export async function askEngineeringDirectorAction(
   } catch (error) {
     return {
       response: null,
-      error: error instanceof Error ? error.message : "Falha ao consultar o Diretor de Engenharia IA.",
+      error: error instanceof Error ? error.message : "Falha ao consultar o Diretor de Planejamento IA.",
       meta: null,
     };
   }
