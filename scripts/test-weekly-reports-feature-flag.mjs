@@ -21,7 +21,10 @@ const { isWeeklyReportsEnabled, assertWeeklyReportsEnabled, WEEKLY_REPORTS_FLAG_
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
-const readSource = (relative) => readFileSync(path.join(repoRoot, relative), "utf8");
+// Fontes lidas como texto são normalizadas para LF: o repositório guarda LF,
+// mas checkouts com autocrlf materializam CRLF — as asserções comparam
+// literais multilinha e não podem depender do fim de linha do checkout.
+const readSource = (relative) => readFileSync(path.join(repoRoot, relative), "utf8").replace(/\r\n?/g, "\n");
 
 let passed = 0;
 let failed = 0;
