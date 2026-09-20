@@ -60,6 +60,7 @@ export default async function DocumentosPage({
     permission,
     emailAttachmentRows,
     trashedDocuments,
+    projectEmails,
   ] = await Promise.all([
     getManagedDocuments(projectId),
     getClauses(projectId),
@@ -67,6 +68,21 @@ export default async function DocumentosPage({
     getCurrentProjectPermission(projectId),
     getEmailAttachmentRegistryForProject(projectId),
     getTrashedDocuments(projectId),
+    supabase
+      .from("emails")
+      .select("id,from_address,subject,sent_at")
+      .eq("project_id", projectId)
+      .order("sent_at", { ascending: false })
+      .limit(200)
+      .then(({ data, error }) => {
+        if (error) throw error;
+        return (data ?? []).map((email) => ({
+          id: email.id,
+          fromAddress: email.from_address,
+          subject: email.subject,
+          sentAt: email.sent_at,
+        }));
+      }),
   ]);
 
   // A aba Cronograma deve exibir exatamente a mesma fonte MPP estruturada
@@ -264,6 +280,7 @@ export default async function DocumentosPage({
                   contractAttachmentCounts={contractAttachmentCounts}
                   canAddContractAttachment={canAddContractAttachment}
                   canDeleteContractAttachment={canDeleteContractAttachment}
+                  emailOptions={projectEmails}
                 />
               ))}
 
@@ -286,6 +303,7 @@ export default async function DocumentosPage({
                       contractAttachmentCounts={contractAttachmentCounts}
                       canAddContractAttachment={canAddContractAttachment}
                       canDeleteContractAttachment={canDeleteContractAttachment}
+                      emailOptions={projectEmails}
                     />
                   ))}
                 </div>
