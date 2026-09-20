@@ -1,0 +1,110 @@
+﻿name: MPP Document Worker
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+
+  workflow_dispatch:
+
+concurrency:
+  group: mpp-document-worker
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  process-mpp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install MPXJ
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "mpxj==16.7.0" "JPype1==1.7.1"
+
+      - name: Find and process pending MPP files
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { createClient } from "@supabase/supabase-js";
+          import { spawnSync } from "node:child_process";
+
+          const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+          const key = process.env.SUPABASE_SECRET_KEY;
+
+          if (!url || !key) {
+            throw new Error("Supabase credentials are missing.");
+          }
+
+          const supabase = createClient(url, key, {
+            auth: {
+              persistSession: false,
+              autoRefreshToken: false,
+            },
+          });
+
+          const { data, error } = await supabase
+            .from("document_versions")
+            .select("id,original_file_name,mime_type,processing_status")
+            .eq("processing_status", "AWAITING_PROCESSING")
+            .order("created_at", { ascending: true })
+            .limit(20);
+
+          if (error) {
+            throw error;
+          }
+
+          const pending = (data ?? []).filter((row) =>
+            row.mime_type === "application/vnd.ms-project" ||
+            row.original_file_name?.toLowerCase().endsWith(".mpp")
+          );
+
+          console.log(`MPP pendentes: ${pending.length}`);
+
+          for (const row of pending) {
+            console.log(`Processando ${row.id} - ${row.original_file_name}`);
+
+            const result = spawnSync(
+              "node",
+              ["scripts/process-document-version.mjs", row.id],
+              {
+                stdio: "inherit",
+                env: process.env,
+              }
+            );
+
+            if (result.status !== 0) {
+              console.error(`Falha ao processar ${row.id}`);
+              process.exitCode = 1;
+            }
+          }
+          NODE
