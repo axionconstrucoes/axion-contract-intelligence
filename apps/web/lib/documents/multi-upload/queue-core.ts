@@ -369,6 +369,8 @@ export function buildImportErrorMessage(
 export const REMOVABLE_STATUSES: readonly QueueItemStatus[] = [
   "PENDENTE",
   "ERRO",
+  "REJEITADO",
+  "DUPLICADO",
 ];
 
 export function canRemoveQueueItem(status: QueueItemStatus): boolean {
