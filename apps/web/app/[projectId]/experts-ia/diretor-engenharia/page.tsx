@@ -39,6 +39,7 @@ export default async function DiretorEngenhariaPage({
         title="Pergunte ao Diretor de Planejamento IA"
         action={askEngineeringDirectorAction}
         initialState={initialAskCommercialDirectorState}
+        questionPlaceholder="Ex.: Qual é a data final prevista da obra, quantas atividades existem e quais estão no caminho crítico?"
       />
     </div>
   );
