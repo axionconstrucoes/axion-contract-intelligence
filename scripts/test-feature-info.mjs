@@ -77,13 +77,20 @@ const EXPECTED_SIDEBAR_LABELS = [
   "Event Ledger",
   "Solicitações",
   "Ações e Escalonamentos",
+  // Expert Jurídico: ponto único para análise de contratos e consultas
+  // jurídicas (as entradas "Análise Contratual"/"Análise de Cláusulas"
+  // saíram do menu).
+  "Jurídico",
   // "Propostas de Adicionais" removida da sidebar: aba "Serviços
   // Adicionais" descontinuada (dependia da importação automática do
   // Drive de Orçamentos, integração cancelada) — serviço adicional
   // aprovado agora entra por upload manual do ADM em Documentos.
-  "Análise Contratual",
-  "Análise de Cláusulas",
+  // "Análise Contratual"/"Análise de Cláusulas" saíram do menu: o Expert
+  // Jurídico é o ponto único (rotas e ajuda preservadas).
   "Documentos",
+  // Financeiro: item restrito (só aparece para quem passa em
+  // evaluateFinancialDashboardAccess), mas faz parte de NAV_ITEMS.
+  "Financeiro",
   "ESG/SSMA",
   "Experts IA",
   "Start-up ACC",

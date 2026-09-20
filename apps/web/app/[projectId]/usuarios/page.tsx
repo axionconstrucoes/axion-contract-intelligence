@@ -22,6 +22,7 @@ import {
   permissionLabels,
   slaAreaLabels,
 } from "@/lib/labels";
+import { isWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import { resolveBusinessHoursConfig, resolveGenericMatrixRule } from "@/lib/sla/resolve-matrix-rule";
 import { formatInvitationSelection, formatMemberSelection } from "@/lib/sla/responsible-selection";
 import { getSlaAreaResponsibles, getSlaMatrixRules, getSlaProjectSettings } from "@/lib/sla/sla-actions-data";
@@ -202,6 +203,22 @@ export default async function UsuariosPage({ params }: { params: Promise<{ proje
                   />
                 );
               })}
+              {isWeeklyReportsEnabled() ? (() => {
+                // Leitura derivada da PRÓPRIA matriz (nenhuma segunda fonte):
+                // quem, em Planejamento, está habilitado a enviar o cronograma
+                // semanal por e-mail (1º/2º escalão). Ver
+                // lib/sla/resolve-user-responsibility-tier.ts.
+                const planning = responsiblesByArea.get("PLANEJAMENTO");
+                const firstTier = [planning?.responsibleDirectName, planning?.secondaryResponsibleName].filter(Boolean);
+                const secondTier = [planning?.escalation1Name].filter(Boolean);
+                return (
+                  <p className="text-xs text-muted-foreground" data-testid="weekly-schedule-planning-tiers">
+                    <strong>Cronograma semanal por e-mail (Planejamento):</strong> 1º escalão —{" "}
+                    {firstTier.length > 0 ? firstTier.join(", ") : "não definido"}; 2º escalão —{" "}
+                    {secondTier.length > 0 ? secondTier.join(", ") : "não definido"}. Esta matriz é a única fonte do escalão; sem definição, o envio vai para revisão humana.
+                  </p>
+                );
+              })() : null}
             </CardContent>
           </Card>
 

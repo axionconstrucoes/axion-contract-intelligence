@@ -94,11 +94,13 @@ check('"Experts IA" está entre os itens de navegação e funciona normalmente r
   assert(sidebarSource.includes('href: "experts-ia", label: "Experts IA"'));
 });
 
-check("labels renomeados presentes, rotas técnicas (href) preservadas", () => {
-  assert(sidebarSource.includes('label: "Análise Contratual"'));
-  assert(sidebarSource.includes('label: "Análise de Cláusulas"'));
-  assert(sidebarSource.includes('href: "revisao-contratual"'));
-  assert(sidebarSource.includes('href: "revisao-clausulas"'));
+check("opções jurídicas removidas do menu (Expert Jurídico único); rotas técnicas preservadas no repositório", () => {
+  const navSource = readSource("apps/web/lib/ui/nav-items.ts");
+  assert(!navSource.includes('label: "Análise Contratual"'));
+  assert(!navSource.includes('label: "Análise de Cláusulas"'));
+  assert(navSource.includes('href: "juridico"'));
+  assert(readSource("apps/web/app/[projectId]/revisao-contratual/page.tsx").length > 0, "rota preservada");
+  assert(readSource("apps/web/app/[projectId]/revisao-clausulas/page.tsx").length > 0, "rota preservada");
 });
 
 // --- Startup oficial do ACC ---

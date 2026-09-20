@@ -98,14 +98,13 @@ check("página experts-ia nunca conecta um novo LLM nem chama providers (não im
   assert(!source.includes("Anthropic"), "hub não deveria referenciar Anthropic diretamente");
 });
 
-check('barra lateral: "Revisão Contratual" e "Revisão de Cláusulas" viraram "Análise Contratual"/"Análise de Cláusulas" — sem alterar as rotas (href)', () => {
-  const source = readSource("apps/web/components/layout/app-sidebar.tsx");
-  assert(source.includes('label: "Análise Contratual"'));
-  assert(source.includes('label: "Análise de Cláusulas"'));
+check('barra lateral: "Análise Contratual" e "Análise de Cláusulas" saíram do menu (Expert Jurídico é o ponto único); rotas técnicas preservadas', () => {
+  const source = readSource("apps/web/lib/ui/nav-items.ts");
+  assert(!source.includes('label: "Análise Contratual"'), "item removido da navegação");
+  assert(!source.includes('label: "Análise de Cláusulas"'), "item removido da navegação");
   assert(!source.includes('label: "Revisão Contratual"'), "label antigo não deveria mais existir");
   assert(!source.includes('label: "Revisão de Cláusulas"'), "label antigo não deveria mais existir");
-  assert(source.includes('href: "revisao-contratual"'), "rota/diretório técnico não pode ter sido renomeado");
-  assert(source.includes('href: "revisao-clausulas"'), "rota/diretório técnico não pode ter sido renomeado");
+  assert(source.includes('href: "juridico"'), "Expert Jurídico continua na navegação");
 });
 
 check('barra lateral: nova entrada "Experts IA" aponta para experts-ia', () => {
