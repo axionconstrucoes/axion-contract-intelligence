@@ -34,7 +34,7 @@ export function TrashDocumentControl({
 
   return (
     <details className="text-xs">
-      <summary className="cursor-pointer whitespace-nowrap opacity-80">Enviar para a lixeira</summary>
+      <summary className="inline-flex cursor-pointer list-none items-center rounded-md bg-red-600 px-2.5 py-1.5 font-medium text-white hover:bg-red-700 [&::-webkit-details-marker]:hidden">Enviar para a lixeira</summary>
       <form action={formAction} className="mt-1.5 flex flex-col gap-1.5 rounded-md border bg-card p-2 text-card-foreground">
         <input type="hidden" name="projectId" value={projectId} />
         <input type="hidden" name="documentId" value={documentId} />
@@ -64,8 +64,7 @@ export function TrashDocumentControl({
         <Button
           type="submit"
           size="sm"
-          variant="outline"
-          className="border-destructive text-destructive hover:bg-destructive/10"
+          className="bg-red-600 text-white hover:bg-red-700 disabled:bg-red-300 disabled:text-white"
           disabled={pending || reason.trim().length < MIN_REASON_LENGTH}
         >
           {pending ? "Enviando…" : "Confirmar envio para a lixeira"}

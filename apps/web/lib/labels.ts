@@ -437,7 +437,7 @@ export const emailAccountStatusLabels: Record<"NOT_CONNECTED" | "CONNECTED" | "S
 export const documentKindLabels: Record<DocumentKind, string> = {
   CONTRATO_BASE: "Contrato base",
   ADITIVO: "Aditivo",
-  EDITAL: "Edital",
+  EDITAL: "Memorial/Edital",
   RFI: "RFI",
   RFP: "RFP",
   ESPECIFICACAO: "Especificação",

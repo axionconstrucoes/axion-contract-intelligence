@@ -14,7 +14,7 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const DOCUMENT_KINDS = [
   ["CONTRATO_BASE", "Contrato base"],
   ["ADITIVO", "Aditivo"],
-  ["EDITAL", "Edital"],
+  ["EDITAL", "Memorial/Edital"],
   ["RFI", "RFI"],
   ["RFP", "RFP"],
   ["ESPECIFICACAO", "Especificação"],
