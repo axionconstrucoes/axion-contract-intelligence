@@ -1,0 +1,72 @@
+name: Weekly Schedule Email Ingestion
+
+# Ingestão automática do cronograma semanal (.mpp) enviado por e-mail
+# pelo Planejamento. Roda de hora em hora (após o Gmail Inbound Sync,
+# que roda a cada 15 min e alimenta public.emails) e é idempotente:
+#   intake  -> weekly_schedule_email_intakes + nova document_version
+#              AWAITING_PROCESSING (processada pelo MPP Document Worker);
+#   compare -> schedule_version_comparisons (após EXTRACTED);
+#   alerts  -> weekly_schedule_ingestion_alerts (único por semana).
+# Usa as MESMAS credenciais somente-leitura do Gmail Inbound Sync —
+# nenhum escopo/segredo novo. Nunca monitora caixas externas do cliente.
+#
+# TRAVA DE DEPLOYMENT: o job só executa quando a variável de repositório
+# ACC_WEEKLY_REPORTS_ENABLED (Settings > Variables, não é segredo) for
+# exatamente "true" — e o próprio script reaplica a mesma verificação.
+# Enquanto a migration 20260920120000 não for aplicada no banco remoto,
+# a variável fica ausente e o workflow não faz nenhuma consulta.
+
+on:
+  schedule:
+    - cron: "20 * * * *"
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: "Restringir a um projeto (UUID). Vazio = todos os habilitados."
+        required: false
+        default: ""
+      phase:
+        description: "Fase: all | intake | compare | alerts"
+        required: false
+        default: "all"
+
+concurrency:
+  group: weekly-schedule-email-ingestion
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    if: ${{ vars.ACC_WEEKLY_REPORTS_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ingest weekly schedules
+        run: >
+          node scripts/weekly-schedule-email-ingest.mjs
+          ${{ github.event.inputs.project_id }}
+          --apply
+          --phase=${{ github.event.inputs.phase || 'all' }}
+        env:
+          ACC_WEEKLY_REPORTS_ENABLED: ${{ vars.ACC_WEEKLY_REPORTS_ENABLED }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          GOOGLE_GMAIL_INBOUND_CLIENT_ID: ${{ secrets.GOOGLE_GMAIL_INBOUND_CLIENT_ID }}
+          GOOGLE_GMAIL_INBOUND_CLIENT_SECRET: ${{ secrets.GOOGLE_GMAIL_INBOUND_CLIENT_SECRET }}
+          GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN: ${{ secrets.GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN }}
+          GOOGLE_GMAIL_INBOUND_MAILBOX: ${{ secrets.GOOGLE_GMAIL_INBOUND_MAILBOX }}

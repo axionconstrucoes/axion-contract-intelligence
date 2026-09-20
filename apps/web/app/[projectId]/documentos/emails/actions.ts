@@ -11,6 +11,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
+import { assertWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import type { EmailRegistryActionState } from "./actions-state";
 
 function requiredField(formData: FormData, name: string): string {
@@ -29,6 +30,7 @@ function failure(error: unknown, fallback: string): EmailRegistryActionState {
 }
 
 async function requireUser(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>) {
+  assertWeeklyReportsEnabled();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) throw new Error("Sessão expirada. Faça login novamente.");
   return data.user;

@@ -11,6 +11,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@axion/db/server";
 import type { EmailRegistryActionState } from "@/app/[projectId]/documentos/emails/actions-state";
+import { assertWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import { getProjectFinancialAccess } from "@/lib/financial/access-server";
 import { toNumericValue } from "@/lib/schedule/s-curve/detect-s-curve";
 import type { FinancialColumnKey, FinancialSheetData } from "@/lib/schedule/weekly-report/types";
@@ -26,6 +27,7 @@ function requiredField(formData: FormData, name: string): string {
 export async function correctFinancialValueAction(_prevState: EmailRegistryActionState, formData: FormData): Promise<EmailRegistryActionState> {
   const supabase = await createSupabaseServerClient();
   try {
+    assertWeeklyReportsEnabled();
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) throw new Error("Sessão expirada. Faça login novamente.");
     const projectId = requiredField(formData, "projectId");

@@ -7,6 +7,7 @@
 import "server-only";
 
 import { createSupabaseServerClient } from "@axion/db/server";
+import { assertWeeklyReportsEnabled, isWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import type { EmailDocumentClassification } from "./classify-email-document";
 import type { RegistrySearchParams } from "./email-document-registry-shared";
 
@@ -47,6 +48,7 @@ export interface RegistryPage {
 }
 
 export async function searchEmailDocumentRegistry(projectId: string, params: RegistrySearchParams): Promise<RegistryPage> {
+  assertWeeklyReportsEnabled();
   const supabase = await createSupabaseServerClient();
 
   let classification: string | null = null;
@@ -265,6 +267,7 @@ function extensionOf(fileName: string): string {
 }
 
 export async function getEmailDocumentDetail(projectId: string, emailId: string): Promise<RegistryEmailDetail | null> {
+  if (!isWeeklyReportsEnabled()) return null;
   const supabase = await createSupabaseServerClient();
 
   const { data: email, error: emailError } = await supabase.from("emails").select("*").eq("id", emailId).eq("project_id", projectId).maybeSingle();

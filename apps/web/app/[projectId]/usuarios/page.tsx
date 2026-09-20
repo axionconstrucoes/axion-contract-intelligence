@@ -22,6 +22,7 @@ import {
   permissionLabels,
   slaAreaLabels,
 } from "@/lib/labels";
+import { isWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import { resolveBusinessHoursConfig, resolveGenericMatrixRule } from "@/lib/sla/resolve-matrix-rule";
 import { formatInvitationSelection, formatMemberSelection } from "@/lib/sla/responsible-selection";
 import { getSlaAreaResponsibles, getSlaMatrixRules, getSlaProjectSettings } from "@/lib/sla/sla-actions-data";
@@ -202,7 +203,7 @@ export default async function UsuariosPage({ params }: { params: Promise<{ proje
                   />
                 );
               })}
-              {(() => {
+              {isWeeklyReportsEnabled() ? (() => {
                 // Leitura derivada da PRÓPRIA matriz (nenhuma segunda fonte):
                 // quem, em Planejamento, está habilitado a enviar o cronograma
                 // semanal por e-mail (1º/2º escalão). Ver
@@ -217,7 +218,7 @@ export default async function UsuariosPage({ params }: { params: Promise<{ proje
                     {secondTier.length > 0 ? secondTier.join(", ") : "não definido"}. Esta matriz é a única fonte do escalão; sem definição, o envio vai para revisão humana.
                   </p>
                 );
-              })()}
+              })() : null}
             </CardContent>
           </Card>
 

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getProject } from "@/lib/data";
+import { isWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import { loadFinancialDashboard, parseFinancialDashboardParams } from "@/lib/financial/financial-dashboard-data";
 import { NOT_AVAILABLE, detectCurrencySymbol, formatByUnit, formatDateBR, formatDateTimeBR, formatPercentBR } from "@/lib/financial/format-br";
 import type { FinancialSheetData } from "@/lib/schedule/weekly-report/types";
@@ -57,6 +58,18 @@ function buildHref(projectId: string, params: Record<string, string | number | n
 
 export default async function FinanceiroPage({ params, searchParams }: { params: Promise<{ projectId: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const { projectId } = await params;
+  if (!isWeeklyReportsEnabled()) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader title="Financeiro" description="Dashboard financeiro do relatório semanal." />
+        <Card>
+          <CardContent className="pt-6 text-sm" role="status" data-testid="financial-feature-disabled">
+            <strong>Funcionalidade indisponível neste ambiente.</strong> O dashboard Financeiro faz parte dos relatórios semanais, ainda não habilitados nesta instalação.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   const query = parseFinancialDashboardParams((await searchParams) ?? {});
   const [model, project] = await Promise.all([loadFinancialDashboard(projectId, query), getProject(projectId)]);
 

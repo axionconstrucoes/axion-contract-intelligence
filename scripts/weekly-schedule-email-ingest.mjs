@@ -31,7 +31,9 @@
 // da mensagem nunca é persistido nem impresso. Logs não expõem tokens
 // nem endereços além de contagens e ids de mensagem.
 //
-// Requer --apply para gravar (mesmo padrão dos demais scripts).
+// Requer --apply para gravar (mesmo padrão dos demais scripts) e a flag
+// ACC_WEEKLY_REPORTS_ENABLED=true (trava de deployment: sem ela, nada é
+// lido nem gravado — as tabelas novas podem ainda não existir no banco).
 //
 // Uso:
 //   node --env-file=apps/web/.env.local scripts/weekly-schedule-email-ingest.mjs --apply
@@ -45,6 +47,12 @@ import { createClient } from "@supabase/supabase-js";
 import { register } from "node:module";
 
 register("./ts-module-resolver.mjs", import.meta.url);
+
+const { isWeeklyReportsEnabled, WEEKLY_REPORTS_FLAG_NAME } = await import("../apps/web/lib/feature-flags/weekly-reports");
+if (!isWeeklyReportsEnabled()) {
+  console.log(`[weekly-schedule-email-ingest] ${WEEKLY_REPORTS_FLAG_NAME} não é "true" — funcionalidade desativada; nada processado.`);
+  process.exit(0);
+}
 
 const { processWeeklyScheduleEmailCandidate } = await import("../apps/web/lib/schedule/weekly-ingestion/ingest-weekly-schedule-email");
 const { prepareScheduleComparisons } = await import("../apps/web/lib/schedule/weekly-ingestion/prepare-schedule-comparisons");

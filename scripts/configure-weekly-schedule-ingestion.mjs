@@ -25,6 +25,17 @@
 // com justificativa e histórico — nunca por este script.
 
 import { createClient } from "@supabase/supabase-js";
+import { register } from "node:module";
+
+register("./ts-module-resolver.mjs", import.meta.url);
+
+// Trava de deployment: sem ACC_WEEKLY_REPORTS_ENABLED=true a tabela de
+// configuração pode não existir ainda — o script não toca no banco.
+const { isWeeklyReportsEnabled, WEEKLY_REPORTS_FLAG_NAME } = await import("../apps/web/lib/feature-flags/weekly-reports");
+if (!isWeeklyReportsEnabled()) {
+  console.log(`[configure-weekly-schedule-ingestion] ${WEEKLY_REPORTS_FLAG_NAME} não é "true" — funcionalidade desativada; nada gravado.`);
+  process.exit(0);
+}
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");

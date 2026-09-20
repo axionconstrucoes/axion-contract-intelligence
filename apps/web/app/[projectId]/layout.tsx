@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { TopBar } from "@/components/layout/top-bar";
 import { getProject } from "@/lib/data";
+import { isWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import { canViewProjectFinancialDashboard } from "@/lib/financial/access-server";
 import { NAV_ITEMS } from "@/lib/ui/nav-items";
 
@@ -17,8 +18,9 @@ export default async function WorkspaceLayout({
   if (!project) notFound();
 
   // Itens restritos da navegação (hoje: Financeiro) — regra central
-  // server-side; a rota /financeiro reaplica a mesma verificação.
-  const canViewFinancial = await canViewProjectFinancialDashboard({ projectId });
+  // server-side; a rota /financeiro reaplica a mesma verificação. Com a
+  // flag ACC_WEEKLY_REPORTS_ENABLED desligada o item nem é avaliado.
+  const canViewFinancial = isWeeklyReportsEnabled() ? await canViewProjectFinancialDashboard({ projectId }) : false;
   const hiddenHrefs = NAV_ITEMS.filter((item) => item.restrictedTo === "financial" && !canViewFinancial).map((item) => item.href);
 
   return (

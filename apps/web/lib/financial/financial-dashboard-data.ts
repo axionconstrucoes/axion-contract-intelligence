@@ -11,6 +11,7 @@ import { createSupabaseServerClient } from "@axion/db/server";
 import type { ScheduleComparisonMetrics } from "../schedule/weekly-ingestion/compare-schedule-versions";
 import type { SCurveMetrics } from "../schedule/s-curve/types";
 import type { FinancialSheetData } from "../schedule/weekly-report/types";
+import { assertWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import { getProjectFinancialAccess } from "./access-server";
 import {
   buildFinancialCards,
@@ -140,6 +141,7 @@ export type FinancialDashboardModel =
     };
 
 export async function loadFinancialDashboard(projectId: string, params: FinancialDashboardParams): Promise<FinancialDashboardModel> {
+  assertWeeklyReportsEnabled();
   const financialAccess = await getProjectFinancialAccess({ projectId });
   if (!financialAccess.canView) return { access: false };
 

@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getProjects } from "@/lib/data";
+import { isWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import { getEmailDocumentDetail } from "@/lib/email/registry/email-document-registry-data";
 import { EMAIL_CLASSIFICATION_LABELS } from "@/lib/email/registry/email-document-registry-shared";
 import { resolveAttachmentOpenBehavior } from "@/lib/email/registry/resolve-attachment-open-behavior";
@@ -52,6 +53,7 @@ function valueOrDash(value: unknown, suffix = ""): string {
 
 export default async function EmailDocumentDetailPage({ params }: { params: Promise<{ projectId: string; emailId: string }> }) {
   const { projectId, emailId } = await params;
+  if (!isWeeklyReportsEnabled()) notFound();
   const [detail, permission, projects] = await Promise.all([getEmailDocumentDetail(projectId, emailId), getCurrentProjectPermission(projectId), getProjects()]);
   if (!detail) notFound();
 

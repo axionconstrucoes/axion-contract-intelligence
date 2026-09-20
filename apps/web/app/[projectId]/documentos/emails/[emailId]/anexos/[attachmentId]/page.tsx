@@ -5,6 +5,7 @@ import { DocumentDownloadButton } from "@/components/documents/document-download
 import { PageHeader } from "@/components/layout/page-header";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { isWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import { resolveAttachmentOpenBehavior } from "@/lib/email/registry/resolve-attachment-open-behavior";
 import { cn } from "@/lib/utils";
 import { createSupabaseServerClient } from "@axion/db/server";
@@ -21,6 +22,7 @@ export const metadata: Metadata = { title: "Anexo · Documentos" };
 
 export default async function EmailAttachmentViewerPage({ params }: { params: Promise<{ projectId: string; emailId: string; attachmentId: string }> }) {
   const { projectId, emailId, attachmentId } = await params;
+  if (!isWeeklyReportsEnabled()) notFound();
   const supabase = await createSupabaseServerClient();
 
   const { data: attachment, error } = await supabase
