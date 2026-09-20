@@ -349,22 +349,14 @@ export default async function DocumentosPage({
 
                     <CardContent className="text-sm text-muted-foreground">
                       Baseline:{" "}
-                      {formatDate(
-                        activity.baselineStart
-                      )}{" "}
+                      {activity.baselineStart ? formatDate(activity.baselineStart) : "—"}{" "}
                       –{" "}
-                      {formatDate(
-                        activity.baselineEnd
-                      )}
+                      {activity.baselineEnd ? formatDate(activity.baselineEnd) : "—"}
                       <br />
                       Atual:{" "}
-                      {formatDate(
-                        activity.currentStart
-                      )}{" "}
+                      {activity.currentStart ? formatDate(activity.currentStart) : "—"}{" "}
                       –{" "}
-                      {formatDate(
-                        activity.currentEnd
-                      )}
+                      {activity.currentEnd ? formatDate(activity.currentEnd) : "—"}
                     </CardContent>
                   </Card>
                 )
