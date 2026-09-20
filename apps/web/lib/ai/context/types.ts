@@ -218,8 +218,65 @@ export interface ContextDocumentCoverage {
   truncated: boolean;
 }
 
+export interface ContextScheduleActivity {
+  id: string;
+  externalTaskId: string | null;
+  uniqueId: string | null;
+  wbs: string | null;
+  outlineLevel: number | null;
+  parentTaskId: string | null;
+  name: string;
+  baselineStart: string | null;
+  baselineEnd: string | null;
+  plannedStart: string | null;
+  plannedEnd: string | null;
+  durationValue: number | string | null;
+  durationUnit: string | null;
+  totalFloatValue: number | string | null;
+  totalFloatUnit: string | null;
+  percentComplete: number | string | null;
+  isMilestone: boolean | null;
+  isSummaryTask: boolean | null;
+  isCritical: boolean | null;
+  calendarName: string | null;
+  status: string;
+}
+
+export interface ContextScheduleRelation {
+  predecessorTaskId: string;
+  predecessorUniqueId: string | null;
+  predecessorName: string | null;
+  successorTaskId: string;
+  successorUniqueId: string | null;
+  successorName: string | null;
+  relationType: string;
+  lagValue: number | string;
+  lagUnit: string;
+}
+
+export interface ContextScheduleVersion {
+  scheduleVersionId: string;
+  documentId: string;
+  documentTitle: string;
+  documentKind: string;
+  documentVersionId: string;
+  documentVersionLabel: string | null;
+  fileName: string;
+  versionType: string;
+  extractedAt: string | null;
+  statusDate: string | null;
+  activities: ContextScheduleActivity[];
+  relations: ContextScheduleRelation[];
+}
+
+export interface ContextScheduleContext {
+  sourceType: "MPP_STRUCTURED";
+  versions: ContextScheduleVersion[];
+}
+
 export interface ProjectAnalysisContext {
   projectId: string;
+  schedule?: ContextScheduleContext | null;
   project: {
     id: string;
     name: string;
@@ -255,6 +312,7 @@ export interface ProjectAnalysisContext {
  */
 export interface EventAnalysisContext {
   projectId: string;
+  schedule?: ContextScheduleContext | null;
   eventId: string;
   /** Presente somente quando o contexto foi restringido a um único candidato. */
   focusCandidateId: string | null;

@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { withActiveDocumentFilter } from "../../../documents/active-document-filter";
 
-export type ScheduleSourceStatus = "MISSING_MPP" | "MPP_PRESENT_NOT_EXTRACTED";
+export type ScheduleSourceStatus =
+  | "MISSING_MPP"
+  | "MPP_PRESENT_NOT_EXTRACTED"
+  | "MPP_EXTRACTED";
 
 const DIRECT_ASSESSMENT_TERMS = [
   "atraso",
@@ -101,7 +104,7 @@ export async function resolveScheduleSourceStatus(
 
   const { data: versionsData, error: versionsError } = await supabase
     .from("document_versions")
-    .select("document_id,original_file_name,version_index")
+    .select("id,document_id,original_file_name,version_index,processing_status")
     .in("document_id", documentIds)
     .order("version_index", { ascending: false });
 
@@ -110,23 +113,55 @@ export async function resolveScheduleSourceStatus(
   }
 
   const rows = (versionsData ?? []) as unknown as Array<{
+    id: string;
     document_id: string;
     original_file_name: string | null;
     version_index: number;
+    processing_status: string | null;
   }>;
 
   // Só a versão vigente (maior version_index, primeira após o order desc)
   // de cada documento conta como fonte atual. Um .mpp histórico substituído
   // por outro formato não mantém artificialmente a análise habilitada.
-  const currentFileNameByDocumentId = new Map<string, string | null>();
+  const currentByDocumentId = new Map<string, (typeof rows)[number]>();
   for (const row of rows) {
-    if (!currentFileNameByDocumentId.has(row.document_id)) {
-      currentFileNameByDocumentId.set(row.document_id, row.original_file_name);
+    if (!currentByDocumentId.has(row.document_id)) {
+      currentByDocumentId.set(row.document_id, row);
     }
   }
 
-  const hasCurrentMpp = Array.from(currentFileNameByDocumentId.values()).some(isMppFileName);
-  return hasCurrentMpp ? "MPP_PRESENT_NOT_EXTRACTED" : "MISSING_MPP";
+  const currentMppVersions = Array.from(currentByDocumentId.values()).filter(
+    (row) => isMppFileName(row.original_file_name)
+  );
+
+  if (currentMppVersions.length === 0) {
+    return "MISSING_MPP";
+  }
+
+  const { data: schedulesData, error: schedulesError } = await supabase
+    .from("schedule_versions")
+    .select("document_version_id,extraction_status")
+    .in("document_version_id", currentMppVersions.map((row) => row.id));
+
+  if (schedulesError) {
+    throw new Error(
+      `Falha ao verificar extracao estruturada do cronograma: ${schedulesError.message}`
+    );
+  }
+
+  const extractedVersionIds = new Set(
+    (schedulesData ?? [])
+      .filter((row) => row.extraction_status === "EXTRACTED")
+      .map((row) => row.document_version_id)
+  );
+
+  return currentMppVersions.some(
+    (row) =>
+      row.processing_status === "PROCESSED" &&
+      extractedVersionIds.has(row.id)
+  )
+    ? "MPP_EXTRACTED"
+    : "MPP_PRESENT_NOT_EXTRACTED";
 }
 
 export function scheduleSourceBlockingMessage(status: ScheduleSourceStatus): string {
