@@ -226,10 +226,18 @@ export function DocumentUploadForm({
       const supabase =
         createSupabaseBrowserClient();
 
+      const uploadFile =
+        file.type !== mimeType
+          ? new File([file], file.name, {
+              type: mimeType,
+              lastModified: file.lastModified,
+            })
+          : file;
+
       const { error: uploadError } =
         await supabase.storage
           .from(BUCKET)
-          .upload(uploadedPath, file, {
+          .upload(uploadedPath, uploadFile, {
             upsert: false,
             contentType: mimeType,
           });
