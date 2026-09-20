@@ -1,11 +1,12 @@
+import { isCronRequestAuthorized } from "@/lib/cron/cron-request-auth";
 import { runWeeklyAlertDigests } from "@/lib/email/run-weekly-alert-digests";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET?.trim();
-  if (!cronSecret || request.headers.get("authorization") !== `Bearer ${cronSecret}`) {
+  // Bearer CRON_SECRET só no header (tempo constante; sem segredo => 401).
+  if (!isCronRequestAuthorized(request, process.env.CRON_SECRET)) {
     return Response.json({ error: "Não autorizado." }, { status: 401 });
   }
 

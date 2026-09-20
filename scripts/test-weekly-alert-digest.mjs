@@ -74,9 +74,11 @@ check("agendamento é quarta-feira às 07:00 de São Paulo (10:00 UTC)", () => {
 });
 
 check("rota agendada exige CRON_SECRET", () => {
-  assert(route.includes("process.env.CRON_SECRET"));
-  assert(route.includes('request.headers.get("authorization")'));
-  assert(proxy.includes('request.nextUrl.pathname === "/api/cron/weekly-alert-digest"'));
+  assert(route.includes("isCronRequestAuthorized(request, process.env.CRON_SECRET)"));
+  const cronAuth = readFileSync("apps/web/lib/cron/cron-request-auth.ts", "utf8");
+  assert(cronAuth.includes('request.headers.get("authorization")') && cronAuth.includes("timingSafeEqual"));
+  assert(proxy.includes("isPublicCronRoute(request.nextUrl.pathname)"));
+  assert(readFileSync("apps/web/lib/cron/public-cron-routes.ts", "utf8").includes('"/api/cron/weekly-alert-digest"'));
 });
 
 check("texto usa português do Brasil", () => {
