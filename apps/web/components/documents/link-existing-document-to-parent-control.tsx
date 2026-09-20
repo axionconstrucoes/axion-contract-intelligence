@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { documentKindLabels } from "@/lib/labels";
+import { Link2 } from "lucide-react";
 
 // Mesmos limites da CHECK constraint
 // documents_contractual_incorporation_basis_length_check (migration
@@ -105,8 +106,15 @@ export function LinkExistingDocumentToParentControl({
       {state.error ? <p className="text-destructive">{state.error}</p> : null}
       {state.success ? <p className="text-emerald-600">Vínculo salvo.</p> : null}
 
-      <Button type="submit" size="sm" disabled={pending || !canSubmit}>
-        {pending ? "Salvando…" : "Vincular"}
+      <Button
+        type="submit"
+        size="icon"
+        title="Vincular"
+        aria-label="Vincular"
+        disabled={pending || !canSubmit}
+        className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-emerald-300 disabled:text-white"
+      >
+        <Link2 className="h-5 w-5" aria-hidden="true" />
       </Button>
     </form>
   );

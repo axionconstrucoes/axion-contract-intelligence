@@ -5,6 +5,7 @@ import { unlinkDocumentContractualAttachmentAction } from "@/app/[projectId]/doc
 import { initialUnlinkContractualAttachmentState } from "@/app/[projectId]/documentos/actions-state";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Unlink2 } from "lucide-react";
 
 // Desvincular exige justificativa (texto obrigatório, mesmo mínimo de
 // 20 caracteres da RPC unlink_document_contractual_attachment — ver
@@ -31,7 +32,13 @@ export function UnlinkContractualAttachmentControl({
 
   return (
     <details className="text-xs">
-      <summary className="cursor-pointer whitespace-nowrap opacity-80">Desvincular</summary>
+      <summary
+        title="Desvincular"
+        aria-label="Desvincular"
+        className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 [&::-webkit-details-marker]:hidden"
+      >
+        <Unlink2 className="h-5 w-5" aria-hidden="true" />
+      </summary>
       <form action={formAction} className="mt-1.5 flex flex-col gap-1.5 rounded-md border bg-card p-2 text-card-foreground">
         <input type="hidden" name="projectId" value={projectId} />
         <input type="hidden" name="childDocumentId" value={documentId} />

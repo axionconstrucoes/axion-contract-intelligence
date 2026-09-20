@@ -336,6 +336,62 @@ try {
 
 
   // ==========================================================
+  // LEGACY_XLS_EXTRACTION
+  // ==========================================================
+
+  const isLegacyXls =
+    version.mime_type === "application/vnd.ms-excel" ||
+    version.original_file_name.toLowerCase().endsWith(".xls");
+
+  let legacyXlsResult = null;
+
+  if (isLegacyXls) {
+    let tempDir = null;
+
+    try {
+      tempDir = mkdtempSync(join(tmpdir(), "acc-xls-"));
+
+      const inputPath = join(tempDir, "source.xls");
+      const outputPath = join(tempDir, "extracted.json");
+
+      writeFileSync(inputPath, buffer);
+
+      const extractorPath = join(process.cwd(), "scripts", "extract-xls.py");
+      const python = spawnSync(
+        "python",
+        [extractorPath, inputPath, outputPath],
+        {
+          encoding: "utf8",
+          windowsHide: true,
+        }
+      );
+
+      if (python.error || python.status !== 0) {
+        throw new Error(
+          "Falha no extrator XLS: " +
+          (
+            python.stderr ||
+            python.stdout ||
+            python.error?.message ||
+            "erro desconhecido"
+          ).trim()
+        );
+      }
+
+      legacyXlsResult = JSON.parse(readFileSync(outputPath, "utf8"));
+
+      if (!legacyXlsResult.text || !Array.isArray(legacyXlsResult.segments)) {
+        throw new Error("Extrator XLS retornou estrutura inválida.");
+      }
+    } finally {
+      if (tempDir) {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    }
+  }
+
+
+  // ==========================================================
   // ACC_MPP_STRUCTURED_EXTRACTION
   // ==========================================================
 
@@ -879,6 +935,7 @@ try {
   // ==========================================================
 
   const result =
+    legacyXlsResult ??
     await extractDocument({
       buffer,
       mimeType:

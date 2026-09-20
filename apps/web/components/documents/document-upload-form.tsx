@@ -348,10 +348,10 @@ export function DocumentUploadForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-3"
     >
       {isNewDocument ? (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium">
               Tipo documental *
@@ -401,44 +401,38 @@ export function DocumentUploadForm({
         </div>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium">
-            Versão *
-          </span>
+      <div className="grid gap-3 md:grid-cols-4">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Versão *</span>
 
           <input
             name="versionLabel"
             required
             defaultValue={defaultVersion}
-            className="h-10 rounded-md border bg-background px-3"
+            className="h-9 rounded-md border bg-background px-3"
           />
         </label>
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium">
-            Data do documento *
-          </span>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Data do documento *</span>
 
           <input
             type="date"
             name="documentDate"
             required
             defaultValue={today()}
-            className="h-10 rounded-md border bg-background px-3"
+            className="h-9 rounded-md border bg-background px-3"
           />
         </label>
 
-        <label className="flex flex-col gap-1.5 text-sm">
-          <span className="font-medium">
-            Origem *
-          </span>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Origem *</span>
 
           <select
             name="sourceType"
             required
             defaultValue="CONTRATO"
-            className="h-10 rounded-md border bg-background px-3"
+            className="h-9 rounded-md border bg-background px-3"
           >
             {SOURCE_TYPES.map(([value, label]) => (
               <option key={value} value={value}>
@@ -447,44 +441,40 @@ export function DocumentUploadForm({
             ))}
           </select>
         </label>
+
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Autor / emissor *</span>
+
+          <input
+            name="author"
+            required
+            className="h-9 rounded-md border bg-background px-3"
+          />
+        </label>
       </div>
 
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium">
-          Autor / emissor *
-        </span>
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Resumo *</span>
 
-        <input
-          name="author"
-          required
-          className="h-10 rounded-md border bg-background px-3"
-        />
-      </label>
+          <textarea
+            name="summary"
+            required
+            rows={2}
+            className="min-h-20 rounded-md border bg-background px-3 py-2"
+          />
+        </label>
 
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium">
-          Resumo *
-        </span>
+        <label className="flex flex-col gap-1 text-sm">
+          <span className="font-medium">Observações</span>
 
-        <textarea
-          name="summary"
-          required
-          rows={3}
-          className="rounded-md border bg-background px-3 py-2"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium">
-          Observações
-        </span>
-
-        <textarea
-          name="notes"
-          rows={2}
-          className="rounded-md border bg-background px-3 py-2"
-        />
-      </label>
+          <textarea
+            name="notes"
+            rows={2}
+            className="min-h-20 rounded-md border bg-background px-3 py-2"
+          />
+        </label>
+      </div>
 
       <label className="flex flex-col gap-1.5 text-sm">
         <span className="font-medium">
