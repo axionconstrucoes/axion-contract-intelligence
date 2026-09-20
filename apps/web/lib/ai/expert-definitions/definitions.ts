@@ -161,19 +161,19 @@ export const LEGAL_CONSULTANT_DEFINITION: ExpertDefinition = {
 };
 
 // ============================================================
-// Seção 5 — Diretor de Engenharia IA (identificador técnico legado
+// Seção 5 — Diretor de Planejamento IA (identificador técnico legado
 // planning-director; operacional — consulta
 // conversacional via experts/planning-director/query.ts).
 // ============================================================
 
 export const PLANNING_DIRECTOR_DEFINITION: ExpertDefinition = {
   expertId: PLANNING_DIRECTOR_EXPERT_ID,
-  expertName: "Diretor de Engenharia IA",
+  expertName: "Diretor de Planejamento IA",
   version: PLANNING_DIRECTOR_VERSION,
   status: "IMPLEMENTED",
   visualIdentity: { icon: "CalendarClock", colorToken: "cyan" },
   mission:
-    "Amparar decisões de engenharia em construções industriais, logística e saúde, com foco em execução, novas versões de projeto, prazo, preço e consequência contratual relevante.",
+    "Amparar decisões de planejamento e prazo em construções industriais, logística e saúde, com foco em cronograma, execução, desvios e consequência contratual relevante.",
   authorizedSources: [SOURCE_SCHEDULE_ACTIVITIES, SOURCE_CONTRACT_EVENTS, SOURCE_CONTRACT_CHANGES, SOURCE_DOCUMENTS, SOURCE_TIMELINE],
   capabilities: [
     "Identificar atraso ou aceleração relevante",

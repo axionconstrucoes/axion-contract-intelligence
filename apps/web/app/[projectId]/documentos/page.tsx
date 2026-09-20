@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { ClausesMasterDetail } from "@/components/documents/clauses-master-detail";
 import { ContractualDocumentGroupSection } from "@/components/documents/contractual-document-group-section";
 import { DocumentCard } from "@/components/documents/document-card";
@@ -10,6 +11,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -287,7 +289,24 @@ export default async function DocumentosPage({
           <ClausesMasterDetail clauses={clauses} />
         </TabsContent>
 
-        <TabsContent value="cronograma">
+        <TabsContent value="cronograma" className="flex flex-col gap-4">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
+              <div>
+                <CardTitle>Diretor de Planejamento IA</CardTitle>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Analise o cronograma MPP processado, prazo final, caminho crítico, folgas e riscos de atraso.
+                </p>
+              </div>
+              <Link
+                href={`/${projectId}/experts-ia/diretor-engenharia`}
+                className={buttonVariants({ size: "sm" })}
+              >
+                Analisar cronograma
+              </Link>
+            </CardHeader>
+          </Card>
+
           {scheduleActivities.length === 0 ? (
             <EmptyState message="Nenhuma atividade de cronograma cadastrada." />
           ) : (

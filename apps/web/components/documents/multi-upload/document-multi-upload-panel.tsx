@@ -100,8 +100,8 @@ export function DocumentMultiUploadPanel({ projectId, documents }: Props) {
 
         <Button
           type="button"
-          variant="outline"
           onClick={() => fileInputRef.current?.click()}
+          className="border border-yellow-500 bg-yellow-400 text-black hover:bg-yellow-500 hover:text-black"
         >
           Selecionar arquivos
         </Button>
