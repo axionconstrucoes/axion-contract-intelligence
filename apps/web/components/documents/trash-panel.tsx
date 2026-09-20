@@ -1,4 +1,5 @@
 import { RestoreDocumentControl } from "@/components/documents/restore-document-control";
+import { PermanentDeleteDocumentControl } from "@/components/documents/permanent-delete-document-control";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { TrashedDocument } from "@/lib/document-management";
 import { formatDateTime } from "@/lib/labels";
@@ -44,7 +45,13 @@ export function TrashPanel({
                 {document.deletedByUserName ? ` por ${document.deletedByUserName}` : ""}
               </span>
             </div>
-            <RestoreDocumentControl projectId={projectId} documentId={document.id} />
+            <div className="flex flex-wrap items-center gap-2">
+              <RestoreDocumentControl projectId={projectId} documentId={document.id} />
+              <PermanentDeleteDocumentControl
+                documentId={document.id}
+                documentTitle={document.title}
+              />
+            </div>
           </div>
         ))}
       </CardContent>
