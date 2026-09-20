@@ -16,6 +16,7 @@ export type MultiUploadDocumentKind =
   | ""
   | "CONTRATO_BASE"
   | "ADITIVO"
+  | "EDITAL"
   | "ATA_REUNIAO"
   | "CRONOGRAMA_BASELINE"
   | "PROPOSTA_COMERCIAL"
@@ -33,6 +34,7 @@ export const MULTI_UPLOAD_DOCUMENT_KINDS: readonly {
 }[] = [
   { value: "CONTRATO_BASE", label: "Contrato" },
   { value: "ADITIVO", label: "Aditivo Contratual" },
+  { value: "EDITAL", label: "Memorial/Edital" },
   { value: "ATA_REUNIAO", label: "Ata de Reunião" },
   { value: "CRONOGRAMA_BASELINE", label: "Cronograma" },
   { value: "PROPOSTA_COMERCIAL", label: "Proposta Comercial" },
