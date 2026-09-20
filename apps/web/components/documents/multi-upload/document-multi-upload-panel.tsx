@@ -133,7 +133,7 @@ export function DocumentMultiUploadPanel({ projectId, documents }: Props) {
                     event.target.value as MultiUploadDocumentKind
                   )
                 }
-                className="h-9"
+                className="h-9 border-gray-400 bg-gray-300 text-black hover:bg-gray-400"
               >
                 <option value="" disabled>
                   Selecione o tipo documental
