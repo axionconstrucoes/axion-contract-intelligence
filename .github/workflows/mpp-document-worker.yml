@@ -76,7 +76,6 @@ jobs:
             .from("document_versions")
             .select("id,original_file_name,mime_type,processing_status")
             .eq("processing_status", "AWAITING_PROCESSING")
-            .order("created_at", { ascending: true })
             .limit(20);
 
           if (error) {
