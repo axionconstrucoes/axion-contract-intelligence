@@ -66,9 +66,27 @@ export function toRiskLevel(value: string | null | undefined): RiskCaseLevel | n
  * Sem configuração para o tipo => REVIEW_REQUIRED (nunca um default ativo;
  * a sugestão fica em pilot-readiness.ts e só vale quando gravada).
  */
+// Tipos cuja severidade pertence ao MOTOR (comparações/abas classificadas
+// por thresholds). Um alerta de ausência com um desses nomes não tem
+// produtor hoje; se algum dia aparecer, o mapa do projeto NÃO pode
+// classificá-lo (nem rebaixar nem elevar): REVIEW_REQUIRED, revisão humana.
+const ENGINE_CLASSIFIED_ALERT_KINDS: ReadonlySet<string> = new Set(["S_CURVE_MPP_DIVERGENCE", "BASELINE_SHEET_DIVERGENCE"]);
+
+/**
+ * Severidade de um ALERTA DE AUSÊNCIA: exclusivamente o mapa do projeto.
+ * Sem configuração => REVIEW_REQUIRED (fail-safe; nunca um default
+ * silencioso). Casos de comparação/aba nunca passam por aqui — usam a
+ * classificação do motor (collectComparisonCases / collectSheetCases).
+ */
 export function resolveIngestionAlertSeverity(map: IngestionAlertSeverityMap | null | undefined, kind: string): RiskCaseLevel {
+  if (ENGINE_CLASSIFIED_ALERT_KINDS.has(kind)) return "REVIEW_REQUIRED";
   const level = map?.[kind];
   return level && ["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(level) ? level : "REVIEW_REQUIRED";
+}
+
+/** Origem rastreável da severidade de um caso (auditoria/interface). */
+export function severitySourceOf(sourceType: "SCHEDULE_COMPARISON" | "WEEKLY_REPORT_SHEET" | "INGESTION_ALERT"): "ENGINE" | "PROJECT_SEVERITY_MAP" {
+  return sourceType === "INGESTION_ALERT" ? "PROJECT_SEVERITY_MAP" : "ENGINE";
 }
 
 const SHEET_AREA: Record<string, SlaArea> = {
