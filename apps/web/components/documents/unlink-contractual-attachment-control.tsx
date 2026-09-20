@@ -3,9 +3,10 @@
 import { useActionState, useState } from "react";
 import { unlinkDocumentContractualAttachmentAction } from "@/app/[projectId]/documentos/actions";
 import { initialUnlinkContractualAttachmentState } from "@/app/[projectId]/documentos/actions-state";
+import { LinkStatusIcon } from "@/components/documents/link-status-icon";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Unlink2 } from "lucide-react";
+import { getLinkStatusAppearance, resolveLinkStatus } from "@/lib/documents/link-status-appearance";
 
 // Desvincular exige justificativa (texto obrigatório, mesmo mínimo de
 // 20 caracteres da RPC unlink_document_contractual_attachment — ver
@@ -29,15 +30,23 @@ export function UnlinkContractualAttachmentControl({
     initialUnlinkContractualAttachmentState
   );
   const [reason, setReason] = useState("");
+  // Este controle só é renderizado para um documento VINCULADO (ver
+  // contractual-attachment-row.tsx) — logo nasce verde. Assim que a
+  // Server Action confirma a desvinculação, vira vermelho na hora
+  // (estado real mudou), sem depender da revalidação nem de reload.
+  const linkStatus = resolveLinkStatus({ linkedOnLoad: true, lastActionSucceeded: state.success });
+  const appearance = getLinkStatusAppearance(linkStatus);
+  const tooltip = linkStatus === "linked" ? "Desvincular" : appearance.statusLabel;
 
   return (
     <details className="text-xs">
       <summary
-        title="Desvincular"
-        aria-label="Desvincular"
-        className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 [&::-webkit-details-marker]:hidden"
+        title={tooltip}
+        aria-label={tooltip}
+        data-link-status={linkStatus}
+        className={`inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md shadow-sm focus:outline-none focus:ring-2 [&::-webkit-details-marker]:hidden ${appearance.triggerClassName}`}
       >
-        <Unlink2 className="h-5 w-5" aria-hidden="true" />
+        <LinkStatusIcon status={linkStatus} />
       </summary>
       <form action={formAction} className="mt-1.5 flex flex-col gap-1.5 rounded-md border bg-card p-2 text-card-foreground">
         <input type="hidden" name="projectId" value={projectId} />
