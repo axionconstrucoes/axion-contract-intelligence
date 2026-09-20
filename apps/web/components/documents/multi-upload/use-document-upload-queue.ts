@@ -298,11 +298,22 @@ export function useDocumentUploadQueue(
         // ---------- UPLOAD ----------
         updateItem(itemId, { status: "ENVIANDO", phase: "UPLOAD" });
 
+        const uploadMimeType =
+          current.descriptor.mimeType ?? file.type || undefined;
+
+        const uploadFile =
+          uploadMimeType && file.type !== uploadMimeType
+            ? new File([file], file.name, {
+                type: uploadMimeType,
+                lastModified: file.lastModified,
+              })
+            : file;
+
         const { error: uploadError } = await supabase.storage
           .from(BUCKET)
-          .upload(storagePath, file, {
+          .upload(storagePath, uploadFile, {
             upsert: false,
-            contentType: current.descriptor.mimeType ?? undefined,
+            contentType: uploadMimeType,
           });
 
         if (uploadError) {
