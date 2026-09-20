@@ -6,6 +6,7 @@ import { initialLinkContractualAttachmentState } from "@/app/[projectId]/documen
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { documentKindLabels } from "@/lib/labels";
 
 // Mesmos limites da CHECK constraint
 // documents_contractual_incorporation_basis_length_check (migration
@@ -81,7 +82,7 @@ export function LinkExistingDocumentToParentControl({
           </option>
           {candidateDocuments.map((candidate) => (
             <option key={candidate.id} value={candidate.id}>
-              {candidate.title} ({candidate.kind.replaceAll("_", " ")})
+              {candidate.title} ({documentKindLabels[candidate.kind as keyof typeof documentKindLabels] ?? candidate.kind.replaceAll("_", " ")})
             </option>
           ))}
         </Select>
