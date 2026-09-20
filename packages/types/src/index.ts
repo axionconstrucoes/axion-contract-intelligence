@@ -126,6 +126,7 @@ export type DocumentKind =
   | "RELATORIO_SEMANAL"
   | "PROPOSTA_AXION"
   | "CLARIFICACAO_CLIENTE"
+  | "EMAIL"
   // Adicionados para o upload múltiplo (migration 20260825130000) —
   // aditivo, nenhum valor acima foi removido/renomeado.
   | "ATA_REUNIAO"

@@ -21,6 +21,8 @@ export type MultiUploadDocumentKind =
   | "CRONOGRAMA_BASELINE"
   | "PROPOSTA_COMERCIAL"
   | "PROPOSTA_TECNICA"
+  | "CLARIFICACAO_CLIENTE"
+  | "EMAIL"
   | "PLANILHA_CONTRATUAL"
   | "RELATORIO"
   | "NOTIFICACAO"
@@ -39,6 +41,8 @@ export const MULTI_UPLOAD_DOCUMENT_KINDS: readonly {
   { value: "CRONOGRAMA_BASELINE", label: "Cronograma" },
   { value: "PROPOSTA_COMERCIAL", label: "Proposta Comercial" },
   { value: "PROPOSTA_TECNICA", label: "Proposta Técnica" },
+  { value: "CLARIFICACAO_CLIENTE", label: "Resposta/Aprovação do cliente" },
+  { value: "EMAIL", label: "E-mail" },
   { value: "PLANILHA_CONTRATUAL", label: "Planilha Contratual" },
   { value: "RELATORIO", label: "Relatório" },
   { value: "NOTIFICACAO", label: "Notificação" },

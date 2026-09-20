@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ManagedDocument } from "@/lib/document-management";
 import { getDocumentKindCardAppearance } from "@/lib/documents/document-kind-card-appearance";
-import { formatDate } from "@/lib/labels";
+import { documentKindLabels, formatDate } from "@/lib/labels";
 
 // Cartão completo de um documento (título, badge de tipo, todas as
 // versões com metadados/download, formulário de nova versão) — extraído
@@ -114,7 +114,7 @@ export function DocumentCard({
         </div>
 
         <Badge variant="outline" className={kindAppearance.badgeClassName}>
-          {document.kind.replaceAll("_", " ")}
+          {documentKindLabels[document.kind as keyof typeof documentKindLabels] ?? document.kind.replaceAll("_", " ")}
         </Badge>
       </CardHeader>
 
