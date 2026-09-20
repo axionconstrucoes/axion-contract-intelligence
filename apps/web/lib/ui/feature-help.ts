@@ -489,6 +489,15 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
     description: "Lista as propostas de adicionais já cadastradas, com status, título e data.",
   },
 
+  // ---------- Financeiro (dashboard da aba FINANCEIRO do relatório semanal) ----------
+  {
+    id: "financeiro",
+    title: "Financeiro",
+    shortDescription: "Dashboard financeiro do relatório semanal (aba Financeiro do Excel).",
+    description:
+      "Cards, gráficos e tabela alimentados exclusivamente pela aba Financeiro da planilha Excel do relatório semanal (previsto, realizado, acumulados, medido, faturado, recebido, custo, receita), com seleção de semana/versão, alterações desde o relatório anterior e cruzamento com a Curva S e o MPP. Acesso restrito a membros ativos com papel Administrador ou Gerente, ou das áreas Diretoria e Financeiro; correções só para Administrador/Gerente.",
+  },
+
   // ---------- Registro documental por e-mail (aba de Documentos) ----------
   {
     id: "documentos-tab-registro-email",

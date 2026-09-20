@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { TopBar } from "@/components/layout/top-bar";
 import { getProject } from "@/lib/data";
+import { canViewProjectFinancialDashboard } from "@/lib/financial/access-server";
+import { NAV_ITEMS } from "@/lib/ui/nav-items";
 
 export default async function WorkspaceLayout({
   children,
@@ -14,9 +16,14 @@ export default async function WorkspaceLayout({
   const project = await getProject(projectId);
   if (!project) notFound();
 
+  // Itens restritos da navegação (hoje: Financeiro) — regra central
+  // server-side; a rota /financeiro reaplica a mesma verificação.
+  const canViewFinancial = await canViewProjectFinancialDashboard({ projectId });
+  const hiddenHrefs = NAV_ITEMS.filter((item) => item.restrictedTo === "financial" && !canViewFinancial).map((item) => item.href);
+
   return (
     <div className="flex h-full min-h-0 flex-1">
-      <AppSidebar projectId={projectId} />
+      <AppSidebar projectId={projectId} hiddenHrefs={hiddenHrefs} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar projectId={projectId} />
         {/* Cinza-claro só nos espaços entre cartões das páginas internas

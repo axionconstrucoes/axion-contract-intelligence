@@ -84,6 +84,9 @@ const EXPECTED_SIDEBAR_LABELS = [
   "Análise Contratual",
   "Análise de Cláusulas",
   "Documentos",
+  // Financeiro: item restrito (só aparece para quem passa em
+  // evaluateFinancialDashboardAccess), mas faz parte de NAV_ITEMS.
+  "Financeiro",
   "ESG/SSMA",
   "Experts IA",
   "Start-up ACC",

@@ -20,6 +20,7 @@ import {
   Scale,
   TimerReset,
   Users,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { getFeatureHelp } from "@/lib/ui/feature-help";
@@ -43,6 +44,7 @@ const ICONS_BY_NAME: Record<string, LucideIcon> = {
   Scale,
   TimerReset,
   Users,
+  Wallet,
 };
 
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "acc.sidebar.collapsed";
@@ -79,9 +81,13 @@ function setSidebarCollapsed(next: boolean): void {
   for (const listener of listeners) listener();
 }
 
-export function AppSidebar({ projectId }: { projectId: string }) {
+export function AppSidebar({ projectId, hiddenHrefs = [] }: { projectId: string; hiddenHrefs?: string[] }) {
   const pathname = usePathname();
   const collapsed = useSyncExternalStore(subscribeCollapsed, getCollapsedSnapshot, getServerCollapsedSnapshot);
+  // Itens restritos (ex.: Financeiro) são resolvidos no layout server-side
+  // e chegam aqui como lista de hrefs a esconder — a MESMA lista vale para
+  // desktop, mobile e menu recolhido (uma única iteração abaixo).
+  const visibleItems = NAV_ITEMS.filter((item) => !hiddenHrefs.includes(item.href));
 
   return (
     <aside
@@ -96,7 +102,7 @@ export function AppSidebar({ projectId }: { projectId: string }) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-0.5 p-2">
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const href = `/${projectId}/${item.href}`;
           const active = pathname?.startsWith(href);
           const Icon = ICONS_BY_NAME[item.icon];

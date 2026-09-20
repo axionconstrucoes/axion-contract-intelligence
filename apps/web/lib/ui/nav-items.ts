@@ -14,6 +14,13 @@ export interface NavItem {
   icon: string;
   /** Chave em ACC_FEATURE_HELP (lib/ui/feature-help.ts) — todo item principal deve ter um helpId válido. */
   helpId: string;
+  /**
+   * Item restrito: só aparece quando o layout (server) confirma o acesso
+   * (ex.: "financial" => canViewProjectFinancialDashboard). Esconder o
+   * menu nunca é a única barreira — rota, loader, actions e RLS aplicam
+   * a mesma regra.
+   */
+  restrictedTo?: "financial";
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -27,6 +34,10 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "revisao-contratual", label: "Análise Contratual", icon: "BookText", helpId: "analise-contratual" },
   { href: "revisao-clausulas", label: "Análise de Cláusulas", icon: "BookText", helpId: "analise-clausulas" },
   { href: "documentos", label: "Documentos", icon: "FileStack", helpId: "documentos" },
+  // Dashboard financeiro alimentado só pela aba FINANCEIRO da planilha do
+  // relatório semanal (weekly_report_sheets). Visível apenas para quem
+  // passa em evaluateFinancialDashboardAccess (lib/financial/access.ts).
+  { href: "financeiro", label: "Financeiro", icon: "Wallet", helpId: "financeiro", restrictedTo: "financial" },
   { href: "esg", label: "ESG/SSMA", icon: "Leaf", helpId: "esg-ssma" },
   { href: "experts-ia", label: "Experts IA", icon: "Bot", helpId: "experts-ia" },
   { href: "integracoes", label: "Integrações", icon: "Plug", helpId: "integracoes" },
