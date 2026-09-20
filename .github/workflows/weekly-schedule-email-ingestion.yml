@@ -20,7 +20,8 @@ name: Weekly Schedule Email Ingestion
 # (/api/cron/risk-alerts, worker Vercel) é disparado DAQUI — o plano
 # Vercel atual admite só 2 crons com frequência diária, então a rota não
 # está em vercel.json. A chamada só acontece com a flag "true",
-# ACC_APP_BASE_URL (variável) e CRON_SECRET (segredo) presentes; o
+# ACC_APP_BASE_URL (variável) e ACC_RISK_ALERTS_CRON_SECRET (segredo
+# DEDICADO do piloto — nunca o CRON_SECRET dos crons Vercel) presentes; o
 # segredo vai exclusivamente no header Authorization (nunca URL, log ou
 # output). Nenhuma regra de horário local aqui: a janela do consolidado
 # (quarta 07:00 America/Sao_Paulo) e a idempotência são decididas pelo
@@ -95,7 +96,7 @@ jobs:
         env:
           ACC_WEEKLY_REPORTS_ENABLED: ${{ vars.ACC_WEEKLY_REPORTS_ENABLED }}
           ACC_APP_BASE_URL: ${{ vars.ACC_APP_BASE_URL }}
-          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ACC_RISK_ALERTS_CRON_SECRET: ${{ secrets.ACC_RISK_ALERTS_CRON_SECRET }}
         run: |
           set -euo pipefail
           # Validação sem imprimir valores: qualquer ausência falha antes da chamada.
@@ -107,13 +108,17 @@ jobs:
             echo "::error::Variável ACC_APP_BASE_URL ausente — ciclo de alertas não chamado."
             exit 1
           fi
-          if [ -z "${CRON_SECRET:-}" ]; then
-            echo "::error::Segredo CRON_SECRET ausente — ciclo de alertas não chamado."
+          if [ -z "${ACC_RISK_ALERTS_CRON_SECRET:-}" ]; then
+            echo "::error::Segredo ACC_RISK_ALERTS_CRON_SECRET ausente — ciclo de alertas não chamado."
             exit 1
           fi
           case "${ACC_APP_BASE_URL}" in
             https://*) ;;
             *) echo "::error::ACC_APP_BASE_URL precisa começar com https://"; exit 1 ;;
           esac
-          status=$(curl --silent --show-error --fail-with-body             --max-time 120 --retry 2 --retry-delay 5             --output /dev/null --write-out "%{http_code}"             -H "Authorization: Bearer ${CRON_SECRET}"             "${ACC_APP_BASE_URL%/}/api/cron/risk-alerts")
+          status=$(curl --silent --show-error --fail-with-body \
+            --max-time 120 --retry 2 --retry-delay 5 \
+            --output /dev/null --write-out "%{http_code}" \
+            -H "Authorization: Bearer ${ACC_RISK_ALERTS_CRON_SECRET}" \
+            "${ACC_APP_BASE_URL%/}/api/cron/risk-alerts")
           echo "Ciclo de alertas de risco: HTTP ${status}"

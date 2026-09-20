@@ -3,8 +3,10 @@
 // pelo agendador da Vercel ou pelo workflow GitHub. Caminhos EXATOS,
 // nunca prefixo: /api/cron/<outra-coisa> e subcaminhos continuam exigindo
 // sessão. Cada handler listado aqui autentica sozinho por
-// `Authorization: Bearer CRON_SECRET` (lib/cron/cron-request-auth.ts) e
-// falha fechado quando o segredo não está configurado. Puro, sem
+// `Authorization: Bearer <segredo>` (lib/cron/cron-request-auth.ts —
+// CRON_SECRET nos crons Vercel; ACC_RISK_ALERTS_CRON_SECRET, dedicado, em
+// /api/cron/risk-alerts) e falha fechado quando o segredo não está
+// configurado. Puro, sem
 // "server-only", para ser testável por script Node.
 
 export const PUBLIC_CRON_ROUTES: ReadonlySet<string> = new Set([

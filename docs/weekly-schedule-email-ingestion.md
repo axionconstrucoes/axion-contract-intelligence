@@ -448,7 +448,9 @@ e-mail corporativo. Qualquer falta ⇒ não envia e registra o motivo. O
 guard global do piloto (`pilot-outbound-guard.ts`) continua sendo a
 segunda camada nos providers.
 
-**Worker**: `GET /api/cron/risk-alerts` (Bearer `CRON_SECRET`, só no
+**Worker**: `GET /api/cron/risk-alerts` (Bearer `ACC_RISK_ALERTS_CRON_SECRET`
+— segredo **dedicado** do piloto, sem fallback para o `CRON_SECRET` dos
+crons Vercel —, só no
 header Authorization, comparação em tempo constante; query string nunca
 autentica), chamado de hora em hora pelo job `risk-alerts` do workflow
 GitHub `weekly-schedule-email-ingestion.yml` (cron `20 * * * *` UTC —
@@ -664,10 +666,10 @@ Job `risk-alerts` (`needs: ingest`, roda depois da captura de respostas):
 só quando `vars.ACC_WEEKLY_REPORTS_ENABLED == 'true'` e (agendado ou
 manual com fase `all`). Antes da chamada valida, **sem imprimir
 valores**, flag `true`, `ACC_APP_BASE_URL` não vazio (https) e
-`CRON_SECRET` não vazio — faltando algo, falha de forma sanitizada e não
+`ACC_RISK_ALERTS_CRON_SECRET` não vazio — faltando algo, falha de forma sanitizada e não
 chama nada. Comando: `curl --silent --show-error --fail-with-body
 --max-time 120 --retry 2 --retry-delay 5 -H "Authorization: Bearer
-${CRON_SECRET}" "${ACC_APP_BASE_URL}/api/cron/risk-alerts"` — o segredo
+${ACC_RISK_ALERTS_CRON_SECRET}" "${ACC_APP_BASE_URL}/api/cron/risk-alerts"` — o segredo
 só no header (nunca URL, query string, echo, output, artifact ou log).
 A cada hora: flag `false`/ausente ⇒ não chama; ALTO/CRÍTICO ⇒
 processado na próxima execução horária; BAIXO/MÉDIO ⇒ o motor decide se
@@ -679,9 +681,9 @@ processado na próxima execução horária; BAIXO/MÉDIO ⇒ o motor decide se
 | --- | --- | --- | --- |
 | GitHub | Variable | `ACC_WEEKLY_REPORTS_ENABLED` | `true` |
 | GitHub | Variable | `ACC_APP_BASE_URL` | `https://acc.axion.com.br` |
-| GitHub | Secret | `CRON_SECRET` | mesmo valor configurado no Vercel |
+| GitHub | Secret | `ACC_RISK_ALERTS_CRON_SECRET` | segredo dedicado do piloto (mesmo valor configurado no Vercel) |
 | Vercel | Env | `ACC_WEEKLY_REPORTS_ENABLED` | `true` |
-| Vercel | Env | `CRON_SECRET` | mesmo valor |
+| Vercel | Env | `ACC_RISK_ALERTS_CRON_SECRET` | mesmo valor (independente do `CRON_SECRET` dos crons `weekly-alert-digest`/`system-health`) |
 | Vercel | Env | `GOOGLE_GMAIL_INBOUND_MAILBOX` | caixa inbound oficial |
 | Vercel | Env | `ACC_PILOT_ADDITIONAL_RECIPIENTS` | participante adicional do piloto |
 

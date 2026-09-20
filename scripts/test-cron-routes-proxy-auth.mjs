@@ -1,8 +1,9 @@
-// Rotas técnicas de cron × proxy de autenticação — 19 itens.
+// Rotas técnicas de cron × proxy de autenticação — 24 itens.
 // O proxy (apps/web/proxy.ts) deixa chegar ao handler, sem sessão, SÓ os
 // caminhos exatos de lib/cron/public-cron-routes.ts; cada handler
-// autentica por Authorization: Bearer CRON_SECRET (lib/cron/
-// cron-request-auth.ts) e falha fechado sem segredo configurado.
+// autentica por Authorization: Bearer (lib/cron/cron-request-auth.ts) —
+// CRON_SECRET nos crons Vercel, ACC_RISK_ALERTS_CRON_SECRET (dedicado)
+// em risk-alerts — e falha fechado sem segredo configurado.
 // Executa as funções REAIS (puras); handlers validados por leitura
 // estática (importam módulos server-only). Nenhuma chamada de rede,
 // e-mail ou workflow.
@@ -18,7 +19,7 @@ import { fileURLToPath } from "node:url";
 register("./ts-module-resolver.mjs", import.meta.url);
 
 const { isPublicCronRoute, PUBLIC_CRON_ROUTES } = await import("../apps/web/lib/cron/public-cron-routes");
-const { isCronRequestAuthorized } = await import("../apps/web/lib/cron/cron-request-auth");
+const { isCronRequestAuthorized, RISK_ALERTS_CRON_SECRET_ENV } = await import("../apps/web/lib/cron/cron-request-auth");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
@@ -90,7 +91,7 @@ check("7. Rota comum sem sessão continua redirecionando para /login com ?next= 
 check("8. risk-alerts sem Authorization => 401", () => {
   assert(isCronRequestAuthorized(req(), SECRET) === false);
   const src = readSource(ROUTES.risk);
-  assert(src.includes("if (!isCronRequestAuthorized(request, process.env.CRON_SECRET)) {") && src.includes('{ status: 401 }'));
+  assert(src.includes("if (!isCronRequestAuthorized(request, process.env[RISK_ALERTS_CRON_SECRET_ENV])) {") && src.includes('{ status: 401 }'));
 });
 check("9. risk-alerts com Bearer incorreto => 401 (inclui prefixo correto com sufixo, esquema errado e espaços)", () => {
   assert(isCronRequestAuthorized(req({ authorization: "Bearer errado" }), SECRET) === false);
@@ -104,7 +105,7 @@ check("10. risk-alerts com segredo somente na query string => 401", () => {
   assert(!/searchParams|nextUrl|URL\(/.test(cronAuth), "helper nem lê a URL");
   assert(!/searchParams\.get\(["'](secret|token|key|authorization)["']\)/.test(readSource(ROUTES.risk) + readSource(ROUTES.health) + readSource(ROUTES.digest)));
 });
-check("11. risk-alerts com CRON_SECRET ausente/vazio => 401 mesmo com header 'correto'", () => {
+check("11. risk-alerts com segredo dedicado ausente/vazio => 401 mesmo com header 'correto'", () => {
   assert(isCronRequestAuthorized(req({ authorization: "Bearer " }), undefined) === false);
   assert(isCronRequestAuthorized(req({ authorization: "Bearer " }), "") === false);
   assert(isCronRequestAuthorized(req({ authorization: "Bearer    " }), "   ") === false);
@@ -133,7 +134,7 @@ check("14. Segredos não aparecem em logs, URL, saída ou mensagens de erro", ()
   }
   assert(!/console\./.test(cronAuth) && !/throw new Error\([^)]*(presented|expected|secret)/.test(cronAuth));
   const workflow = readSource(".github/workflows/weekly-schedule-email-ingestion.yml");
-  assert(workflow.includes('-H "Authorization: Bearer ${CRON_SECRET}"') && !/api\/cron\/risk-alerts[^"\n]*(secret|token|CRON)/i.test(workflow));
+  assert(workflow.includes('-H "Authorization: Bearer ${ACC_RISK_ALERTS_CRON_SECRET}"') && !/api\/cron\/risk-alerts[^"\n]*(secret|token|CRON)/i.test(workflow));
 });
 check("15. risk-alerts com feature desligada => 204 antes do banco, mas só depois da autenticação válida", () => {
   const src = readSource(ROUTES.risk);
@@ -144,7 +145,7 @@ check("15. risk-alerts com feature desligada => 204 antes do banco, mas só depo
   assert(readSource("apps/web/lib/risk-alerts/run-risk-alert-cycle.ts").includes("if (!featureEnabled) return result; // nenhuma consulta ao banco"));
 });
 check("16. Nenhuma chamada real, e-mail ou workflow executado por este teste", () => {
-  assert(!process.env.CRON_SECRET && !process.env.GITHUB_ACTIONS && process.env.ACC_WEEKLY_REPORTS_ENABLED !== "true");
+  assert(!process.env.CRON_SECRET && !process.env.ACC_RISK_ALERTS_CRON_SECRET && !process.env.GITHUB_ACTIONS && process.env.ACC_WEEKLY_REPORTS_ENABLED !== "true");
   assert(!/fetch\(|https?:\/\//.test(cronAuth + readSource("apps/web/lib/cron/public-cron-routes.ts")), "módulos puros sem rede");
 });
 
@@ -215,6 +216,51 @@ check("19. Nenhuma gravação SYSTEM dos três fluxos cron (handlers + serviços
   assert(migration.includes("case when v_actor is null then 'SYSTEM' else 'USER' end, v_actor, null,"), "RPC de ação: label sempre null");
   // Proxy e Bearer inalterados por esta correção.
   assert(proxy.includes("isPublicCronRoute(request.nextUrl.pathname)") && readSource(ROUTES.health).includes("if (!isCronRequestAuthorized(request, process.env.CRON_SECRET)) {"));
+});
+
+// ------------------------------------------------------------------
+// Segredo DEDICADO do piloto: risk-alerts aceita exclusivamente
+// ACC_RISK_ALERTS_CRON_SECRET; digest e system-health seguem com CRON_SECRET.
+// ------------------------------------------------------------------
+const DEDICATED = "segredo-dedicado-de-teste-nao-real-9876543210";
+const SHARED = "cron-secret-de-teste-nao-real-0011223344";
+const riskRoute = readSource(ROUTES.risk);
+// Simula o que o handler faz: lê SOMENTE process.env[RISK_ALERTS_CRON_SECRET_ENV].
+const riskAuth = (request, env) => isCronRequestAuthorized(request, env[RISK_ALERTS_CRON_SECRET_ENV]);
+check("20. Segredo dedicado correto alcança o handler (autorização passa; próximo passo é a flag)", () => {
+  assert(RISK_ALERTS_CRON_SECRET_ENV === "ACC_RISK_ALERTS_CRON_SECRET");
+  assert(riskAuth(req({ authorization: `Bearer ${DEDICATED}` }), { ACC_RISK_ALERTS_CRON_SECRET: DEDICATED, CRON_SECRET: SHARED }) === true);
+  assert(riskRoute.includes("process.env[RISK_ALERTS_CRON_SECRET_ENV]") && !riskRoute.includes("process.env.CRON_SECRET"), "handler lê só o segredo dedicado");
+  assert(riskRoute.indexOf("isCronRequestAuthorized(") < riskRoute.indexOf("if (!isWeeklyReportsEnabled()) {"));
+});
+check("21. CRON_SECRET correto, sem o dedicado, retorna 401 (sem fallback)", () => {
+  assert(riskAuth(req({ authorization: `Bearer ${SHARED}` }), { CRON_SECRET: SHARED }) === false, "dedicado ausente => 401 mesmo com CRON_SECRET válido");
+  assert(riskAuth(req({ authorization: `Bearer ${SHARED}` }), { CRON_SECRET: SHARED, ACC_RISK_ALERTS_CRON_SECRET: DEDICATED }) === false, "CRON_SECRET nunca autentica risk-alerts");
+  assert(!/CRON_SECRET\s*\?\?|\?\?\s*process\.env\.CRON_SECRET|\|\|\s*process\.env\.CRON_SECRET/.test(riskRoute), "sem fallback no código");
+});
+check("22. Segredo dedicado ausente/vazio/incorreto retorna 401", () => {
+  assert(riskAuth(req({ authorization: `Bearer ${DEDICATED}` }), {}) === false);
+  assert(riskAuth(req({ authorization: `Bearer ${DEDICATED}` }), { ACC_RISK_ALERTS_CRON_SECRET: "" }) === false);
+  assert(riskAuth(req({ authorization: `Bearer ${DEDICATED}` }), { ACC_RISK_ALERTS_CRON_SECRET: "   " }) === false);
+  assert(riskAuth(req({ authorization: `Bearer ${DEDICATED}x` }), { ACC_RISK_ALERTS_CRON_SECRET: DEDICATED }) === false);
+  assert(riskAuth(req(), { ACC_RISK_ALERTS_CRON_SECRET: DEDICATED }) === false);
+});
+check("23. Query string com o segredo dedicado retorna 401; segredo não aparece em URL/log/erro", () => {
+  assert(riskAuth(req({}, `https://acc.example.test/api/cron/risk-alerts?ACC_RISK_ALERTS_CRON_SECRET=${DEDICATED}&secret=${DEDICATED}`), { ACC_RISK_ALERTS_CRON_SECRET: DEDICATED }) === false);
+  assert(!/console\./.test(riskRoute) && riskRoute.includes('error: "Não autorizado."'));
+  const step = readSource(".github/workflows/weekly-schedule-email-ingestion.yml").split("  risk-alerts:")[1];
+  assert(step.includes("ACC_RISK_ALERTS_CRON_SECRET: ${{ secrets.ACC_RISK_ALERTS_CRON_SECRET }}") && step.includes('-H "Authorization: Bearer ${ACC_RISK_ALERTS_CRON_SECRET}"'));
+  assert(!step.includes("secrets.CRON_SECRET") && !/echo[^\n]*\$\{?ACC_RISK_ALERTS_CRON_SECRET/.test(step) && !/api\/cron\/risk-alerts[^"\n]*(secret|token|CRON)/i.test(step));
+});
+check("24. Feature desligada + segredo dedicado correto => 204 antes do banco; digest e system-health continuam com CRON_SECRET", () => {
+  assert(riskRoute.includes("return new Response(null, { status: 204 });") && riskRoute.indexOf("if (!isWeeklyReportsEnabled()) {") < riskRoute.indexOf("runRiskAlertCycle("));
+  assert(readSource("apps/web/lib/risk-alerts/run-risk-alert-cycle.ts").includes("if (!featureEnabled) return result; // nenhuma consulta ao banco"));
+  for (const file of [ROUTES.digest, ROUTES.health]) {
+    const src = readSource(file);
+    assert(src.includes("if (!isCronRequestAuthorized(request, process.env.CRON_SECRET)) {") && !src.includes("ACC_RISK_ALERTS_CRON_SECRET"), `${file} mantém CRON_SECRET`);
+  }
+  assert(isCronRequestAuthorized(req({ authorization: `Bearer ${SHARED}` }), SHARED) === true && isCronRequestAuthorized(req({ authorization: `Bearer ${DEDICATED}` }), SHARED) === false);
+  assert(!/process\.env\.\w*CRON_SECRET|ACC_RISK_ALERTS_CRON_SECRET/.test(proxy), "proxy inalterado (não lê segredo algum)");
 });
 
 console.log("");

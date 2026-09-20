@@ -1,14 +1,15 @@
-import { isCronRequestAuthorized } from "@/lib/cron/cron-request-auth";
+import { isCronRequestAuthorized, RISK_ALERTS_CRON_SECRET_ENV } from "@/lib/cron/cron-request-auth";
 import { isWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
 import { runRiskAlertCycle } from "@/lib/risk-alerts/run-risk-alert-cycle";
 
 // Worker horário dos alertas de risco. Disparado pelo workflow GitHub
 // horário (.github/workflows/weekly-schedule-email-ingestion.yml, job
 // risk-alerts) — o plano Vercel atual admite só 2 crons diários, por isso
-// a rota NÃO está em vercel.json. Mesmo contrato do cron do resumo
-// semanal: Bearer CRON_SECRET obrigatório (só no header Authorization —
-// nunca query string; comparação em tempo constante; o header nunca é
-// registrado).
+// a rota NÃO está em vercel.json. Segredo DEDICADO do piloto:
+// Authorization: Bearer ACC_RISK_ALERTS_CRON_SECRET — exclusivamente
+// esse (sem fallback para o CRON_SECRET dos crons Vercel); só no header
+// (nunca query string); comparação em tempo constante; ausente/vazio/
+// incorreto => 401; o header nunca é registrado.
 // - ACC_WEEKLY_REPORTS_ENABLED != "true" => 204 sem tocar no banco.
 // - ?dryRun=1 => só o plano (nenhuma escrita, nenhum envio), para
 //   inspeção manual controlada.
@@ -25,7 +26,7 @@ export const maxDuration = 300;
 let inFlight = false;
 
 export async function GET(request: Request) {
-  if (!isCronRequestAuthorized(request, process.env.CRON_SECRET)) {
+  if (!isCronRequestAuthorized(request, process.env[RISK_ALERTS_CRON_SECRET_ENV])) {
     return Response.json({ error: "Não autorizado." }, { status: 401 });
   }
   if (!isWeeklyReportsEnabled()) {

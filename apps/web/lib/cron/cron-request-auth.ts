@@ -6,6 +6,9 @@
 
 import { timingSafeEqual } from "node:crypto";
 
+/** Segredo DEDICADO do ciclo de alertas de risco (piloto) — nunca o CRON_SECRET dos crons Vercel. */
+export const RISK_ALERTS_CRON_SECRET_ENV = "ACC_RISK_ALERTS_CRON_SECRET";
+
 export function isCronRequestAuthorized(request: Pick<Request, "headers">, cronSecret: string | undefined): boolean {
   const expectedSecret = cronSecret?.trim();
   if (!expectedSecret) return false;
