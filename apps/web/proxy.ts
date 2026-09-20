@@ -1,6 +1,8 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { isPublicCronRoute } from "@/lib/cron/public-cron-routes";
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -44,9 +46,12 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute =
     request.nextUrl.pathname === "/login" ||
     request.nextUrl.pathname === "/auth/callback" ||
-    // Chamado sem cookie pelo agendador da Vercel; a própria rota exige
-    // Authorization: Bearer CRON_SECRET e falha fechada se ausente.
-    request.nextUrl.pathname === "/api/cron/weekly-alert-digest";
+    // Rotas técnicas de cron (allowlist EXATA em lib/cron/public-cron-routes.ts:
+    // weekly-alert-digest, system-health, risk-alerts). Chamadas sem cookie
+    // pelo agendador da Vercel / workflow GitHub; cada handler exige
+    // Authorization: Bearer CRON_SECRET e falha fechado se ausente. Nunca
+    // o prefixo /api/cron nem subcaminhos.
+    isPublicCronRoute(request.nextUrl.pathname);
 
   if (!isPublicRoute && !data?.claims) {
     // Destino original preservado em ?next= para /login devolver o
