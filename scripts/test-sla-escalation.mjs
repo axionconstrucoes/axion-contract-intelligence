@@ -319,7 +319,7 @@ check("CRÍTICO: não assumida no prazo escala ao 1º escalão (NO_ACKNOWLEDGMEN
   assert(result.reason === "NO_ACKNOWLEDGMENT");
 });
 
-check("CRÍTICO escala corretamente ao longo do tempo: 12:00 criado, 13:30 sem ação -> 2º escalão, 15:30 -> Diretoria", () => {
+check("CRÍTICO escala na cadeia única: 13:30 sem ação -> Nível 2 (ESCALAO_1); 14:30 (+escalation2After) -> Diretoria; 16:30 (+boardAfter) -> limite atingido, sem Nível 4", () => {
   const base = {
     status: "PENDING",
     currentEscalationLevel: "RESPONSAVEL",
@@ -335,11 +335,21 @@ check("CRÍTICO escala corretamente ao longo do tempo: 12:00 criado, 13:30 sem a
   const at1330 = computeEscalation({ ...base, now: "2026-08-22T13:30:00Z" }); // 30min após vencer -> ainda ESCALAO_1 (limiar do 2º escalão é 13:00+1h=14:00)
   assert(at1330.recommendedLevel === "ESCALAO_1", `13:30 esperado ESCALAO_1, obtido ${at1330.recommendedLevel}`);
 
-  const at1430 = computeEscalation({ ...base, now: "2026-08-22T14:30:00Z" }); // após 14:00 -> ESCALAO_2
-  assert(at1430.recommendedLevel === "ESCALAO_2", `14:30 esperado ESCALAO_2, obtido ${at1430.recommendedLevel}`);
+  assert(at1330.topLevelReached === false);
 
-  const at1630 = computeEscalation({ ...base, now: "2026-08-22T16:30:00Z" }); // 14:00 + 2h = 16:00 -> Diretoria
+  const at1430 = computeEscalation({ ...base, now: "2026-08-22T14:30:00Z" }); // após 14:00 (13:00 + escalation2After 1h) -> Diretoria (Nível 3); ESCALAO_2 nunca é recomendado
+  assert(at1430.recommendedLevel === "DIRETORIA", `14:30 esperado DIRETORIA, obtido ${at1430.recommendedLevel}`);
+  assert(at1430.topLevelReached === false && at1430.shouldEscalate === true);
+
+  const at1630 = computeEscalation({ ...base, now: "2026-08-22T16:30:00Z" }); // 14:00 + boardAfter 2h = 16:00 -> prazo da Diretoria vencido => limite (sem novo nível)
   assert(at1630.recommendedLevel === "DIRETORIA", `16:30 esperado DIRETORIA, obtido ${at1630.recommendedLevel}`);
+  assert(at1630.topLevelReached === true, "boardAfter vencido => topLevelReached");
+
+  const atBoard = computeEscalation({ ...base, currentEscalationLevel: "DIRETORIA", now: "2026-08-22T16:30:00Z" });
+  assert(atBoard.shouldEscalate === false && atBoard.topLevelReached === true, "já na Diretoria: nada a escalar, só o limite registrado");
+
+  const legacy = computeEscalation({ ...base, currentEscalationLevel: "ESCALAO_2", now: "2026-08-22T14:30:00Z" });
+  assert(legacy.recommendedLevel === "DIRETORIA" && legacy.shouldEscalate === true, "registro histórico em ESCALAO_2 avança direto para DIRETORIA");
 });
 
 check("ação assumida no prazo nunca escala por NO_ACKNOWLEDGMENT", () => {
@@ -407,7 +417,7 @@ check("ação CANCELLED nunca escala", () => {
   assert(result.shouldEscalate === false);
 });
 
-check("prazo contratual perdido força ao menos ESCALAO_2 mesmo sem vencimento do Relógio B", () => {
+check("prazo contratual perdido força a Diretoria (Nível 3) mesmo sem vencimento do Relógio B — nunca ESCALAO_2", () => {
   const result = computeEscalation({
     status: "ACKNOWLEDGED",
     currentEscalationLevel: "RESPONSAVEL",
@@ -422,7 +432,7 @@ check("prazo contratual perdido força ao menos ESCALAO_2 mesmo sem vencimento d
   });
   assert(result.shouldEscalate === true);
   assert(result.reason === "CONTRACTUAL_DEADLINE_MISSED");
-  assert(result.recommendedLevel === "ESCALAO_2");
+  assert(result.recommendedLevel === "DIRETORIA");
 });
 
 check("prazo contratual próximo (≤24h) força ao menos ESCALAO_1", () => {

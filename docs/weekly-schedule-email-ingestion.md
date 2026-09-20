@@ -414,7 +414,7 @@ motivos + métricas): mudança ⇒ "risco alterado".
 | Risco | Entrega | Escalonamento |
 | --- | --- | --- |
 | BAIXO / MÉDIO | nunca individual; **um** consolidado por destinatário, quarta-feira 07:00 no timezone do projeto (janela decidida a cada hora pelo ciclo, chave = data local da quarta) | — |
-| ALTO / CRÍTICO | imediato ao surgir, ao subir para ALTO/CRÍTICO ou ao alterar; cria `sla_actions` (SYSTEM, origem OTHER, responsável = Nível 1, prazos da Matriz) | `computeEscalation` (motor existente): prazo de assumir vencido ⇒ Nível 2; +`escalation_2_after` ⇒ Nível 3 (`resolveEscalationDestination`, Nível 2 ausente ⇒ Nível 3); aplicado via `escalate_sla_action_system` (service_role); para quando assumida/concluída conforme regra existente |
+| ALTO / CRÍTICO | imediato ao surgir, ao subir para ALTO/CRÍTICO ou ao alterar; cria `sla_actions` (SYSTEM, origem OTHER, responsável = Nível 1, prazos da Matriz) | `computeEscalation` (motor existente, cadeia única): prazo de assumir vencido ⇒ Nível 2 (`ESCALAO_1`); +`escalation_2_after` ("prazo do Nível 2") ⇒ Nível 3 (`DIRETORIA`; Nível 2 ausente ⇒ direto ao Nível 3); +`board_after` ("prazo do Nível 3") ⇒ **limite de escalonamento atingido** (`TOP_LEVEL_REACHED`, registrado uma única vez, sem destinatário e sem e-mail); `ESCALAO_2` nunca é criado (só leitura de registros históricos, que avançam direto para a Diretoria); mesma cadeia no caminho automático e no botão manual; aplicado via `escalate_sla_action_system` (service_role); para quando assumida/concluída conforme regra existente |
 
 Consolidado: riscos novos/alterados desde o último consolidado + ainda
 abertos + encerrados desde o último (uma vez); encerrados sem mudança
@@ -490,7 +490,8 @@ válida; **projeto piloto confirmado por humano**
 escolhidos automaticamente); mailbox remetente configurada; severidade
 dos alertas de ausência configurada **por projeto**
 (`risk_alert_severity_map`, `--severity-map=`; sem configuração ⇒
-`REVIEW_REQUIRED`; sugestão não ativa em `SUGGESTED_INGESTION_ALERT_SEVERITY`);
+`REVIEW_REQUIRED`; sugestão não ativa em `SUGGESTED_INGESTION_ALERT_SEVERITY`;
+o mapa cobre **somente alertas de ausência** — ver 9.7);
 **caixa inbound oficial configurada** (`GOOGLE_GMAIL_INBOUND_MAILBOX`
 também no ambiente do worker Vercel — a resposta pelo corpo do e-mail é
 requisito obrigatório; sem ela ⇒ `REPLY_MAILBOX_NOT_CONFIGURED`).
@@ -620,10 +621,42 @@ RESOLVED, REVIEW_REQUIRED, TOP_LEVEL_REACHED.
 - OUTRO: texto obrigatório; nada resolve automaticamente.
 - **Regra única (HIGH/CRITICAL)**: TOMANDO PROVIDÊNCIAS, ENVIAR P/,
   ESPECIALISTA e OUTRO escalam imediatamente pelo **nível atual do
-  alerta**: N1→N2, N2→N3, N3→`TOP_LEVEL_REACHED` (sem Nível 4; Diretoria
+  alerta**: N1→N2, N2→N3, N3→`TOP_LEVEL_REACHED` (a mesma cadeia do motor
+  por prazo — `ESCALAO_2` é só legado; sem Nível 4; Diretoria
   informada uma vez, sem e-mail duplicado). Ação e escalonamento são
   eventos distintos, ambos auditados; idempotente por nível; respeita
   Matriz e allowlist. LOW/MEDIUM nunca escalam por essas ações.
+
+### 9.7 Severidade: ausência × motor; planilha do relatório ausente
+
+Dois grupos formalmente separados (`pilot-readiness.ts`):
+
+| Grupo | Tipos | Fonte da severidade |
+| --- | --- | --- |
+| A. Alertas de ausência (`weekly_schedule_ingestion_alerts`) | `MISSING_WEEKLY_SCHEDULE`, `MISSING_WEEKLY_REPORT_WORKBOOK`, `MISSING_S_CURVE` | **exclusivamente** `risk_alert_severity_map` do projeto; sem entrada ⇒ `REVIEW_REQUIRED` (nunca um default) |
+| B. Classificados pelo motor | comparações de cronograma; abas do relatório (dimensões `S_CURVE_MPP_DIVERGENCE_PP`, `BASELINE_SHEET_DIVERGENCE_DAYS`, …) | **exclusivamente** o motor (thresholds do projeto); o mapa nunca rebaixa nem eleva; rastreável (`severitySourceOf` = `ENGINE`) |
+
+O readiness (`validateSeverityMap`) exige exatamente os três tipos de
+ausência produzidos e **rejeita** entradas para `S_CURVE_MPP_DIVERGENCE`
+/ `BASELINE_SHEET_DIVERGENCE` (nomes reservados no CHECK de `kind`, sem
+produtor; se um dia aparecerem como ausência ⇒ `REVIEW_REQUIRED`).
+Mapa esperado do piloto (a gravar após aprovação): `MISSING_WEEKLY_SCHEDULE=HIGH`,
+`MISSING_WEEKLY_REPORT_WORKBOOK=HIGH`, `MISSING_S_CURVE=MEDIUM`.
+
+**Planilha do relatório semanal ausente** (`createWeeklyWorkbookAbsenceAlert`):
+evidência = qualquer `weekly_report_workbooks` ligado a um intake recebido
+da semana (planilha inválida/pendente de revisão **conta como recebida** —
+invalidez tem fluxo próprio); prazo = o mesmo prazo semanal da
+configuração (`deadline_weekday`/`deadline_time`/`timezone`), dentro da
+janela de monitoramento e só depois de o cronograma da semana ter sido
+recebido (a planilha viaja no mesmo envio). Idempotente por
+(projeto, semana, kind); nova semana ⇒ novo alerta.
+**Resolução por evidência posterior** (`resolveAbsenceAlertsWithEvidence`,
+fase `alerts` do worker): quando o cronograma / a Curva S / a planilha
+chegam depois, o alerta aberto recebe `resolved_at` (uma única vez,
+auditado) e o caso de risco correspondente é encerrado pelo ciclo
+(`closed = resolved_at`). Antes desta versão nenhum alerta de ausência
+era resolvido automaticamente.
 
 ### 9.6 Gatilho horário pelo GitHub Actions e configuração de ativação
 
@@ -658,6 +691,9 @@ severity map gravado. Manter a feature desligada até a validação completa.
 
 ## 8. Testes
 
+- `node scripts/test-pilot-readiness-consistency.mjs` (17 itens: cadeia única,
+  boardAfter/limite, ESCALAO_2 legado, rótulos, severidade ausência × motor,
+  ausência de MPP / Curva S / planilha, resolução por evidência)
 - `node scripts/test-pilot-risk-alert-audit.mjs` (auditoria final: Reply-To no guard,
   roteamento temático dos Experts, delimitação da outbox, RPC/transições, RLS/ACL,
   privacidade)

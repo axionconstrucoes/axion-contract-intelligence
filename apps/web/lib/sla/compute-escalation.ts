@@ -11,6 +11,16 @@
 // (o primeiro que se aplica vira o "checkpoint" a partir do qual o
 // Relógio C (escalation2AfterValue / boardAfterValue) é contado.)
 //
+// CADEIA ÚNICA (três níveis operacionais):
+//   RESPONSAVEL --(checkpoint vencido)--> ESCALAO_1 (Nível 2 · Gerência)
+//   ESCALAO_1  --(+ escalation2AfterValue, "prazo do Nível 2")--> DIRETORIA (Nível 3)
+//   DIRETORIA  --(+ boardAfterValue, "prazo do Nível 3")--> TOP_LEVEL_REACHED
+// TOP_LEVEL_REACHED não é um nível nem tem destinatário: é o sinal de que
+// a Diretoria também deixou o prazo vencer (topLevelReached = true), para
+// registro/auditoria — nunca um novo e-mail. ESCALAO_2 é legado: nunca é
+// recomendado; um registro histórico em ESCALAO_2 é tratado como Nível 2
+// e avança diretamente para DIRETORIA.
+//
 // Prazo contratual (Relógio A) e "nova evidência aumentou o risco" são
 // tratados como gatilhos adicionais e independentes (seção 11) — nunca
 // confundidos com o Relógio B/C.
@@ -19,13 +29,16 @@ import { addTimeUnits, AXION_DEFAULT_BUSINESS_HOURS_CONFIG, type SlaBusinessHour
 import type { ResolvedSlaMatrixRule } from "./resolve-matrix-rule";
 import type { SlaActionStatus, SlaEscalationLevel, SlaEscalationReason } from "./types";
 
+// ESCALAO_2 (legado) ocupa o MESMO rank do Nível 2: nunca é recomendado e,
+// quando é o nível atual de um registro antigo, o próximo passo é DIRETORIA.
 const LEVEL_RANK: Record<SlaEscalationLevel, number> = {
   RESPONSAVEL: 0,
   ESCALAO_1: 1,
-  ESCALAO_2: 2,
-  DIRETORIA: 3,
+  ESCALAO_2: 1,
+  DIRETORIA: 2,
 };
-const LEVEL_BY_RANK: SlaEscalationLevel[] = ["RESPONSAVEL", "ESCALAO_1", "ESCALAO_2", "DIRETORIA"];
+const LEVEL_BY_RANK: SlaEscalationLevel[] = ["RESPONSAVEL", "ESCALAO_1", "DIRETORIA"];
+export const SLA_ESCALATION_CHAIN: readonly SlaEscalationLevel[] = LEVEL_BY_RANK;
 
 // Janela de "prazo contratual próximo" (seção 11) — mínimo seguro fixo,
 // nunca configurável nesta fase (evita mais uma dimensão de configuração
@@ -57,6 +70,12 @@ export interface ComputeEscalationResult {
   reason: SlaEscalationReason | null;
   /** Explicação legível de cada gatilho considerado — nunca uma caixa-preta. */
   reasons: string[];
+  /**
+   * true quando o prazo da Diretoria (boardAfterValue após a subida ao
+   * Nível 3) também venceu: limite de escalonamento atingido. Não há novo
+   * destinatário nem novo e-mail — só registro/auditoria (idempotente).
+   */
+  topLevelReached: boolean;
 }
 
 export function computeEscalation(input: ComputeEscalationInput): ComputeEscalationResult {
@@ -68,6 +87,7 @@ export function computeEscalation(input: ComputeEscalationInput): ComputeEscalat
       shouldEscalate: false,
       reason: null,
       reasons: ["Ação concluída/cancelada — nunca escalada."],
+      topLevelReached: false,
     };
   }
 
@@ -75,6 +95,7 @@ export function computeEscalation(input: ComputeEscalationInput): ComputeEscalat
   const businessHoursConfig = input.businessHoursConfig ?? AXION_DEFAULT_BUSINESS_HOURS_CONFIG;
   let recommendedRank = LEVEL_RANK[input.currentEscalationLevel];
   let dominantReason: SlaEscalationReason | null = null;
+  let topLevelReached = false;
 
   let checkpoint: Date | null = null;
   let checkpointReason: SlaEscalationReason | null = null;
@@ -99,23 +120,27 @@ export function computeEscalation(input: ComputeEscalationInput): ComputeEscalat
     dominantReason = dominantReason ?? checkpointReason;
     reasons.push(`Prazo para ${checkpointLabel} vencido em ${checkpoint.toISOString()}.`);
 
-    const level2Threshold = addTimeUnits(
+    // Prazo do Nível 2 (escalation2AfterValue) contado a partir do
+    // checkpoint: vencido => Diretoria (Nível 3).
+    const boardThreshold = addTimeUnits(
       checkpoint,
       input.rule.escalation2AfterValue,
       input.rule.timeUnit,
       businessHoursConfig
     );
-    if (now.getTime() > level2Threshold.getTime()) {
-      recommendedRank = Math.max(recommendedRank, LEVEL_RANK.ESCALAO_2);
+    if (now.getTime() > boardThreshold.getTime()) {
+      recommendedRank = Math.max(recommendedRank, LEVEL_RANK.DIRETORIA);
       reasons.push(
-        `Sem ação por mais ${input.rule.escalation2AfterValue} (${input.rule.timeUnit}) após o vencimento — sobe ao 2º escalão.`
+        `Sem ação por mais ${input.rule.escalation2AfterValue} (${input.rule.timeUnit}) após o vencimento — sobe à Diretoria (Nível 3).`
       );
 
-      const boardThreshold = addTimeUnits(level2Threshold, input.rule.boardAfterValue, input.rule.timeUnit, businessHoursConfig);
-      if (now.getTime() > boardThreshold.getTime()) {
-        recommendedRank = Math.max(recommendedRank, LEVEL_RANK.DIRETORIA);
+      // Prazo do Nível 3 (boardAfterValue) contado a partir da subida à
+      // Diretoria: vencido => limite de escalonamento atingido (sem Nível 4).
+      const topLevelThreshold = addTimeUnits(boardThreshold, input.rule.boardAfterValue, input.rule.timeUnit, businessHoursConfig);
+      if (now.getTime() > topLevelThreshold.getTime()) {
+        topLevelReached = true;
         reasons.push(
-          `Sem ação por mais ${input.rule.boardAfterValue} (${input.rule.timeUnit}) após o 2º escalão — sobe à Diretoria.`
+          `Sem ação por mais ${input.rule.boardAfterValue} (${input.rule.timeUnit}) após a Diretoria — limite de escalonamento atingido.`
         );
       }
     }
@@ -124,9 +149,9 @@ export function computeEscalation(input: ComputeEscalationInput): ComputeEscalat
   if (input.contractualDeadline) {
     const deadline = new Date(input.contractualDeadline);
     if (now.getTime() > deadline.getTime()) {
-      recommendedRank = Math.max(recommendedRank, LEVEL_RANK.ESCALAO_2);
+      recommendedRank = Math.max(recommendedRank, LEVEL_RANK.DIRETORIA);
       dominantReason = dominantReason ?? "CONTRACTUAL_DEADLINE_MISSED";
-      reasons.push("Prazo contratual perdido.");
+      reasons.push("Prazo contratual perdido — Diretoria (Nível 3).");
     } else if (deadline.getTime() - now.getTime() <= CONTRACTUAL_DEADLINE_NEAR_WINDOW_MS) {
       recommendedRank = Math.max(recommendedRank, LEVEL_RANK.ESCALAO_1);
       dominantReason = dominantReason ?? "CONTRACTUAL_DEADLINE_NEAR";
@@ -152,5 +177,6 @@ export function computeEscalation(input: ComputeEscalationInput): ComputeEscalat
     shouldEscalate,
     reason: shouldEscalate ? dominantReason : null,
     reasons,
+    topLevelReached,
   };
 }

@@ -32,7 +32,7 @@ import { resolveMatrixPolicy, type MatrixPolicy } from "@/lib/sla/resolve-matrix
 import type { SlaArea, SlaEscalationLevel, SlaRiskLevel } from "@/lib/sla/types";
 
 import { actionLinkExpiry, buildActionLink, EMAIL_ACTION_TYPES, generateActionToken, hashActionToken } from "./action-links";
-import { applyForwardTimeout } from "./alert-state-machine";
+import { applyForwardTimeout, applyScheduledTopLevel } from "./alert-state-machine";
 import { buildAlertFollowUpEmail, buildImmediateRiskAlertEmail, buildRiskDigestEmail, formatDateTimeBR, type BuiltEmail } from "./build-risk-alert-emails";
 import { evaluatePilotReadiness, blockerToSuppressionReason, isSeverityMapComplete } from "./pilot-readiness";
 import { evaluateRecipient, planRiskAlerts } from "./plan-risk-alerts";
@@ -55,6 +55,7 @@ export interface RiskAlertCycleProjectResult {
   failed: number;
   skipped: number;
   forwardsReturned: number;
+  topLevelReached: number;
   expertAnswers: number;
   digestWindow: { key: string; isOpen: boolean } | null;
   dryRunPreview?: Array<Record<string, unknown>>;
@@ -184,6 +185,7 @@ export async function runRiskAlertCycle(options: RunRiskAlertCycleOptions = {}):
       failed: 0,
       skipped: 0,
       forwardsReturned: 0,
+      topLevelReached: 0,
       expertAnswers: 0,
       digestWindow: plan.digestWindow,
     };
@@ -241,6 +243,22 @@ export async function runRiskAlertCycle(options: RunRiskAlertCycleOptions = {}):
         detail: `Alerta ${entry.notificationType}${entry.escalationLevel ? ` (${entry.escalationLevel})` : ""} para ${entry.recipient.userId}: ${entry.recipient.status}${entry.recipient.suppressionReason ? ` (${entry.recipient.suppressionReason})` : ""}. Chave ${entry.idempotencyKey}.`,
       })),
     ]);
+
+    // ---- prazo da Diretoria vencido: limite de escalonamento (uma vez, sem e-mail) ----
+    for (const item of plan.topLevelReached) {
+      const caseId = caseIds.get(item.caseKey);
+      if (!caseId) continue;
+      const loaded = await store.loadCaseSnapshotForAction(caseId);
+      if (!loaded) continue;
+      const transition = applyScheduledTopLevel({ now: nowIso, snapshot: loaded.snapshot, reasons: item.reasons });
+      if (!transition) continue;
+      try {
+        await store.applyTransition(caseId, transition, null);
+        projectResult.topLevelReached += 1;
+      } catch {
+        // Já registrado pelo caminho imediato (chave única) ou ação humana concorrente — nada a repetir.
+      }
+    }
 
     // ---- encaminhamentos sem ação: devolver ao remetente ----
     for (const forward of await store.listActiveForwards(projectId)) {

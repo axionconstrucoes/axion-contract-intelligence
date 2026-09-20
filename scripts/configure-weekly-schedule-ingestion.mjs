@@ -99,10 +99,18 @@ if (option("risk-alerts") !== undefined) {
 // real): --severity-map=MISSING_WEEKLY_SCHEDULE:HIGH,MISSING_S_CURVE:MEDIUM,...
 if (option("severity-map") !== undefined) {
   const map = {};
+  // Só ALERTAS DE AUSÊNCIA entram no mapa; divergências classificadas pelo
+  // motor (S_CURVE_MPP_DIVERGENCE, BASELINE_SHEET_DIVERGENCE) nunca — a
+  // severidade delas é do motor e não pode ser rebaixada/elevada aqui.
+  const ABSENCE_KINDS = ["MISSING_WEEKLY_SCHEDULE", "MISSING_WEEKLY_REPORT_WORKBOOK", "MISSING_S_CURVE"];
   for (const pair of list("severity-map") ?? []) {
     const [kind, level] = pair.split(":");
     if (!kind || !["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(level)) throw new Error(`--severity-map inválido: ${pair}`);
+    if (!ABSENCE_KINDS.includes(kind)) throw new Error(`--severity-map: tipo não admitido no mapa (${kind}) — só alertas de ausência: ${ABSENCE_KINDS.join(", ")}`);
     map[kind] = level;
+  }
+  for (const kind of ABSENCE_KINDS) {
+    if (Object.keys(map).length && !map[kind]) throw new Error(`--severity-map incompleto: falta ${kind}`);
   }
   payload.risk_alert_severity_map = Object.keys(map).length ? map : null;
 }

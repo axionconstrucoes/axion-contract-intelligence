@@ -7,8 +7,11 @@ export interface ResolvedEscalationDestination {
 
 /**
  * Resolve o nível efetivo antes de gravar/enviar um escalonamento.
- * A matriz atual possui três níveis. ESCALAO_2 permanece apenas para
- * compatibilidade com registros antigos.
+ * Cadeia única de três níveis: RESPONSAVEL -> ESCALAO_1 -> DIRETORIA.
+ * ESCALAO_2 permanece aceito apenas em registros antigos (leitura):
+ * nunca é destino de um novo escalonamento — quando ainda aparece como
+ * nível recomendado/atual, o destino é a DIRETORIA (Nível 3), com o
+ * mesmo resultado no caminho automático e no manual.
  */
 export function resolveEscalationDestination(
   recommendedLevel: SlaEscalationLevel,
@@ -24,17 +27,8 @@ export function resolveEscalationDestination(
     }
   }
 
-  if (recommendedLevel === "ESCALAO_2") {
-    if (responsibles?.escalation2UserId) {
-      return { level: "ESCALAO_2", userId: responsibles.escalation2UserId };
-    }
-
-    if (responsibles?.boardUserId) {
-      return { level: "DIRETORIA", userId: responsibles.boardUserId };
-    }
-  }
-
-  if (recommendedLevel === "DIRETORIA") {
+  if (recommendedLevel === "ESCALAO_2" || recommendedLevel === "DIRETORIA") {
+    // escalation_2_user_id (legado) é ignorado: novos fluxos nunca criam ESCALAO_2.
     return { level: "DIRETORIA", userId: responsibles?.boardUserId ?? null };
   }
 

@@ -33,7 +33,7 @@ export default async function AlertDetailPage({ params, searchParams }: { params
       <PageHeader title={`Alerta de risco — ${view.title}`} description={`${view.reference} · área ${slaAreaLabels[view.area as keyof typeof slaAreaLabels] ?? view.area} · código ${view.visibleCode}`} />
 
       <Card>
-        <CardHeader><CardTitle className="flex flex-wrap items-center gap-2">Situação <Badge>{view.riskLevel}</Badge><Badge variant="outline" data-testid="alert-state">{view.stateLabel}</Badge>{view.topLevelReachedAt ? <Badge variant="destructive">TOP_LEVEL_REACHED</Badge> : null}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="flex flex-wrap items-center gap-2">Situação <Badge>{view.riskLevel}</Badge><Badge variant="outline" data-testid="alert-state">{view.stateLabel}</Badge>{view.topLevelReachedAt ? <Badge variant="destructive">Limite de escalonamento atingido</Badge> : null}</CardTitle></CardHeader>
         <CardContent className="grid gap-2 text-sm sm:grid-cols-2">
           <p><span className="text-muted-foreground">Resumo:</span> {view.summary}</p>
           <p><span className="text-muted-foreground">Impacto:</span> {view.impact || "—"}</p>

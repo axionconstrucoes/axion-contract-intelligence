@@ -144,6 +144,7 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
         currentLevel: row.current_level as RiskCaseRecord["currentLevel"],
         currentResponsibleUserId: s(row.current_responsible_user_id),
         previousResponsibleUserId: s(row.previous_responsible_user_id),
+        topLevelReachedAt: s(row.top_level_reached_at),
         visibleCode: (row.visible_code as string) ?? "",
       }));
 
@@ -795,6 +796,7 @@ function mapCaseRow(row: Row): RiskCaseRecord {
     currentLevel: row.current_level as RiskCaseRecord["currentLevel"],
     currentResponsibleUserId: s2(row.current_responsible_user_id),
     previousResponsibleUserId: s2(row.previous_responsible_user_id),
+    topLevelReachedAt: s2(row.top_level_reached_at),
     visibleCode: (row.visible_code as string) ?? "",
   };
 }

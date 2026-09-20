@@ -305,9 +305,13 @@ export const slaActionStatusLabels: Record<SlaActionStatus, string> = {
 export const slaEscalationLevelLabels: Record<SlaEscalationLevel, string> = {
   RESPONSAVEL: "Nível 1 · Responsável",
   ESCALAO_1: "Nível 2 · Gerência",
-  ESCALAO_2: "Nível 2 · Gerência",
+  // Só registros históricos: nunca é criado por novos escalonamentos.
+  ESCALAO_2: "Nível legado · Escalão 2",
   DIRETORIA: "Nível 3 · Diretoria",
 };
+
+/** Limite da cadeia (após o prazo da Diretoria): não é um nível nem tem destinatário. */
+export const slaTopLevelReachedLabel = "Limite de escalonamento atingido";
 
 export const slaTimeUnitLabels: Record<SlaTimeUnit, string> = {
   BUSINESS_HOURS: "Horas úteis",

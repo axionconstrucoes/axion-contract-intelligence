@@ -167,14 +167,24 @@ export interface ScheduleComparisonStore {
   writeAudit(entry: AuditEntry): Promise<void>;
 }
 
+/** Só ALERTAS DE AUSÊNCIA são produzidos aqui; divergências são classificadas pelo motor (comparações/abas), nunca por este módulo. */
+export type AbsenceAlertKind = "MISSING_WEEKLY_SCHEDULE" | "MISSING_S_CURVE" | "MISSING_WEEKLY_REPORT_WORKBOOK";
+
 export interface AbsenceAlertRecord {
   projectId: string;
   configId: string;
-  kind: "MISSING_WEEKLY_SCHEDULE" | "MISSING_S_CURVE" | "S_CURVE_MPP_DIVERGENCE";
+  kind: AbsenceAlertKind;
   weekStart: string;
   deadlineAt: string;
   recipientUserIds: string[];
   detail: string;
+}
+
+export interface OpenAbsenceAlert {
+  id: string;
+  projectId: string;
+  kind: AbsenceAlertKind;
+  weekStart: string;
 }
 
 export interface AbsenceAlertStore {
@@ -182,8 +192,19 @@ export interface AbsenceAlertStore {
   hasReceivedScheduleForWeek(projectId: string, weekStart: string): Promise<boolean>;
   /** true quando existe aba Curva S (EXTRACTED / HUMAN_MAPPED / HUMAN_VALIDATED / PENDING_HUMAN_REVIEW) de uma planilha ligada a intake daquela semana. */
   hasSCurveForWeek(projectId: string, weekStart: string): Promise<boolean>;
+  /**
+   * true quando existe QUALQUER weekly_report_workbooks ligado a intake da
+   * semana — inclusive INVALID_FILE / FAILED / LEGACY_FORMAT_REVIEW_REQUIRED
+   * / PENDING_HUMAN_REVIEW: planilha inválida NÃO é planilha ausente (a
+   * invalidez tem seu próprio fluxo de revisão). Ausente = nenhum arquivo.
+   */
+  hasWorkbookForWeek?(projectId: string, weekStart: string): Promise<boolean>;
   /** Insere respeitando o UNIQUE (project_id, week_start, kind); devolve created=false quando já existia. */
   insertAlert(record: AbsenceAlertRecord): Promise<{ created: boolean; id: string | null }>;
+  /** Alertas de ausência ainda abertos (resolved_at IS NULL) do projeto. */
+  listOpenAbsenceAlerts?(projectId: string): Promise<OpenAbsenceAlert[]>;
+  /** Marca resolved_at (uma única vez) quando a evidência da semana passou a existir. */
+  resolveAbsenceAlert?(alertId: string, detail: string): Promise<boolean>;
   writeAudit(entry: AuditEntry): Promise<void>;
 }
 

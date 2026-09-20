@@ -19,26 +19,57 @@ import type { IngestionAlertSeverityMap, PilotReadinessBlocker, PilotReadinessIn
 
 export const REQUIRED_EXPLICIT_RULE_LEVELS: SlaRiskLevel[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
-export const INGESTION_ALERT_KINDS = [
-  "MISSING_WEEKLY_SCHEDULE",
-  "MISSING_WEEKLY_REPORT_WORKBOOK",
-  "MISSING_S_CURVE",
-  "S_CURVE_MPP_DIVERGENCE",
-  "BASELINE_SHEET_DIVERGENCE",
-] as const;
+// Dois grupos formalmente separados:
+//   A. ALERTAS DE AUSÊNCIA (weekly_schedule_ingestion_alerts) — não têm
+//      classificação própria; a severidade vem EXCLUSIVAMENTE do mapa do
+//      projeto (risk_alert_severity_map). Só os tipos efetivamente
+//      produzidos por create-absence-alerts.ts entram aqui.
+//   B. CLASSIFICADOS PELO MOTOR — comparações de cronograma e abas do
+//      relatório (dimensões S_CURVE_MPP_DIVERGENCE_PP,
+//      BASELINE_SHEET_DIVERGENCE_DAYS etc.): a severidade vem do motor
+//      (thresholds) e o mapa NUNCA a altera (nem rebaixa, nem eleva).
+//      Esses nomes ainda existem no CHECK de `kind` do banco, mas nenhum
+//      produtor cria alerta de ausência com eles — são reservados e não
+//      podem constar do mapa.
+export const ABSENCE_ALERT_KINDS = ["MISSING_WEEKLY_SCHEDULE", "MISSING_WEEKLY_REPORT_WORKBOOK", "MISSING_S_CURVE"] as const;
+export const ENGINE_CLASSIFIED_KINDS = ["S_CURVE_MPP_DIVERGENCE", "BASELINE_SHEET_DIVERGENCE"] as const;
+export type AbsenceAlertKind = (typeof ABSENCE_ALERT_KINDS)[number];
+/** @deprecated compatibilidade — o readiness exige apenas ABSENCE_ALERT_KINDS. */
+export const INGESTION_ALERT_KINDS = ABSENCE_ALERT_KINDS;
+
+const VALID_LEVELS: readonly string[] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
 /** Sugestão (NÃO ativa): só vira regra quando gravada em risk_alert_severity_map. */
-export const SUGGESTED_INGESTION_ALERT_SEVERITY: Required<IngestionAlertSeverityMap> = {
+export const SUGGESTED_INGESTION_ALERT_SEVERITY: Record<AbsenceAlertKind, SlaRiskLevel> = {
   MISSING_WEEKLY_SCHEDULE: "HIGH",
   MISSING_WEEKLY_REPORT_WORKBOOK: "HIGH",
   MISSING_S_CURVE: "MEDIUM",
-  S_CURVE_MPP_DIVERGENCE: "MEDIUM",
-  BASELINE_SHEET_DIVERGENCE: "MEDIUM",
 };
 
+export type SeverityMapProblem =
+  | { kind: string; problem: "MISSING" }
+  | { kind: string; problem: "INVALID_LEVEL" }
+  | { kind: string; problem: "ENGINE_CLASSIFIED_NOT_ALLOWED" }
+  | { kind: string; problem: "UNKNOWN_KIND" };
+
+/** Valida o mapa: todos os tipos de ausência produzidos, níveis válidos, nenhuma entrada para tipos do motor ou desconhecidos. */
+export function validateSeverityMap(map: IngestionAlertSeverityMap | null): SeverityMapProblem[] {
+  const problems: SeverityMapProblem[] = [];
+  if (!map) return ABSENCE_ALERT_KINDS.map((kind) => ({ kind, problem: "MISSING" as const }));
+  for (const kind of ABSENCE_ALERT_KINDS) {
+    const level = map[kind];
+    if (level === undefined || level === null) problems.push({ kind, problem: "MISSING" });
+    else if (!VALID_LEVELS.includes(level)) problems.push({ kind, problem: "INVALID_LEVEL" });
+  }
+  for (const kind of Object.keys(map)) {
+    if ((ENGINE_CLASSIFIED_KINDS as readonly string[]).includes(kind)) problems.push({ kind, problem: "ENGINE_CLASSIFIED_NOT_ALLOWED" });
+    else if (!(ABSENCE_ALERT_KINDS as readonly string[]).includes(kind)) problems.push({ kind, problem: "UNKNOWN_KIND" });
+  }
+  return problems;
+}
+
 export function isSeverityMapComplete(map: IngestionAlertSeverityMap | null): boolean {
-  if (!map) return false;
-  return INGESTION_ALERT_KINDS.every((kind) => ["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(map[kind] ?? ""));
+  return validateSeverityMap(map).length === 0;
 }
 
 export function evaluatePilotReadiness(input: PilotReadinessInput): { ready: boolean; blockers: PilotReadinessBlocker[] } {

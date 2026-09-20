@@ -9,7 +9,7 @@ import "server-only";
 
 import { createSupabaseServerClient } from "@axion/db/server";
 
-import { membershipAreaLabels, slaEscalationLevelLabels } from "@/lib/labels";
+import { membershipAreaLabels, slaEscalationLevelLabels, slaTopLevelReachedLabel } from "@/lib/labels";
 import { getSlaAreaResponsibles, getSlaMatrixRules, getSlaProjectSettings } from "@/lib/sla/sla-actions-data";
 import { computeEscalation } from "@/lib/sla/compute-escalation";
 import { resolveMatrixPolicy, type MatrixPolicy } from "@/lib/sla/resolve-matrix-policy";
@@ -157,7 +157,7 @@ export async function getAlertDetailView(projectId: string, caseId: string, opti
     status: row.status,
     currentLevel,
     currentLevelLabel: slaEscalationLevelLabels[currentLevel as keyof typeof slaEscalationLevelLabels] ?? currentLevel,
-    nextLevelLabel: next ? slaEscalationLevelLabels[next] : "Nível máximo (TOP_LEVEL_REACHED)",
+    nextLevelLabel: next ? slaEscalationLevelLabels[next] : slaTopLevelReachedLabel,
     topLevelReachedAt: row.top_level_reached_at ?? null,
     currentResponsible: { userId: row.current_responsible_user_id ?? null, name: nameOf(row.current_responsible_user_id) },
     previousResponsible: { userId: row.previous_responsible_user_id ?? null, name: nameOf(row.previous_responsible_user_id) },
