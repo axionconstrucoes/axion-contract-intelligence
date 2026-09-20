@@ -64,7 +64,7 @@ if (!isWeeklyReportsEnabled()) {
 
 const { processWeeklyScheduleEmailCandidate } = await import("../apps/web/lib/schedule/weekly-ingestion/ingest-weekly-schedule-email");
 const { prepareScheduleComparisons } = await import("../apps/web/lib/schedule/weekly-ingestion/prepare-schedule-comparisons");
-const { createWeeklyAbsenceAlert, createWeeklySCurveAbsenceAlert } = await import("../apps/web/lib/schedule/weekly-ingestion/create-absence-alerts");
+const { createWeeklyAbsenceAlert, createWeeklySCurveAbsenceAlert, createWeeklyWorkbookAbsenceAlert, resolveAbsenceAlertsWithEvidence } = await import("../apps/web/lib/schedule/weekly-ingestion/create-absence-alerts");
 const { promoteReviewedIntake } = await import("../apps/web/lib/schedule/weekly-ingestion/promote-reviewed-intake");
 const { classifySyncedEmails } = await import("../apps/web/lib/email/registry/classify-synced-emails");
 const { processWeeklyReportWorkbooks } = await import("../apps/web/lib/schedule/weekly-report/process-weekly-report-workbooks");
@@ -338,6 +338,12 @@ if (phases.has("alerts") && apply) {
     console.log(`Projeto ${config.projectId}: semana ${outcome.weekStart} => cronograma ${outcome.result}`);
     const sCurve = await createWeeklySCurveAbsenceAlert(alertStore, config, new Date());
     summary.alerts[`S_CURVE_${sCurve.result}`] = (summary.alerts[`S_CURVE_${sCurve.result}`] ?? 0) + 1;
+    // Planilha do relatório semanal ausente (mesmas garantias; inválida ≠ ausente).
+    const workbook = await createWeeklyWorkbookAbsenceAlert(alertStore, config, new Date());
+    summary.alerts[`WORKBOOK_${workbook.result}`] = (summary.alerts[`WORKBOOK_${workbook.result}`] ?? 0) + 1;
+    // Chegada posterior da evidência resolve os alertas de ausência abertos (encerra o caso de risco).
+    const resolution = await resolveAbsenceAlertsWithEvidence(alertStore, config.projectId);
+    summary.alerts.RESOLVED_BY_EVIDENCE = (summary.alerts.RESOLVED_BY_EVIDENCE ?? 0) + resolution.resolved;
     console.log(`Projeto ${config.projectId}: semana ${sCurve.weekStart} => Curva S ${sCurve.result}`);
   }
 }

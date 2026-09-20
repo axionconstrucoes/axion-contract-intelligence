@@ -25,6 +25,7 @@ import { isMppAttachment } from "./evaluate-weekly-schedule-email";
 import type {
   AbsenceAlertRecord,
   AbsenceAlertStore,
+  OpenAbsenceAlert,
   AuditEntry,
   ComparisonRecord,
   CreateScheduleDocumentVersionInput,
@@ -680,6 +681,44 @@ export function createSupabaseAbsenceAlertStore(supabase: SupabaseClient): Absen
         .in("status", ["EXTRACTED", "HUMAN_MAPPED", "HUMAN_VALIDATED", "PENDING_HUMAN_REVIEW"]);
       if (error) fail("Falha ao verificar aba Curva S da semana", error);
       return (count ?? 0) > 0;
+    },
+
+    async hasWorkbookForWeek(projectId, weekStart) {
+      const { data: intakes, error: intakesError } = await supabase
+        .from("weekly_schedule_email_intakes")
+        .select("id")
+        .eq("project_id", projectId)
+        .eq("week_start", weekStart)
+        .in("status", RECEIVED_STATUSES);
+      if (intakesError) fail("Falha ao listar intakes da semana", intakesError);
+      const ids = (intakes ?? []).map((row) => row.id as string);
+      if (ids.length === 0) return false;
+      // Qualquer status conta como "recebida" (inválida ≠ ausente).
+      const { count, error } = await supabase.from("weekly_report_workbooks").select("id", { count: "exact", head: true }).in("intake_id", ids);
+      if (error) fail("Falha ao verificar planilha da semana", error);
+      return (count ?? 0) > 0;
+    },
+
+    async listOpenAbsenceAlerts(projectId) {
+      const { data, error } = await supabase
+        .from("weekly_schedule_ingestion_alerts")
+        .select("id,project_id,kind,week_start")
+        .eq("project_id", projectId)
+        .is("resolved_at", null)
+        .in("kind", ["MISSING_WEEKLY_SCHEDULE", "MISSING_S_CURVE", "MISSING_WEEKLY_REPORT_WORKBOOK"]);
+      if (error) fail("Falha ao listar alertas de ausência abertos", error);
+      return (data ?? []).map((row) => ({ id: row.id as string, projectId: row.project_id as string, kind: row.kind as OpenAbsenceAlert["kind"], weekStart: row.week_start as string }));
+    },
+
+    async resolveAbsenceAlert(alertId, detail) {
+      const { data, error } = await supabase
+        .from("weekly_schedule_ingestion_alerts")
+        .update({ resolved_at: new Date().toISOString(), detail })
+        .eq("id", alertId)
+        .is("resolved_at", null)
+        .select("id");
+      if (error) fail("Falha ao resolver alerta de ausência", error);
+      return (data ?? []).length > 0;
     },
 
     async insertAlert(record: AbsenceAlertRecord) {
