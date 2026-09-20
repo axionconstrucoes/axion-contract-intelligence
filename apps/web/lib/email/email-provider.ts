@@ -31,7 +31,24 @@ export interface SendEmailInput {
   // quando `html` está ausente. Nenhum caller existente precisa mudar.
   inlineImages?: InlineImageAttachment[];
   replyTo?: string;
+  // Contexto que AUTORIZA um Reply-To: só mensagens de uma conversa de
+  // alerta de risco (outbox + conversa válidas) podem pedir Reply-To, e
+  // mesmo assim o guard do piloto valida formato/caixa/domínio/token
+  // (lib/email/pilot-outbound-guard.ts: resolveGuardedReplyTo). Sem este
+  // contexto, qualquer Reply-To é removido em modo piloto.
+  replyToContext?: AlertReplyToContext;
+  // Continuidade de thread (respostas do ACC dentro da mesma conversa de
+  // alerta): In-Reply-To / References. Nunca destinatários — o guard do
+  // piloto não precisa tocá-los.
+  inReplyTo?: string;
+  references?: string[];
   correlationId: string;
+}
+
+export interface AlertReplyToContext {
+  kind: "RISK_ALERT_CONVERSATION";
+  outboxId: string;
+  conversationId: string;
 }
 
 // Resultado normalizado — nunca expõe a resposta raw do provider ao domínio.

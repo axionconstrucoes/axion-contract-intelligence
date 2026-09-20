@@ -2,10 +2,13 @@ import { notFound } from "next/navigation";
 
 import { SlaAreaResponsiblesForm } from "@/components/sla/sla-area-responsibles-form";
 import { SlaMatrixConfigForm } from "@/components/sla/sla-matrix-config-form";
+import { PilotRiskAlertsPanel } from "@/components/sla/pilot-risk-alerts-panel";
 import { SlaProjectSettingsForm } from "@/components/sla/sla-project-settings-form";
 import { FeatureInfo } from "@/components/shared/feature-info";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
+import { isWeeklyReportsEnabled } from "@/lib/feature-flags/weekly-reports";
+import { getPilotRiskAlertsView } from "@/lib/risk-alerts/pilot-risk-alerts-view-data";
 import { getProjectMemberInvitations, getProjectMembers } from "@/lib/data";
 import { membershipAreaLabels, slaAreaLabels } from "@/lib/labels";
 import { formatInvitationSelection, formatMemberSelection } from "@/lib/sla/responsible-selection";
@@ -55,6 +58,9 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
   ].sort((a, b) => a.label.localeCompare(b.label, "pt-BR"));
   const responsiblesByArea = new Map(areaResponsibles.map((r) => [r.area, r]));
   const businessHoursConfig = resolveBusinessHoursConfig(projectSettings);
+  // Alertas de risco do piloto: só com ACC_WEEKLY_REPORTS_ENABLED (tabelas
+  // novas); somente leitura — prazos/níveis continuam editáveis apenas na Matriz.
+  const pilotRiskAlerts = isWeeklyReportsEnabled() ? await getPilotRiskAlertsView(projectId) : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -156,6 +162,8 @@ export default async function SlaConfigurationPage({ params }: { params: Promise
           })}
         </CardContent>
       </Card>
+
+      {pilotRiskAlerts ? <PilotRiskAlertsPanel view={pilotRiskAlerts} /> : null}
     </div>
   );
 }

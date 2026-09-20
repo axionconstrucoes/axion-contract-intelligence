@@ -88,9 +88,12 @@ export async function sendSlaEscalationEmail(
 
   const { error: auditError } = await admin.from("audit_log_entries").insert({
     project_id: input.projectId,
+    // audit_log_entries exige actor_label IS NULL para SYSTEM (constraint de
+    // 20260819195713; mesma correção aplicada às triggers em 20260822060313).
+    // Um label não nulo faria o INSERT falhar DEPOIS do e-mail já enviado.
     actor_type: "SYSTEM",
     actor_user_id: null,
-    actor_label: "sla-engine",
+    actor_label: null,
     action: "ACTION_ESCALATED",
     entity_type: "SLA_ACTION",
     entity_id: input.actionId,

@@ -10,11 +10,21 @@ name: Weekly Schedule Email Ingestion
 # Usa as MESMAS credenciais somente-leitura do Gmail Inbound Sync —
 # nenhum escopo/segredo novo. Nunca monitora caixas externas do cliente.
 #
-# TRAVA DE DEPLOYMENT: o job só executa quando a variável de repositório
+# TRAVA DE DEPLOYMENT: os jobs só executam quando a variável de repositório
 # ACC_WEEKLY_REPORTS_ENABLED (Settings > Variables, não é segredo) for
 # exatamente "true" — e o próprio script reaplica a mesma verificação.
 # Enquanto a migration 20260920120000 não for aplicada no banco remoto,
 # a variável fica ausente e o workflow não faz nenhuma consulta.
+#
+# ALERTAS DE RISCO (job risk-alerts): o ciclo horário de alertas
+# (/api/cron/risk-alerts, worker Vercel) é disparado DAQUI — o plano
+# Vercel atual admite só 2 crons com frequência diária, então a rota não
+# está em vercel.json. A chamada só acontece com a flag "true",
+# ACC_APP_BASE_URL (variável) e CRON_SECRET (segredo) presentes; o
+# segredo vai exclusivamente no header Authorization (nunca URL, log ou
+# output). Nenhuma regra de horário local aqui: a janela do consolidado
+# (quarta 07:00 America/Sao_Paulo) e a idempotência são decididas pelo
+# motor da aplicação a cada chamada.
 
 on:
   schedule:
@@ -26,7 +36,7 @@ on:
         required: false
         default: ""
       phase:
-        description: "Fase: all | intake | compare | alerts"
+        description: "Fase: all | intake | promote | compare | classify | workbook | alerts | replies"
         required: false
         default: "all"
 
@@ -70,3 +80,40 @@ jobs:
           GOOGLE_GMAIL_INBOUND_CLIENT_SECRET: ${{ secrets.GOOGLE_GMAIL_INBOUND_CLIENT_SECRET }}
           GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN: ${{ secrets.GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN }}
           GOOGLE_GMAIL_INBOUND_MAILBOX: ${{ secrets.GOOGLE_GMAIL_INBOUND_MAILBOX }}
+
+  risk-alerts:
+    # Só agendado ou manual com fase "all" — nunca em execuções manuais de
+    # uma fase específica da ingestão.
+    if: ${{ !cancelled() && vars.ACC_WEEKLY_REPORTS_ENABLED == 'true' && (github.event_name == 'schedule' || (github.event.inputs.phase || 'all') == 'all') }}
+    needs: ingest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger risk alert cycle
+        shell: bash
+        env:
+          ACC_WEEKLY_REPORTS_ENABLED: ${{ vars.ACC_WEEKLY_REPORTS_ENABLED }}
+          ACC_APP_BASE_URL: ${{ vars.ACC_APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          # Validação sem imprimir valores: qualquer ausência falha antes da chamada.
+          if [ "${ACC_WEEKLY_REPORTS_ENABLED:-}" != "true" ]; then
+            echo "::notice::ACC_WEEKLY_REPORTS_ENABLED não é 'true' — ciclo de alertas não chamado."
+            exit 0
+          fi
+          if [ -z "${ACC_APP_BASE_URL:-}" ]; then
+            echo "::error::Variável ACC_APP_BASE_URL ausente — ciclo de alertas não chamado."
+            exit 1
+          fi
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::Segredo CRON_SECRET ausente — ciclo de alertas não chamado."
+            exit 1
+          fi
+          case "${ACC_APP_BASE_URL}" in
+            https://*) ;;
+            *) echo "::error::ACC_APP_BASE_URL precisa começar com https://"; exit 1 ;;
+          esac
+          status=$(curl --silent --show-error --fail-with-body             --max-time 120 --retry 2 --retry-delay 5             --output /dev/null --write-out "%{http_code}"             -H "Authorization: Bearer ${CRON_SECRET}"             "${ACC_APP_BASE_URL%/}/api/cron/risk-alerts")
+          echo "Ciclo de alertas de risco: HTTP ${status}"

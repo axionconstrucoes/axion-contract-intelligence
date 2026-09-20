@@ -104,6 +104,12 @@ export function buildMimeMessage(input: SendEmailInput, from: string, messageIdH
   if (input.replyTo) {
     headers.push(`Reply-To: ${sanitizeHeaderValue(input.replyTo)}`);
   }
+  if (input.inReplyTo) {
+    headers.push(`In-Reply-To: ${sanitizeHeaderValue(input.inReplyTo)}`);
+  }
+  if (input.references && input.references.length > 0) {
+    headers.push(`References: ${sanitizeHeaderValue(input.references.join(" "))}`);
+  }
 
   if (!input.html) {
     headers.push("Content-Type: text/plain; charset=UTF-8");

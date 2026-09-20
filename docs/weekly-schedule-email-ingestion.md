@@ -371,8 +371,302 @@ pelo worker.
 - Não afirmamos que todas as caixas AXION são monitoradas: só as
   configuradas em `project_email_ingestion_mailboxes`.
 
+## 9. Alertas de risco por e-mail (piloto) — Matriz como fonte única
+
+Migration `20260921090000_pilot_risk_alert_delivery.sql` (aditiva) +
+`apps/web/lib/risk-alerts/**`, `apps/web/app/api/cron/risk-alerts`
+(rota protegida, disparada de hora em hora pelo workflow GitHub — ver
+9.6), painel somente leitura em
+`/[projectId]/acoes/configuracao`. Tudo atrás de
+`ACC_WEEKLY_REPORTS_ENABLED` **e** de `risk_alerts_enabled` por projeto
+(default `false`).
+
+**Reutilizado, nunca duplicado**: `sla_matrix_rules` /
+`sla_area_responsibles` / `sla_project_settings` (prazos, unidades,
+níveis, e-mail, confirmação, justificativa, timezone/expediente),
+`sla_actions` + `sla_action_escalations` (assumir/tratar/concluir,
+escalonamento, botões de e-mail acionável `SLA_ACTION`), provider de
+e-mail (Gmail/Fake) com o guard global do piloto, `emails` +
+`audit_log_entries`.
+
+**Helper central** `apps/web/lib/sla/resolve-matrix-policy.ts`
+(`resolveMatrixPolicy`): por (projeto, área, risco) devolve unidade,
+prazos para assumir/responder/concluir, intervalos Nível 2/Nível 3,
+usuários de Nível 1 (responsável + corresponsável), Nível 2
+(`escalation_1_user_id`) e Nível 3 (`board_user_id`), e-mail habilitado,
+confirmação obrigatória, justificativa obrigatória, timezone/expediente.
+Sem Matriz suficiente ⇒ `CONFIGURATION_REVIEW_REQUIRED` (lista o que
+falta) ⇒ **nenhum envio**. Unidades suportadas: horas úteis, horas
+corridas, dias úteis, dias corridos (`addTimeUnits`, calendário sem
+feriados — limitação já documentada em `docs/sla-escalation.md`).
+
+**Fontes de risco** (`collect-risk-cases.ts`): `schedule_version_comparisons`
+(só a mais recente por tipo fica aberta), `weekly_report_sheets` (mais
+recente por categoria; FINANCEIRO → área FINANCEIRO, SSMA → ESG_SSMA,
+demais → PLANEJAMENTO), `weekly_schedule_ingestion_alerts` (severidade
+por tipo: `MISSING_WEEKLY_SCHEDULE`/`MISSING_WEEKLY_REPORT_WORKBOOK` =
+ALTO; `MISSING_S_CURVE`/divergências = MÉDIO — mapeamento explícito em
+`INGESTION_ALERT_RISK_LEVEL`). Cada caso tem `fingerprint` (nível +
+motivos + métricas): mudança ⇒ "risco alterado".
+
+**Política de entrega** (`plan-risk-alerts.ts`, puro/determinístico):
+
+| Risco | Entrega | Escalonamento |
+| --- | --- | --- |
+| BAIXO / MÉDIO | nunca individual; **um** consolidado por destinatário, quarta-feira 07:00 no timezone do projeto (janela decidida a cada hora pelo ciclo, chave = data local da quarta) | — |
+| ALTO / CRÍTICO | imediato ao surgir, ao subir para ALTO/CRÍTICO ou ao alterar; cria `sla_actions` (SYSTEM, origem OTHER, responsável = Nível 1, prazos da Matriz) | `computeEscalation` (motor existente): prazo de assumir vencido ⇒ Nível 2; +`escalation_2_after` ⇒ Nível 3 (`resolveEscalationDestination`, Nível 2 ausente ⇒ Nível 3); aplicado via `escalate_sla_action_system` (service_role); para quando assumida/concluída conforme regra existente |
+
+Consolidado: riscos novos/alterados desde o último consolidado + ainda
+abertos + encerrados desde o último (uma vez); encerrados sem mudança
+não repetem; seções separadas Médio/Baixo; ordem criticidade → prazo →
+título.
+
+**Allowlist do piloto** (`pilot_recipient_allowlist_user_ids`, por
+user_id, configurada por
+`scripts/configure-weekly-schedule-ingestion.mjs --pilot-recipients=`):
+somente esses usuários recebem; qualquer outro indicado pela Matriz é
+gravado na outbox como `SUPPRESSED / PILOT_RECIPIENT_SUPPRESSED` e
+auditado; allowlist vazia ⇒ `PILOT_ALLOWLIST_MISSING` (nenhum envio).
+Ainda por destinatário: membership ACTIVE, e-mail cadastrado e do
+domínio corporativo (`sender_domain`). Nunca To/Cc/Bcc adicionais, nunca
+listas. Remover após o piloto: `--pilot-recipients=` + retirar a checagem
+em `plan-risk-alerts.ts`.
+
+**Outbox** `risk_alert_outbox`: projeto, caso, ação SLA, risco, tipo
+(IMMEDIATE/ESCALATION/DIGEST), nível, destinatário (user_id + e-mail
+resolvido no envio), `scheduled_for`, `sent_at`, provider id, status
+(PENDING/SENT/FAILED/SUPPRESSED/SKIPPED), tentativas (máx. 3), erro
+sanitizado, janela do consolidado, `idempotency_key` **única** =
+caso × estado (fingerprint) × nível × destinatário × janela, snapshot da
+regra da Matriz e resumo sanitizado. Casos em `risk_alert_cases`.
+RLS: SELECT por membership; sem anon/PUBLIC; escrita só pelo worker.
+
+**Condições para envio real (todas)**: `ACC_WEEKLY_REPORTS_ENABLED=true`
+· `enabled` e `risk_alerts_enabled` do projeto · `AXION_EMAIL_PROVIDER=gmail`
+configurado · allowlist válida · Matriz suficiente · usuário ACTIVE ·
+e-mail corporativo. Qualquer falta ⇒ não envia e registra o motivo. O
+guard global do piloto (`pilot-outbound-guard.ts`) continua sendo a
+segunda camada nos providers.
+
+**Worker**: `GET /api/cron/risk-alerts` (Bearer `CRON_SECRET`, só no
+header Authorization, comparação em tempo constante; query string nunca
+autentica), chamado de hora em hora pelo job `risk-alerts` do workflow
+GitHub `weekly-schedule-email-ingestion.yml` (cron `20 * * * *` UTC —
+**não** há entrada em `vercel.json`: o plano Vercel atual admite só 2
+crons diários, e os 2 existentes foram preservados). Cada execução
+avalia ALTO/CRÍTICO e escalonamentos e decide localmente se a janela do
+consolidado (quarta 07:00) está aberta — nunca fixa 10:00 UTC; nenhuma
+regra de horário local fica no YAML. `?dryRun=1` = só plano, nenhuma
+escrita/envio; `?projectId=` restringe. Concorrência: 409 para chamada
+simultânea na mesma instância + idempotência por chave + `for update`
+na RPC de escalonamento + `concurrency` do workflow. Flag desligada ⇒
+204 sem consulta.
+
+**Auditoria** (`audit_log_entries`, SYSTEM): regra da Matriz usada
+(snapshot na outbox), destinatários calculados/permitidos/suprimidos,
+agendamento, envio (provider id), escalonamento e vencimento de prazo,
+falha e retry, configuração insuficiente; ciência/assunção/conclusão
+continuam nos eventos existentes de `sla_actions`.
+
+**Conteúdo**: projeto, grau, origem (WNN/aba/tipo + área), resumo,
+impacto, prazo aplicável, nível atual/anterior, responsável, data/hora,
+recomendação, exigências da Matriz (confirmação/justificativa), links
+seguros para rotas do projeto (sem token/URL assinada) e botões
+acionáveis existentes. Sem anexos, sem conteúdo de outro projeto.
+
+### 9.1 Prontidão para envio real (piloto)
+
+`pilot-readiness.ts`: envio REAL só quando **todas** valem — feature
+ligada; projeto `enabled` + `risk_alerts_enabled`; provider Gmail
+configurado; **regras explícitas** salvas em `sla_matrix_rules` para
+BAIXO/MÉDIO/ALTO/CRÍTICO (defaults institucionais **não** bastam;
+`usingDefaultRule` só informa em simulação); Matriz sem
+`CONFIGURATION_REVIEW_REQUIRED` (níveis faltantes listados:
+`LEVEL_1_MISSING`, `LEVEL_2_MISSING` (informativo), `LEVEL_3_MISSING`,
+`LEGACY_LEVEL_2_AMBIGUOUS` — nunca inventados/movidos); allowlist
+válida; **projeto piloto confirmado por humano**
+(`pilot_project_confirmed_at/_by`, via
+`--confirm-pilot-project-by=<uuid>`; candidatos "[DEV]"/PRE nunca
+escolhidos automaticamente); mailbox remetente configurada; severidade
+dos alertas de ausência configurada **por projeto**
+(`risk_alert_severity_map`, `--severity-map=`; sem configuração ⇒
+`REVIEW_REQUIRED`; sugestão não ativa em `SUGGESTED_INGESTION_ALERT_SEVERITY`);
+**caixa inbound oficial configurada** (`GOOGLE_GMAIL_INBOUND_MAILBOX`
+também no ambiente do worker Vercel — a resposta pelo corpo do e-mail é
+requisito obrigatório; sem ela ⇒ `REPLY_MAILBOX_NOT_CONFIGURED`).
+Qualquer bloqueio ⇒ entradas `SUPPRESSED` com o motivo e auditoria
+`RISK_ALERT_NOT_READY_FOR_REAL_SEND`.
+
+### 9.2 Guard global do piloto
+
+`pilot-outbound-guard.ts` mantém a allowlist fixa (4 participantes) e
+ganha `ACC_PILOT_ADDITIONAL_RECIPIENTS` (env, validada: só e-mails
+corporativos válidos; inválidos ignorados) para admitir, quando
+configurado, um participante adicional (ex.: Ricardo Martins) sem
+espalhar o endereço no repositório. A allowlist **por user_id do
+projeto** continua sendo a restrição efetiva: pessoas permitidas
+globalmente mas fora dela são `PILOT_RECIPIENT_SUPPRESSED`; ENVIAR P/ a
+terceiro é exceção específica (`pilot_exception`) que não amplia a
+allowlist automática.
+
+### 9.3 Fonte única de idempotência (motor × botão manual × ações)
+
+Toda entrega passa por `risk_alert_outbox` com `origin`
+(AUTOMATIC / MANUAL / EMAIL_REPLY / WEB_ACTION) e **a mesma
+`idempotency_key`** `sourceType:sourceId:ESCALATION:nível:usuário`:
+o motor horário, o botão "Processar escalonamentos" (agora
+`enqueue_manual_escalation_email`, para ações vinculadas a um alerta) e
+o escalonamento imediato por ação humana nunca geram segundo e-mail.
+`sla_action_escalations` continua registrando o escalonamento (lógica
+compartilhada `apply_sla_action_escalation_internal`).
+`send-sla-escalation-email.ts` foi corrigido (`actor_label: null` para
+SYSTEM — a constraint de `audit_log_entries` falhava após o envio).
+
+### 9.4 Resposta pelo corpo do e-mail
+
+Cada alerta tem thread própria: `alert_email_conversations` (hash do
+token do Reply-To, Message-ID raiz, thread do provider) e
+`alert_email_messages` (enviadas/recebidas; corpo só aqui). Cabeçalhos:
+Message-ID, Reply-To opaco `mailbox+alerta-<token>@domínio` (token
+aleatório, persistido só como hash), In-Reply-To/References na thread,
+código visível `[ACC-ALERTA:XXXXXXXX]` no assunto. Captura: fase
+`replies` do worker GitHub (threads dos alertas, `format=full`, texto
+novo × citado × assinatura). Correlação nesta ordem: In-Reply-To →
+References → Reply-To opaco → código visível; sem identificação
+inequívoca ⇒ `PENDING_HUMAN_REVIEW`. Ignorados: autorespostas, bounces/
+DSN, mensagens do próprio ACC, loops. Autorização: profile + membership
+ACTIVE + e-mail corporativo + destinatário original/encaminhado +
+allowlist ou exceção manual + Authentication-Results (falha ⇒ rejeita;
+ausente ⇒ aceita com nota); não autorizada ⇒ `UNAUTHORIZED_REPLY`, sem
+alterar o alerta. Classificação determinística (ACKNOWLEDGEMENT,
+JUSTIFICATION, DECISION, QUESTION_TO_EXPERT, REQUEST_MORE_INFORMATION,
+DISAGREEMENT, STATUS_UPDATE, UNCLASSIFIED) com confiança; texto original
+sempre preservado; ambígua ⇒ `REVIEW_REQUIRED`; instruções no texto
+nunca viram ação. Só STATUS_UPDATE/ACKNOWLEDGEMENT/QUESTION inequívocos
+viram ação formal (respectivamente TOMANDO PROVIDÊNCIAS / OUTRO /
+ESPECIALISTA); LOW/MEDIUM só registram.
+
+**Reply-To (caminho principal).** Formato único
+`<caixa-acc>+alerta-<token-opaco>@<domínio-configurado>` (ex.:
+`acc+alerta-…@axion.com.br`), onde `<caixa-acc>` é a caixa inbound
+OFICIAL monitorada pelo worker (`GOOGLE_GMAIL_INBOUND_MAILBOX`) — nunca a
+caixa pessoal do remetente. O guard global (`resolveGuardedReplyTo`)
+preserva o Reply-To **somente** quando a mensagem declara
+`replyToContext` de uma conversa de alerta (outbox + conversa válidas) e
+o endereço passa em todas as validações (sem CR/LF, sem caracteres de
+injeção, caixa e domínio iguais aos configurados, token opaco 16–64
+base64url que não é um UUID); qualquer Reply-To externo/arbitrário é
+removido e o motivo registrado (sem endereço nem token no log). Em modo
+produção, fluxos legados sem `replyToContext` seguem intocados. O
+destinatário efetivo continua sendo decidido pela allowlist do guard — o
+Reply-To nunca redireciona a mensagem a uma pessoa. Fallback quando
+removido: In-Reply-To / References / código visível. O worker busca as
+respostas (a) por `to:<caixa>+alerta-` e resolve a conversa pelo **hash**
+do token; (b) pelas threads dos alertas.
+
+**Pergunta ao Expert por e-mail.** Roteamento `routeExpert`: escolha
+explícita no dropdown → nome do Expert inequívoco no texto → tema único →
+mais de um tema ⇒ multi-Expert (ceo) → sem confiança ⇒
+`EXPERT_SELECTION_REVIEW_REQUIRED` (revisão humana). Nunca cai em
+Planejamento por falta de classificação. A decisão (fonte, confiança,
+temas, sugerido × confirmado, `humanOverride`) fica em `expert_routing`
+na mensagem e no evento `EXPERT_CONSULTATION`.
+
+**Retenção e privacidade.** `body_original`/`body_clean` existem apenas em
+`alert_email_messages` (limite 100k caracteres, truncado com marcador;
+text/plain preferido, HTML só como fallback sem tags); nunca vão para
+logs, auditoria ou provider. Proposta de retenção (a decidir com o
+administrador; nada é apagado automaticamente — regra 9 do CLAUDE.md):
+manter enquanto o alerta estiver aberto e por 24 meses após `RESOLVED`,
+depois anonimizar o corpo mantendo cabeçalhos/classificação para trilha.
+
+### 9.5 Ações formais, máquina de estados e escalonamento imediato
+
+Página autenticada `/[projectId]/alertas/[caseId]` com
+[RESOLVIDO] [TOMANDO PROVIDÊNCIAS] [ENVIAR P/] [ESPECIALISTA] [OUTRO];
+links do e-mail (`?acao=&t=<token curto/expirável, só hash>`) apenas
+abrem a página e pré-selecionam — **GET nunca altera estado**; a ação é
+POST (server action) → máquina de estados pura
+(`alert-state-machine.ts`) → RPC `record_risk_alert_action`
+(membership, estado esperado, idempotência por evento, um
+encaminhamento ativo, escalonamento via lógica interna, outbox).
+Estados: OPEN, ACKNOWLEDGED, IN_PROGRESS, FORWARDED,
+AWAITING_RECIPIENT_ACTION, RETURNED_TO_SENDER,
+EXPERT_CONSULTATION_PENDING, EXPERT_ANSWERED, RESOLUTION_PROPOSED,
+RESOLVED, REVIEW_REQUIRED, TOP_LEVEL_REACHED.
+
+- RESOLVIDO: confirmação explícita, justificativa (Matriz), evidência
+  (ALTO/CRÍTICO); ALTO/CRÍTICO com confirmação exigida ⇒
+  `RESOLUTION_PROPOSED` e só CONFIRMAR RESOLUÇÃO ⇒ `RESOLVED`; encerra
+  lembretes/escalonamentos futuros; **não escala**.
+- TOMANDO PROVIDÊNCIAS: `IN_PROGRESS`, responsável, providência,
+  previsão; alerta aberto.
+- ENVIAR P/: dropdown pesquisável (membros ACTIVE, e-mail corporativo,
+  área, papel, posição na Matriz); um único encaminhamento ativo; prazo
+  para assumir da Matriz (unidade/timezone/calendário útil); terceiro
+  fora da allowlist recebe só este alerta (`pilot_exception`); sem ação
+  até o prazo ⇒ `FORWARD_TIMEOUT` + `RETURNED_TO_SENDER` (prazos
+  originais preservados). Conta como ação: resposta, confirmação,
+  TOMANDO PROVIDÊNCIAS, RESOLVIDO, ESPECIALISTA, OUTRO; abrir/visualizar
+  não conta.
+- ESPECIALISTA: Expert cadastrado + pergunta obrigatória; escolha
+  explícita prevalece; sem escolha, roteamento por nome/tema
+  (prazo/MPP/Curva S/Histograma → planning-director, contrato/cláusula →
+  legal-consultant, financeiro → commercial-director, SSMA/ESG →
+  esg-director, multidisciplinar → ceo; incerto ⇒ revisão humana, nunca
+  Planejamento por default); o Expert só recomenda
+  (`requiresHumanReview`), responde na mesma thread, cita evidências e
+  confiança; nunca resolve.
+- OUTRO: texto obrigatório; nada resolve automaticamente.
+- **Regra única (HIGH/CRITICAL)**: TOMANDO PROVIDÊNCIAS, ENVIAR P/,
+  ESPECIALISTA e OUTRO escalam imediatamente pelo **nível atual do
+  alerta**: N1→N2, N2→N3, N3→`TOP_LEVEL_REACHED` (sem Nível 4; Diretoria
+  informada uma vez, sem e-mail duplicado). Ação e escalonamento são
+  eventos distintos, ambos auditados; idempotente por nível; respeita
+  Matriz e allowlist. LOW/MEDIUM nunca escalam por essas ações.
+
+### 9.6 Gatilho horário pelo GitHub Actions e configuração de ativação
+
+Job `risk-alerts` (`needs: ingest`, roda depois da captura de respostas):
+só quando `vars.ACC_WEEKLY_REPORTS_ENABLED == 'true'` e (agendado ou
+manual com fase `all`). Antes da chamada valida, **sem imprimir
+valores**, flag `true`, `ACC_APP_BASE_URL` não vazio (https) e
+`CRON_SECRET` não vazio — faltando algo, falha de forma sanitizada e não
+chama nada. Comando: `curl --silent --show-error --fail-with-body
+--max-time 120 --retry 2 --retry-delay 5 -H "Authorization: Bearer
+${CRON_SECRET}" "${ACC_APP_BASE_URL}/api/cron/risk-alerts"` — o segredo
+só no header (nunca URL, query string, echo, output, artifact ou log).
+A cada hora: flag `false`/ausente ⇒ não chama; ALTO/CRÍTICO ⇒
+processado na próxima execução horária; BAIXO/MÉDIO ⇒ o motor decide se
+é quarta ≥ 07:00 America/Sao_Paulo.
+
+**Antes da ativação (nada disso existe hoje; nenhum valor foi criado):**
+
+| Onde | Tipo | Nome | Valor |
+| --- | --- | --- | --- |
+| GitHub | Variable | `ACC_WEEKLY_REPORTS_ENABLED` | `true` |
+| GitHub | Variable | `ACC_APP_BASE_URL` | `https://acc.axion.com.br` |
+| GitHub | Secret | `CRON_SECRET` | mesmo valor configurado no Vercel |
+| Vercel | Env | `ACC_WEEKLY_REPORTS_ENABLED` | `true` |
+| Vercel | Env | `CRON_SECRET` | mesmo valor |
+| Vercel | Env | `GOOGLE_GMAIL_INBOUND_MAILBOX` | caixa inbound oficial |
+| Vercel | Env | `ACC_PILOT_ADDITIONAL_RECIPIENTS` | participante adicional do piloto |
+
+Além disso: migration `20260921090000` aplicada e validada, projeto
+piloto confirmado, Níveis 1 e 3 completos, regras explícitas salvas,
+severity map gravado. Manter a feature desligada até a validação completa.
+
 ## 8. Testes
 
+- `node scripts/test-pilot-risk-alert-audit.mjs` (auditoria final: Reply-To no guard,
+  roteamento temático dos Experts, delimitação da outbox, RPC/transições, RLS/ACL,
+  privacidade)
+- `node scripts/test-pilot-risk-alert-actions.mjs` (56 itens: resposta por e-mail,
+  ações formais, escalonamento imediato, segurança, pendências do piloto)
+- `node scripts/test-pilot-risk-alerts.mjs` (35 itens: Matriz como fonte, níveis,
+  unidades, digest quarta 07:00, imediato ALTO/CRÍTICO, escalonamento, allowlist,
+  supressão, outbox idempotente, retry, flag/projeto desligados, provider fake,
+  timezone, auditoria, RLS, conteúdo sem secrets, links)
 - `node scripts/test-weekly-reports-feature-flag.mjs` (flag ausente/false/true,
   gating de menu/aba/rotas/loaders/actions/scripts/workflow, páginas antigas)
 - `node scripts/test-weekly-schedule-email-ingestion.mjs` (24)

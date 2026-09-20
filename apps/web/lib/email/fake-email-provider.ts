@@ -17,15 +17,20 @@ export const FAKE_FORCED_FAILURE_RECIPIENT = "smoke-forced-failure@fake.axion.lo
 export interface FakeEmailProviderOptions {
   // Permite simular falha de envio em testes diretos, sem depender de rede.
   shouldFail?: (input: SendEmailInput) => boolean;
+  // Observa o input JÁ guardado (o que o provider real enviaria) — só para
+  // testes verificarem headers como Reply-To; nunca usado em produção.
+  onGuardedInput?: (input: SendEmailInput) => void;
 }
 
 // Nunca envia rede. IDs sintéticos derivados deterministicamente de
 // correlationId (nunca Math.random) para manter os testes reprodutíveis.
 export class FakeEmailProvider implements EmailProvider {
   private readonly shouldFail?: (input: SendEmailInput) => boolean;
+  private readonly onGuardedInput?: (input: SendEmailInput) => void;
 
   constructor(options: FakeEmailProviderOptions = {}) {
     this.shouldFail = options.shouldFail;
+    this.onGuardedInput = options.onGuardedInput;
   }
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
@@ -40,6 +45,7 @@ export class FakeEmailProvider implements EmailProvider {
     // falha simulada acima — mesma trava aplicada em GmailEmailProvider,
     // para que os testes exerçam exatamente a mesma transformação real.
     const guardedInput = applyPilotOutboundGuard(input);
+    this.onGuardedInput?.(guardedInput);
 
     const digest = createHash("sha256").update(guardedInput.correlationId).digest("hex");
 

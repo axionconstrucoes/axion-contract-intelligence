@@ -16,7 +16,17 @@
 //     [--deadline-weekday=5] [--deadline-time=18:00] [--timezone=America/Sao_Paulo] \
 //     [--attachment-pattern=<regex>] [--alert-recipients=<uuid>,<uuid>] \
 //     [--threshold=FINAL_DATE_SLIP_DAYS:3:7:15 ...] \
+//     [--risk-alerts=on|off] [--pilot-recipients=<uuid>,<uuid>] \
+//     [--severity-map=MISSING_WEEKLY_SCHEDULE:HIGH,...] [--confirm-pilot-project-by=<uuid>] \
 //     [--enable | --disable] --apply
+//
+// ALERTAS DE RISCO (piloto): --risk-alerts liga/desliga os e-mails de
+// alerta do projeto; --pilot-recipients define a allowlist POR user_id
+// (somente esses usuários podem receber; qualquer outro indicado pela
+// Matriz é registrado como PILOT_RECIPIENT_SUPPRESSED). Os user_ids são
+// validados contra project_memberships ACTIVE antes de gravar. Prazos e
+// níveis NÃO são configurados aqui: vêm da Matriz de responsabilidades e
+// prazos. Remover a allowlist após o piloto: --pilot-recipients= (vazio).
 //
 // ESCALÃO: não é configurado aqui. Quem está no 1º/2º escalão de
 // Planejamento vem exclusivamente da "Matriz de responsabilidades e
@@ -81,6 +91,33 @@ if (option("monitoring-start")) payload.monitoring_start_at = option("monitoring
 if (option("monitoring-end")) payload.monitoring_end_at = option("monitoring-end");
 if (args.includes("--enable")) payload.enabled = true;
 if (args.includes("--disable")) payload.enabled = false;
+if (option("risk-alerts") !== undefined) {
+  if (!["on", "off"].includes(option("risk-alerts"))) throw new Error("--risk-alerts deve ser on|off");
+  payload.risk_alerts_enabled = option("risk-alerts") === "on";
+}
+// Severidade dos alertas de ausência POR PROJETO (obrigatória para envio
+// real): --severity-map=MISSING_WEEKLY_SCHEDULE:HIGH,MISSING_S_CURVE:MEDIUM,...
+if (option("severity-map") !== undefined) {
+  const map = {};
+  for (const pair of list("severity-map") ?? []) {
+    const [kind, level] = pair.split(":");
+    if (!kind || !["LOW", "MEDIUM", "HIGH", "CRITICAL"].includes(level)) throw new Error(`--severity-map inválido: ${pair}`);
+    map[kind] = level;
+  }
+  payload.risk_alert_severity_map = Object.keys(map).length ? map : null;
+}
+// Confirmação HUMANA do projeto piloto real (nunca automática):
+// --confirm-pilot-project-by=<user_id do administrador que confirma>.
+if (option("confirm-pilot-project-by")) {
+  payload.pilot_project_confirmed_at = new Date().toISOString();
+  payload.pilot_project_confirmed_by_user_id = option("confirm-pilot-project-by");
+}
+const pilotRecipients = list("pilot-recipients");
+if (pilotRecipients !== undefined) {
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (pilotRecipients.some((id) => !UUID.test(id))) throw new Error("--pilot-recipients aceita somente user_ids (uuid), nunca e-mails");
+  payload.pilot_recipient_allowlist_user_ids = pilotRecipients.length ? pilotRecipients : null;
+}
 
 const thresholds = args
   .filter((arg) => arg.startsWith("--threshold="))
@@ -100,6 +137,19 @@ console.log("Config:", JSON.stringify(payload, null, 2));
 if (thresholds.length) console.log("Limites de risco:", JSON.stringify(thresholds));
 
 if (!apply) process.exit(0);
+
+// Allowlist do piloto: cada user_id precisa ter membership ACTIVE no projeto.
+if (payload.pilot_recipient_allowlist_user_ids) {
+  const { data: members, error: membersError } = await supabase
+    .from("project_memberships")
+    .select("user_id,status")
+    .eq("project_id", projectId)
+    .in("user_id", payload.pilot_recipient_allowlist_user_ids);
+  if (membersError) throw new Error(membersError.message);
+  const active = new Set((members ?? []).filter((m) => m.status === "ACTIVE").map((m) => m.user_id));
+  const invalid = payload.pilot_recipient_allowlist_user_ids.filter((id) => !active.has(id));
+  if (invalid.length) throw new Error(`Allowlist inválida — sem membership ACTIVE no projeto: ${invalid.join(", ")}`);
+}
 
 const { data: config, error: configError } = await supabase
   .from("project_weekly_schedule_ingestion_configs")
