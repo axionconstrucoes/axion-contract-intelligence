@@ -34,7 +34,18 @@ export function TrashDocumentControl({
 
   return (
     <details className="text-xs">
-      <summary className="inline-flex cursor-pointer list-none items-center rounded-md bg-red-600 px-2.5 py-1.5 font-medium text-white hover:bg-red-700 [&::-webkit-details-marker]:hidden">Enviar para a lixeira</summary>
+      <summary
+        title="Enviar para a lixeira"
+        aria-label="Enviar para a lixeira"
+        className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md bg-red-600 text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 [&::-webkit-details-marker]:hidden"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 fill-none stroke-current stroke-2">
+          <path d="M3 6h18" />
+          <path d="M8 6V4h8v2" />
+          <path d="M19 6l-1 14H6L5 6" />
+          <path d="M10 11v5M14 11v5" />
+        </svg>
+      </summary>
       <form action={formAction} className="mt-1.5 flex flex-col gap-1.5 rounded-md border bg-card p-2 text-card-foreground">
         <input type="hidden" name="projectId" value={projectId} />
         <input type="hidden" name="documentId" value={documentId} />
