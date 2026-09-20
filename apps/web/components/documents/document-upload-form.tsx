@@ -25,6 +25,7 @@ const DOCUMENT_KINDS = [
   ["RELATORIO_SEMANAL", "Relatório semanal"],
   ["PROPOSTA_AXION", "Proposta AXION"],
   ["CLARIFICACAO_CLIENTE", "Resposta/Aprovação do cliente"],
+  ["EMAIL", "E-mail"],
 ] as const;
 
 const SOURCE_TYPES = [
