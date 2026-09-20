@@ -448,6 +448,7 @@ export const documentKindLabels: Record<DocumentKind, string> = {
   RELATORIO_SEMANAL: "Relatório semanal",
   PROPOSTA_AXION: "Proposta AXION",
   CLARIFICACAO_CLIENTE: "Resposta/Aprovação do cliente",
+  EMAIL: "E-mail",
   ATA_REUNIAO: "Ata de Reunião",
   PROPOSTA_COMERCIAL: "Proposta Comercial",
   PROPOSTA_TECNICA: "Proposta Técnica",
