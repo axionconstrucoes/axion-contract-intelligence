@@ -70,11 +70,14 @@ export async function GET(request: Request) {
     await admin.from("acc_system_health_incidents").update({
       notified_at: incidentFailures === 0 ? new Date().toISOString() : null,
     }).eq("id", incident.id);
+    // audit_log_entries exige actor_user_id IS NULL e actor_label IS NULL
+    // para actor_type = 'SYSTEM' (constraint de 20260819195713); um label
+    // não nulo fazia este INSERT falhar silenciosamente após o envio.
     await admin.from("audit_log_entries").insert({
       project_id: row.project_id,
       actor_type: "SYSTEM",
       actor_user_id: null,
-      actor_label: "acc-system-health",
+      actor_label: null,
       action: failed === 0 ? "SYSTEM_HEALTH_ALERT_SENT" : "SYSTEM_HEALTH_ALERT_FAILED",
       entity_type: "PROJECT_INTEGRATION",
       entity_id: `${row.project_id}:${row.source_type}`,
