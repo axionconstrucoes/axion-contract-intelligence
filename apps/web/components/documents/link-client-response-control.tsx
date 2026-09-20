@@ -4,23 +4,33 @@ import { useActionState } from "react";
 import { linkClientResponseAction } from "@/app/[projectId]/documentos/link-client-response-actions";
 import { initialLinkClientResponseState } from "@/app/[projectId]/documentos/link-client-response-actions-state";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-// Formulário MÍNIMO de vínculo manual (Bloco 6 — MVP controlado). Sem
-// busca de e-mails ainda (fora do escopo desta rodada) — o e-mail é
-// identificado pelo UUID já existente em public.emails (ex.: copiado
-// da tela de e-mails do projeto). A automação completa por Message-ID/
-// thread/hash fica para depois do go-live (ver
-// resolve-document-version-link-candidate.ts, já pronta e testada,
-// pendente de um caller real de ingestão automática).
+// Vínculo manual auditável entre uma versão documental e um e-mail já
+// ingerido no projeto. O usuário escolhe pelo contexto humano (data,
+// remetente e assunto); o UUID interno continua sendo enviado ao servidor
+// como valor técnico do select, sem ser exposto na interface.
+export type ProjectEmailOption = {
+  id: string;
+  fromAddress: string;
+  subject: string;
+  sentAt: string;
+};
+
+function formatEmailOption(option: ProjectEmailOption): string {
+  const date = new Date(option.sentAt).toLocaleDateString("pt-BR");
+  return `${date} · ${option.fromAddress} · ${option.subject}`;
+}
+
 export function LinkClientResponseControl({
   projectId,
   documentVersionId,
+  emailOptions,
 }: {
   projectId: string;
   documentVersionId: string;
+  emailOptions: ProjectEmailOption[];
 }) {
   const [state, formAction, pending] = useActionState(linkClientResponseAction, initialLinkClientResponseState);
 
@@ -32,8 +42,20 @@ export function LinkClientResponseControl({
         <input type="hidden" name="documentVersionId" value={documentVersionId} />
 
         <label className="flex flex-col gap-1 text-xs">
-          ID do e-mail (public.emails.id)
-          <Input name="emailId" required placeholder="UUID do e-mail já registrado" />
+          E-mail relacionado
+          <Select name="emailId" required defaultValue="">
+            <option value="" disabled>
+              Selecione o e-mail
+            </option>
+            {emailOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {formatEmailOption(option)}
+              </option>
+            ))}
+          </Select>
+          {emailOptions.length === 0 ? (
+            <span className="text-muted-foreground">Nenhum e-mail registrado neste projeto.</span>
+          ) : null}
         </label>
 
         <label className="flex flex-col gap-1 text-xs">

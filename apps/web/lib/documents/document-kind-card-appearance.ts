@@ -11,7 +11,7 @@ import type { DocumentKind } from "@axion/types";
 // faixa do cabeçalho, sempre uma das três cores abaixo (nunca mais um
 // caso "neutro" branco/preto):
 //
-//   BORDÔ  — contrato-base, aditivo, e qualquer documento que seja um
+//   AZUL ESCURO  — contrato-base, aditivo, e qualquer documento que seja um
 //            ANEXO CONTRATUAL formalmente incorporado (a condição de
 //            anexo contratual PREVALECE sobre o tipo original: uma
 //            proposta comercial, cronograma ou especificação
@@ -32,10 +32,8 @@ import type { DocumentKind } from "@axion/types";
 // uma segunda reescrita quando esse vínculo for modelado; até lá, a
 // classificação reduz-se a `kind` puro.
 //
-// Vermelho institucional (bordô) reaproveita os MESMOS tokens de marca
-// já usados em toda a aplicação
-// (--color-brand-sidebar/--color-brand-sidebar-foreground,
-// globals.css) — nunca uma segunda cor "vermelha" inventada à parte.
+// Contrato-base, aditivos e anexos contratuais usam azul escuro para
+// diferenciá-los visualmente das demais categorias sem representar risco.
 //
 // Contraste do CONTEÚDO (metadados/versões/botões/links) dentro da
 // caixa colorida: page.tsx envolve esse conteúdo num painel claro opaco
@@ -46,7 +44,7 @@ import type { DocumentKind } from "@axion/types";
 //
 // Toda visualização de documento cadastrado na página Documentos deve
 // chamar esta função em vez de reimplementar a regra.
-const BORDO_KINDS: readonly DocumentKind[] = ["CONTRATO_BASE", "ADITIVO"];
+const CONTRACT_KINDS: readonly DocumentKind[] = ["CONTRATO_BASE", "ADITIVO"];
 
 // RELATORIO_SEMANAL (fluxo original) e RELATORIO (fluxo de upload
 // múltiplo, migration 20260825130000) são o mesmo conceito de
@@ -56,7 +54,7 @@ const BORDO_KINDS: readonly DocumentKind[] = ["CONTRATO_BASE", "ADITIVO"];
 // diferencie relatório semanal de outro tipo de relatório.
 const GREEN_KINDS: readonly DocumentKind[] = ["RELATORIO_SEMANAL", "RELATORIO"];
 
-const BORDO: ReadonlySet<string> = new Set(BORDO_KINDS);
+const CONTRACT: ReadonlySet<string> = new Set(CONTRACT_KINDS);
 const GREEN: ReadonlySet<string> = new Set(GREEN_KINDS);
 
 export type DocumentKindCardAppearance = {
@@ -74,10 +72,10 @@ export type DocumentKindCardAppearance = {
   contentPanelClassName: string;
 };
 
-const BORDO_APPEARANCE: DocumentKindCardAppearance = {
-  cardClassName: "border-2 border-brand-sidebar bg-brand-sidebar text-brand-sidebar-foreground",
-  titleClassName: "font-bold text-brand-sidebar-foreground",
-  badgeClassName: "border-white/50 bg-transparent text-brand-sidebar-foreground",
+const CONTRACT_APPEARANCE: DocumentKindCardAppearance = {
+  cardClassName: "border-2 border-blue-950 bg-blue-800 text-white",
+  titleClassName: "font-bold text-white",
+  badgeClassName: "border-white/50 bg-transparent text-white",
   contentPanelClassName: "rounded-md bg-card p-2 text-card-foreground",
 };
 
@@ -108,11 +106,11 @@ export function getDocumentKindCardAppearance(
 ): DocumentKindCardAppearance {
   // A condição de anexo contratual prevalece sobre o tipo original.
   if (options?.isContractualAttachment) {
-    return BORDO_APPEARANCE;
+    return CONTRACT_APPEARANCE;
   }
 
-  if (typeof kind === "string" && BORDO.has(kind)) {
-    return BORDO_APPEARANCE;
+  if (typeof kind === "string" && CONTRACT.has(kind)) {
+    return CONTRACT_APPEARANCE;
   }
 
   if (typeof kind === "string" && GREEN.has(kind)) {

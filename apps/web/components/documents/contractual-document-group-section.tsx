@@ -3,13 +3,14 @@ import { DocumentCard } from "@/components/documents/document-card";
 import type { LinkableDocumentCandidate } from "@/components/documents/link-existing-document-to-parent-control";
 import { LinkExistingDocumentToParentControl } from "@/components/documents/link-existing-document-to-parent-control";
 import type { ManagedDocument } from "@/lib/document-management";
+import type { ProjectEmailOption } from "@/components/documents/link-client-response-control";
 import type { ContractualDocumentGroup } from "@/lib/documents/group-contractual-documents";
 import { deriveContractualGroupTitles } from "@/lib/documents/group-contractual-documents";
 
 // UMA UNIDADE VISUAL por instrumento contratual — contrato-base/aditivo
 // à ESQUERDA, seus anexos formalmente vinculados à DIREITA, ligados por
 // um conector decorativo (nunca embaixo um do outro em desktop — essa é
-// a queixa que esta versão corrige). Moldura bordô única em volta do
+// a queixa que esta versão corrige). Moldura azul escuro única em volta do
 // grupo inteiro. Título de cada coluna fica JUNTO do seu próprio
 // conteúdo (nunca uma faixa única no topo do grupo inteiro) — garante
 // que, empilhado no mobile, "ANEXOS AO X" apareça logo ANTES dos
@@ -29,6 +30,7 @@ export function ContractualDocumentGroupSection({
   contractAttachmentCounts,
   canAddContractAttachment = false,
   canDeleteContractAttachment = false,
+  emailOptions = [],
 }: {
   group: ContractualDocumentGroup<ManagedDocument>;
   projectId: string;
@@ -51,15 +53,16 @@ export function ContractualDocumentGroupSection({
   contractAttachmentCounts?: Map<string, number>;
   canAddContractAttachment?: boolean;
   canDeleteContractAttachment?: boolean;
+  emailOptions?: ProjectEmailOption[];
 }) {
   const { principalTitle, attachmentsTitle } = deriveContractualGroupTitles(group.label);
   const hasMultipleAttachments = group.attachments.length > 1;
 
   return (
-    <div className="overflow-hidden rounded-lg border-2 border-brand-sidebar">
+    <div className="overflow-hidden rounded-lg border-2 border-blue-950">
       <div className="flex flex-col md:flex-row md:items-stretch">
         <div className="min-w-0 md:w-[35%] md:shrink-0">
-          <div className="truncate bg-brand-sidebar px-2 py-1 text-[11px] font-bold tracking-wide text-brand-sidebar-foreground uppercase">
+          <div className="truncate bg-blue-800 px-2 py-1 text-[11px] font-bold tracking-wide text-white uppercase">
             {principalTitle}
           </div>
           <div className="min-w-0 p-1.5">
@@ -71,6 +74,7 @@ export function ContractualDocumentGroupSection({
               contractAttachmentCounts={contractAttachmentCounts}
               canAddContractAttachment={canAddContractAttachment}
               canDeleteContractAttachment={canDeleteContractAttachment}
+              emailOptions={emailOptions}
             />
           </div>
         </div>
@@ -78,14 +82,14 @@ export function ContractualDocumentGroupSection({
         {/* Conector decorativo — nunca informação real, só deixa claro
             que o contrato/aditivo e seus anexos formam UMA unidade. */}
         <div aria-hidden="true" className="flex items-center justify-center py-1 md:hidden">
-          <div className="h-3 w-px bg-brand-sidebar/50" />
+          <div className="h-3 w-px bg-blue-800/50" />
         </div>
         <div aria-hidden="true" className="hidden items-center md:flex md:w-10 md:shrink-0">
-          <div className="h-px w-full bg-brand-sidebar/50" />
+          <div className="h-px w-full bg-blue-800/50" />
         </div>
 
-        <div className="min-w-0 border-t border-brand-sidebar/30 md:w-auto md:flex-1 md:border-t-0">
-          <div className="truncate bg-brand-sidebar px-2 py-1 text-[11px] font-bold tracking-wide text-brand-sidebar-foreground uppercase md:border-l md:border-brand-sidebar-foreground/20">
+        <div className="min-w-0 border-t border-blue-950/30 md:w-auto md:flex-1 md:border-t-0">
+          <div className="truncate bg-blue-800 px-2 py-1 text-[11px] font-bold tracking-wide text-white uppercase md:border-l md:border-blue-950-foreground/20">
             {attachmentsTitle}
           </div>
 
@@ -103,12 +107,12 @@ export function ContractualDocumentGroupSection({
                 ) : null}
               </div>
             ) : hasMultipleAttachments ? (
-              <div className="flex flex-col gap-1 border-l-2 border-brand-sidebar/40 pl-3">
+              <div className="flex flex-col gap-1 border-l-2 border-blue-950/40 pl-3">
                 {group.attachments.map((attachment) => (
                   <div key={attachment.id} className="relative min-w-0">
                     <span
                       aria-hidden="true"
-                      className="absolute top-1/2 -left-3 h-px w-3 -translate-y-1/2 bg-brand-sidebar/40"
+                      className="absolute top-1/2 -left-3 h-px w-3 -translate-y-1/2 bg-blue-800/40"
                     />
                     <ContractualAttachmentRow
                       document={attachment}
