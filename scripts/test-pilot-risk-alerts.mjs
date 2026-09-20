@@ -394,7 +394,7 @@ await check("27. Feature desligada não envia (planejador bloqueia; cron respond
   const result = plan({ featureEnabled: false });
   assert(result.blockedReason === "FEATURE_DISABLED" && result.outbox.length === 0 && result.caseUpserts.length === 0);
   const route = readSource("apps/web/app/api/cron/risk-alerts/route.ts");
-  assert(route.includes("if (!isWeeklyReportsEnabled())") && route.includes("status: 204") && route.includes("isCronRequestAuthorized(request, process.env.CRON_SECRET)"));
+  assert(route.includes("if (!isWeeklyReportsEnabled())") && route.includes("status: 204") && route.includes("isCronRequestAuthorized(request, process.env[RISK_ALERTS_CRON_SECRET_ENV])"));
   const cycle = readSource("apps/web/lib/risk-alerts/run-risk-alert-cycle.ts");
   assert(/if \(!featureEnabled\) return result;/.test(cycle) && cycle.indexOf("if (!featureEnabled) return result;") < cycle.indexOf("createSupabaseRiskAlertStore("));
 });

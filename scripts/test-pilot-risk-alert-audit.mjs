@@ -468,7 +468,7 @@ await check("S7. CSRF/auth: server action 'use server' + sessão; RPC exige auth
   assert(action.startsWith('"use server"') && action.includes("supabase.auth.getUser()") && action.includes("assertWeeklyReportsEnabled()"));
   assert(sql.includes("if v_auth_uid is null and not v_is_service then\n    raise exception 'Sessão não autenticada.';"));
   const cron = readSource("apps/web/app/api/cron/risk-alerts/route.ts");
-  assert(cron.includes("CRON_SECRET") && cron.includes("Bearer") && cron.includes("204"));
+  assert(cron.includes("RISK_ALERTS_CRON_SECRET_ENV") && !cron.includes("process.env.CRON_SECRET") && cron.includes("Bearer") && cron.includes("204"));
   assert(sql.includes("if jsonb_typeof(p_transition) is distinct from 'object' then"), "payload precisa ser objeto");
 });
 await check("S8. Projetos isolados: policies por is_project_member; RPC checa membership no projeto do caso; outbox/eventos só com chaves do próprio caso; worker filtra por project_id", () => {
@@ -499,26 +499,26 @@ await check("W2. Workflow existente é horário, chama /api/cron/risk-alerts, s�
   const step = cronStep();
   assert(step.includes('"${ACC_APP_BASE_URL%/}/api/cron/risk-alerts"'));
   assert(step.includes("if: ${{ !cancelled() && vars.ACC_WEEKLY_REPORTS_ENABLED == 'true' &&"), "job condicionado à flag");
-  assert(step.includes("ACC_APP_BASE_URL: ${{ vars.ACC_APP_BASE_URL }}") && step.includes("CRON_SECRET: ${{ secrets.CRON_SECRET }}"));
-  assert(!workflow.includes("secrets.ACC_APP_BASE_URL") && !workflow.includes("vars.CRON_SECRET"));
+  assert(step.includes("ACC_APP_BASE_URL: ${{ vars.ACC_APP_BASE_URL }}") && step.includes("ACC_RISK_ALERTS_CRON_SECRET: ${{ secrets.ACC_RISK_ALERTS_CRON_SECRET }}"));
+  assert(!workflow.includes("secrets.ACC_APP_BASE_URL") && !workflow.includes("vars.ACC_RISK_ALERTS_CRON_SECRET") && !workflow.includes("secrets.CRON_SECRET"), "segredo dedicado; nunca o CRON_SECRET dos crons Vercel");
 });
 await check("W3. Secret vai somente no header Authorization Bearer; nunca em URL, echo, output, artifact ou log", () => {
   const step = cronStep();
-  assert(step.includes('-H "Authorization: Bearer ${CRON_SECRET}"'));
-  const occurrences = step.match(/CRON_SECRET/g) ?? [];
+  assert(step.includes('-H "Authorization: Bearer ${ACC_RISK_ALERTS_CRON_SECRET}"'));
+  const occurrences = step.match(/ACC_RISK_ALERTS_CRON_SECRET/g) ?? [];
   // env mapping, validação de presença, header — nada mais.
-  assert(occurrences.length === 5, `usos de CRON_SECRET: ${occurrences.length}`);
+  assert(occurrences.length === 5, `usos de ACC_RISK_ALERTS_CRON_SECRET: ${occurrences.length}`);
   assert(!/api\/cron\/risk-alerts[^"\n]*(secret|token|CRON)/i.test(step), "nunca na URL/query string");
-  assert(!/echo[^\n]*\$\{?CRON_SECRET|::set-output|GITHUB_OUTPUT|GITHUB_ENV|upload-artifact|set -x|::add-mask/.test(step), "sem echo/output/artifact do segredo");
+  assert(!/echo[^\n]*\$\{?(ACC_RISK_ALERTS_)?CRON_SECRET|::set-output|GITHUB_OUTPUT|GITHUB_ENV|upload-artifact|set -x|::add-mask/.test(step), "sem echo/output/artifact do segredo");
   assert(step.includes("--output /dev/null") && step.includes("--silent --show-error --fail-with-body") && step.includes("--max-time 120 --retry 2 --retry-delay 5"));
 });
 await check("W4. Configuração ausente impede a chamada (falha sanitizada); feature desligada impede a chamada; nenhuma regra de horário local no YAML", () => {
   const step = cronStep();
   assert(step.includes('if [ "${ACC_WEEKLY_REPORTS_ENABLED:-}" != "true" ]; then') && step.includes("exit 0"));
-  assert(step.includes('if [ -z "${ACC_APP_BASE_URL:-}" ]; then') && step.includes('if [ -z "${CRON_SECRET:-}" ]; then') && step.includes("exit 1"));
+  assert(step.includes('if [ -z "${ACC_APP_BASE_URL:-}" ]; then') && step.includes('if [ -z "${ACC_RISK_ALERTS_CRON_SECRET:-}" ]; then') && step.includes("exit 1"));
   assert(step.includes("https://*) ;;"), "só https");
-  assert(step.indexOf("if [ -z \"${CRON_SECRET:-}\" ]") < step.indexOf("status=$(curl"), "validação antes da chamada");
-  assert(!/echo[^\n]*\$\{?(ACC_APP_BASE_URL|CRON_SECRET)/.test(step), "mensagens sem valores");
+  assert(step.indexOf("if [ -z \"${ACC_RISK_ALERTS_CRON_SECRET:-}\" ]") < step.indexOf("status=$(curl"), "validação antes da chamada");
+  assert(!/echo[^\n]*\$\{?(ACC_APP_BASE_URL|ACC_RISK_ALERTS_CRON_SECRET|CRON_SECRET)/.test(step), "mensagens sem valores");
   assert(!/Sao_Paulo|07:00|TZ=/.test(readSource(WORKFLOW).replace(/^\s*#.*$/gm, "")), "timezone só no motor (comentários fora)");
   assert(readSource("apps/web/lib/risk-alerts/digest-window.ts").includes("America/Sao_Paulo") || readSource("apps/web/lib/risk-alerts/types.ts").includes("DIGEST_HOUR_LOCAL"));
 });
@@ -535,7 +535,7 @@ await check("W5. Rota: sem secret => 401; secret incorreto => 401; query string 
   const auth = readSource("apps/web/lib/cron/cron-request-auth.ts");
   assert(auth.includes("timingSafeEqual(presented, expected)") && !/searchParams|console\./.test(auth));
   const route = readSource("apps/web/app/api/cron/risk-alerts/route.ts");
-  assert(route.includes("isCronRequestAuthorized(request, process.env.CRON_SECRET)") && !/console\.|searchParams\.get\("(secret|token|key)"\)/.test(route), "header nunca registrado; query string nunca lida como segredo");
+  assert(route.includes("isCronRequestAuthorized(request, process.env[RISK_ALERTS_CRON_SECRET_ENV])") && !route.includes("process.env.CRON_SECRET") && !/console\.|searchParams\.get\("(secret|token|key)"\)/.test(route), "segredo dedicado; header nunca registrado; query string nunca lida como segredo");
 });
 await check("W6. Feature desligada retorna 204 antes do banco; execução idempotente (409 concorrente + chaves únicas); nenhum e-mail real; nenhum workflow executado", () => {
   const route = readSource("apps/web/app/api/cron/risk-alerts/route.ts");
@@ -548,7 +548,7 @@ await check("W6. Feature desligada retorna 204 antes do banco; execução idempo
   assert(cycle.includes("if (!featureEnabled) return result; // nenhuma consulta ao banco"));
   assert(cycle.includes("existingIdempotencyKeys") && cycle.includes("sentKeys.has(row.idempotencyKey)"));
   assert(!/fetch\(\s*["'`]https?:/.test(route + cycle), "rota/ciclo não chamam rede própria — provider fake nos testes");
-  assert(!process.env.GITHUB_ACTIONS && !process.env.CRON_SECRET, "teste local: nenhum workflow/segredo real em uso");
+  assert(!process.env.GITHUB_ACTIONS && !process.env.CRON_SECRET && !process.env.ACC_RISK_ALERTS_CRON_SECRET, "teste local: nenhum workflow/segredo real em uso");
 });
 
 console.log("");
