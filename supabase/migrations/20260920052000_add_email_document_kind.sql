@@ -1,6 +1,13 @@
 -- EMAIL as a first-class project document kind.
 -- Distinct from CLARIFICACAO_CLIENTE (Resposta/Aprovação do cliente)
 -- and from source_type EMAIL (origin/channel of a document version).
+--
+-- Lista de kinds = TODOS os valores aceitos pela constraint vigente
+-- (20260829180000_document_relation_hierarchy: 24 valores, incluindo
+-- QUESTIONARIO_BID e COMPLEMENTO_CIRCULAR da hierarquia do BID) + EMAIL
+-- = 25 valores. Nenhum valor é removido. A allowlist da RPC
+-- register_project_document_upload abaixo usa exatamente o mesmo
+-- conjunto (paridade coberta por scripts/test-email-document-kind-migration.mjs).
 
 alter table public.documents
   drop constraint documents_kind_check;
@@ -13,7 +20,7 @@ alter table public.documents
     'RELATORIO_SEMANAL', 'PROPOSTA_AXION', 'CLARIFICACAO_CLIENTE', 'EMAIL',
     'ATA_REUNIAO', 'PROPOSTA_COMERCIAL', 'PROPOSTA_TECNICA',
     'PLANILHA_CONTRATUAL', 'RELATORIO', 'NOTIFICACAO', 'ESG_SSMA',
-    'DIARIO_OBRA', 'OUTRO'
+    'DIARIO_OBRA', 'QUESTIONARIO_BID', 'COMPLEMENTO_CIRCULAR', 'OUTRO'
   ));
 
 create or replace function public.register_project_document_upload(
@@ -37,7 +44,10 @@ create or replace function public.register_project_document_upload(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, storage
+-- search_path vazio (estado vigente em produção): toda referência a
+-- objetos é qualificada (public.*, storage.*, auth.*); built-ins vêm de
+-- pg_catalog, sempre implícito.
+set search_path = ''
 as $$
 declare
   v_user_id uuid;
@@ -124,7 +134,7 @@ begin
     'RELATORIO_SEMANAL', 'PROPOSTA_AXION', 'CLARIFICACAO_CLIENTE', 'EMAIL',
     'ATA_REUNIAO', 'PROPOSTA_COMERCIAL', 'PROPOSTA_TECNICA',
     'PLANILHA_CONTRATUAL', 'RELATORIO', 'NOTIFICACAO', 'ESG_SSMA',
-    'DIARIO_OBRA', 'OUTRO'
+    'DIARIO_OBRA', 'QUESTIONARIO_BID', 'COMPLEMENTO_CIRCULAR', 'OUTRO'
   ) then
     raise exception 'Invalid document kind';
   end if;
