@@ -3,6 +3,7 @@ import { DocumentCard } from "@/components/documents/document-card";
 import type { LinkableDocumentCandidate } from "@/components/documents/link-existing-document-to-parent-control";
 import { LinkExistingDocumentToParentControl } from "@/components/documents/link-existing-document-to-parent-control";
 import type { ManagedDocument } from "@/lib/document-management";
+import type { ProjectEmailOption } from "@/components/documents/link-client-response-control";
 import type { ContractualDocumentGroup } from "@/lib/documents/group-contractual-documents";
 import { deriveContractualGroupTitles } from "@/lib/documents/group-contractual-documents";
 
@@ -29,6 +30,7 @@ export function ContractualDocumentGroupSection({
   contractAttachmentCounts,
   canAddContractAttachment = false,
   canDeleteContractAttachment = false,
+  emailOptions = [],
 }: {
   group: ContractualDocumentGroup<ManagedDocument>;
   projectId: string;
@@ -51,6 +53,7 @@ export function ContractualDocumentGroupSection({
   contractAttachmentCounts?: Map<string, number>;
   canAddContractAttachment?: boolean;
   canDeleteContractAttachment?: boolean;
+  emailOptions?: ProjectEmailOption[];
 }) {
   const { principalTitle, attachmentsTitle } = deriveContractualGroupTitles(group.label);
   const hasMultipleAttachments = group.attachments.length > 1;
@@ -71,6 +74,7 @@ export function ContractualDocumentGroupSection({
               contractAttachmentCounts={contractAttachmentCounts}
               canAddContractAttachment={canAddContractAttachment}
               canDeleteContractAttachment={canDeleteContractAttachment}
+              emailOptions={emailOptions}
             />
           </div>
         </div>
