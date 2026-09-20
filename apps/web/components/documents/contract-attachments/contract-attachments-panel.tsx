@@ -185,7 +185,7 @@ export function ContractAttachmentsPanel({
 
   return (
     <details className="rounded-md border p-2" onToggle={handleToggle}>
-      <summary className="cursor-pointer text-sm font-medium">Anexos do Contrato ({count})</summary>
+      <summary className="cursor-pointer text-sm font-medium">Arquivos anexos da versão ({count})</summary>
 
       <div className="mt-1.5 flex flex-col gap-1.5">
         {loading && !loaded ? <p className="text-xs text-muted-foreground">Carregando anexos…</p> : null}
@@ -204,7 +204,7 @@ export function ContractAttachmentsPanel({
         {canAdd ? (
           <div className="flex flex-col gap-1 pt-1">
             <label className="flex flex-col gap-1 text-xs font-medium">
-              Adicionar anexo(s)
+              Adicionar arquivo(s) anexo(s)
               <input
                 ref={fileInputRef}
                 type="file"
