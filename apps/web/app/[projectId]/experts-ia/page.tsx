@@ -53,7 +53,13 @@ export default async function ExpertsIaPage({ params }: { params: Promise<{ proj
                     {expert.expertName}
                     <FeatureInfo helpId={`expert-${expert.expertId}`} />
                   </CardTitle>
-                  <Badge variant={isActive ? "default" : "secondary"} className="shrink-0">
+                  <Badge
+                    variant={isActive ? "default" : "secondary"}
+                    className={cn(
+                      "shrink-0",
+                      isActive && "border-green-600 bg-green-600 text-white hover:bg-green-600 hover:text-white"
+                    )}
+                  >
                     {isActive ? <CheckCircle2 className="size-3" /> : <Clock className="size-3" />}
                     {isActive ? "Ativo" : "Em implantação"}
                   </Badge>
