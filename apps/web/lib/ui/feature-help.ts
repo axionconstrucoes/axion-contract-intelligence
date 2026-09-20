@@ -489,6 +489,15 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
     description: "Lista as propostas de adicionais já cadastradas, com status, título e data.",
   },
 
+  // ---------- Registro documental por e-mail (aba de Documentos) ----------
+  {
+    id: "documentos-tab-registro-email",
+    title: "Registro por e-mail",
+    shortDescription: "Envios documentais por e-mail, classificados e pesquisáveis.",
+    description:
+      "Lista cada envio por e-mail (assunto, remetente, destinatários, semana da obra, anexos) com classificação determinística (atas, RDO, alterações de projeto, SSMA/ESG, relatório semanal) e o filtro transversal de e-mails enviados ao cliente. Ao abrir um registro, mostra todos os anexos do mesmo message_id, o cronograma MPP, a Curva S, as comparações com a semana anterior e com a baseline, o risco e a revisão humana.",
+  },
+
   // ---------- Anexos de E-mail (aba de Documentos) ----------
   {
     id: "documentos-tab-anexos-email",

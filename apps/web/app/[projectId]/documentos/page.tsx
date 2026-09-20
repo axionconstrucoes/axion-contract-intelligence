@@ -35,6 +35,9 @@ import {
   sortAndLabelContractualPrincipals,
 } from "@/lib/documents/group-contractual-documents";
 import { getEmailAttachmentRegistryForProject } from "@/lib/email/attachments/registry/get-attachment-registry";
+import { EmailRegistryPanel } from "@/components/documents/email-registry/email-registry-panel";
+import { searchEmailDocumentRegistry } from "@/lib/email/registry/email-document-registry-data";
+import { parseRegistrySearchParams } from "@/lib/email/registry/email-document-registry-shared";
 import {
   formatDate,
   scheduleStatusLabels,
@@ -44,12 +47,29 @@ export const metadata: Metadata = { title: "Documentos" };
 
 export default async function DocumentosPage({
   params,
+  searchParams,
 }: {
   params: Promise<{
     projectId: string;
   }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { projectId } = await params;
+  const resolvedSearchParams = (await searchParams) ?? {};
+  const rawTab = resolvedSearchParams.tab;
+  const initialTab = (Array.isArray(rawTab) ? rawTab[0] : rawTab) ?? "documentos";
+
+  // Registro documental por e-mail: busca/filtros/paginação server-side
+  // (função SQL com RLS). Falha nunca derruba a página inteira — a aba
+  // mostra o erro no lugar da lista.
+  const registryParams = parseRegistrySearchParams(resolvedSearchParams);
+  let registryPage = null;
+  let registryError: string | null = null;
+  try {
+    registryPage = await searchEmailDocumentRegistry(projectId, registryParams);
+  } catch (error) {
+    registryError = error instanceof Error ? error.message : "Falha ao carregar o registro documental por e-mail.";
+  }
 
   const supabase = await createSupabaseServerClient();
 
@@ -185,7 +205,7 @@ export default async function DocumentosPage({
         description="Upload manual de contratos, aditivos, editais, RFI, RFP, clarificações, propostas, relatórios e cronogramas. O Google Drive é reservado exclusivamente ao SSMA/ESG."
       />
 
-      <Tabs defaultValue="documentos">
+      <Tabs defaultValue={["documentos", "clausulas", "cronograma", "anexos-email", "registro-email"].includes(initialTab) ? initialTab : "documentos"}>
         <TabsList>
           <span className="inline-flex items-center gap-1">
             <TabsTrigger value="documentos">
@@ -213,6 +233,13 @@ export default async function DocumentosPage({
               Anexos de E-mail
             </TabsTrigger>
             <FeatureInfo helpId="documentos-tab-anexos-email" />
+          </span>
+
+          <span className="inline-flex items-center gap-1">
+            <TabsTrigger value="registro-email">
+              Registro por e-mail
+            </TabsTrigger>
+            <FeatureInfo helpId="documentos-tab-registro-email" />
           </span>
         </TabsList>
 
@@ -385,6 +412,10 @@ export default async function DocumentosPage({
 
         <TabsContent value="anexos-email">
           <EmailAttachmentsPanel projectId={projectId} rows={emailAttachmentRows} canPromote={canUpload} />
+        </TabsContent>
+
+        <TabsContent value="registro-email">
+          <EmailRegistryPanel projectId={projectId} params={registryParams} page={registryPage} error={registryError} />
         </TabsContent>
       </Tabs>
     </div>
