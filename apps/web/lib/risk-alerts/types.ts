@@ -124,6 +124,8 @@ export interface RiskAlertProjectConfig {
   severityMap: IngestionAlertSeverityMap | null;
   /** Confirmação humana do projeto piloto real. */
   pilotProjectConfirmedAt: string | null;
+  /** Piloto: endereço institucional que recebe TODOS os e-mails do projeto (só a entrega muda). null = entrega normal. */
+  pilotDeliveryOverrideEmail: string | null;
 }
 
 export interface PlannedRecipient {
@@ -355,6 +357,10 @@ export interface PilotReadinessInput {
   severityMapConfigured: boolean;
   /** Caixa inbound oficial (GOOGLE_GMAIL_INBOUND_MAILBOX) configurada — sem ela não há Reply-To nem resposta por e-mail. */
   replyMailboxConfigured: boolean;
+  /** Caixa inbound oficial normalizada (para conferir com o override de entrega do piloto). */
+  replyMailbox?: string | null;
+  /** Override de entrega do piloto (normalizado) — quando presente, deve ser a própria caixa inbound (respostas voltam à mesma caixa). */
+  deliveryOverrideEmail?: string | null;
 }
 
 export type PilotReadinessBlocker =
@@ -367,4 +373,5 @@ export type PilotReadinessBlocker =
   | "PILOT_PROJECT_NOT_CONFIRMED"
   | "WORKSPACE_NOT_CONFIGURED"
   | "SEVERITY_MAP_NOT_CONFIGURED"
-  | "REPLY_MAILBOX_NOT_CONFIGURED";
+  | "REPLY_MAILBOX_NOT_CONFIGURED"
+  | "DELIVERY_OVERRIDE_REPLY_MAILBOX_MISMATCH";

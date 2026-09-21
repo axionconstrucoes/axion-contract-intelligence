@@ -31,6 +31,13 @@ export const ACC_PILOT_ALLOWED_RECIPIENTS = [
 ] as const;
 export const PILOT_SUBJECT_PREFIX = "[TESTE CONTROLADO] ";
 
+// Caixas INSTITUCIONAIS do ACC (não são pessoas): destino do override de
+// entrega do piloto (project_weekly_schedule_ingestion_configs.
+// pilot_delivery_override_email). Enviar para a própria caixa do ACC é
+// intrinsecamente interno, por isso é admitido em modo piloto — a lista
+// fixa de participantes acima permanece intacta.
+export const ACC_PILOT_INSTITUTIONAL_MAILBOXES = ["axion@axion.com.br"] as const;
+
 // Extensão CONTROLADA da allowlist do piloto por ambiente — ponto único.
 // ACC_PILOT_ADDITIONAL_RECIPIENTS = lista separada por vírgula de
 // e-mails corporativos (mesmo domínio do destinatário piloto) que também
@@ -58,7 +65,7 @@ export function parsePilotAdditionalRecipients(rawValue: string | undefined): st
 
 /** Allowlist efetiva do provider em modo piloto: fixa + adicionais válidos do ambiente. */
 export function resolvePilotAllowedRecipients(env: Pick<PilotOutboundGuardEnv, "additionalRecipients"> = defaultEnv()): string[] {
-  return Array.from(new Set([...ACC_PILOT_ALLOWED_RECIPIENTS, ...parsePilotAdditionalRecipients(env.additionalRecipients)]));
+  return Array.from(new Set([...ACC_PILOT_ALLOWED_RECIPIENTS, ...ACC_PILOT_INSTITUTIONAL_MAILBOXES, ...parsePilotAdditionalRecipients(env.additionalRecipients)]));
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

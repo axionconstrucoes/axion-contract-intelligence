@@ -93,6 +93,7 @@ export async function applyAlertActionAction(_prev: EmailRegistryActionState, fo
         senderDomain: (config?.sender_domain as string | null) ?? null,
         severityMap: (config?.risk_alert_severity_map as Record<string, SlaRiskLevel> | null) ?? null,
         pilotProjectConfirmedAt: (config?.pilot_project_confirmed_at as string | null) ?? null,
+        pilotDeliveryOverrideEmail: null, // entrega é decidida só pelo worker (não influencia a ação)
       },
       recipients,
       eligibleForwardUserIds,

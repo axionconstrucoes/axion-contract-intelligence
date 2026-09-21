@@ -18,6 +18,7 @@
 //     [--threshold=FINAL_DATE_SLIP_DAYS:3:7:15 ...] \
 //     [--risk-alerts=on|off] [--pilot-recipients=<uuid>,<uuid>] \
 //     [--severity-map=MISSING_WEEKLY_SCHEDULE:HIGH,...] [--confirm-pilot-project-by=<uuid>] \
+//     [--delivery-override=<caixa institucional>|--delivery-override=] \
 //     [--enable | --disable] --apply
 //
 // ALERTAS DE RISCO (piloto): --risk-alerts liga/desliga os e-mails de
@@ -113,6 +114,18 @@ if (option("severity-map") !== undefined) {
     if (Object.keys(map).length && !map[kind]) throw new Error(`--severity-map incompleto: falta ${kind}`);
   }
   payload.risk_alert_severity_map = Object.keys(map).length ? map : null;
+}
+// Override de ENTREGA do piloto: TODOS os e-mails do projeto vão só para a
+// caixa institucional informada (lowercase, validada); vazio limpa. Só a
+// entrega muda — destinatário lógico/responsável/auditoria continuam da pessoa.
+if (option("delivery-override") !== undefined) {
+  const raw = String(option("delivery-override") ?? "").trim().toLowerCase();
+  if (raw === "") {
+    payload.pilot_delivery_override_email = null;
+  } else {
+    if (!/^[a-z0-9][a-z0-9._+-]{0,63}@[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/.test(raw)) throw new Error(`--delivery-override inválido`);
+    payload.pilot_delivery_override_email = raw;
+  }
 }
 // Confirmação HUMANA do projeto piloto real (nunca automática):
 // --confirm-pilot-project-by=<user_id do administrador que confirma>.
