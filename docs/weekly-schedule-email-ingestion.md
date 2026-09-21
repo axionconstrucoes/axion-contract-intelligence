@@ -685,6 +685,45 @@ Readiness: o override precisa ser a própria caixa inbound oficial
 que recebe os alertas (`DELIVERY_OVERRIDE_REPLY_MAILBOX_MISMATCH`).
 Sem override, entrega normal; outros projetos não são afetados.
 
+**OAuth dedicado da caixa de respostas (fase `replies`).** A leitura das
+respostas aos alertas usa **exclusivamente** as credenciais dedicadas da
+caixa institucional — `ACC_RISK_ALERTS_INBOUND_CLIENT_ID`,
+`ACC_RISK_ALERTS_INBOUND_CLIENT_SECRET`, `ACC_RISK_ALERTS_INBOUND_REFRESH_TOKEN`
+e `ACC_RISK_ALERTS_INBOUND_MAILBOX` (piloto: `axion@axion.com.br`) —
+sem qualquer fallback para `GOOGLE_GMAIL_INBOUND_*`, que pertencem ao
+Gmail Inbound Sync (outra caixa, validada contra
+`project_email_ingestion_mailboxes`) e continuam intocadas no intake e em
+`gmail-inbound-sync.yml`. Regras (`replies/inbound-credentials.ts`, puro):
+qualquer variável ausente/vazia ou caixa inválida ⇒ fase
+`SKIPPED_NOT_CONFIGURED` (só os NOMES ausentes no resumo; as demais fases
+do job seguem e o job termina com sucesso); Gmail `users.getProfile` ≠
+caixa configurada ⇒ `BLOCKED_MAILBOX_MISMATCH` (falha fechada: nenhum
+projeto é lido, resumo impresso, `exitCode=1` só nesse caso); override de
+entrega do projeto ≠ caixa dedicada ⇒ projeto pulado
+(`BLOCKED_OVERRIDE_MISMATCH`). Escopo mínimo `gmail.readonly` (a fase só
+executa `getProfile`, `messages.list/get`, `threads.get`; nada é enviado
+nem rotulado). Token, client secret e Authorization nunca aparecem em
+logs. Os filtros de self/plus-address, auto-reply, bounce/DSN e
+Message-ID duplicado são os mesmos. Coerência obrigatória: a caixa do
+Reply-To (`GOOGLE_GMAIL_INBOUND_MAILBOX` no Vercel), o override de
+entrega e `ACC_RISK_ALERTS_INBOUND_MAILBOX` (GitHub) devem ser o **mesmo**
+endereço.
+
+Geração local do refresh token da caixa `axion@` (feita por um humano
+logado nessa caixa; nada é executado automaticamente): no Google Cloud,
+cliente OAuth "Desktop" com a API Gmail habilitada; em `apps/web/.env.local`
+definir `ACC_RISK_ALERTS_INBOUND_CLIENT_ID`, `ACC_RISK_ALERTS_INBOUND_CLIENT_SECRET`
+e `ACC_RISK_ALERTS_INBOUND_MAILBOX=axion@axion.com.br`; rodar
+`node scripts/gmail-inbound-oauth.mjs --prefix=ACC_RISK_ALERTS_INBOUND`,
+autenticar **com a conta axion@** e consentir só `gmail.readonly`; o
+script valida o perfil autenticado e grava
+`ACC_RISK_ALERTS_INBOUND_REFRESH_TOKEN` no `.env.local` (sem prefixo o
+script continua gerando `GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN`, sem
+sobrescrever um o outro). Em seguida copiar os quatro valores para os
+**Secrets** do GitHub (nunca Variables) e remover do `.env.local` se não
+forem mais necessários localmente. Valores nunca vão para este
+repositório, logs ou PR.
+
 ### 9.6 Gatilho horário pelo GitHub Actions e configuração de ativação
 
 Job `risk-alerts` (`needs: ingest`, roda depois da captura de respostas):
@@ -709,8 +748,16 @@ processado na próxima execução horária; BAIXO/MÉDIO ⇒ o motor decide se
 | GitHub | Secret | `ACC_RISK_ALERTS_CRON_SECRET` | segredo dedicado do piloto (mesmo valor configurado no Vercel) |
 | Vercel | Env | `ACC_WEEKLY_REPORTS_ENABLED` | `true` |
 | Vercel | Env | `ACC_RISK_ALERTS_CRON_SECRET` | mesmo valor (independente do `CRON_SECRET` dos crons `weekly-alert-digest`/`system-health`) |
-| Vercel | Env | `GOOGLE_GMAIL_INBOUND_MAILBOX` | caixa inbound oficial |
+| Vercel | Env | `GOOGLE_GMAIL_INBOUND_MAILBOX` | caixa inbound oficial (base do Reply-To; piloto: `axion@axion.com.br`) |
 | Vercel | Env | `ACC_PILOT_ADDITIONAL_RECIPIENTS` | participante adicional do piloto |
+| GitHub | Secret | `ACC_RISK_ALERTS_INBOUND_CLIENT_ID` | cliente OAuth dedicado da caixa de respostas (§9.8) |
+| GitHub | Secret | `ACC_RISK_ALERTS_INBOUND_CLIENT_SECRET` | idem |
+| GitHub | Secret | `ACC_RISK_ALERTS_INBOUND_REFRESH_TOKEN` | refresh token gerado logado em `axion@` (escopo `gmail.readonly`) |
+| GitHub | Secret | `ACC_RISK_ALERTS_INBOUND_MAILBOX` | `axion@axion.com.br` (igual ao override e ao Reply-To) |
+
+Os quatro secrets `ACC_RISK_ALERTS_INBOUND_*` são lidos só pelo job
+`ingest` (fase `replies`); ausentes, a fase é pulada sem falhar o job —
+os alertas continuam sendo enviados, mas nenhuma resposta é capturada.
 
 Além disso: migration `20260921090000` aplicada e validada, projeto
 piloto confirmado, Níveis 1 e 3 completos, regras explícitas salvas,
@@ -718,6 +765,10 @@ severity map gravado. Manter a feature desligada até a validação completa.
 
 ## 8. Testes
 
+- `node scripts/test-risk-alerts-inbound-oauth.mjs` (16 itens: credenciais
+  dedicadas `ACC_RISK_ALERTS_INBOUND_*`, sem fallback, SKIPPED_NOT_CONFIGURED,
+  perfil ≠ caixa, override ≠ caixa, filtros self/auto-reply/bounce/duplicado,
+  workflow e helper OAuth)
 - `node scripts/test-pilot-delivery-override.mjs` (12 itens: override de entrega
   por projeto — imediato, digest, escalonamento, encaminhamento, resposta,
   deduplicação, nenhum envio pessoal, loops)
