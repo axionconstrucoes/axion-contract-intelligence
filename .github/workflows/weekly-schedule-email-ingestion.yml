@@ -81,6 +81,13 @@ jobs:
           GOOGLE_GMAIL_INBOUND_CLIENT_SECRET: ${{ secrets.GOOGLE_GMAIL_INBOUND_CLIENT_SECRET }}
           GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN: ${{ secrets.GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN }}
           GOOGLE_GMAIL_INBOUND_MAILBOX: ${{ secrets.GOOGLE_GMAIL_INBOUND_MAILBOX }}
+          # Fase `replies` (respostas aos alertas de risco): credenciais
+          # DEDICADAS da caixa axion@… (escopo gmail.readonly). Ausentes =>
+          # a fase é pulada (SKIPPED_NOT_CONFIGURED) sem falhar o job.
+          ACC_RISK_ALERTS_INBOUND_CLIENT_ID: ${{ secrets.ACC_RISK_ALERTS_INBOUND_CLIENT_ID }}
+          ACC_RISK_ALERTS_INBOUND_CLIENT_SECRET: ${{ secrets.ACC_RISK_ALERTS_INBOUND_CLIENT_SECRET }}
+          ACC_RISK_ALERTS_INBOUND_REFRESH_TOKEN: ${{ secrets.ACC_RISK_ALERTS_INBOUND_REFRESH_TOKEN }}
+          ACC_RISK_ALERTS_INBOUND_MAILBOX: ${{ secrets.ACC_RISK_ALERTS_INBOUND_MAILBOX }}
 
   risk-alerts:
     # Só agendado ou manual com fase "all" — nunca em execuções manuais de

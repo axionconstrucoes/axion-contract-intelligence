@@ -5,17 +5,23 @@ import crypto from "node:crypto";
 import { exec } from "node:child_process";
 import { google } from "googleapis";
 
-const CLIENT_ID = process.env.GOOGLE_GMAIL_INBOUND_CLIENT_ID;
-const CLIENT_SECRET = process.env.GOOGLE_GMAIL_INBOUND_CLIENT_SECRET;
-const MAILBOX = process.env.GOOGLE_GMAIL_INBOUND_MAILBOX;
+// --prefix=ACC_RISK_ALERTS_INBOUND gera o refresh token da caixa DEDICADA
+// das respostas aos alertas de risco (axion@…) lendo/gravando
+// <PREFIXO>_CLIENT_ID/_CLIENT_SECRET/_MAILBOX/_REFRESH_TOKEN — sem tocar nas
+// variáveis GOOGLE_GMAIL_INBOUND_* do Gmail Inbound Sync. Default: prefixo
+// legado GOOGLE_GMAIL_INBOUND. Escopo continua gmail.readonly.
+const PREFIX = (process.argv.find((arg) => arg.startsWith("--prefix=")) ?? "--prefix=GOOGLE_GMAIL_INBOUND").split("=")[1].replace(/[^A-Z0-9_]/g, "");
+const CLIENT_ID = process.env[`${PREFIX}_CLIENT_ID`];
+const CLIENT_SECRET = process.env[`${PREFIX}_CLIENT_SECRET`];
+const MAILBOX = process.env[`${PREFIX}_MAILBOX`];
 
 const REDIRECT_URI = "http://localhost:53682/oauth2callback";
 const ENV_PATH = path.resolve("apps/web/.env.local");
 
 if (!CLIENT_ID || !CLIENT_SECRET || !MAILBOX) {
   console.error(
-    "ERRO: configure GOOGLE_GMAIL_INBOUND_CLIENT_ID, " +
-    "GOOGLE_GMAIL_INBOUND_CLIENT_SECRET e GOOGLE_GMAIL_INBOUND_MAILBOX."
+    `ERRO: configure ${PREFIX}_CLIENT_ID, ` +
+    `${PREFIX}_CLIENT_SECRET e ${PREFIX}_MAILBOX.`
   );
   process.exit(1);
 }
@@ -114,7 +120,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     setEnvValue(
-      "GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN",
+      `${PREFIX}_REFRESH_TOKEN`,
       tokens.refresh_token
     );
 

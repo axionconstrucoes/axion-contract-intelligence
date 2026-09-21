@@ -27,7 +27,12 @@
 //             conta como recebido).
 //   replies : captura (Gmail) as RESPOSTAS por e-mail aos alertas de risco
 //             -> alert_email_messages e as processa (filtro/correlação/
-//             autorização/classificação/ação formal via RPC). Duas buscas:
+//             autorização/classificação/ação formal via RPC). Usa
+//             EXCLUSIVAMENTE as credenciais dedicadas
+//             ACC_RISK_ALERTS_INBOUND_* (caixa axion@…; escopo gmail.readonly)
+//             — nunca as do Gmail Inbound Sync; ausentes => fase pulada
+//             (SKIPPED_NOT_CONFIGURED); perfil ≠ caixa => fase bloqueada.
+//             Duas buscas:
 //             (a) mensagens enviadas ao Reply-To opaco da caixa oficial
 //                 (<caixa>+alerta-<token>@...) — caminho PRINCIPAL;
 //             (b) threads dos alertas enviados — fallback (In-Reply-To/
@@ -83,6 +88,7 @@ const { createSupabaseRiskAlertStore } = await import("../apps/web/lib/risk-aler
 const { processAlertReplies } = await import("../apps/web/lib/risk-alerts/replies/process-alert-replies");
 const { extractInboundFromGmail } = await import("../apps/web/lib/risk-alerts/replies/gmail-reply-extract");
 const { extractReplyTokens, hashReplyToken } = await import("../apps/web/lib/risk-alerts/replies/reply-pipeline");
+const { resolveRiskAlertInboundCredentials, inboundProfileMatchesMailbox, checkOverrideCompatibility } = await import("../apps/web/lib/risk-alerts/replies/inbound-credentials");
 
 const args = process.argv.slice(2);
 const apply = args.includes("--apply");
@@ -351,16 +357,51 @@ if (phases.has("alerts") && apply) {
 // ------------------------------------------------------------------
 // FASE 7 — RESPOSTAS POR E-MAIL AOS ALERTAS DE RISCO
 // ------------------------------------------------------------------
+let repliesBlocked = false;
 if (phases.has("replies") && apply) {
-  const { google } = await import("googleapis");
-  const auth = new google.auth.OAuth2(required("GOOGLE_GMAIL_INBOUND_CLIENT_ID"), required("GOOGLE_GMAIL_INBOUND_CLIENT_SECRET"));
-  auth.setCredentials({ refresh_token: required("GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN") });
-  const gmail = google.gmail({ version: "v1", auth });
-  const mailbox = required("GOOGLE_GMAIL_INBOUND_MAILBOX").toLowerCase();
+  // Credenciais DEDICADAS (nunca GOOGLE_GMAIL_INBOUND_*, que são do Gmail
+  // Inbound Sync). Ausentes => fase pulada sem falhar o job.
+  const inbound = resolveRiskAlertInboundCredentials(process.env);
+  if (!inbound.ok) {
+    summary.replies = { status: inbound.status, missing: inbound.missing, threads: 0, replyToMatches: 0, captured: 0, processed: [] };
+    console.log(`Respostas aos alertas: ${inbound.status} (variáveis ausentes: ${inbound.missing.join(", ")}).`);
+  }
+  const gmailClient = inbound.ok ? await (async () => {
+    const { google } = await import("googleapis");
+    const auth = new google.auth.OAuth2(inbound.credentials.clientId, inbound.credentials.clientSecret);
+    auth.setCredentials({ refresh_token: inbound.credentials.refreshToken });
+    return google.gmail({ version: "v1", auth });
+  })() : null;
+  // Falha fechada: a conta autenticada precisa ser exatamente a caixa dedicada.
+  if (gmailClient) {
+    let profileEmail = null;
+    try {
+      const profile = await gmailClient.users.getProfile({ userId: "me" });
+      profileEmail = profile.data.emailAddress ?? null;
+    } catch {
+      profileEmail = null; // sem detalhes: nunca registrar token/erro de OAuth com credenciais
+    }
+    if (!inboundProfileMatchesMailbox(profileEmail, inbound.credentials.mailbox)) {
+      repliesBlocked = true;
+      summary.replies = { status: "BLOCKED_MAILBOX_MISMATCH", threads: 0, replyToMatches: 0, captured: 0, processed: [] };
+      console.error("Respostas aos alertas: BLOCKED_MAILBOX_MISMATCH — a conta Gmail autenticada não é a caixa dedicada configurada (ACC_RISK_ALERTS_INBOUND_MAILBOX). Fase bloqueada.");
+    }
+  }
+  const gmail = repliesBlocked ? null : gmailClient;
+  const mailbox = inbound.ok ? inbound.credentials.mailbox : null;
   const riskStore = createSupabaseRiskAlertStore(supabase);
-  summary.replies = { threads: 0, replyToMatches: 0, captured: 0, processed: [] };
+  if (gmail) summary.replies = { status: "OK", threads: 0, replyToMatches: 0, captured: 0, skippedProjects: [], processed: [] };
 
-  for (const config of configs) {
+  for (const config of gmail ? configs : []) {
+    // Override de entrega do projeto precisa ser a própria caixa dedicada —
+    // senão as respostas chegariam a uma caixa que este worker não lê.
+    const { data: overrideRow } = await supabase.from("project_weekly_schedule_ingestion_configs").select("pilot_delivery_override_email").eq("project_id", config.projectId).maybeSingle();
+    const compat = checkOverrideCompatibility(mailbox, overrideRow?.pilot_delivery_override_email ?? null);
+    if (!compat.ok) {
+      summary.replies.skippedProjects.push({ projectId: config.projectId, status: compat.status });
+      console.log(`Projeto ${config.projectId}: respostas ${compat.status} (override de entrega difere da caixa dedicada).`);
+      continue;
+    }
     // Threads dos alertas já enviados deste projeto.
     const { data: conversations } = await supabase
       .from("alert_email_conversations")
@@ -482,8 +523,11 @@ if (summary.classification) console.table([summary.classification]);
 if (summary.workbooks) console.table([summary.workbooks]);
 if (Object.keys(summary.alerts).length > 0) console.table([summary.alerts]);
 if (summary.replies) {
-  console.table([{ threads: summary.replies.threads, viaReplyTo: summary.replies.replyToMatches, capturadas: summary.replies.captured }]);
+  console.table([{ status: summary.replies.status ?? "OK", threads: summary.replies.threads, viaReplyTo: summary.replies.replyToMatches, capturadas: summary.replies.captured, projetosPulados: (summary.replies.skippedProjects ?? []).length }]);
   if (summary.replies.processed.length) console.table(summary.replies.processed);
 }
+// Fase de respostas bloqueada (perfil ≠ caixa dedicada): as demais fases já
+// concluíram; o job termina com erro para ficar visível, sem interromper nada.
+if (repliesBlocked) process.exitCode = 1;
 console.log("");
 console.log("INGESTÃO SEMANAL concluída.");
