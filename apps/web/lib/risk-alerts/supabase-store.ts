@@ -9,6 +9,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ALERT_REPLY_MAILBOX_ENV, normalizeAlertReplyMailbox } from "@/lib/email/alert-reply-address";
+import { normalizeDeliveryOverrideEmail } from "@/lib/email/pilot-delivery-override";
 import type { SlaArea, SlaAreaResponsibles, SlaMatrixRule, SlaProjectSettings } from "@/lib/sla/types";
 
 import {
@@ -62,7 +63,7 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
         client.from("projects").select("id,name").eq("id", projectId).maybeSingle(),
         client
           .from("project_weekly_schedule_ingestion_configs")
-          .select("enabled,risk_alerts_enabled,pilot_recipient_allowlist_user_ids,sender_domain,risk_alert_severity_map,pilot_project_confirmed_at")
+          .select("enabled,risk_alerts_enabled,pilot_recipient_allowlist_user_ids,sender_domain,risk_alert_severity_map,pilot_project_confirmed_at,pilot_delivery_override_email")
           .eq("project_id", projectId)
           .maybeSingle(),
         client.from("sla_matrix_rules").select("*").eq("project_id", projectId),
@@ -261,6 +262,7 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
               senderDomain: s(config.sender_domain),
               severityMap: (config.risk_alert_severity_map as IngestionAlertSeverityMap | null) ?? null,
               pilotProjectConfirmedAt: s(config.pilot_project_confirmed_at),
+              pilotDeliveryOverrideEmail: normalizeDeliveryOverrideEmail(s(config.pilot_delivery_override_email)),
             }
           : null,
         matrixRules: (rules ?? []).map((row) => mapRule(row as Row)),

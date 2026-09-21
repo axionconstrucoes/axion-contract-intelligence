@@ -36,6 +36,8 @@ import { applyForwardTimeout, applyScheduledTopLevel } from "./alert-state-machi
 import { buildAlertFollowUpEmail, buildImmediateRiskAlertEmail, buildRiskDigestEmail, formatDateTimeBR, type BuiltEmail } from "./build-risk-alert-emails";
 import { evaluatePilotReadiness, blockerToSuppressionReason, isSeverityMapComplete } from "./pilot-readiness";
 import { evaluateRecipient, planRiskAlerts } from "./plan-risk-alerts";
+import { resolveDeliveryAddress } from "@/lib/email/pilot-delivery-override";
+
 import { buildOpaqueReplyTo, generateReplyToken, hashReplyToken } from "./replies/reply-pipeline";
 import type { PendingOutboxRow, RiskAlertProjectSnapshot, RiskAlertStore } from "./store";
 import { createSupabaseRiskAlertStore, sanitizeError } from "./supabase-store";
@@ -151,6 +153,8 @@ export async function runRiskAlertCycle(options: RunRiskAlertCycleOptions = {}):
       workspaceConfigured: Boolean(snapshot.senderMailbox) || Boolean(options.provider),
       severityMapConfigured: isSeverityMapComplete(snapshot.config?.severityMap ?? null),
       replyMailboxConfigured: Boolean(snapshot.replyMailbox),
+      replyMailbox: snapshot.replyMailbox,
+      deliveryOverrideEmail: snapshot.config?.pilotDeliveryOverrideEmail ?? null,
     });
 
     const plan: RiskAlertPlan = planRiskAlerts({
@@ -314,14 +318,15 @@ export async function runRiskAlertCycle(options: RunRiskAlertCycleOptions = {}):
     }
 
     // ---- envio: entradas planejadas neste ciclo ----
-    const ctx: SendContext = { store, provider, projectId, projectName: snapshot.projectName, baseUrl, timeZone, nowIso, inlineLogo, caseIds, snapshot, policyFor };
+    const ctx: SendContext = { store, provider, projectId, projectName: snapshot.projectName, baseUrl, timeZone, nowIso, inlineLogo, caseIds, snapshot, policyFor, deliveredKeys: new Set() };
     const sentKeys = new Set<string>();
     for (const item of persisted) {
       if (item.entry.recipient.status !== "PENDING") continue;
       sentKeys.add(item.entry.idempotencyKey);
       const outcome = await sendPlanned(item.id, item.caseId, item.entry, ctx);
       if (outcome === "SENT") projectResult.sent += 1;
-      else projectResult.failed += 1;
+      else if (outcome === "FAILED") projectResult.failed += 1;
+      else projectResult.skipped += 1;
     }
 
     // ---- envio: pendentes de outras origens (manual, ação humana, Expert, retry) ----
@@ -351,6 +356,8 @@ interface SendContext {
   caseIds: Map<string, string>;
   snapshot: RiskAlertProjectSnapshot;
   policyFor: (area: SlaArea, riskLevel: SlaRiskLevel) => MatrixPolicy;
+  /** Deduplicação por evento × endereço efetivo (override do piloto): nunca dois e-mails iguais no mesmo ciclo. */
+  deliveredKeys: Set<string>;
 }
 
 /** Links das 5 ações (token curto/expirável, só hash persistido). */
@@ -366,7 +373,18 @@ async function issueActionLinks(ctx: SendContext, caseId: string, recipientUserI
   return links;
 }
 
-async function deliver(ctx: SendContext, outboxId: string, caseId: string | null, recipientUserId: string, recipientEmail: string, built: BuiltEmail, notificationType: string, escalationLevel: string | null, idempotencyKey: string): Promise<"SENT" | "FAILED"> {
+async function deliver(ctx: SendContext, outboxId: string, caseId: string | null, recipientUserId: string, recipientEmail: string, built: BuiltEmail, notificationType: string, escalationLevel: string | null, idempotencyKey: string): Promise<"SENT" | "FAILED" | "SKIPPED"> {
+  // Override de ENTREGA do piloto: só o To muda (nunca CC/BCC); o destinatário
+  // lógico (recipientUserId/recipientEmail) permanece na outbox e na auditoria.
+  const delivery = resolveDeliveryAddress({
+    logicalEmail: recipientEmail,
+    overrideEmail: ctx.snapshot.config?.pilotDeliveryOverrideEmail ?? null,
+    eventKey: `${caseId ?? idempotencyKey}:${notificationType}:${escalationLevel ?? "-"}`,
+  });
+  if (delivery.overridden && ctx.deliveredKeys.has(delivery.dedupKey)) {
+    await ctx.store.markSkipped(outboxId, `Deduplicado pelo override de entrega do piloto (mesmo evento já entregue em ${delivery.deliveryEmail} neste ciclo).`);
+    return "SKIPPED";
+  }
   try {
     const conversation = caseId ? await ctx.store.ensureConversation(ctx.projectId, caseId) : null;
     // Reply-To = caixa inbound OFICIAL (+alerta-<token>), só em mensagens
@@ -377,7 +395,7 @@ async function deliver(ctx: SendContext, outboxId: string, caseId: string | null
     const replyTo = conversation && ctx.snapshot.replyMailbox ? buildOpaqueReplyTo(ctx.snapshot.replyMailbox, replyToken) : undefined;
     const signed = appendAccEmailSignature({ text: built.text, html: built.html }, ctx.inlineLogo !== null);
     const sent = await ctx.provider.send({
-      to: recipientEmail,
+      to: delivery.deliveryEmail,
       subject: built.subject,
       text: signed.text,
       html: signed.html,
@@ -388,8 +406,9 @@ async function deliver(ctx: SendContext, outboxId: string, caseId: string | null
       references: conversation?.rootMessageIdHeader ? [conversation.rootMessageIdHeader] : undefined,
       correlationId: crypto.randomUUID(),
     });
-    const emailId = await ctx.store.recordEmail(ctx.projectId, { from: sent.from, to: recipientEmail, subject: built.subject, sentAt: sent.sentAt, snippet: built.text });
-    await ctx.store.markSent(outboxId, { recipientEmail, provider: sent.provider, providerMessageId: sent.providerMessageId, emailId, sentAt: sent.sentAt, messageIdHeader: sent.messageIdHeader, conversationId: conversation?.id ?? null });
+    const emailId = await ctx.store.recordEmail(ctx.projectId, { from: sent.from, to: delivery.deliveryEmail, subject: built.subject, sentAt: sent.sentAt, snippet: built.text });
+    await ctx.store.markSent(outboxId, { recipientEmail: delivery.deliveryEmail, provider: sent.provider, providerMessageId: sent.providerMessageId, emailId, sentAt: sent.sentAt, messageIdHeader: sent.messageIdHeader, conversationId: conversation?.id ?? null });
+    ctx.deliveredKeys.add(delivery.dedupKey);
     if (conversation) {
       if (!conversation.rootMessageIdHeader) await ctx.store.setConversationRoot(conversation.id, sent.messageIdHeader, sent.providerThreadId);
       await ctx.store.recordOutboundMessage({
@@ -404,7 +423,7 @@ async function deliver(ctx: SendContext, outboxId: string, caseId: string | null
         inReplyTo: conversation.rootMessageIdHeader,
         references: conversation.rootMessageIdHeader ? [conversation.rootMessageIdHeader] : [],
         replyTokenHash: replyTo ? hashReplyToken(replyToken) : null,
-        recipients: [recipientEmail],
+        recipients: [delivery.deliveryEmail],
         subject: built.subject,
         sentAt: sent.sentAt,
       });
@@ -414,7 +433,7 @@ async function deliver(ctx: SendContext, outboxId: string, caseId: string | null
         action: "RISK_ALERT_EMAIL_SENT",
         entityType: caseId ? "RISK_ALERT_CASE" : "RISK_ALERT_DIGEST",
         entityId: caseId ?? idempotencyKey,
-        detail: `E-mail ${notificationType}${escalationLevel ? ` (${escalationLevel})` : ""} enviado ao usuário ${recipientUserId} via ${sent.provider} (${sent.providerMessageId}). Chave ${idempotencyKey}.`,
+        detail: `E-mail ${notificationType}${escalationLevel ? ` (${escalationLevel})` : ""} enviado ao usuário ${recipientUserId} via ${sent.provider} (${sent.providerMessageId}). Chave ${idempotencyKey}.${delivery.overridden ? " Override de entrega do piloto: entregue na caixa institucional configurada (destinatário lógico preservado)." : ""}`,
       },
     ]);
     return "SENT";
@@ -426,7 +445,7 @@ async function deliver(ctx: SendContext, outboxId: string, caseId: string | null
   }
 }
 
-async function sendPlanned(outboxId: string, caseId: string | null, entry: PlannedOutboxEntry, ctx: SendContext): Promise<"SENT" | "FAILED"> {
+async function sendPlanned(outboxId: string, caseId: string | null, entry: PlannedOutboxEntry, ctx: SendContext): Promise<"SENT" | "FAILED" | "SKIPPED"> {
   const recipientEmail = entry.recipient.email;
   if (!recipientEmail) {
     await ctx.store.markFailed(outboxId, "Destinatário sem e-mail no momento do envio.");

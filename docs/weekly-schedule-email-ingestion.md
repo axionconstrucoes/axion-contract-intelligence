@@ -660,6 +660,31 @@ auditado) e o caso de risco correspondente é encerrado pelo ciclo
 (`closed = resolved_at`). Antes desta versão nenhum alerta de ausência
 era resolvido automaticamente.
 
+### 9.8 Override de entrega do piloto (caixa institucional única)
+
+Migration `20260921120000_pilot_delivery_override.sql` (aditiva; coluna
+`pilot_delivery_override_email`, lowercase validado, sem UPDATE para
+`authenticated`). Quando preenchida — `--delivery-override=axion@axion.com.br`
+no script de configuração — **todos** os e-mails de alerta de risco do
+projeto (imediato, consolidado, escalonamento por prazo e imediato,
+encaminhamento, devolução, resposta do Expert, confirmação) são
+entregues **somente** nesse endereço, sem CC/BCC. Só a entrega muda
+(`deliver()` em `run-risk-alert-cycle.ts`): destinatário lógico
+(user_id da Matriz + allowlist), responsável, ações, permissões e
+auditoria continuam da pessoa; a auditoria registra "override de
+entrega do piloto" e o destinatário lógico, sem conteúdo sensível.
+Deduplicação por evento × endereço efetivo normalizado (segundo
+destinatário lógico do mesmo evento ⇒ `SKIPPED`). O guard global admite
+a caixa institucional (`ACC_PILOT_INSTITUTIONAL_MAILBOXES`) sem alterar
+a lista fixa de participantes; a caixa **não** é usuário/profile.
+Loop/autoresposta: mensagens originadas da própria caixa (inclusive
+plus-address), auto-replies, bounces e Message-IDs já enviados são
+ignorados; o worker busca só `-from:me` e descarta `isSentByMailbox`.
+Readiness: o override precisa ser a própria caixa inbound oficial
+(`GOOGLE_GMAIL_INBOUND_MAILBOX`), para que as respostas voltem à caixa
+que recebe os alertas (`DELIVERY_OVERRIDE_REPLY_MAILBOX_MISMATCH`).
+Sem override, entrega normal; outros projetos não são afetados.
+
 ### 9.6 Gatilho horário pelo GitHub Actions e configuração de ativação
 
 Job `risk-alerts` (`needs: ingest`, roda depois da captura de respostas):
@@ -693,6 +718,9 @@ severity map gravado. Manter a feature desligada até a validação completa.
 
 ## 8. Testes
 
+- `node scripts/test-pilot-delivery-override.mjs` (12 itens: override de entrega
+  por projeto — imediato, digest, escalonamento, encaminhamento, resposta,
+  deduplicação, nenhum envio pessoal, loops)
 - `node scripts/test-pilot-readiness-consistency.mjs` (17 itens: cadeia única,
   boardAfter/limite, ESCALAO_2 legado, rótulos, severidade ausência × motor,
   ausência de MPP / Curva S / planilha, resolução por evidência)

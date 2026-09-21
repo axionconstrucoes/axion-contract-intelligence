@@ -426,7 +426,7 @@ await check("30. Nenhum To/Cc/Bcc adicional: um destinatário por entrada; provi
   const immediate = result.outbox.filter((e) => e.notificationType === "IMMEDIATE");
   assert(immediate.length === 2 && immediate.every((e) => typeof e.recipient.userId === "string"));
   const cycle = readSource("apps/web/lib/risk-alerts/run-risk-alert-cycle.ts");
-  assert(cycle.includes("to: recipientEmail,") && !/\bcc:|\bbcc:/.test(cycle));
+  assert(cycle.includes("to: delivery.deliveryEmail,") && !/\bcc:|\bbcc:/.test(cycle), "um único To (endereço efetivo: lógico ou override institucional do piloto); nunca CC/BCC");
   const sql = readSource(MIGRATION);
   assert(sql.includes("recipient_user_id uuid not null"));
 });

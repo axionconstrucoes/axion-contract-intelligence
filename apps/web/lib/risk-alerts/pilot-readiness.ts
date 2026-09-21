@@ -84,6 +84,9 @@ export function evaluatePilotReadiness(input: PilotReadinessInput): { ready: boo
   if (!input.workspaceConfigured) blockers.push("WORKSPACE_NOT_CONFIGURED");
   if (!input.severityMapConfigured) blockers.push("SEVERITY_MAP_NOT_CONFIGURED");
   if (!input.replyMailboxConfigured) blockers.push("REPLY_MAILBOX_NOT_CONFIGURED");
+  // Override de entrega do piloto: as respostas precisam voltar à MESMA caixa
+  // que recebe os alertas — o override só é válido quando é a caixa inbound oficial.
+  if (input.deliveryOverrideEmail && input.replyMailbox && input.deliveryOverrideEmail !== input.replyMailbox) blockers.push("DELIVERY_OVERRIDE_REPLY_MAILBOX_MISMATCH");
   return { ready: blockers.length === 0, blockers };
 }
 
@@ -92,6 +95,8 @@ export function blockerToSuppressionReason(blocker: PilotReadinessBlocker): Risk
   switch (blocker) {
     case "WORKSPACE_NOT_CONFIGURED":
       return "PROVIDER_NOT_CONFIGURED";
+    case "DELIVERY_OVERRIDE_REPLY_MAILBOX_MISMATCH":
+      return "REPLY_MAILBOX_NOT_CONFIGURED";
     default:
       return blocker;
   }
@@ -108,4 +113,5 @@ export const PILOT_READINESS_LABELS: Record<PilotReadinessBlocker, string> = {
   WORKSPACE_NOT_CONFIGURED: "Google Workspace (mailbox remetente) não configurado",
   SEVERITY_MAP_NOT_CONFIGURED: "Severidade dos alertas de ausência não configurada para o projeto",
   REPLY_MAILBOX_NOT_CONFIGURED: "Caixa inbound oficial do ACC (GOOGLE_GMAIL_INBOUND_MAILBOX) não configurada no worker — sem Reply-To/resposta por e-mail",
+  DELIVERY_OVERRIDE_REPLY_MAILBOX_MISMATCH: "Override de entrega do piloto diferente da caixa inbound oficial — respostas não voltariam à caixa que recebe os alertas",
 };
