@@ -536,7 +536,7 @@ await check("55. Ricardo Martins permitido pelo guard quando configurado por amb
   assert(withEnv.effectiveRecipientEmail === "participante.adicional@axion.com.br", "configurado => não redirecionado");
   assert(ACC_PILOT_ALLOWED_RECIPIENTS.length === 4, "lista fixa preservada (outros pilotos intactos)");
   assert(parsePilotAdditionalRecipients("participante.adicional@axion.com.br, invalido, alguem@gmail.com").join() === "participante.adicional@axion.com.br", "só corporativo válido");
-  assert(resolvePilotAllowedRecipients({ additionalRecipients: undefined }).length === 4);
+  assert(resolvePilotAllowedRecipients({ additionalRecipients: undefined }).length === 5, "4 participantes fixos + 1 caixa institucional do ACC (override de entrega)");
   const guarded = applyPilotOutboundGuard({ to: "participante.adicional@axion.com.br", subject: "s", text: "t", correlationId: "c" }, { ...env, additionalRecipients: "participante.adicional@axion.com.br" });
   assert(guarded.to === "participante.adicional@axion.com.br" && guarded.subject.startsWith("[TESTE CONTROLADO] "));
   const guardSource = readSource("apps/web/lib/email/pilot-outbound-guard.ts");
