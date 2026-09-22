@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Leaf,
   ListChecks,
+  Mail,
   PackagePlus,
   PanelLeftClose,
   PanelLeftOpen,
@@ -38,6 +39,7 @@ const ICONS_BY_NAME: Record<string, LucideIcon> = {
   LayoutDashboard,
   Leaf,
   ListChecks,
+  Mail,
   PackagePlus,
   Plug,
   Rocket,
@@ -89,6 +91,19 @@ export function AppSidebar({ projectId, hiddenHrefs = [] }: { projectId: string;
   // desktop, mobile e menu recolhido (uma única iteração abaixo).
   const visibleItems = NAV_ITEMS.filter((item) => !hiddenHrefs.includes(item.href));
 
+  // Item ativo = o href MAIS ESPECÍFICO (mais longo) que é prefixo da
+  // rota atual — nunca "o primeiro que combinar" por ordem de array.
+  // Necessário desde que "ledger/lote-alertas" foi adicionado como item
+  // PRÓPRIO (sem submenu, ver nav-items.ts): sem isto, uma página em
+  // /{projectId}/ledger/lote-alertas/... acenderia "Event Ledger" E
+  // "Lotes de Alertas" ao mesmo tempo (ambos os hrefs são prefixo).
+  const activeHref = visibleItems.reduce<string | null>((best, item) => {
+    const href = `/${projectId}/${item.href}`;
+    if (!pathname?.startsWith(href)) return best;
+    if (!best || href.length > best.length) return href;
+    return best;
+  }, null);
+
   return (
     <aside
       className={cn(
@@ -104,7 +119,7 @@ export function AppSidebar({ projectId, hiddenHrefs = [] }: { projectId: string;
       <nav className="flex flex-1 flex-col gap-0.5 p-2">
         {visibleItems.map((item) => {
           const href = `/${projectId}/${item.href}`;
-          const active = pathname?.startsWith(href);
+          const active = href === activeHref;
           const Icon = ICONS_BY_NAME[item.icon];
           const help = getFeatureHelp(item.helpId);
           // Ajuda via hover/focus no próprio item (title nativo), nunca um

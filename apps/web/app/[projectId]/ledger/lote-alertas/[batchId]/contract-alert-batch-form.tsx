@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
+import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 
 import { SeverityBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
@@ -8,6 +10,7 @@ import { Select } from "@/components/ui/select";
 import {
   CONTRACT_ALERT_BATCH_ITEM_ACTIONS,
   CONTRACT_ALERT_BATCH_ITEM_ACTION_LABELS,
+  CONTRACT_ALERT_BATCH_VIEW_EVENT_LABEL,
   type ContractAlertBatchItemAction,
 } from "@/lib/email-actions/contract-alert-batch-types";
 import { resolveContractAlertBatchAnsweredState } from "@/lib/email-actions/contract-alert-batch-validation";
@@ -82,6 +85,20 @@ export function ContractAlertBatchForm({
                 <SeverityBadge severity={item.severity} />
                 <h2 className="font-semibold text-foreground">{item.title}</h2>
               </div>
+              {/* Navegação/consulta apenas — nunca conta como resposta
+                  (ver contract-alert-batch-types.ts). Abre em nova aba
+                  para nunca perder o progresso já preenchido no
+                  formulário deste lote. A tela do evento já mostra
+                  evidência/origens — nunca duplicadas aqui. */}
+              <Link
+                href={`/${projectId}/ledger/${item.eventId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline dark:text-blue-400"
+              >
+                {CONTRACT_ALERT_BATCH_VIEW_EVENT_LABEL}
+                <ExternalLink className="size-3" />
+              </Link>
             </div>
 
             <div className="grid w-full gap-2 sm:w-[260px]">

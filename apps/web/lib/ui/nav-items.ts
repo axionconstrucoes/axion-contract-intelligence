@@ -28,6 +28,12 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "dashboard", label: "Dashboard", icon: "LayoutDashboard", helpId: "dashboard" },
   { href: "timeline", label: "Timeline", icon: "History", helpId: "timeline" },
   { href: "ledger", label: "Event Ledger", icon: "BookText", helpId: "event-ledger" },
+  // Lotes semanais automáticos de alertas MÉDIO/BAIXO (contract_alert_batches)
+  // — CRÍTICO/ALTO continuam no fluxo imediato do próprio Event Ledger,
+  // acima. Arquitetura de navegação atual é uma lista plana (sem
+  // submenu) — por isso este item é direto, não um filho de "Event
+  // Ledger" (ver app-sidebar.tsx).
+  { href: "ledger/lote-alertas", label: "Lotes de Alertas", icon: "Mail", helpId: "lotes-de-alertas" },
   { href: "action-requests", label: "Solicitações", icon: "ListChecks", helpId: "solicitacoes" },
   { href: "acoes", label: "Ações e Escalonamentos", icon: "TimerReset", helpId: "acoes-escalonamentos" },
   { href: "juridico", label: "Jurídico", icon: "Scale", helpId: "juridico" },

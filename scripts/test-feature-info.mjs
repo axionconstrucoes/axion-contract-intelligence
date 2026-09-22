@@ -75,6 +75,10 @@ const EXPECTED_SIDEBAR_LABELS = [
   "Dashboard",
   "Timeline",
   "Event Ledger",
+  // Lote semanal automático de alertas MÉDIO/BAIXO — item próprio
+  // (arquitetura de sidebar atual não tem submenu), CRÍTICO/ALTO
+  // continuam no fluxo imediato do próprio Event Ledger.
+  "Lotes de Alertas",
   "Solicitações",
   "Ações e Escalonamentos",
   // Expert Jurídico: ponto único para análise de contratos e consultas

@@ -41,6 +41,13 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
       "Mantém os acontecimentos relevantes identificados no projeto, com origem, evidência, impacto, classificação e rastreabilidade.",
   },
   {
+    id: "lotes-de-alertas",
+    title: "Lotes de Alertas",
+    shortDescription: "Lote semanal automático de alertas MÉDIO e BAIXO por destinatário.",
+    description:
+      "Alertas de contrato classificados como MÉDIO ou BAIXO são agregados automaticamente, uma vez por semana e por destinatário, em um único e-mail com um bloco independente por evento. CRÍTICO e ALTO continuam no fluxo imediato do Event Ledger, sem passar por aqui. A resposta final ao ACC só é liberada quando todos os alertas do lote tiverem uma ação registrada.",
+  },
+  {
     id: "solicitacoes",
     title: "Solicitações",
     shortDescription: "Pedidos de informação, documentação ou providências.",
