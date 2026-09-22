@@ -150,3 +150,52 @@ export function planWeeklyContractAlertBatches(
 
   return plans;
 }
+
+// ------------------------------------------------------------------
+// "Responsável pelos alertas contratuais" — resolução do destinatário
+// automático a partir da configuração EXPLÍCITA por projeto
+// (contract_alert_responsibles), decisão aprovada que substitui o gap
+// documentado anteriormente. Puro/testável: run-weekly-contract-alert-
+// batches.ts só carrega `configured` (contract_alert_responsibles) e
+// `activeMembers` (project_memberships com status = ACTIVE, revalidado
+// agora — nunca o que era válido no cadastro) via I/O real; esta função
+// decide, sem tocar em banco, se cada configuração ainda é válida.
+//
+// Um responsável configurado para um usuário que NÃO está em
+// `activeMembers` — porque foi suspenso/removido do projeto DEPOIS do
+// cadastro (requisito 11: "usuário suspenso/inativo -> rejeitado"), OU
+// porque a linha nunca correspondeu a um membro daquele projeto
+// (requisito 11: "usuário fora do projeto -> rejeitado", cenário que a
+// FK composta do banco já impede no cadastro, mas esta função nunca
+// confia apenas nisso) — nunca aparece no Map resultante. Sem
+// configuração alguma para um projeto, esse projeto também não aparece
+// (requisito 11: "responsável inexistente -> nenhum lote").
+export interface ConfiguredContractAlertResponsible {
+  projectId: string;
+  responsibleUserId: string;
+}
+
+export interface ActiveProjectMemberForResponsible {
+  projectId: string;
+  userId: string;
+  email: string;
+  name: string;
+}
+
+export function resolveWeeklyAutoBatchRecipientsFromConfig(
+  configured: readonly ConfiguredContractAlertResponsible[],
+  activeMembers: readonly ActiveProjectMemberForResponsible[]
+): Map<string, WeeklyAutoBatchRecipient[]> {
+  const activeByKey = new Map(activeMembers.map((m) => [`${m.projectId}:${m.userId}`, m]));
+  const recipientsByProject = new Map<string, WeeklyAutoBatchRecipient[]>();
+
+  for (const row of configured) {
+    const active = activeByKey.get(`${row.projectId}:${row.responsibleUserId}`);
+    if (!active) continue;
+    recipientsByProject.set(row.projectId, [
+      { projectId: row.projectId, userId: row.responsibleUserId, email: active.email, name: active.name },
+    ]);
+  }
+
+  return recipientsByProject;
+}

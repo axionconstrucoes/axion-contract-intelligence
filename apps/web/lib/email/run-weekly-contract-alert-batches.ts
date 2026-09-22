@@ -6,6 +6,9 @@ import type { AlertSeverity } from "@axion/types";
 import { resolveContractAlertBatchWeeklyWindow, DEFAULT_PROJECT_TIMEZONE } from "./contract-alert-batch-weekly-window";
 import {
   planWeeklyContractAlertBatches,
+  resolveWeeklyAutoBatchRecipientsFromConfig,
+  type ActiveProjectMemberForResponsible,
+  type ConfiguredContractAlertResponsible,
   type WeeklyAutoBatchRecipient,
   type WeeklyAutoEligibleEventInput,
 } from "./contract-alert-batch-weekly-eligibility";
@@ -36,6 +39,8 @@ export interface WeeklyContractAlertBatchRunResult {
   plansConsidered: number;
   created: number;
   skippedAlreadyExists: number;
+  /** Projetos com evento(s) elegível(is) mas SEM responsável configurado (ou configurado porém não mais ACTIVE) — pendência visível também na página /lote-alertas, nunca um destinatário escolhido silenciosamente. */
+  skippedNoResponsible: number;
   sent: number;
   failed: number;
 }
@@ -55,46 +60,63 @@ interface AiAssessmentRow {
 }
 
 // ============================================================
-// GAP CONHECIDO — NÃO PREENCHIDO DE PROPÓSITO (ver relatório enviado ao
-// usuário). Investigação exaustiva na arquitetura atual do ACC não
-// encontrou uma fonte inequívoca de "responsável do alerta/projeto"
-// para contract_events:
+// "Responsável pelos alertas contratuais" — decisão aprovada, destrava
+// o gap documentado na rodada anterior (investigação exaustiva não
+// encontrou nenhuma fonte inequívoca de responsável para
+// contract_events: nem ADMINISTRADOR, nem criador do evento, nem último
+// responsável, nem o mecanismo institucional do piloto — esse último
+// decide só ONDE o e-mail é entregue, nunca QUEM é o destinatário
+// lógico). A fonte agora é EXPLÍCITA e configurada pelo usuário:
+// contract_alert_responsibles (1 linha por projeto, ver migration
+// 20260922100000 e a página /lote-alertas, que também mostra a mesma
+// pendência descrita abaixo).
 //
-//   1. send-alert-actions.ts (fluxo imediato CRÍTICO/ALTO, já existente
-//      e inalterado por esta feature) usa `responsibleName: null` — o
-//      destinatário é escolhido livremente por um humano entre TODOS os
-//      membros ACTIVE do projeto (qualquer permissão), sem nenhuma
-//      pré-seleção ou default. Nunca ADMINISTRADOR-only — essa foi uma
-//      suposição da rodada anterior, não aprovada e removida aqui.
-//   2. contract_alert_batches.recipient_user_id é a COLUNA DE DESTINO
-//      (preenchida quando um lote é criado), nunca uma fonte de
-//      configuração de destinatário — não existe hoje um "destinatário
-//      padrão do projeto" configurado em nenhuma tabela.
-//   3. sla_actions.responsible_user_id + related_event_id existem no
-//      schema (origin = 'EVENT' é um valor aceito) e SERIAM a ponte
-//      natural — mas nenhum caminho de código atual (AssessScheduleDelay
-//      Button, curadoria multiagente, ou qualquer outro) cria de fato um
-//      sla_action a partir de um contract_event: related_event_id nunca
-//      é escrito. A coluna existe, mas está desconectada deste domínio.
-//   4. O mecanismo institucional/pilot delivery (ACC_PILOT_INSTITUTIONAL_
-//      MAILBOXES / pilot-delivery-override.ts) decide APENAS para ONDE o
-//      e-mail efetivamente é entregue durante o piloto (effective_
-//      recipient_email) — nunca QUEM é o destinatário lógico
-//      (recipient_user_id precisa ser um membro real do projeto, pela FK
-//      composta para project_memberships).
-//
-// Por isso esta função NUNCA inventa uma regra (nem ADMINISTRADOR, nem
-// "todos os ativos", nem qualquer outra) — devolve um Map vazio para
-// todo projeto até que o usuário aprove explicitamente uma fonte real.
-// Efeito prático: o job continua seguro de rodar (calcula elegibilidade,
-// nunca envia nada, nunca inventa destinatário) — só não compõe nenhum
-// lote de fato até esta função ser preenchida com a regra aprovada.
-// ============================================================
+// Sem responsável configurado para um projeto — ou configurado mas o
+// membership não é mais ACTIVE (removido/suspenso depois do cadastro,
+// nunca confiar apenas no que era válido na hora de configurar) — esse
+// projeto simplesmente não entra no Map: nenhum lote é criado/enviado,
+// nunca um destinatário escolhido silenciosamente. `skippedNoResponsible`
+// no resultado do job é o sinal operacional dessa pendência.
 async function resolveWeeklyContractAlertBatchRecipients(
-  _admin: ReturnType<typeof createSupabaseAdminClient>,
-  _projectIds: readonly string[]
+  admin: ReturnType<typeof createSupabaseAdminClient>,
+  projectIds: readonly string[]
 ): Promise<Map<string, WeeklyAutoBatchRecipient[]>> {
-  return new Map();
+  if (projectIds.length === 0) return new Map();
+
+  const { data: configuredRows, error: configuredError } = await admin
+    .from("contract_alert_responsibles")
+    .select("project_id,responsible_user_id")
+    .in("project_id", projectIds);
+  if (configuredError) throw new Error(`Falha ao carregar responsáveis pelos alertas contratuais: ${configuredError.message}`);
+  const configured: ConfiguredContractAlertResponsible[] = ((configuredRows ?? []) as Array<{
+    project_id: string;
+    responsible_user_id: string;
+  }>).map((row) => ({ projectId: row.project_id, responsibleUserId: row.responsible_user_id }));
+  if (configured.length === 0) return new Map();
+
+  // Revalida ACTIVE agora — nunca confia em que era válido quando o
+  // responsável foi configurado (o membro pode ter sido suspenso ou
+  // removido do projeto depois). A decisão em si (configurado × ativo →
+  // destinatário real, ou rejeitado) é pura — ver
+  // resolveWeeklyAutoBatchRecipientsFromConfig.
+  const { data: membershipRows, error: membershipError } = await admin
+    .from("project_memberships")
+    .select("project_id,user_id,status,profiles(name,email)")
+    .in("project_id", projectIds)
+    .eq("status", "ACTIVE");
+  if (membershipError) throw new Error(`Falha ao validar membership dos responsáveis: ${membershipError.message}`);
+  const activeMembers: ActiveProjectMemberForResponsible[] = [];
+  for (const row of (membershipRows ?? []) as Array<{
+    project_id: string;
+    user_id: string;
+    profiles: { name: string; email: string } | { name: string; email: string }[] | null;
+  }>) {
+    const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+    if (!profile?.email) continue;
+    activeMembers.push({ projectId: row.project_id, userId: row.user_id, email: profile.email, name: profile.name ?? "Responsável" });
+  }
+
+  return resolveWeeklyAutoBatchRecipientsFromConfig(configured, activeMembers);
 }
 
 export async function runWeeklyContractAlertBatches(
@@ -110,6 +132,7 @@ export async function runWeeklyContractAlertBatches(
     plansConsidered: 0,
     created: 0,
     skippedAlreadyExists: 0,
+    skippedNoResponsible: 0,
     sent: 0,
     failed: 0,
   };
@@ -156,10 +179,15 @@ export async function runWeeklyContractAlertBatches(
   if (alreadyBatchedError) throw new Error(`Falha ao carregar itens de lote existentes: ${alreadyBatchedError.message}`);
   const alreadyBatchedEventIds = new Set<string>(((alreadyBatchedRows ?? []) as Array<{ event_id: string }>).map((r) => r.event_id));
 
-  // 3. Destinatário automático — ver GAP CONHECIDO acima. Sem fonte
-  // aprovada, devolve vazio para todo projeto (nenhum lote inventado).
+  // 3. Destinatário automático — "Responsável pelos alertas contratuais"
+  // configurado explicitamente por projeto (contract_alert_responsibles).
+  // Projeto sem responsável ativo configurado simplesmente não entra no
+  // Map (ver resolveWeeklyContractAlertBatchRecipients acima) —
+  // contabilizado em skippedNoResponsible, nunca um destinatário
+  // inventado.
   const candidateProjectIds = Array.from(new Set(eligibleEventInputs.filter((e) => e.severity !== null).map((e) => e.projectId)));
   const recipientsByProject = await resolveWeeklyContractAlertBatchRecipients(admin, candidateProjectIds);
+  result.skippedNoResponsible = candidateProjectIds.filter((id) => !recipientsByProject.has(id)).length;
 
   const plans = planWeeklyContractAlertBatches({
     events: eligibleEventInputs,

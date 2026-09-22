@@ -13,7 +13,7 @@ import { register } from "node:module";
 
 register("./ts-module-resolver.mjs", import.meta.url);
 
-const { planWeeklyContractAlertBatches, isEventEligibleForWeeklyAutoBatch } = await import(
+const { planWeeklyContractAlertBatches, isEventEligibleForWeeklyAutoBatch, resolveWeeklyAutoBatchRecipientsFromConfig } = await import(
   "../apps/web/lib/email/contract-alert-batch-weekly-eligibility.ts"
 );
 const { computeContractAlertBatchListStatus } = await import(
@@ -352,14 +352,129 @@ check("resolveContractAlertBatchWeeklyWindow: fechamento é exatamente quarta-fe
   assert.equal(nextWeek.cutoffDate, "2026-09-23", "quinta-feira em diante aponta para o PRÓXIMO fechamento, nunca retroage");
 });
 
-check("destinatário do lote automático vem de uma fonte real aprovada, nunca de uma regra genérica de ADMINISTRADOR (gap conhecido, documentado, não implementado sem aprovação)", () => {
+check("destinatário do lote automático vem da configuração real EXPLÍCITA (contract_alert_responsibles), nunca de uma regra genérica de ADMINISTRADOR", () => {
   const runner = readSource("apps/web/lib/email/run-weekly-contract-alert-batches.ts");
   assert(
     !/\.eq\(\s*["']permission["']\s*,\s*["']ADMINISTRADOR["']\s*\)/.test(runner),
-    "não deveria mais filtrar project_memberships por permission = ADMINISTRADOR — suposição não aprovada da rodada anterior"
+    "não deveria mais filtrar project_memberships por permission = ADMINISTRADOR — suposição não aprovada, já removida"
   );
-  assert(runner.includes("resolveWeeklyContractAlertBatchRecipients"), "resolução de destinatário deveria estar isolada numa função própria (fácil de substituir quando a fonte real for aprovada)");
-  assert(runner.includes("GAP CONHECIDO"), "o gap de arquitetura (sem responsável inequívoco para contract_events) deveria estar documentado no código, não silenciosamente contornado");
+  assert(runner.includes("resolveWeeklyContractAlertBatchRecipients"), "resolução de destinatário deveria estar isolada numa função própria");
+  assert(runner.includes('from("contract_alert_responsibles")'), "deveria carregar a configuração explícita por projeto");
+  assert(runner.includes("resolveWeeklyAutoBatchRecipientsFromConfig"), "a decisão configurado×ativo deveria usar a função pura testável, nunca reimplementada inline");
+});
+
+check("migration: contract_alert_responsibles garante no BANCO que o responsável é um membro real do MESMO projeto (FK composta), RLS só ADMINISTRADOR escreve", () => {
+  const migration = readSource("supabase/migrations/20260922100000_contract_alert_responsible_foundation.sql");
+  assert(migration.includes("foreign key (project_id, responsible_user_id)\n    references public.project_memberships (project_id, user_id)"), "FK composta para project_memberships deveria existir (mesmo padrão de sla_area_responsibles)");
+  assert(migration.includes('has_project_permission(project_id, \'ADMINISTRADOR\')'), "RLS de escrita deveria exigir ADMINISTRADOR");
+  assert(!/alter\s+table\s+public\.contract_alert_batches\b/i.test(migration), "migration é uma tabela nova e isolada — nunca deveria tocar contract_alert_batches");
+});
+
+// ------------------------------------------------------------------
+// Requisito 11 — testes obrigatórios da configuração de responsável
+// ------------------------------------------------------------------
+check("responsável configurado (membro ATIVO do projeto) -> lote é criado para ele", () => {
+  const recipients = resolveWeeklyAutoBatchRecipientsFromConfig(
+    [{ projectId: "p1", responsibleUserId: "user-1" }],
+    [{ projectId: "p1", userId: "user-1", email: "user1@axion.com.br", name: "Responsável Um" }]
+  );
+  assert.deepEqual(recipients.get("p1"), [
+    { projectId: "p1", userId: "user-1", email: "user1@axion.com.br", name: "Responsável Um" },
+  ]);
+
+  // E o lote de fato é composto para ele (nível de composição pura).
+  const plans = planWeeklyContractAlertBatches({
+    events: [event("a", "p1", "BAIXA")],
+    alreadyBatchedEventIds: new Set(),
+    recipientsByProject: recipients,
+    cutoffDate: CUTOFF_DATE,
+  });
+  assert.equal(plans.length, 1);
+  assert.equal(plans[0].recipientUserId, "user-1");
+});
+
+check("responsável inexistente (projeto sem nenhuma configuração) -> nenhum lote", () => {
+  const recipients = resolveWeeklyAutoBatchRecipientsFromConfig([], []);
+  assert.equal(recipients.size, 0);
+
+  const plans = planWeeklyContractAlertBatches({
+    events: [event("a", "p1", "BAIXA")],
+    alreadyBatchedEventIds: new Set(),
+    recipientsByProject: recipients,
+    cutoffDate: CUTOFF_DATE,
+  });
+  assert.equal(plans.length, 0);
+});
+
+check("usuário fora do projeto (configurado em p1, ativo só em p2) -> rejeitado, nenhum lote em p1", () => {
+  const recipients = resolveWeeklyAutoBatchRecipientsFromConfig(
+    [{ projectId: "p1", responsibleUserId: "user-2" }],
+    [{ projectId: "p2", userId: "user-2", email: "user2@axion.com.br", name: "Responsável Dois" }]
+  );
+  assert.equal(recipients.has("p1"), false, "user-2 não é membro ACTIVE de p1 — nunca aceito só por ser ativo em outro projeto");
+  assert.equal(recipients.size, 0);
+});
+
+check("usuário suspenso/inativo (configurado, mas não está mais entre os ACTIVE revalidados) -> rejeitado", () => {
+  // activeMembers vazio simula exatamente o que a query real produziria
+  // para um membership com status != ACTIVE (o filtro .eq("status",
+  // "ACTIVE") já exclui a linha antes de chegar aqui) — a config antiga
+  // continua na tabela (nunca apagada silenciosamente), mas não vira
+  // destinatário.
+  const recipients = resolveWeeklyAutoBatchRecipientsFromConfig(
+    [{ projectId: "p1", responsibleUserId: "user-1" }],
+    []
+  );
+  assert.equal(recipients.has("p1"), false);
+});
+
+check("execução repetida (mesmo responsável, mesmo fechamento) -> sem duplicidade (mesma constraint de banco do teste C, agora também exercida com destinatário real configurado)", () => {
+  const recipients = resolveWeeklyAutoBatchRecipientsFromConfig(
+    [{ projectId: "p1", responsibleUserId: "user-1" }],
+    [{ projectId: "p1", userId: "user-1", email: "user1@axion.com.br", name: "Responsável Um" }]
+  );
+  const planA = planWeeklyContractAlertBatches({
+    events: [event("a", "p1", "BAIXA")],
+    alreadyBatchedEventIds: new Set(),
+    recipientsByProject: recipients,
+    cutoffDate: CUTOFF_DATE,
+  });
+  const planB = planWeeklyContractAlertBatches({
+    events: [event("a", "p1", "BAIXA")],
+    alreadyBatchedEventIds: new Set(),
+    recipientsByProject: recipients,
+    cutoffDate: CUTOFF_DATE,
+  });
+  // Mesmo plano determinístico nas duas "execuções" — quem impede a
+  // duplicação de fato é o índice único parcial (project_id,
+  // recipient_user_id, cutoff_date) + insert-then-catch-23505, já
+  // verificado no teste C; aqui confirmamos que a composição em si é
+  // estável/determinística para a mesma entrada.
+  assert.deepEqual(planA, planB);
+});
+
+check("server action de configuração valida no servidor: usuário pertence ao projeto E está ACTIVE (nunca confia no <select> do navegador)", () => {
+  const action = readSource("apps/web/app/[projectId]/ledger/lote-alertas/responsible-actions.ts");
+  assert(action.includes('from("project_memberships")'));
+  assert(action.includes('.eq("project_id", projectId)') && action.includes('.eq("user_id", responsibleUserId)'));
+  assert(/membership\.status !== ["']ACTIVE["']/.test(action), "deveria rejeitar explicitamente um usuário não ACTIVE");
+  assert(action.includes('getCurrentProjectPermission'), "só ADMINISTRADOR pode configurar (checado no servidor, não só na RLS)");
+});
+
+check("página /lote-alertas mostra a pendência com clareza quando não há responsável configurado (ou o configurado não é mais ACTIVE) — nunca escolhe alguém silenciosamente", () => {
+  const page = readSource("apps/web/app/[projectId]/ledger/lote-alertas/page.tsx");
+  assert(page.includes("getContractAlertResponsible"));
+  assert(page.includes("ContractAlertResponsibleForm"));
+  assert(page.includes("isCurrentlyActive"));
+  assert(/Nenhum responsável configurado/.test(page));
+});
+
+check("piloto continua usando o mecanismo institucional existente para a entrega física — configuração de responsável decide só QUEM, nunca ONDE", () => {
+  const sender = readSource("apps/web/lib/email/send-contract-alert-batch-email.ts");
+  assert(sender.includes('from "./pilot-outbound-guard"'));
+  assert(sender.includes("resolveEffectiveRecipient("));
+  const responsibleData = readSource("apps/web/lib/email/contract-alert-responsible-data.ts");
+  assert(!/pilot-outbound-guard|ACC_PILOT_INSTITUTIONAL_MAILBOXES/.test(responsibleData), "a configuração de responsável nunca deveria decidir entrega — isso continua sendo só do guard institucional");
 });
 
 check("guard de piloto/pilot-outbound-guard.ts continua intocado — envio automático usa resolveEffectiveRecipient, nunca uma segunda decisão de destinatário", () => {
