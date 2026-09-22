@@ -483,11 +483,18 @@ await check("S8. Projetos isolados: policies por is_project_member; RPC checa me
 // ================================================================== CRON / WORKFLOW
 const WORKFLOW = ".github/workflows/weekly-schedule-email-ingestion.yml";
 const cronStep = () => readSource(WORKFLOW).split("  risk-alerts:")[1] ?? "";
-await check("W1. vercel.json tem exatamente dois crons, ambos preservados; risk-alerts fora; rota continua existindo", () => {
+await check("W1. vercel.json preserva weekly-alert-digest e system-health (+ lote semanal de alertas, novo); risk-alerts fora; rota continua existindo", () => {
   const vercel = JSON.parse(readSource("apps/web/vercel.json"));
-  assert(vercel.crons.length === 2);
+  // Lote semanal de alertas (contract-alert-batches-weekly) é um cron NOVO
+  // e legítimo (requisito da composição automática semanal de BAIXO/MÉDIO) —
+  // não é o "risk-alerts" antigo nem um scheduler paralelo ao mecanismo de
+  // week-window já existente: só um novo endpoint que REUSA resolveWeekStart.
+  assert(vercel.crons.length === 3);
   assert(vercel.crons[0].path === "/api/cron/weekly-alert-digest" && vercel.crons[0].schedule === "0 10 * * 3");
-  assert(vercel.crons[1].path === "/api/cron/system-health" && vercel.crons[1].schedule === "30 10 * * *");
+  assert(
+    vercel.crons[1].path === "/api/cron/contract-alert-batches-weekly" && vercel.crons[1].schedule === "0 11 * * 3"
+  );
+  assert(vercel.crons[2].path === "/api/cron/system-health" && vercel.crons[2].schedule === "30 10 * * *");
   assert(!vercel.crons.some((c) => c.path === "/api/cron/risk-alerts"));
   const route = readSource("apps/web/app/api/cron/risk-alerts/route.ts");
   assert(route.includes("export async function GET(request: Request)") && route.includes("runRiskAlertCycle("));
