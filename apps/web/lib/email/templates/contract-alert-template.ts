@@ -124,7 +124,10 @@ export interface ContractAlertEmail {
   text: string;
 }
 
-function escapeHtml(value: string): string {
+// Exportado (além do uso interno neste arquivo) para ser reaproveitado
+// por contract-alert-batch-template.ts — nunca uma segunda implementação
+// de escapeHtml/evidenceItemHtml/evidenceItemText divergente desta.
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -150,7 +153,7 @@ function textRow(label: string, value: string | null): string {
 // Nunca inclui a locator/gmail://: cada evidência com metadados (EMAIL ou
 // OTHER) sempre tem uma url HTTPS própria; string simples (compat) nunca
 // vira link.
-function evidenceItemHtml(item: ContractAlertEvidenceItem): string {
+export function evidenceItemHtml(item: ContractAlertEvidenceItem): string {
   const baseLiStyle = `margin-bottom:8px;font-family:${ACC_FONT_FAMILY};`;
 
   if (typeof item === "string") {
@@ -175,7 +178,7 @@ function evidenceItemHtml(item: ContractAlertEvidenceItem): string {
   </li>`;
 }
 
-function evidenceItemText(item: ContractAlertEvidenceItem): string {
+export function evidenceItemText(item: ContractAlertEvidenceItem): string {
   if (typeof item === "string") return `- ${item}`;
   if (item.kind === "EMAIL") {
     const direction = EVIDENCE_EMAIL_DIRECTION_LABELS[item.direction];
