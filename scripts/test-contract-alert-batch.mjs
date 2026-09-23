@@ -466,7 +466,9 @@ check("auditoria registra eventId, ação, ator, destinatário do ENVIADO_PARA e
 
 check("auditoria registra também o momento em que a resposta final foi liberada/enviada", () => {
   assert(migration.includes("'CONTRACT_ALERT_BATCH_RESPONDED', 'CONTRACT_ALERT_BATCH', p_batch_id::text"));
-  assert(migration.includes("update public.contract_alert_batches\n  set status = 'RESPONDED', responded_at = now()"));
+  assert(
+    /update\s+public\.contract_alert_batches\s+set\s+status\s*=\s*'RESPONDED'\s*,\s*responded_at\s*=\s*now\(\)/is.test(migration)
+  );
 });
 
 check("vocabulário de ação do lote nunca colide com EmailAlertActionType nem WeeklyDigestResponse existentes", () => {
