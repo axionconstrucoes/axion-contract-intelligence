@@ -65,6 +65,7 @@ export interface ContractAlertBatchRunResult {
   groupsFailed: number;
   eventsEligible: number;
   eventsSkippedAsAlreadyBatched: number;
+  eventsSkippedAsConcurrentClaim: number;
 }
 
 export async function runContractAlertBatches(): Promise<ContractAlertBatchRunResult> {
@@ -199,6 +200,7 @@ export async function runContractAlertBatches(): Promise<ContractAlertBatchRunRe
     groupsFailed: 0,
     eventsEligible: dedupedActions.length,
     eventsSkippedAsAlreadyBatched: blockedEventIds.size,
+    eventsSkippedAsConcurrentClaim: 0,
   };
 
   for (const groupActions of groups.values()) {
@@ -242,15 +244,64 @@ export async function runContractAlertBatches(): Promise<ContractAlertBatchRunRe
       continue;
     }
 
+    const groupEventIds = groupActions.map((action) => action.related_event_id);
+
+    const { data: claimGroupId, error: claimError } = await admin.rpc(
+      "claim_contract_alert_batch_events",
+      {
+        p_event_ids: groupEventIds,
+        p_project_id: first.project_id,
+        p_responsible_user_id: first.responsible_user_id,
+      }
+    );
+
+    if (claimError) {
+      result.groupsFailed += 1;
+      continue;
+    }
+
+    if (!claimGroupId) {
+      result.groupsSkipped += 1;
+      result.eventsSkippedAsConcurrentClaim += groupEventIds.length;
+      continue;
+    }
+
     try {
-      await createAndSendContractAlertBatch({
+      const sent = await createAndSendContractAlertBatch({
         projectId: first.project_id,
         recipientUserId: first.responsible_user_id,
         deliveryEmail: configByProjectId.get(first.project_id)?.pilot_delivery_override_email ?? undefined,
         items,
       });
+
+      const { error: claimSentError } = await admin
+        .from("contract_alert_batch_dispatch_claims")
+        .update({
+          state: "SENT",
+          batch_id: sent.batchId,
+          failure_reason: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("claim_group_id", claimGroupId)
+        .eq("state", "CLAIMED");
+
+      if (claimSentError) {
+        result.groupsFailed += 1;
+        continue;
+      }
+
       result.groupsSent += 1;
     } catch {
+      await admin
+        .from("contract_alert_batch_dispatch_claims")
+        .update({
+          state: "FAILED",
+          failure_reason: "Falha antes da conclusão do envio do lote.",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("claim_group_id", claimGroupId)
+        .eq("state", "CLAIMED");
+
       result.groupsFailed += 1;
     }
   }
