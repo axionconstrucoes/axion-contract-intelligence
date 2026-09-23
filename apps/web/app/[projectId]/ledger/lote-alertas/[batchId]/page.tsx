@@ -44,7 +44,7 @@ export default async function ContractAlertBatchPage({
         <p className="text-sm font-medium text-primary">ACC · AXION CONTROLE DE CONTRATOS</p>
         <h1 className="mt-1 text-2xl font-semibold">Responder alertas de contrato</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {batch.projectName} · Destinatário: {batch.recipientName} · {batch.items.length} {batch.items.length === 1 ? "alerta" : "alertas"} neste lote
+          {batch.projectName} · Responsável: {batch.recipientName} · {batch.items.length} {batch.items.length === 1 ? "alerta" : "alertas"} neste lote
         </p>
       </div>
 
