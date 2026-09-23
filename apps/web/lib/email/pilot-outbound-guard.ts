@@ -36,7 +36,7 @@ export const PILOT_SUBJECT_PREFIX = "[TESTE CONTROLADO] ";
 // pilot_delivery_override_email). Enviar para a própria caixa do ACC é
 // intrinsecamente interno, por isso é admitido em modo piloto — a lista
 // fixa de participantes acima permanece intacta.
-export const ACC_PILOT_INSTITUTIONAL_MAILBOXES = ["axion@axion.com.br"] as const;
+export const ACC_PILOT_INSTITUTIONAL_MAILBOXES = ["axion@axion.com.br", "crm@axion.com.br"] as const;
 
 // Extensão CONTROLADA da allowlist do piloto por ambiente — ponto único.
 // ACC_PILOT_ADDITIONAL_RECIPIENTS = lista separada por vírgula de

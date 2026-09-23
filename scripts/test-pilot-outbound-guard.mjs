@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 
 register("./ts-module-resolver.mjs", import.meta.url);
 
-const { applyPilotOutboundGuard, resolveOutboundMode, isValidEmailAddress, ACC_EXPECTED_PILOT_RECIPIENT, ACC_PILOT_ALLOWED_RECIPIENTS, PILOT_SUBJECT_PREFIX } =
+const { applyPilotOutboundGuard, resolveOutboundMode, isValidEmailAddress, ACC_EXPECTED_PILOT_RECIPIENT, ACC_PILOT_ALLOWED_RECIPIENTS, ACC_PILOT_INSTITUTIONAL_MAILBOXES, PILOT_SUBJECT_PREFIX } =
   await import("../apps/web/lib/email/pilot-outbound-guard");
 const { EmailSendError } = await import("../apps/web/lib/email/email-provider");
 const { FakeEmailProvider } = await import("../apps/web/lib/email/fake-email-provider");
@@ -148,6 +148,19 @@ check("allowlist do período de testes contém somente os quatro participantes a
       "reynaldo@axion.com.br|ricardo.silva@axion.com.br|carlos.evandro@axion.com.br|rosana.mendes@axion.com.br",
     `allowlist obtida: ${ACC_PILOT_ALLOWED_RECIPIENTS.join(", ")}`
   );
+});
+
+check("caixas institucionais autorizadas incluem axion@ e crm@", () => {
+  assert(ACC_PILOT_INSTITUTIONAL_MAILBOXES.includes("axion@axion.com.br"));
+  assert(ACC_PILOT_INSTITUTIONAL_MAILBOXES.includes("crm@axion.com.br"));
+});
+
+check("crm@axion.com.br permanece como destino efetivo em modo piloto", () => {
+  const guarded = applyPilotOutboundGuard(
+    { ...baseInput, to: "crm@axion.com.br" },
+    VALID_PILOT_ENV
+  );
+  assert(guarded.to === "crm@axion.com.br", `to obtido: "${guarded.to}"`);
 });
 
 check("destinatário original preservado SOMENTE no objeto de metadados do chamador, nunca no resultado do guard", () => {
