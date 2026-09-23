@@ -7,7 +7,11 @@ import { appendAccEmailSignature } from "./branding/acc-email-signature";
 import { loadAccLogoInlineImage } from "./branding/load-acc-logo-inline-image";
 import { EmailSendError } from "./email-provider";
 import { getEmailProvider } from "./get-email-provider";
-import { resolveEffectiveRecipient } from "./pilot-outbound-guard";
+import {
+  ACC_PILOT_INSTITUTIONAL_MAILBOXES,
+  isValidEmailAddress,
+  resolveEffectiveRecipient,
+} from "./pilot-outbound-guard";
 import {
   buildContractAlertBatchEmail,
   type ContractAlertBatchEmailItem,
@@ -18,6 +22,7 @@ export type ContractAlertBatchSourceItem = Omit<ContractAlertBatchEmailItem, "re
 export interface CreateAndSendContractAlertBatchInput {
   projectId: string;
   recipientUserId: string;
+  deliveryEmail?: string;
   items: ContractAlertBatchSourceItem[];
 }
 
@@ -85,15 +90,29 @@ export async function createAndSendContractAlertBatch(
     throw new EmailSendError("O lote contém evento ausente ou pertencente a outro projeto.");
   }
 
+  const deliveryEmail = (input.deliveryEmail ?? recipient.email).trim().toLowerCase();
+  const allowedInstitutionalMailbox = ACC_PILOT_INSTITUTIONAL_MAILBOXES.includes(
+    deliveryEmail as (typeof ACC_PILOT_INSTITUTIONAL_MAILBOXES)[number]
+  );
+
+  if (
+    !isValidEmailAddress(deliveryEmail) ||
+    (deliveryEmail !== recipient.email.toLowerCase() && !allowedInstitutionalMailbox)
+  ) {
+    throw new EmailSendError(
+      "O endereço de entrega precisa ser o e-mail do destinatário ativo ou uma caixa institucional autorizada do ACC."
+    );
+  }
+
   const correlationId = crypto.randomUUID();
-  const resolvedRecipient = resolveEffectiveRecipient(recipient.email);
+  const resolvedRecipient = resolveEffectiveRecipient(deliveryEmail);
 
   const { data: batch, error: batchError } = await admin
     .from("contract_alert_batches")
     .insert({
       project_id: input.projectId,
       recipient_user_id: input.recipientUserId,
-      intended_recipient_email: recipient.email,
+      intended_recipient_email: deliveryEmail,
       correlation_id: correlationId,
     })
     .select("id")
@@ -145,7 +164,7 @@ export async function createAndSendContractAlertBatch(
   let sent;
   try {
     sent = await provider.send({
-      to: recipient.email,
+      to: deliveryEmail,
       subject: built.subject,
       text: signed.text,
       html: signed.html,
@@ -184,7 +203,7 @@ export async function createAndSendContractAlertBatch(
   await admin.from("emails").insert({
     project_id: input.projectId,
     from_address: sent.from,
-    to_address: recipient.email,
+    to_address: deliveryEmail,
     subject: built.subject,
     sent_at: sent.sentAt,
     snippet: built.text.slice(0, 280),
