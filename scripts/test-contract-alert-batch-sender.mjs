@@ -53,10 +53,10 @@ check("usa o provider oficial e o pilot outbound guard", () => {
 });
 
 check("o mesmo correlationId vai ao banco e ao provider", () => {
-  const occurrences = source.match(/correlationId/g) ?? [];
-  assert(occurrences.length >= 5);
+  assert(source.includes("const correlationId = crypto.randomUUID();"));
   assert(source.includes("correlation_id: correlationId"));
-  assert(source.includes("correlationId,"));
+  assert(/provider\.send\(\{[\s\S]*?correlationId,[\s\S]*?\}\);/.test(source));
+  assert(source.includes("CorrelationId=${correlationId}"));
 });
 
 check("falha de envio marca FAILED", () => {
