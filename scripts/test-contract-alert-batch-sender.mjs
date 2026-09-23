@@ -17,13 +17,20 @@ check("sender é server-only", () => {
 
 check("cria lote PENDING antes do envio", () => {
   assert(source.includes('.from("contract_alert_batches")'));
-  assert(source.includes("intended_recipient_email: recipient.email"));
+  assert(source.includes("intended_recipient_email: deliveryEmail"));
   assert(source.includes("correlation_id: correlationId"));
 });
 
 check("valida destinatário ACTIVE no projeto", () => {
   assert(source.includes('.from("project_memberships")'));
   assert(source.includes('.eq("status", "ACTIVE")'));
+});
+
+check("permite entrega somente no e-mail do responsável ou caixa institucional autorizada", () => {
+  assert(source.includes("deliveryEmail?: string"));
+  assert(source.includes("ACC_PILOT_INSTITUTIONAL_MAILBOXES.includes"));
+  assert(source.includes("deliveryEmail !== recipient.email.toLowerCase()"));
+  assert(source.includes("caixa institucional autorizada do ACC"));
 });
 
 check("valida todos os eventos no mesmo projeto antes de criar os itens", () => {
@@ -49,7 +56,7 @@ check("usa o provider oficial e o pilot outbound guard", () => {
   assert(source.includes("getEmailProvider"));
   assert(source.includes("resolveEffectiveRecipient"));
   assert(source.includes("provider.send({"));
-  assert(source.includes("to: recipient.email"));
+  assert(source.includes("to: deliveryEmail"));
 });
 
 check("o mesmo correlationId vai ao banco e ao provider", () => {
@@ -73,6 +80,7 @@ check("sucesso marca SENT antes dos registros auxiliares", () => {
 
 check("persiste destinatário efetivo e provider_message_id", () => {
   assert(source.includes("effective_recipient_email: resolvedRecipient.effectiveRecipientEmail"));
+  assert(source.includes("to_address: deliveryEmail"));
   assert(source.includes("provider_message_id: sent.providerMessageId"));
   assert(source.includes("sent_at: sent.sentAt"));
 });
