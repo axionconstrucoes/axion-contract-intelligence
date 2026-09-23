@@ -374,10 +374,19 @@ const endpoint = readFileSync(
   "utf8"
 );
 const respondFn = readFileSync("apps/web/lib/email-actions/respond-to-contract-alert-batch.ts", "utf8");
+const batchPage = readFileSync(
+  "apps/web/app/[projectId]/ledger/lote-alertas/[batchId]/page.tsx",
+  "utf8"
+);
 const migration = readFileSync(
   "supabase/migrations/20260921130000_contract_alert_batches_foundation.sql",
   "utf8"
 );
+
+check("página identifica o usuário como Responsável, não como destinatário de entrega", () => {
+  assert(batchPage.includes("Responsável: {batch.recipientName}"));
+  assert(!batchPage.includes("Destinatário: {batch.recipientName}"));
+});
 
 check("interface bloqueia RESPONDER AO ACC enquanto houver pendência e mostra lista de pendentes", () => {
   assert(form.includes("disabled={!answeredState.allEventsAnswered || pending}"));
