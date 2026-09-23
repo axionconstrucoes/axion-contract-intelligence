@@ -114,7 +114,7 @@ const EMAIL_LOGO_SIZE_PX = Math.round(EMAIL_LOGO_PREVIOUS_SIZE_PX * EMAIL_LOGO_R
 // Cabeçalho compacto: logo + "ACC - Acompanhamento de Contratos" (texto
 // do layout aprovado) na mesma linha, nome do projeto em vermelho/negrito
 // na linha abaixo — mesmo texto/cores validados no mockup do piloto.
-function buildHeaderHtml(hasInlineLogo: boolean, projectName: string, itemCount: number): string {
+function buildHeaderHtml(hasInlineLogo: boolean, projectName: string): string {
   const logoCell = hasInlineLogo
     ? `<td style="vertical-align:middle;padding-right:8px;"><img src="cid:${ACC_EMAIL_LOGO_CID}" alt="ACC" width="${EMAIL_LOGO_SIZE_PX}" height="${EMAIL_LOGO_SIZE_PX}" style="display:block;border:0;width:${EMAIL_LOGO_SIZE_PX}px;height:${EMAIL_LOGO_SIZE_PX}px;" /></td>`
     : "";
@@ -122,8 +122,7 @@ function buildHeaderHtml(hasInlineLogo: boolean, projectName: string, itemCount:
   return `<table role="presentation" cellpadding="0" cellspacing="0"><tr>${logoCell}<td style="vertical-align:middle;">
     <p style="margin:0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;color:${ACC_COLOR_BODY};">ACC - Acompanhamento de Contratos</p>
     <p style="margin:2px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_TITLE};font-weight:bold;color:${ACC_COLOR_HEADING};">${escapeHtml(projectName)}</p>
-  </td></tr></table>
-  <p style="margin:10px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_BODY};color:${ACC_COLOR_BODY};">Este e-mail reúne <strong>${itemCount}</strong> ${itemCount === 1 ? "alerta" : "alertas"} de contrato — cada um precisa de uma ação própria antes que a resposta ao ACC possa ser enviada.</p>`;
+  </td></tr></table>`;
 }
 
 // As 4 cores/rótulos do layout aprovado. VER EVENTO é o único link REAL
@@ -266,7 +265,7 @@ export function buildContractAlertBatchEmail(input: ContractAlertBatchEmailInput
       <table role="presentation" width="820" cellpadding="0" cellspacing="0" style="width:100%;max-width:820px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:8px;">
         <tr><td style="padding:20px 24px 0 24px;">
           <p style="margin:0 0 12px 0;font-family:${ACC_FONT_FAMILY};color:${ACC_COLOR_BODY};font-size:${ACC_FONT_SIZE_BODY};">${escapeHtml(greeting)}</p>
-          ${buildHeaderHtml(input.hasInlineLogo, input.projectName, input.items.length)}
+          ${buildHeaderHtml(input.hasInlineLogo, input.projectName)}
         </td></tr>
         ${itemsHtml}
         <tr><td style="padding:20px 24px;border-top:1px solid #e5e7eb;text-align:center;">
