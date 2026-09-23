@@ -59,6 +59,7 @@ export async function runWeeklyAlertDigests(now: Date = new Date()): Promise<Wee
     .select("id,project_id,responsible_user_id,title,description,risk_level,complete_due_at")
     .in("risk_level", ["MEDIUM", "LOW"])
     .not("responsible_user_id", "is", null)
+    .is("related_event_id", null)
     .not("status", "in", "(COMPLETED,CANCELLED)")
     .order("risk_level", { ascending: false })
     .order("title", { ascending: true });
