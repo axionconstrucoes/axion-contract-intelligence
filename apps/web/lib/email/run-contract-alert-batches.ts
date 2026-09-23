@@ -231,7 +231,7 @@ export async function runContractAlertBatches(): Promise<ContractAlertBatchRunRe
           eventUrl: `${baseUrl}/${event.project_id}/ledger/${event.id}`,
         } satisfies ContractAlertBatchSourceItem;
       })
-      .filter((item): item is ContractAlertBatchSourceItem => item !== null)
+      .filter((item): item is NonNullable<typeof item> => item !== null)
       .sort((a, b) => {
         const rank = { CRITICA: 0, ALTA: 1, MEDIA: 2, BAIXA: 3 } as const;
         return rank[a.severity] - rank[b.severity] || a.title.localeCompare(b.title, "pt-BR");
