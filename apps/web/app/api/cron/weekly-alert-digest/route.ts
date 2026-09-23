@@ -1,4 +1,5 @@
 import { isCronRequestAuthorized } from "@/lib/cron/cron-request-auth";
+import { runContractAlertBatches } from "@/lib/email/run-contract-alert-batches";
 import { runWeeklyAlertDigests } from "@/lib/email/run-weekly-alert-digests";
 
 export const runtime = "nodejs";
@@ -11,8 +12,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await runWeeklyAlertDigests();
-    return Response.json(result, { status: result.failed > 0 ? 207 : 200 });
+    const [weeklyDigest, contractBatches] = await Promise.all([
+      runWeeklyAlertDigests(),
+      runContractAlertBatches(),
+    ]);
+    const failed = weeklyDigest.failed + contractBatches.groupsFailed;
+    return Response.json({ weeklyDigest, contractBatches }, { status: failed > 0 ? 207 : 200 });
   } catch {
     return Response.json({ error: "Falha ao processar o resumo semanal." }, { status: 500 });
   }
