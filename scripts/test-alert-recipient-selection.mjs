@@ -96,9 +96,9 @@ check("send-alert-actions.ts: permanece 'use server', ADMINISTRADOR continua ver
 // ---------- cliente: seleção, auto-fill, somente leitura ----------
 
 check("send-contract-alert-form.tsx: recipientEmail é um <Select> alimentado por eligibleRecipients, não um <Input> livre", () => {
-  assert(formSource.includes('<Select\n            name="recipientEmail"'));
+  assert(/<Select\b[^>]*\bname=["']recipientEmail["'][^>]*>/s.test(formSource));
   assert(formSource.includes("eligibleRecipients.map((r) => ("));
-  assert(!/name="recipientEmail"[^>]*type="email"/.test(formSource), "não deveria mais existir um <Input type=email> livre para recipientEmail");
+  assert(!/<Input\b(?=[^>]*\bname=["']recipientEmail["'])[^>]*>/s.test(formSource), "não deveria existir <Input> livre para recipientEmail");
 });
 
 check("send-contract-alert-form.tsx: campo Nome é somente leitura E nunca é enviado no FormData (sem atributo name)", () => {
