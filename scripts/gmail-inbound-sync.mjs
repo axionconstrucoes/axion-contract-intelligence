@@ -567,6 +567,9 @@ const { error: integrationError } =
   await supabase
     .from("project_integrations")
     .update({
+      status:
+        "CONECTADO",
+
       last_sync_at:
         completedAt,
 
