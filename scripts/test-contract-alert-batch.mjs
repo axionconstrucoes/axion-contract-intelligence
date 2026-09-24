@@ -336,6 +336,8 @@ check("os 4 botões de ação usam exatamente as cores do layout aprovado", () =
   assert.equal((email.html.match(/>RESOLVIDO</g) ?? []).length, 2);
   assert.equal((email.html.match(/>EM ANDAMENTO</g) ?? []).length, 2);
   assert.equal((email.html.match(/>ENVIADO P\/</g) ?? []).length, 2);
+  assert.equal((email.html.match(/target="_blank"/g) ?? []).length, 8);
+  assert.equal((email.html.match(/rel="noopener noreferrer"/g) ?? []).length, 8);
 });
 
 check("botões de ação do e-mail multi-alerta apontam para a página compacta do lote", () => {
@@ -443,12 +445,16 @@ check("lote com vários alertas usa página compacta única e mantém resposta a
   assert(form.includes('"CONFIRMAR TUDO"'));
 });
 
-check("página rápida não usa dashboard/sidebar e ENVIADO P/ mostra dropdown de colaborador", () => {
+check("página rápida mantém ENVIADO P/ interativo e registra ações simples em um clique", () => {
   assert(compactPage.includes("Resposta rápida ao alerta"));
   assert(compactPage.includes("CompactContractAlertActionForm"));
   assert(compactForm.includes('initialAction === "ENVIADO_PARA"'));
   assert(compactForm.includes("Selecione um colaborador"));
   assert(compactForm.includes("CONFIRMAR"));
+  assert(compactForm.includes('initialAction === "RESOLVIDO" || initialAction === "EM_ANDAMENTO"'));
+  assert(compactForm.includes("requestSubmit()"));
+  assert(compactForm.includes("window.close()"));
+  assert(compactForm.includes("Registrando ação no ACC"));
   assert(compactActions.includes("respondToContractAlertBatch"));
   assert(compactActions.includes("batch.items.length !== 1"));
 });
