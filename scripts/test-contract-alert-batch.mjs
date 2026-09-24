@@ -253,7 +253,7 @@ const email = buildContractAlertBatchEmail({
       ],
       eventUrl: "https://acc.exemplo/obra/ledger/evt-1",
       respondItemUrl: "https://acc.exemplo/obra/ledger/lote-alertas/batch-1#evento-evt-1",
-      quickActionUrl: "https://acc.exemplo/alertas/acao/proj-1/batch-1/evt-1",
+      quickActionUrl: "https://acc.exemplo/alertas/lote/proj-1/batch-1?evento=evt-1",
     },
     {
       eventId: "evt-2",
@@ -265,7 +265,7 @@ const email = buildContractAlertBatchEmail({
       evidence: [],
       eventUrl: "https://acc.exemplo/obra/ledger/evt-2",
       respondItemUrl: "https://acc.exemplo/obra/ledger/lote-alertas/batch-1#evento-evt-2",
-      quickActionUrl: "https://acc.exemplo/alertas/acao/proj-1/batch-1/evt-2",
+      quickActionUrl: "https://acc.exemplo/alertas/lote/proj-1/batch-1?evento=evt-2",
     },
   ],
 });
@@ -338,11 +338,11 @@ check("os 4 botões de ação usam exatamente as cores do layout aprovado", () =
   assert.equal((email.html.match(/>ENVIADO P\/</g) ?? []).length, 2);
 });
 
-check("botões de ação do e-mail apontam para a página rápida e preservam a intenção", () => {
-  assert(email.html.includes("/alertas/acao/proj-1/batch-1/evt-1?acao=RESOLVIDO"));
-  assert(email.html.includes("/alertas/acao/proj-1/batch-1/evt-1?acao=EM_ANDAMENTO"));
-  assert(email.html.includes("/alertas/acao/proj-1/batch-1/evt-1?acao=ENVIADO_PARA"));
-  assert(email.html.includes("/alertas/acao/proj-1/batch-1/evt-2?acao=ENVIADO_PARA"));
+check("botões de ação do e-mail multi-alerta apontam para a página compacta do lote", () => {
+  assert(email.html.includes("/alertas/lote/proj-1/batch-1?evento=evt-1&amp;acao=RESOLVIDO"));
+  assert(email.html.includes("/alertas/lote/proj-1/batch-1?evento=evt-1&amp;acao=EM_ANDAMENTO"));
+  assert(email.html.includes("/alertas/lote/proj-1/batch-1?evento=evt-1&amp;acao=ENVIADO_PARA"));
+  assert(email.html.includes("/alertas/lote/proj-1/batch-1?evento=evt-2&amp;acao=ENVIADO_PARA"));
 });
 
 check("evidências continuam acessíveis a partir de cada alerta (link para o evento no ACC)", () => {
@@ -374,6 +374,14 @@ check("sem logo real disponível, o cabeçalho nunca referencia cid: (mesma regr
   assert(!emailWithoutLogo.html.includes("cid:"));
 });
 
+const compactBatchPage = readFileSync(
+  "apps/web/app/alertas/lote/[projectId]/[batchId]/page.tsx",
+  "utf8"
+);
+const batchSender = readFileSync(
+  "apps/web/lib/email/create-and-send-contract-alert-batch.ts",
+  "utf8"
+);
 const compactPage = readFileSync(
   "apps/web/app/alertas/acao/[projectId]/[batchId]/[eventId]/page.tsx",
   "utf8"
@@ -421,6 +429,15 @@ check("interface bloqueia RESPONDER AO ACC enquanto houver pendência e mostra l
 check("VER EVENTO nunca é oferecido como opção de ação no formulário", () => {
   assert(!form.includes('"VER_EVENTO"'));
   assert(form.includes("CONTRACT_ALERT_BATCH_ITEM_ACTIONS"));
+});
+
+check("lote com vários alertas usa página compacta única e mantém resposta atômica", () => {
+  assert(batchSender.includes("input.items.length === 1"));
+  assert(batchSender.includes("/alertas/lote/"));
+  assert(compactBatchPage.includes("ContractAlertBatchForm"));
+  assert(compactBatchPage.includes("Resposta rápida"));
+  assert(compactBatchPage.includes("initialAction={initialAction}"));
+  assert(compactBatchPage.includes("members={activeMembers}"));
 });
 
 check("página rápida não usa dashboard/sidebar e ENVIADO P/ mostra dropdown de colaborador", () => {
