@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { getProjectMembers } from "@/lib/data";
 import { getContractAlertBatch } from "@/lib/email/get-contract-alert-batch";
+import { isValidContractAlertBatchAction } from "@/lib/email-actions/contract-alert-batch-validation";
+import type { ContractAlertBatchItemAction } from "@/lib/email-actions/contract-alert-batch-types";
 import { formatDateTime } from "@/lib/labels";
 
 import { ContractAlertBatchForm } from "./contract-alert-batch-form";
@@ -13,10 +15,13 @@ export const metadata: Metadata = { title: "Responder alertas do ACC" };
 
 export default async function ContractAlertBatchPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string; batchId: string }>;
+  searchParams: Promise<{ acao?: string | string[]; evento?: string | string[] }>;
 }) {
   const { projectId, batchId } = await params;
+  const query = await searchParams;
   const [batch, members] = await Promise.all([
     getContractAlertBatch(projectId, batchId),
     getProjectMembers(projectId),
@@ -37,6 +42,16 @@ export default async function ContractAlertBatchPage({
   const activeMembers = members
     .filter((member) => member.status === "ACTIVE")
     .map((member) => ({ userId: member.userId, name: member.user.name }));
+
+  const requestedAction = Array.isArray(query.acao) ? query.acao[0] : query.acao;
+  const requestedEventId = Array.isArray(query.evento) ? query.evento[0] : query.evento;
+  const initialAction =
+    requestedAction &&
+    requestedEventId &&
+    isValidContractAlertBatchAction(requestedAction) &&
+    batch.items.some((item) => item.eventId === requestedEventId)
+      ? { eventId: requestedEventId, action: requestedAction as ContractAlertBatchItemAction }
+      : null;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
@@ -64,7 +79,13 @@ export default async function ContractAlertBatchPage({
             Defina RESOLVIDO, EM ANDAMENTO ou ENVIADO P/ para cada alerta. "VER EVENTO" é só consulta e não conta como resposta.
             A resposta ao ACC só é liberada quando todos os alertas abaixo tiverem uma ação definida.
           </div>
-          <ContractAlertBatchForm batchId={batch.id} projectId={projectId} items={batch.items} members={activeMembers} />
+          <ContractAlertBatchForm
+            batchId={batch.id}
+            projectId={projectId}
+            items={batch.items}
+            members={activeMembers}
+            initialAction={initialAction}
+          />
         </>
       )}
     </div>
