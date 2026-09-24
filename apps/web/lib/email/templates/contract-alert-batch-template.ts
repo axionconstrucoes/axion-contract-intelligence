@@ -52,10 +52,10 @@ export interface ContractAlertBatchEmailItem {
   // Link neutro (sem token) direto para este evento no ACC — mesmo
   // espírito de eventUrl em contract-alert-template.ts.
   eventUrl: string;
-  // Link para o bloco DESTE evento dentro da página do lote (âncora
-  // "#evento-<eventId>") — é aqui, e só aqui, que a ação real
-  // (RESOLVIDO/EM ANDAMENTO/ENVIADO P/) é registrada.
+  // Link para o bloco DESTE evento dentro da página do lote.
   respondItemUrl: string;
+  // Página mínima de ação rápida, sem dashboard/sidebar.
+  quickActionUrl?: string;
 }
 
 export interface ContractAlertBatchEmailInput {
@@ -158,9 +158,8 @@ function buildRespondActionUrl(
   item: ContractAlertBatchEmailItem,
   action: "RESOLVIDO" | "EM_ANDAMENTO" | "ENVIADO_PARA"
 ): string {
-  const url = new URL(item.respondItemUrl);
+  const url = new URL(item.quickActionUrl ?? item.respondItemUrl);
   url.searchParams.set("acao", action);
-  url.searchParams.set("evento", item.eventId);
   return url.toString();
 }
 
@@ -174,19 +173,19 @@ function buildItemActionsColumnHtml(item: ContractAlertBatchEmailItem): string {
   const resolvido = buildBatchActionButtonHtml(
     buildRespondActionUrl(item, "RESOLVIDO"),
     BATCH_ACTION_BUTTON_STYLES.RESOLVIDO,
-    "Abre este alerta na página do ACC com RESOLVIDO pré-selecionado.",
+    "Abre uma confirmação rápida do alerta com RESOLVIDO pré-selecionado.",
     "8px"
   );
   const emAndamento = buildBatchActionButtonHtml(
     buildRespondActionUrl(item, "EM_ANDAMENTO"),
     BATCH_ACTION_BUTTON_STYLES.EM_ANDAMENTO,
-    "Abre este alerta na página do ACC com EM ANDAMENTO pré-selecionado.",
+    "Abre uma confirmação rápida do alerta com EM ANDAMENTO pré-selecionado.",
     "8px"
   );
   const enviadoPara = buildBatchActionButtonHtml(
     buildRespondActionUrl(item, "ENVIADO_PARA"),
     BATCH_ACTION_BUTTON_STYLES.ENVIADO_PARA,
-    "Abre este alerta na página do ACC com ENVIADO P/ pré-selecionado e o destinatário visível.",
+    "Abre uma página rápida com ENVIADO P/ e o dropdown de colaboradores.",
     "8px"
   );
   const caption = `<p style="margin:8px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${ACC_COLOR_MUTED};text-align:center;">A resposta a este e-mail só é liberada depois que TODOS os alertas do lote tiverem uma ação.</p>`;
