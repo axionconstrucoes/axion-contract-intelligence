@@ -39,12 +39,12 @@ export function CompactContractAlertActionForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form action={formAction} className="flex flex-col gap-2.5">
       <input type="hidden" name="action" value={initialAction} />
 
       {initialAction === "ENVIADO_PARA" ? (
-        <div className="flex flex-col gap-2">
-          <label htmlFor="assignedUserId" className="text-sm font-medium">
+        <div className="grid gap-1.5 md:grid-cols-[110px_minmax(0,1fr)] md:items-center">
+          <label htmlFor="assignedUserId" className="text-sm font-medium md:mb-0">
             Enviado para
           </label>
           <Select id="assignedUserId" name="assignedUserId" required defaultValue="">
@@ -64,7 +64,7 @@ export function CompactContractAlertActionForm({
         <p className="text-sm text-destructive">{state.error}</p>
       ) : null}
 
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending} className="md:self-end md:px-10">
         {pending ? "Confirmando…" : "CONFIRMAR"}
       </Button>
     </form>

@@ -438,6 +438,9 @@ check("lote com vários alertas usa página compacta única e mantém resposta a
   assert(compactBatchPage.includes("Resposta rápida"));
   assert(compactBatchPage.includes("initialAction={initialAction}"));
   assert(compactBatchPage.includes("members={activeMembers}"));
+  assert(compactBatchPage.includes("compact"));
+  assert(form.includes("compact?: boolean"));
+  assert(form.includes('"CONFIRMAR TUDO"'));
 });
 
 check("página rápida não usa dashboard/sidebar e ENVIADO P/ mostra dropdown de colaborador", () => {

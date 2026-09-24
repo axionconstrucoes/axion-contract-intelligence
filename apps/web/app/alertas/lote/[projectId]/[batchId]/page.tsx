@@ -26,7 +26,7 @@ export default async function CompactContractAlertBatchPage({
 
   if (!batch) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-muted p-4">
+      <div className="min-h-dvh bg-muted p-3 sm:p-4">
         <Card className="w-full max-w-3xl">
           <CardContent className="pt-6 text-sm text-destructive">
             Este link não existe ou seu usuário não tem acesso aos alertas.
@@ -53,19 +53,19 @@ export default async function CompactContractAlertBatchPage({
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-muted p-4">
-      <Card className="w-full max-w-5xl">
-        <CardHeader>
+      <Card className="mx-auto w-full max-w-5xl">
+        <CardHeader className="gap-1 p-4 pb-3">
           <div className="mb-1 flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/branding/acc-logo.png" alt="ACC" className="h-10 w-auto" />
+            <img src="/branding/acc-logo.png" alt="ACC" className="h-7 w-auto" />
           </div>
-          <CardTitle>AXION Controle de Contratos</CardTitle>
+          <CardTitle className="text-base">AXION Controle de Contratos</CardTitle>
           <CardDescription>
             Resposta rápida · {batch.projectName} · {batch.items.length} {batch.items.length === 1 ? "alerta" : "alertas"}
           </CardDescription>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="p-4 pt-0">
           {batch.status === "RESPONDED" ? (
             <p className="rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-800">
               Este lote de alertas já foi respondido.
@@ -81,6 +81,7 @@ export default async function CompactContractAlertBatchPage({
               items={batch.items}
               members={activeMembers}
               initialAction={initialAction}
+              compact
             />
           )}
         </CardContent>

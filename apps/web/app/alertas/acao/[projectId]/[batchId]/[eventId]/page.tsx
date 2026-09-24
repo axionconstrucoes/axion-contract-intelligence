@@ -42,18 +42,18 @@ export default async function CompactContractAlertActionPage({
     .map((member) => ({ userId: member.userId, name: member.user.name }));
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-muted p-4">
-      <Card className="w-full max-w-lg">
-        <CardHeader>
+    <div className="flex min-h-dvh items-start justify-center bg-muted p-3 sm:p-4">
+      <Card className="w-full max-w-2xl">
+        <CardHeader className="gap-1 p-4 pb-3">
           <div className="mb-1 flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/branding/acc-logo.png" alt="ACC" className="h-10 w-auto" />
+            <img src="/branding/acc-logo.png" alt="ACC" className="h-7 w-auto" />
           </div>
-          <CardTitle>AXION Controle de Contratos</CardTitle>
+          <CardTitle className="text-base">AXION Controle de Contratos</CardTitle>
           <CardDescription>Resposta rápida ao alerta</CardDescription>
         </CardHeader>
 
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex flex-col gap-3 p-4 pt-0">
           {!batch || !item ? (
             <p className="text-sm text-destructive">
               Este link não existe ou seu usuário não tem acesso ao alerta.
@@ -66,15 +66,15 @@ export default async function CompactContractAlertActionPage({
             <p className="text-sm text-destructive">Ação inválida ou ausente.</p>
           ) : (
             <>
-              <div className="rounded-md border p-4">
-                <p className="text-xs font-medium text-muted-foreground">Projeto</p>
-                <p className="mt-1 text-sm font-medium">{batch.projectName}</p>
-                <p className="mt-4 text-xs font-medium text-muted-foreground">Alerta</p>
-                <p className="mt-1 font-semibold">{item.title}</p>
-                <p className="mt-4 text-xs font-medium text-muted-foreground">Ação</p>
-                <p className="mt-1 font-semibold">
-                  {CONTRACT_ALERT_BATCH_ITEM_ACTION_LABELS[action]}
-                </p>
+              <div className="grid gap-2 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_180px] md:items-center">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">{batch.projectName}</p>
+                  <p className="truncate text-sm font-semibold" title={item.title}>{item.title}</p>
+                </div>
+                <div className="md:text-right">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Ação</p>
+                  <p className="text-sm font-semibold">{CONTRACT_ALERT_BATCH_ITEM_ACTION_LABELS[action]}</p>
+                </div>
               </div>
 
               {batch.items.length === 1 ? (
