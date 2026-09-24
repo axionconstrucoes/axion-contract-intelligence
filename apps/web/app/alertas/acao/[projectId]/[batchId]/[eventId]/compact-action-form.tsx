@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -29,17 +29,32 @@ export function CompactContractAlertActionForm({
     boundAction,
     initialCompactContractAlertActionState
   );
+  const formRef = useRef<HTMLFormElement>(null);
+  const autoSubmittedRef = useRef(false);
+  const isOneClickAction = initialAction === "RESOLVIDO" || initialAction === "EM_ANDAMENTO";
+
+  useEffect(() => {
+    if (!isOneClickAction || autoSubmittedRef.current || state.success || state.error) return;
+    autoSubmittedRef.current = true;
+    formRef.current?.requestSubmit();
+  }, [isOneClickAction, state.error, state.success]);
+
+  useEffect(() => {
+    if (!isOneClickAction || !state.success) return;
+    const timer = window.setTimeout(() => window.close(), 900);
+    return () => window.clearTimeout(timer);
+  }, [isOneClickAction, state.success]);
 
   if (state.success) {
     return (
       <div className="rounded-md border border-emerald-300 bg-emerald-50 p-4 text-sm font-medium text-emerald-800">
-        Ação registrada no ACC.
+        Ação registrada no ACC. Você pode voltar ao e-mail.
       </div>
     );
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-2.5">
+    <form ref={formRef} action={formAction} className="flex flex-col gap-2.5">
       <input type="hidden" name="action" value={initialAction} />
 
       {initialAction === "ENVIADO_PARA" ? (
@@ -64,9 +79,15 @@ export function CompactContractAlertActionForm({
         <p className="text-sm text-destructive">{state.error}</p>
       ) : null}
 
-      <Button type="submit" disabled={pending} className="md:self-end md:px-10">
-        {pending ? "Confirmando…" : "CONFIRMAR"}
-      </Button>
+      {isOneClickAction ? (
+        <div className="rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground">
+          {pending ? "Registrando ação no ACC…" : state.error ? "Não foi possível registrar automaticamente." : "Registrando ação no ACC…"}
+        </div>
+      ) : (
+        <Button type="submit" disabled={pending} className="md:self-end md:px-10">
+          {pending ? "Confirmando…" : "CONFIRMAR"}
+        </Button>
+      )}
     </form>
   );
 }
