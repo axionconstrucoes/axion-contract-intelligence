@@ -15,11 +15,20 @@ export async function GET(request: NextRequest) {
   // Primeiro usa ?next=. Se o provedor OAuth não devolver a query string
   // completa, recupera a intenção preservada por cookie curto antes do
   // redirect ao Google. Ambos são revalidados pelo mesmo allowlist.
-  const nextCandidate =
-    url.searchParams.get("next") ??
-    request.cookies.get(POST_LOGIN_COOKIE)?.value ??
-    null;
-  const nextDestination = sanitizeInternalRedirect(nextCandidate, "/projetos");
+  const nextFromQuery = url.searchParams.get("next");
+  const cookieValue = request.cookies.get(POST_LOGIN_COOKIE)?.value;
+  let nextFromCookie: string | null = null;
+  if (cookieValue) {
+    try {
+      nextFromCookie = decodeURIComponent(cookieValue);
+    } catch {
+      nextFromCookie = null;
+    }
+  }
+  const nextDestination = sanitizeInternalRedirect(
+    nextFromQuery ?? nextFromCookie,
+    "/projetos"
+  );
 
   if (!code) {
     return NextResponse.redirect(new URL("/login?error=oauth_missing_code", url.origin));
