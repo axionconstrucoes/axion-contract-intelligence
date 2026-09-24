@@ -147,7 +147,7 @@ function buildBatchActionButtonHtml(
   title: string,
   marginTop: string
 ): string {
-  return `<a href="${escapeHtml(href)}" title="${escapeHtml(title)}" aria-label="${escapeHtml(`${style.label} — ${title}`)}" style="display:block;width:100%;box-sizing:border-box;margin:${marginTop} 0 0 0;padding:8px 10px;background-color:${style.background};color:${style.color};font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;text-decoration:none;border-radius:6px;text-align:center;">${escapeHtml(style.label)}</a>`;
+  return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(title)}" aria-label="${escapeHtml(`${style.label} — ${title}`)}" style="display:block;width:100%;box-sizing:border-box;margin:${marginTop} 0 0 0;padding:8px 10px;background-color:${style.background};color:${style.color};font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;text-decoration:none;border-radius:6px;text-align:center;">${escapeHtml(style.label)}</a>`;
 }
 
 // Bloco de ações de UM alerta — alinhado ao lado do conteúdo do MESMO
@@ -173,13 +173,13 @@ function buildItemActionsColumnHtml(item: ContractAlertBatchEmailItem): string {
   const resolvido = buildBatchActionButtonHtml(
     buildRespondActionUrl(item, "RESOLVIDO"),
     BATCH_ACTION_BUTTON_STYLES.RESOLVIDO,
-    "Abre uma confirmação rápida do alerta com RESOLVIDO pré-selecionado.",
+    "Registra RESOLVIDO em um clique quando este e-mail contém um único alerta.",
     "8px"
   );
   const emAndamento = buildBatchActionButtonHtml(
     buildRespondActionUrl(item, "EM_ANDAMENTO"),
     BATCH_ACTION_BUTTON_STYLES.EM_ANDAMENTO,
-    "Abre uma confirmação rápida do alerta com EM ANDAMENTO pré-selecionado.",
+    "Registra EM ANDAMENTO em um clique quando este e-mail contém um único alerta.",
     "8px"
   );
   const enviadoPara = buildBatchActionButtonHtml(
