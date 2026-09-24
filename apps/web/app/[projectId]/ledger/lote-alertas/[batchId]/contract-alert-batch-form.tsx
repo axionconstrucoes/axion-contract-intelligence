@@ -27,12 +27,14 @@ export function ContractAlertBatchForm({
   items,
   members,
   initialAction,
+  compact = false,
 }: {
   batchId: string;
   projectId: string;
   items: ContractAlertBatchViewItem[];
   members: Array<{ userId: string; name: string }>;
   initialAction: { eventId: string; action: ContractAlertBatchItemAction } | null;
+  compact?: boolean;
 }) {
   const boundAction = submitContractAlertBatchAction.bind(null, batchId, projectId);
   const [state, formAction, pending] = useActionState(boundAction, initialSubmitContractAlertBatchState);
@@ -74,27 +76,27 @@ export function ContractAlertBatchForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
+    <form action={formAction} className={compact ? "flex flex-col gap-2" : "flex flex-col gap-4"}>
       {items.map((item) => (
         <section
           key={item.eventId}
           id={`evento-${item.eventId}`}
           title={item.title}
           tabIndex={0}
-          className="rounded-lg border bg-card p-4 outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring"
+          className={`rounded-lg border bg-card outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-ring ${compact ? "p-2.5" : "p-4"}`}
         >
           <input type="hidden" name="eventId" value={item.eventId} />
-          <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className={compact ? "grid items-center gap-2 md:grid-cols-[minmax(0,1fr)_220px]" : "flex flex-wrap items-start justify-between gap-3"}>
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
+              <div className={compact ? "flex items-center gap-2" : "flex items-center gap-2"}>
                 <SeverityBadge severity={item.severity} />
-                <h2 className="font-semibold text-foreground">{item.title}</h2>
+                <h2 className={compact ? "truncate text-sm font-semibold text-foreground" : "font-semibold text-foreground"}>{item.title}</h2>
               </div>
             </div>
 
-            <div className="grid w-full gap-2 sm:w-[260px]">
+            <div className={compact ? "grid w-full gap-1.5" : "grid w-full gap-2 sm:w-[260px]"}>
               <label className="text-xs font-medium" htmlFor={`action-${item.eventId}`}>
-                Ação obrigatória
+                {compact ? "Ação" : "Ação obrigatória"}
               </label>
               <Select
                 id={`action-${item.eventId}`}
@@ -140,13 +142,13 @@ export function ContractAlertBatchForm({
         </section>
       ))}
 
-      <div className="sticky bottom-3 flex flex-col gap-2 rounded-lg border bg-background/95 p-4 shadow-lg backdrop-blur">
+      <div className={`sticky bottom-3 flex flex-col rounded-lg border bg-background/95 shadow-lg backdrop-blur ${compact ? "gap-1.5 p-2.5" : "gap-2 p-4"}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
             {answeredState.answeredCount} de {answeredState.totalCount} alertas respondidos
           </p>
           <Button type="submit" disabled={!answeredState.allEventsAnswered || pending}>
-            {pending ? "Enviando resposta…" : "RESPONDER AO ACC"}
+            {pending ? "Enviando resposta…" : compact ? "CONFIRMAR TUDO" : "RESPONDER AO ACC"}
           </Button>
         </div>
 
