@@ -154,6 +154,16 @@ function buildBatchActionButtonHtml(
 // alerta (requisito 1: "a coluna de ações deve ficar alinhada
 // verticalmente com o respectivo alerta"), nunca uma coluna
 // compartilhada entre alertas.
+function buildRespondActionUrl(
+  item: ContractAlertBatchEmailItem,
+  action: "RESOLVIDO" | "EM_ANDAMENTO" | "ENVIADO_PARA"
+): string {
+  const url = new URL(item.respondItemUrl);
+  url.searchParams.set("acao", action);
+  url.searchParams.set("evento", item.eventId);
+  return url.toString();
+}
+
 function buildItemActionsColumnHtml(item: ContractAlertBatchEmailItem): string {
   const verEvento = buildBatchActionButtonHtml(
     item.eventUrl,
@@ -162,21 +172,21 @@ function buildItemActionsColumnHtml(item: ContractAlertBatchEmailItem): string {
     "0"
   );
   const resolvido = buildBatchActionButtonHtml(
-    item.respondItemUrl,
+    buildRespondActionUrl(item, "RESOLVIDO"),
     BATCH_ACTION_BUTTON_STYLES.RESOLVIDO,
-    "Abre este alerta na página do ACC para marcar como RESOLVIDO.",
+    "Abre este alerta na página do ACC com RESOLVIDO pré-selecionado.",
     "8px"
   );
   const emAndamento = buildBatchActionButtonHtml(
-    item.respondItemUrl,
+    buildRespondActionUrl(item, "EM_ANDAMENTO"),
     BATCH_ACTION_BUTTON_STYLES.EM_ANDAMENTO,
-    "Abre este alerta na página do ACC para marcar como EM ANDAMENTO.",
+    "Abre este alerta na página do ACC com EM ANDAMENTO pré-selecionado.",
     "8px"
   );
   const enviadoPara = buildBatchActionButtonHtml(
-    item.respondItemUrl,
+    buildRespondActionUrl(item, "ENVIADO_PARA"),
     BATCH_ACTION_BUTTON_STYLES.ENVIADO_PARA,
-    "Abre este alerta na página do ACC para enviar a um colaborador.",
+    "Abre este alerta na página do ACC com ENVIADO P/ pré-selecionado e o destinatário visível.",
     "8px"
   );
   const caption = `<p style="margin:8px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${ACC_COLOR_MUTED};text-align:center;">A resposta a este e-mail só é liberada depois que TODOS os alertas do lote tiverem uma ação.</p>`;

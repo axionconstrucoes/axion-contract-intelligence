@@ -336,6 +336,16 @@ check("os 4 botões de ação usam exatamente as cores do layout aprovado", () =
   assert.equal((email.html.match(/>ENVIADO P\/</g) ?? []).length, 2);
 });
 
+check("botões de ação do e-mail preservam a intenção no deep link do ACC", () => {
+  assert(email.html.includes("acao=RESOLVIDO"));
+  assert(email.html.includes("acao=EM_ANDAMENTO"));
+  assert(email.html.includes("acao=ENVIADO_PARA"));
+  assert(email.html.includes("evento=evt-1"));
+  assert(email.html.includes("evento=evt-2"));
+  assert(email.html.includes("#evento-evt-1"));
+  assert(email.html.includes("#evento-evt-2"));
+});
+
 check("evidências continuam acessíveis a partir de cada alerta (link para o evento no ACC)", () => {
   assert(email.html.includes("Abrir evidência no ACC"));
   assert(email.html.includes("https://acc.exemplo/obra/ledger/evt-1"));
@@ -399,6 +409,19 @@ check("interface bloqueia RESPONDER AO ACC enquanto houver pendência e mostra l
 check("VER EVENTO nunca é oferecido como opção de ação no formulário", () => {
   assert(!form.includes('"VER_EVENTO"'));
   assert(form.includes("CONTRACT_ALERT_BATCH_ITEM_ACTIONS"));
+});
+
+check("página e formulário pré-selecionam a ação vinda do deep link sem gravar nada automaticamente", () => {
+  assert(batchPage.includes("searchParams"));
+  assert(batchPage.includes("query.acao"));
+  assert(batchPage.includes("query.evento"));
+  assert(batchPage.includes("isValidContractAlertBatchAction(requestedAction)"));
+  assert(batchPage.includes("batch.items.some((item) => item.eventId === requestedEventId)"));
+  assert(batchPage.includes("initialAction={initialAction}"));
+  assert(form.includes("initialAction"));
+  assert(form.includes("initialAction?.eventId === item.eventId ? initialAction.action :"));
+  assert(form.includes('actions[item.eventId] === "ENVIADO_PARA"'));
+  assert(form.includes("Selecione um colaborador"));
 });
 
 check("servidor (Server Action) também recusa resposta incompleta ou ENVIADO P/ sem colaborador", () => {
