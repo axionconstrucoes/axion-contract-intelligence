@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@axion/db/server";
 import { sanitizeInternalRedirect } from "@/lib/safe-redirect";
 
@@ -7,14 +7,28 @@ import { sanitizeInternalRedirect } from "@/lib/safe-redirect";
 // nunca confiar somente na configuração do provider/UI.
 const ALLOWED_EMAIL_DOMAIN = "axion.com.br";
 
-export async function GET(request: Request) {
+const POST_LOGIN_COOKIE = "acc_post_login_next";
+
+export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  // Destino pós-login (ex.: voltar para /email-actions/[token] depois de
-  // um login disparado por um link de e-mail) — sempre revalidado aqui
-  // (nunca confiado só porque já passou por /login), nunca gravado em
-  // log/auditoria: só usado para montar a URL do redirect abaixo.
-  const nextDestination = sanitizeInternalRedirect(url.searchParams.get("next"), "/projetos");
+  // Primeiro usa ?next=. Se o provedor OAuth não devolver a query string
+  // completa, recupera a intenção preservada por cookie curto antes do
+  // redirect ao Google. Ambos são revalidados pelo mesmo allowlist.
+  const nextFromQuery = url.searchParams.get("next");
+  const cookieValue = request.cookies.get(POST_LOGIN_COOKIE)?.value;
+  let nextFromCookie: string | null = null;
+  if (cookieValue) {
+    try {
+      nextFromCookie = decodeURIComponent(cookieValue);
+    } catch {
+      nextFromCookie = null;
+    }
+  }
+  const nextDestination = sanitizeInternalRedirect(
+    nextFromQuery ?? nextFromCookie,
+    "/projetos"
+  );
 
   if (!code) {
     return NextResponse.redirect(new URL("/login?error=oauth_missing_code", url.origin));
@@ -54,5 +68,12 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/login?error=domain_not_allowed", url.origin));
   }
 
-  return NextResponse.redirect(new URL(nextDestination, url.origin));
+  const response = NextResponse.redirect(new URL(nextDestination, url.origin));
+  response.cookies.set(POST_LOGIN_COOKIE, "", {
+    path: "/",
+    maxAge: 0,
+    sameSite: "lax",
+    secure: true,
+  });
+  return response;
 }

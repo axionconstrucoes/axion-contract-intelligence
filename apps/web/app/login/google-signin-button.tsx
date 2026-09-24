@@ -16,6 +16,10 @@ export function GoogleSignInButton({ next }: { next?: string } = {}) {
     const callbackUrl = new URL("/auth/callback", window.location.origin);
     if (next) {
       callbackUrl.searchParams.set("next", next);
+      document.cookie =
+        "acc_post_login_next=" +
+        encodeURIComponent(next) +
+        "; Path=/; Max-Age=600; SameSite=Lax; Secure";
     }
     await supabase.auth.signInWithOAuth({
       provider: "google",
