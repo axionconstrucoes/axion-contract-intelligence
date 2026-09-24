@@ -333,6 +333,7 @@ export function ExpertQueryPanel({
   initialState = initialAskCommercialDirectorState,
   disabledReason = null,
   presentation = "default",
+  questionPlaceholder = "Ex.: Qual a melhor estratégia para negociar este aditivo?",
 }: {
   projectId: string;
   eventId?: string;
@@ -351,6 +352,8 @@ export function ExpertQueryPanel({
   disabledReason?: string | null;
   /** Comparacao juridica ocupa a largura das duas colunas no fluxo pre-contratual. */
   presentation?: "default" | "legal-clause-comparison";
+  /** Exemplo contextual da pergunta, definido por cada Expert quando necessário. */
+  questionPlaceholder?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const { response, error } = state;
@@ -422,7 +425,7 @@ export function ExpertQueryPanel({
               name="question"
               required
               rows={2}
-              placeholder="Ex.: Qual a melhor estratégia para negociar este aditivo?"
+              placeholder={questionPlaceholder}
               title="Descreva o contexto e a pergunta. O especialista usará os documentos e dados disponíveis neste projeto; a resposta exige revisão humana."
             />
           </label>
