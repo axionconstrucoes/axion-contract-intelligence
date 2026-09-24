@@ -160,19 +160,48 @@ export async function answerPlanningDirectorQuery(
     scope: request.scope,
   });
 
+  // Resumo estrutural determinístico do MPP: quando o contexto estruturado
+  // está presente, a resposta sempre informa contagem de atividades e
+  // relações, independentemente de o provider mencionar esses números.
+  const scheduleSummaryFact = scheduleContext
+    ? (() => {
+        const activityCount = scheduleContext.versions.reduce(
+          (total, version) => total + version.activities.length,
+          0
+        );
+        const relationCount = scheduleContext.versions.reduce(
+          (total, version) => total + version.relations.length,
+          0
+        );
+        return `Cronograma MPP estruturado: ${activityCount} atividades e ${relationCount} relações de precedência extraídas.`;
+      })()
+    : null;
+
+  const validatedWithScheduleSummary = scheduleSummaryFact
+    ? {
+        ...validated,
+        fatosDocumentados: [
+          scheduleSummaryFact,
+          ...validated.fatosDocumentados.filter(
+            (fact) => !/atividades e .*relações de precedência extraídas/i.test(fact)
+          ),
+        ],
+      }
+    : validated;
+
   // Guardrail de grounding: só roda para o provider real (Anthropic) —
   // ver commentário equivalente em experts/commercial-director/query.ts.
-  let finalResponse = validated;
+  let finalResponse = validatedWithScheduleSummary;
   let groundingAudit = { performed: false, valid: true, supportedClaimCount: 0, inferredClaimCount: 0, unsupportedClaimCount: 0, humanInputRequiredClaimCount: 0 };
 
-  if (response.providerId === "anthropic" && validated.rascunhoSugerido) {
-    const draft = validated.rascunhoSugerido;
+  if (response.providerId === "anthropic" && validatedWithScheduleSummary.rascunhoSugerido) {
+    const draft = validatedWithScheduleSummary.rascunhoSugerido;
     const source = buildGroundingSource({
       eventContext: eventContextWithSchedule,
       projectContext: projectContextWithSchedule,
-      documentedFacts: validated.fatosDocumentados,
-      contractualBasis: validated.baseContratual,
-      legalCitations: validated.baseLegal,
+      documentedFacts: validatedWithScheduleSummary.fatosDocumentados,
+      contractualBasis: validatedWithScheduleSummary.baseContratual,
+      legalCitations: validatedWithScheduleSummary.baseLegal,
     });
     const result = validateDraftGrounding(draft.body, source);
 
@@ -191,15 +220,15 @@ export async function answerPlanningDirectorQuery(
     }
 
     finalResponse = {
-      ...validated,
-      confidence: adjustConfidenceForGrounding(validated.confidence, result, { draftSuppressed, correctionApplied }),
+      ...validatedWithScheduleSummary,
+      confidence: adjustConfidenceForGrounding(validatedWithScheduleSummary.confidence, result, { draftSuppressed, correctionApplied }),
       rascunhoSugerido: draftSuppressed ? null : correctedDraft,
       informacoesFaltantes: draftSuppressed
         ? [
-            ...validated.informacoesFaltantes,
+            ...validatedWithScheduleSummary.informacoesFaltantes,
             "Rascunho de comunicação removido pelo guardrail de grounding: continha afirmação sem suporte no contexto fornecido.",
           ]
-        : validated.informacoesFaltantes,
+        : validatedWithScheduleSummary.informacoesFaltantes,
       grounding: buildResponseGroundingSummary(result, { correctionApplied, draftSuppressed }),
     };
 
@@ -212,7 +241,7 @@ export async function answerPlanningDirectorQuery(
       humanInputRequiredClaimCount: result.humanInputRequiredClaims.length,
     };
   } else {
-    finalResponse = { ...validated, grounding: NOT_PERFORMED_GROUNDING_SUMMARY };
+    finalResponse = { ...validatedWithScheduleSummary, grounding: NOT_PERFORMED_GROUNDING_SUMMARY };
   }
 
   return {
