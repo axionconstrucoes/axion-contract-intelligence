@@ -26,16 +26,24 @@ export function ContractAlertBatchForm({
   projectId,
   items,
   members,
+  initialAction,
 }: {
   batchId: string;
   projectId: string;
   items: ContractAlertBatchViewItem[];
   members: Array<{ userId: string; name: string }>;
+  initialAction: { eventId: string; action: ContractAlertBatchItemAction } | null;
 }) {
   const boundAction = submitContractAlertBatchAction.bind(null, batchId, projectId);
   const [state, formAction, pending] = useActionState(boundAction, initialSubmitContractAlertBatchState);
   const [actions, setActions] = useState<Record<string, ContractAlertBatchItemAction | "">>(() =>
-    Object.fromEntries(items.map((item) => [item.eventId, item.action ?? ""]))
+    Object.fromEntries(
+      items.map((item) => [
+        item.eventId,
+        item.action ??
+          (initialAction?.eventId === item.eventId ? initialAction.action : ""),
+      ])
+    )
   );
   const [assignees, setAssignees] = useState<Record<string, string>>(() =>
     Object.fromEntries(items.map((item) => [item.eventId, item.assignedUserId ?? ""]))
