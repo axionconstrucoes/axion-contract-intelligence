@@ -148,6 +148,7 @@ export async function createAndSendContractAlertBatch(
   const emailItems: ContractAlertBatchEmailItem[] = input.items.map((item) => ({
     ...item,
     respondItemUrl: `${batchUrl}#evento-${item.eventId}`,
+    quickActionUrl: `${baseUrl}/alertas/acao/${input.projectId}/${batchId}/${item.eventId}`,
   }));
 
   const inlineLogo = loadAccLogoInlineImage();
