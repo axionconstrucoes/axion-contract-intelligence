@@ -47,10 +47,15 @@ export interface EsgDirectorQueryResult {
  * ambos genéricos e reutilizados) e chama o provider — nunca escreve,
  * nunca envia nada, nunca altera status de obrigação/comprovação.
  */
+export interface EsgDirectorQueryOptions {
+  includeContractualDocuments?: boolean;
+}
+
 export async function answerEsgDirectorQuery(
   supabase: SupabaseClient,
   request: ExpertQueryRequest,
-  provider: AiProvider = resolveAiProviderForExpert(ESG_DIRECTOR_EXPERT_ID)
+  provider: AiProvider = resolveAiProviderForExpert(ESG_DIRECTOR_EXPERT_ID),
+  options: EsgDirectorQueryOptions = {}
 ): Promise<EsgDirectorQueryResult> {
   if (!IMPLEMENTED_SCOPES.includes(request.scope)) {
     throw new Error(
@@ -75,7 +80,12 @@ export async function answerEsgDirectorQuery(
       : null;
 
   const projectContext =
-    request.scope === "PROJECT" ? await buildProjectAnalysisContext(supabase, { projectId: request.projectId }) : null;
+    request.scope === "PROJECT"
+      ? await buildProjectAnalysisContext(supabase, {
+          projectId: request.projectId,
+          includeContractualDocuments: options.includeContractualDocuments === true,
+        })
+      : null;
 
   const response = await provider.answerQuery({
     expertId: ESG_DIRECTOR_EXPERT_ID,

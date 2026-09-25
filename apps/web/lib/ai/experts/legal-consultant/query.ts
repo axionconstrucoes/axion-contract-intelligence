@@ -73,6 +73,8 @@ export interface LegalConsultantQueryResult {
  * provider — nunca escreve, nunca envia nada.
  */
 export interface LegalConsultantQueryOptions {
+  /** Carrega o texto dos documentos contratuais sem, por si só, exigir que exista ao menos um. */
+  includeContractualDocuments?: boolean;
   /**
    * Carrega o texto dos documentos contratuais no contexto e EXIGE que
    * exista pelo menos um legivel. Usado pela analise juridica
@@ -118,7 +120,8 @@ export async function answerLegalConsultantQuery(
     request.scope === "PROJECT"
       ? await buildProjectAnalysisContext(supabase, {
           projectId: request.projectId,
-          includeContractualDocuments: options.requireContractualDocuments === true,
+          includeContractualDocuments:
+            options.includeContractualDocuments === true || options.requireContractualDocuments === true,
         })
       : null;
 

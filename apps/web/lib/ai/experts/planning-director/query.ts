@@ -70,10 +70,15 @@ export interface PlanningDirectorQueryResult {
  * buildProjectAnalysisContext, ambos genéricos e reutilizados) e chama o
  * provider — nunca escreve, nunca envia nada, nunca altera cronograma.
  */
+export interface PlanningDirectorQueryOptions {
+  includeContractualDocuments?: boolean;
+}
+
 export async function answerPlanningDirectorQuery(
   supabase: SupabaseClient,
   request: ExpertQueryRequest,
-  provider: AiProvider = resolveAiProviderForExpert(PLANNING_DIRECTOR_EXPERT_ID)
+  provider: AiProvider = resolveAiProviderForExpert(PLANNING_DIRECTOR_EXPERT_ID),
+  options: PlanningDirectorQueryOptions = {}
 ): Promise<PlanningDirectorQueryResult> {
   if (!IMPLEMENTED_SCOPES.includes(request.scope)) {
     throw new Error(
@@ -130,7 +135,12 @@ export async function answerPlanningDirectorQuery(
       : null;
 
   const projectContext =
-    request.scope === "PROJECT" ? await buildProjectAnalysisContext(supabase, { projectId: request.projectId }) : null;
+    request.scope === "PROJECT"
+      ? await buildProjectAnalysisContext(supabase, {
+          projectId: request.projectId,
+          includeContractualDocuments: options.includeContractualDocuments === true,
+        })
+      : null;
 
   const eventContextWithSchedule = eventContext
     ? { ...eventContext, schedule: scheduleContext }

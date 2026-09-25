@@ -28,6 +28,12 @@ export interface CurationInput {
   description: string;
   /** Na análise pré-contratual, consulta obrigatoriamente todos os especialistas antes da curadoria do CEO IA. */
   consultAllExperts?: boolean;
+  /**
+   * Inclui o texto contratual extraído no ProjectAnalysisContext de TODOS
+   * os especialistas desta rodada. Usado somente pelo workspace
+   * PRE_CONTRATUAL, onde todos devem analisar a mesma minuta/contrato.
+   */
+  includeContractualDocuments?: boolean;
 }
 
 /**

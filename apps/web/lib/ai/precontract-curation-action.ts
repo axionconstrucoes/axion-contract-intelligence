@@ -36,6 +36,7 @@ export async function runPrecontractCurationAction(
       sourceType: "PROJECT",
       description: question,
       consultAllExperts: true,
+      includeContractualDocuments: true,
     });
     return { result, error: null };
   } catch (error) {

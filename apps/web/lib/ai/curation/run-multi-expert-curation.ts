@@ -76,12 +76,49 @@ export async function runMultiExpertCuration(supabase: SupabaseClient, input: Cu
     const queryFn = SPECIALIST_QUERY_FUNCTIONS[expertId];
     if (!queryFn) continue;
 
-    const result = await queryFn(supabase, {
+    const request = {
       scope,
       projectId: input.projectId,
       eventId: input.eventId,
       question,
-    });
+    };
+
+    const includeContractualDocuments = input.includeContractualDocuments === true && scope === "PROJECT";
+
+    const result =
+      expertId === "legal-consultant"
+        ? await answerLegalConsultantQuery(
+            supabase,
+            request,
+            undefined,
+            {
+              includeContractualDocuments,
+              requireContractualDocuments: includeContractualDocuments,
+            }
+          )
+        : expertId === "commercial-director"
+          ? await answerCommercialDirectorQuery(
+              supabase,
+              request,
+              undefined,
+              { includeContractualDocuments }
+            )
+          : expertId === "esg-director"
+            ? await answerEsgDirectorQuery(
+                supabase,
+                request,
+                undefined,
+                { includeContractualDocuments }
+              )
+            : expertId === "planning-director"
+              ? await answerPlanningDirectorQuery(
+                  supabase,
+                  request,
+                  undefined,
+                  { includeContractualDocuments }
+                )
+              : await queryFn(supabase, request);
+
     expertResults.push({ expertId, response: result.response });
   }
 
