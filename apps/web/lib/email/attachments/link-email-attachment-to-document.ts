@@ -34,7 +34,8 @@ export type EmailAttachmentDocumentKind =
   | "CRONOGRAMA_REVISAO"
   | "RELATORIO_SEMANAL"
   | "PROPOSTA_AXION"
-  | "CLARIFICACAO_CLIENTE";
+  | "CLARIFICACAO_CLIENTE"
+  | "ATA_REUNIAO";
 
 export interface LinkEmailAttachmentToDocumentInput {
   attachmentId: string;
