@@ -64,10 +64,15 @@ export interface CommercialDirectorQueryResult {
  * buildProjectAnalysisContext, ambos genéricos e reutilizados) e chama o
  * provider — nunca escreve, nunca envia nada.
  */
+export interface CommercialDirectorQueryOptions {
+  includeContractualDocuments?: boolean;
+}
+
 export async function answerCommercialDirectorQuery(
   supabase: SupabaseClient,
   request: ExpertQueryRequest,
-  provider: AiProvider = resolveAiProviderForExpert(COMMERCIAL_DIRECTOR_EXPERT_ID)
+  provider: AiProvider = resolveAiProviderForExpert(COMMERCIAL_DIRECTOR_EXPERT_ID),
+  options: CommercialDirectorQueryOptions = {}
 ): Promise<CommercialDirectorQueryResult> {
   if (!IMPLEMENTED_SCOPES.includes(request.scope)) {
     throw new Error(
@@ -92,7 +97,12 @@ export async function answerCommercialDirectorQuery(
       : null;
 
   const projectContext =
-    request.scope === "PROJECT" ? await buildProjectAnalysisContext(supabase, { projectId: request.projectId }) : null;
+    request.scope === "PROJECT"
+      ? await buildProjectAnalysisContext(supabase, {
+          projectId: request.projectId,
+          includeContractualDocuments: options.includeContractualDocuments === true,
+        })
+      : null;
 
   const response = await provider.answerQuery({
     expertId: COMMERCIAL_DIRECTOR_EXPERT_ID,
