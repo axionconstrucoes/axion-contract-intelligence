@@ -90,7 +90,7 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
           .eq("project_id", projectId)
           .order("created_at", { ascending: false })
           .limit(200),
-        client.from("weekly_schedule_email_intakes").select("email_id,document_version_id,work_week_label").eq("project_id", projectId).not("document_version_id", "is", null),
+        client.from("weekly_schedule_email_intakes").select("email_id,document_version_id,work_week_label,sent_at").eq("project_id", projectId).not("document_version_id", "is", null),
         client.from("weekly_report_workbooks").select("id,email_id,work_week_label").eq("project_id", projectId),
         client.from("risk_alert_cases").select("*").eq("project_id", projectId),
       ]);
@@ -104,16 +104,30 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
       const versionMeta = new Map(
         (versions ?? []).map((row) => {
           const intake = intakeByDocVersion.get(row.document_version_id as string);
-          return [row.id as string, { emailId: s(intake?.email_id), weekLabel: s(intake?.work_week_label) }];
+          return [row.id as string, { emailId: s(intake?.email_id), weekLabel: s(intake?.work_week_label), sentAt: s(intake?.sent_at) }];
         })
       );
       const workbookById = new Map((workbooks ?? []).map((row) => [row.id as string, row]));
 
-      const comparisonRows: ComparisonSourceRow[] = (comparisons ?? []).map((row) => ({
+      const comparisonRowsAll: ComparisonSourceRow[] = (comparisons ?? []).map((row) => ({
         ...(row as unknown as ComparisonSourceRow),
         work_week_label: versionMeta.get(row.current_schedule_version_id as string)?.weekLabel ?? null,
         email_id: versionMeta.get(row.current_schedule_version_id as string)?.emailId ?? null,
       }));
+
+      // Alertas de prazo devem refletir exclusivamente o MPP mais recente
+      // recebido para o projeto. Comparações históricas continuam no banco
+      // para auditoria, mas não podem reabrir/gerar alertas se já existe um
+      // cronograma posterior.
+      const latestScheduleSentAt = Array.from(versionMeta.values())
+        .map((meta) => meta.sentAt)
+        .filter((value): value is string => Boolean(value))
+        .sort()
+        .at(-1) ?? null;
+
+      const comparisonRows: ComparisonSourceRow[] = latestScheduleSentAt
+        ? comparisonRowsAll.filter((row) => versionMeta.get(row.current_schedule_version_id as string)?.sentAt === latestScheduleSentAt)
+        : comparisonRowsAll;
       const sheetRows: SheetSourceRow[] = (sheets ?? []).map((row) => ({
         ...(row as unknown as SheetSourceRow),
         work_week_label: s(workbookById.get(row.workbook_id as string)?.work_week_label),

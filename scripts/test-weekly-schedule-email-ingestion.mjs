@@ -217,6 +217,21 @@ await check("1. Planejador ACTIVE, área PLANEJAMENTO, 1º escalão pela Matriz,
   assert(decision.selectedAttachment?.gmailAttachmentId === "att-1");
 });
 
+await check("1b. Dois MPP no pacote: seleciona automaticamente o arquivo cujo nome contém Cronograma", () => {
+  const decision = evaluateWeeklyScheduleEmail(
+    candidate({
+      attachments: [
+        mpp("att-cron", "(W38) WEG - Cronograma.mpp"),
+        mpp("att-aux", "(W38) Estratificação de Tarefas Futuras.mpp"),
+      ],
+    }),
+    config,
+    sender()
+  );
+  assert(decision.status === "AUTHORIZED_AUTO", `status ${decision.status} (${decision.rule})`);
+  assert(decision.selectedAttachment?.gmailAttachmentId === "att-cron");
+});
+
 await check("2. Planejador 2º escalão (Nível 2 · Gerência na Matriz) → AUTHORIZED_AUTO", () => {
   const decision = evaluateWeeklyScheduleEmail(candidate(), config, sender({ standings: [standing({ tier: "SECOND_TIER", tierReason: "Nível 2 (Gerência) na Matriz." })] }));
   assert(decision.status === "AUTHORIZED_AUTO", `status ${decision.status} (${decision.rule})`);

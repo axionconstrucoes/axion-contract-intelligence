@@ -26,8 +26,10 @@ function normalize(value) {
     .toLowerCase();
 }
 
-function isMeetingMinutes(fileName, subject) {
-  const text = normalize(`${fileName} ${subject}`);
+function isMeetingMinutes(fileName) {
+  const text = normalize(fileName);
+  const documentExtension = /\.(pdf|doc|docx|odt|rtf)$/i.test(fileName);
+  if (!documentExtension) return false;
   return (
     /(^|[^a-z0-9])ata([^a-z0-9]|$)/.test(text) ||
     text.includes("ata de reuniao") ||
@@ -168,7 +170,7 @@ for (const row of byId.values()) {
       if (result.status === "INGESTED") attachmentsIngested += 1;
 
       const attachment = result.attachment;
-      if (!isMeetingMinutes(attachment.originalFileName, row.subject)) continue;
+      if (!isMeetingMinutes(attachment.originalFileName)) continue;
 
       await linkEmailAttachmentToDocument(supabase, {
         attachmentId: attachment.id,
