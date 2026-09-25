@@ -77,7 +77,7 @@ async function assertThrowsEmailSendError(fn, message) {
   throw new Error(`${message} — deveria ter lançado, mas não lançou`);
 }
 
-const VALID_PILOT_ENV = { outboundMode: "pilot", pilotRecipient: "reynaldo@axion.com.br" };
+const VALID_PILOT_ENV = { outboundMode: "pilot", pilotRecipient: "crm@axion.com.br" };
 const PRODUCTION_ENV = {
   outboundMode: "production",
   pilotRecipient: undefined,
@@ -121,38 +121,34 @@ check("à meia-noite de 22/09/2026 em São Paulo, a liberação manual pode entr
 
 // --- Destinatário original substituído ---
 
-check("destinatário original é substituído por reynaldo@axion.com.br em modo piloto", () => {
+check("destinatário original é substituído por crm@axion.com.br em modo piloto", () => {
   const guarded = applyPilotOutboundGuard(baseInput, VALID_PILOT_ENV);
   assert(guarded.to === ACC_EXPECTED_PILOT_RECIPIENT, `to obtido: "${guarded.to}"`);
   assert(guarded.to !== baseInput.to);
 });
 
-check("Ricardo Silva permanece como destinatário quando o alerta já é destinado a ele", () => {
-  const guarded = applyPilotOutboundGuard(
-    { ...baseInput, to: "ricardo.silva@axion.com.br" },
-    VALID_PILOT_ENV
-  );
-  assert(guarded.to === "ricardo.silva@axion.com.br", `to obtido: "${guarded.to}"`);
-});
-
-check("Carlos Evandro e Rosana Mendes permanecem como destinatários quando o alerta já é destinado a eles", () => {
-  for (const email of ["carlos.evandro@axion.com.br", "rosana.mendes@axion.com.br"]) {
+check("todo destinatário humano é redirecionado para crm@axion.com.br", () => {
+  for (const email of [
+    "reynaldo@axion.com.br",
+    "ricardo.silva@axion.com.br",
+    "carlos.evandro@axion.com.br",
+    "rosana.mendes@axion.com.br",
+  ]) {
     const guarded = applyPilotOutboundGuard({ ...baseInput, to: email }, VALID_PILOT_ENV);
-    assert(guarded.to === email, `to obtido: "${guarded.to}"`);
+    assert(guarded.to === ACC_EXPECTED_PILOT_RECIPIENT, `to obtido: "${guarded.to}"`);
   }
 });
 
-check("allowlist do período de testes contém somente os quatro participantes autorizados", () => {
+check("allowlist do piloto contém somente crm@axion.com.br", () => {
   assert(
-    ACC_PILOT_ALLOWED_RECIPIENTS.join("|") ===
-      "reynaldo@axion.com.br|ricardo.silva@axion.com.br|carlos.evandro@axion.com.br|rosana.mendes@axion.com.br",
+    ACC_PILOT_ALLOWED_RECIPIENTS.join("|") === "crm@axion.com.br",
     `allowlist obtida: ${ACC_PILOT_ALLOWED_RECIPIENTS.join(", ")}`
   );
 });
 
-check("caixas institucionais autorizadas incluem axion@ e crm@", () => {
-  assert(ACC_PILOT_INSTITUTIONAL_MAILBOXES.includes("axion@axion.com.br"));
-  assert(ACC_PILOT_INSTITUTIONAL_MAILBOXES.includes("crm@axion.com.br"));
+check("única caixa institucional de destino do piloto é crm@", () => {
+  assert(ACC_PILOT_INSTITUTIONAL_MAILBOXES.length === 1);
+  assert(ACC_PILOT_INSTITUTIONAL_MAILBOXES[0] === "crm@axion.com.br");
 });
 
 check("crm@axion.com.br permanece como destino efetivo em modo piloto", () => {
@@ -221,20 +217,20 @@ await checkAsync("destinatário piloto com endereço inválido (sem @/domínio) 
   );
 });
 
-await checkAsync("destinatário piloto diferente de reynaldo@axion.com.br (mas válido) bloqueia o envio", async () => {
+await checkAsync("destinatário piloto diferente de crm@axion.com.br (mas válido) bloqueia o envio", async () => {
   await assertThrowsEmailSendError(
     () => applyPilotOutboundGuard(baseInput, { outboundMode: "pilot", pilotRecipient: "outro-usuario@axion.com.br" }),
     "endereço piloto diferente do autorizado deveria bloquear"
   );
 });
 
-check("destinatário piloto com caixa diferente (Reynaldo@Axion.com.br) ainda é aceito e normalizado", () => {
-  const guarded = applyPilotOutboundGuard(baseInput, { outboundMode: "pilot", pilotRecipient: "Reynaldo@Axion.com.br" });
+check("destinatário piloto com caixa diferente (CRM@Axion.com.br) ainda é aceito e normalizado", () => {
+  const guarded = applyPilotOutboundGuard(baseInput, { outboundMode: "pilot", pilotRecipient: "CRM@Axion.com.br" });
   assert(guarded.to === ACC_EXPECTED_PILOT_RECIPIENT);
 });
 
 check("isValidEmailAddress: validação básica de formato", () => {
-  assert(isValidEmailAddress("reynaldo@axion.com.br") === true);
+  assert(isValidEmailAddress("crm@axion.com.br") === true);
   assert(isValidEmailAddress("sem-arroba-nem-dominio") === false);
   assert(isValidEmailAddress("sem-dominio@") === false);
   assert(isValidEmailAddress("") === false);
@@ -281,7 +277,7 @@ await checkAsync("FakeEmailProvider aplica a reescrita completa quando o piloto 
   const previousMode = process.env.ACC_OUTBOUND_MODE;
   const previousRecipient = process.env.ACC_PILOT_RECIPIENT;
   process.env.ACC_OUTBOUND_MODE = "pilot";
-  process.env.ACC_PILOT_RECIPIENT = "reynaldo@axion.com.br";
+  process.env.ACC_PILOT_RECIPIENT = "crm@axion.com.br";
   try {
     const provider = new FakeEmailProvider();
     const result = await provider.send(baseInput);
