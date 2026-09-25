@@ -155,9 +155,9 @@ export async function readWorkbookSafely(input: { buffer: Buffer; fileName: stri
         rows.push(cells);
       }
 
-      const state = (sheet as unknown as { state?: string }).state;
-      const hidden = state !== undefined && state !== "visible";
-      const name = sheet.name ?? `Planilha ${position + 1}`;
+      const sheetMeta = sheet as unknown as { state?: string; name?: string };
+      const hidden = sheetMeta.state !== undefined && sheetMeta.state !== "visible";
+      const name = sheetMeta.name ?? `Planilha ${position + 1}`;
 
       grids.push({ name, index: position, rows, hidden });
       sheetIndex.push({
