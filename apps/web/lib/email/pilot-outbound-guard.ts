@@ -13,7 +13,7 @@
 //   ativo — nunca abre a porta por engano.
 // - Em modo piloto, somente os destinatários fixos da allowlist podem
 //   receber mensagens. O destinatário de contingência configurado por
-//   ACC_PILOT_RECIPIENT continua sendo Reynaldo; mensagens destinadas a
+//   ACC_PILOT_RECIPIENT continua sendo CRM; mensagens destinadas a
 //   qualquer outra pessoa são redirecionadas para ele.
 // - Sem qualquer desligamento automático por data/relógio — controlado
 //   inteiramente por configuração de ambiente.
@@ -22,12 +22,9 @@ import { ACC_GO_LIVE_DATE } from "../acc-go-live";
 import { ALERT_REPLY_MAILBOX_ENV, validateAlertReplyTo, type AlertReplyToRejection } from "./alert-reply-address";
 import { EmailSendError, type SendEmailInput } from "./email-provider";
 
-export const ACC_EXPECTED_PILOT_RECIPIENT = "reynaldo@axion.com.br";
+export const ACC_EXPECTED_PILOT_RECIPIENT = "crm@axion.com.br";
 export const ACC_PILOT_ALLOWED_RECIPIENTS = [
   ACC_EXPECTED_PILOT_RECIPIENT,
-  "ricardo.silva@axion.com.br",
-  "carlos.evandro@axion.com.br",
-  "rosana.mendes@axion.com.br",
 ] as const;
 export const PILOT_SUBJECT_PREFIX = "[TESTE CONTROLADO] ";
 
@@ -36,7 +33,7 @@ export const PILOT_SUBJECT_PREFIX = "[TESTE CONTROLADO] ";
 // pilot_delivery_override_email). Enviar para a própria caixa do ACC é
 // intrinsecamente interno, por isso é admitido em modo piloto — a lista
 // fixa de participantes acima permanece intacta.
-export const ACC_PILOT_INSTITUTIONAL_MAILBOXES = ["axion@axion.com.br", "crm@axion.com.br"] as const;
+export const ACC_PILOT_INSTITUTIONAL_MAILBOXES = [ACC_EXPECTED_PILOT_RECIPIENT] as const;
 
 // Extensão CONTROLADA da allowlist do piloto por ambiente — ponto único.
 // ACC_PILOT_ADDITIONAL_RECIPIENTS = lista separada por vírgula de
@@ -64,8 +61,8 @@ export function parsePilotAdditionalRecipients(rawValue: string | undefined): st
 }
 
 /** Allowlist efetiva do provider em modo piloto: fixa + adicionais válidos do ambiente. */
-export function resolvePilotAllowedRecipients(env: Pick<PilotOutboundGuardEnv, "additionalRecipients"> = defaultEnv()): string[] {
-  return Array.from(new Set([...ACC_PILOT_ALLOWED_RECIPIENTS, ...ACC_PILOT_INSTITUTIONAL_MAILBOXES, ...parsePilotAdditionalRecipients(env.additionalRecipients)]));
+export function resolvePilotAllowedRecipients(): string[] {
+  return [ACC_EXPECTED_PILOT_RECIPIENT];
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -181,7 +178,7 @@ function ensureSubjectPrefixed(subject: string): string {
 // em piloto, ACC_PILOT_RECIPIENT precisa ser válido e bater com o
 // destinatário de contingência autorizado, senão lança antes de qualquer
 // efeito. Se o destinatário original estiver na lista de testadores, ele é
-// preservado; qualquer outro é redirecionado para Reynaldo.
+// preservado; qualquer outro é redirecionado para CRM.
 export interface ResolvedEmailRecipient {
   mode: "PRODUCTION" | "PILOT";
   intendedRecipientEmail: string;
@@ -206,10 +203,7 @@ export function resolveEffectiveRecipient(
     );
   }
 
-  const normalizedIntendedRecipient = intendedRecipientEmail.trim().toLowerCase();
-  const effectiveRecipientEmail = resolvePilotAllowedRecipients(env).includes(normalizedIntendedRecipient)
-    ? normalizedIntendedRecipient
-    : ACC_EXPECTED_PILOT_RECIPIENT;
+  const effectiveRecipientEmail = ACC_EXPECTED_PILOT_RECIPIENT;
 
   return { mode, intendedRecipientEmail, effectiveRecipientEmail };
 }
