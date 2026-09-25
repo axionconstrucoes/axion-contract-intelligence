@@ -26,7 +26,7 @@
 // gravada como evidência; nunca convertida em semana civil.
 
 import { parseWorkWeekSubject } from "../../email/registry/parse-work-week-subject";
-import { evaluateWeeklyScheduleEmail } from "./evaluate-weekly-schedule-email";
+import { evaluateWeeklyScheduleEmail, isMppAttachment } from "./evaluate-weekly-schedule-email";
 import type { IngestedMppAttachment, WeeklyScheduleIngestionStore, WeeklyScheduleIntakeRecord } from "./store";
 import { DuplicateDocumentVersionError } from "./store";
 import type { EmailAttachmentDescriptor, WeeklyScheduleEmailCandidate, WeeklyScheduleIngestionConfig, WeeklyScheduleIntakeStatus } from "./types";
@@ -35,6 +35,22 @@ import { resolveWeekStart } from "./week-window";
 export type ProcessCandidateOutcome =
   | { kind: "ALREADY_EVALUATED"; intakeId: string; status: WeeklyScheduleIntakeStatus }
   | { kind: "RECORDED"; intakeId: string; status: WeeklyScheduleIntakeStatus; rule: string; documentVersionId: string | null };
+
+const SPREADSHEET_RE = /\.(xlsx|xlsm|xls)$/i;
+const MEETING_MINUTES_RE = /(^|[^a-z0-9])(ata|atas|mom)([^a-z0-9]|$)|minuta[\s_-]*de[\s_-]*reuni/i;
+
+function isSpreadsheetAttachment(attachment: EmailAttachmentDescriptor): boolean {
+  return SPREADSHEET_RE.test(attachment.fileName) || /spreadsheetml|ms-excel/i.test(attachment.mimeType);
+}
+
+function isMeetingMinutesAttachment(attachment: EmailAttachmentDescriptor): boolean {
+  const normalized = attachment.fileName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return MEETING_MINUTES_RE.test(normalized);
+}
+
+function isWeeklyPackageAttachment(attachment: EmailAttachmentDescriptor): boolean {
+  return isMppAttachment(attachment) || isSpreadsheetAttachment(attachment) || isMeetingMinutesAttachment(attachment);
+}
 
 function withHash(attachments: EmailAttachmentDescriptor[], ingested: Map<string, IngestedMppAttachment>): EmailAttachmentDescriptor[] {
   return attachments.map((attachment) => {
@@ -139,7 +155,22 @@ export async function processWeeklyScheduleEmailCandidate(
       throw new Error("E-mail ainda não sincronizado em public.emails — anexo não pode ser ingerido nesta execução.");
     }
 
-    const attachment = await store.ingestAttachment(config.projectId, candidate, decision.selectedAttachment);
+    // Pacote semanal do Planejamento: preserva, na mesma mensagem,
+    // Cronograma MPP + planilha Excel + Ata de Reunião. O intake continua
+    // sendo a unidade semanal (message_id/WNN); cada arquivo segue seu
+    // pipeline próprio, mas todos mantêm a mesma origem email_id.
+    for (const packageAttachment of candidate.attachments.filter(isWeeklyPackageAttachment)) {
+      const stored = await store.ingestAttachment(config.projectId, candidate, packageAttachment);
+      ingested.set(packageAttachment.gmailAttachmentId, stored);
+
+      if (isMeetingMinutesAttachment(packageAttachment)) {
+        await store.promoteMeetingMinutesAttachment(stored, candidate);
+      }
+    }
+
+    const attachment =
+      ingested.get(decision.selectedAttachment.gmailAttachmentId) ??
+      (await store.ingestAttachment(config.projectId, candidate, decision.selectedAttachment));
     ingested.set(decision.selectedAttachment.gmailAttachmentId, attachment);
 
     const duplicate = await store.findDocumentVersionBySha(config.projectId, attachment.sha256Hash);
