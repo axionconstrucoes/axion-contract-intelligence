@@ -192,6 +192,16 @@ export function selectMppAttachment(
   if (candidates.length === 0) return { kind: "NONE" };
   if (candidates.length === 1) return { kind: "SELECTED", attachment: candidates[0], candidates, how: "ONLY_MPP" };
 
+  // Regra institucional do pacote semanal: quando há mais de um
+  // .mpp e exatamente um deles é o cronograma principal (nome contém
+  // "cronograma"), seleciona-o. Arquivos auxiliares como "Estratificação
+  // de Tarefas Futuras" permanecem como evidência, mas não viram a versão
+  // oficial do cronograma semanal.
+  const cronogramaNamed = candidates.filter((candidate) => /(^|[^a-z])cronograma([^a-z]|$)/i.test(candidate.fileName.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
+  if (cronogramaNamed.length === 1) {
+    return { kind: "SELECTED", attachment: cronogramaNamed[0], candidates, how: "NAME_PATTERN" };
+  }
+
   const pattern = config.attachmentNamePattern?.trim();
   if (pattern) {
     let regex: RegExp | null = null;
