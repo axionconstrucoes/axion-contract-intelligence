@@ -12,6 +12,10 @@
 //     disponível"), nunca recalculado/inventado;
 //   - hyperlinks viram só o texto; erros (#REF!, #N/A) viram null.
 
+import { randomUUID } from "node:crypto";
+import { unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import type { SheetCell, SheetGrid, WorkbookSafetyReport, WorkbookSheetIndexEntry } from "./types";
@@ -109,26 +113,64 @@ export async function readWorkbookSafely(input: { buffer: Buffer; fileName: stri
   }
 
   const pkg = await inspectPackage(input.buffer);
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(input.buffer as unknown as ArrayBuffer);
+
+  // ExcelJS.Workbook().xlsx.load() materializa a pasta inteira em memória.
+  // Arquivos pequenos em disco podem expandir para vários GB quando têm
+  // dimensões/estilos extensos. No worker do GitHub isso já provocou OOM
+  // (>6 GB). O WorkbookReader faz leitura streaming: mantemos no máximo
+  // MAX_ROWS × MAX_COLUMNS por aba, mas drenamos o restante sem armazenar.
+  const tempPath = join(tmpdir(), `acc-weekly-${randomUUID()}.xlsx`);
+  await writeFile(tempPath, input.buffer);
 
   const counters = { formulas: 0, missing: 0 };
   const grids: SheetGrid[] = [];
   const sheetIndex: WorkbookSheetIndexEntry[] = [];
-  workbook.worksheets.forEach((sheet, position) => {
-    const rows: SheetCell[][] = [];
-    const rowCount = Math.min(sheet.rowCount, MAX_ROWS);
-    const columnCount = Math.min(Math.max(sheet.columnCount, 1), MAX_COLUMNS);
-    for (let r = 1; r <= rowCount; r += 1) {
-      const row = sheet.getRow(r);
-      const cells: SheetCell[] = [];
-      for (let c = 1; c <= columnCount; c += 1) cells.push(toCell(row.getCell(c), counters));
-      rows.push(cells);
+
+  try {
+    const workbook = new ExcelJS.stream.xlsx.WorkbookReader(tempPath, {
+      entries: "emit",
+      sharedStrings: "cache",
+      hyperlinks: "ignore",
+      styles: "cache",
+      worksheets: "emit",
+    });
+
+    let position = 0;
+    for await (const sheet of workbook) {
+      const rows: SheetCell[][] = [];
+      let observedRows = 0;
+      let observedColumns = 0;
+
+      for await (const row of sheet) {
+        observedRows = Math.max(observedRows, row.number);
+        observedColumns = Math.max(observedColumns, row.cellCount);
+
+        if (row.number > MAX_ROWS) continue;
+
+        const columnCount = Math.min(Math.max(row.cellCount, 1), MAX_COLUMNS);
+        const cells: SheetCell[] = [];
+        for (let column = 1; column <= columnCount; column += 1) {
+          cells.push(toCell(row.getCell(column), counters));
+        }
+        rows.push(cells);
+      }
+
+      const sheetMeta = sheet as unknown as { state?: string; name?: string };
+      const hidden = sheetMeta.state !== undefined && sheetMeta.state !== "visible";
+      const name = sheetMeta.name ?? `Planilha ${position + 1}`;
+
+      grids.push({ name, index: position, rows, hidden });
+      sheetIndex.push({
+        index: position,
+        name,
+        hidden,
+        rowCount: observedRows,
+      });
+      position += 1;
     }
-    const hidden = sheet.state !== undefined && sheet.state !== "visible";
-    grids.push({ name: sheet.name, index: position, rows, hidden });
-    sheetIndex.push({ index: position, name: sheet.name, hidden, rowCount: sheet.rowCount });
-  });
+  } finally {
+    await unlink(tempPath).catch(() => undefined);
+  }
 
   const notes = [...base.notes];
   if (pkg.macrosDetected) notes.push("Macro (vbaProject.bin) presente no pacote — ignorada, nunca executada.");
