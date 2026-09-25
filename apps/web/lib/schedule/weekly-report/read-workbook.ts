@@ -52,13 +52,36 @@ export function validateWorkbookFile(input: { buffer: Buffer; fileName: string; 
   return { detectedFormat, signatureValid, extensionValid, mimeValid, sizeValid, notes };
 }
 
-async function inspectPackage(buffer: Buffer): Promise<Pick<WorkbookSafetyReport, "macrosDetected" | "externalLinksDetected" | "dataConnectionsDetected">> {
+interface PackageInspection extends Pick<WorkbookSafetyReport, "macrosDetected" | "externalLinksDetected" | "dataConnectionsDetected"> {
+  estimatedUncompressedBytes: number;
+  oversizedXmlEntry: string | null;
+}
+
+const MAX_XLSX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024;
+const MAX_XLSX_XML_ENTRY_BYTES = 128 * 1024 * 1024;
+
+async function inspectPackage(buffer: Buffer): Promise<PackageInspection> {
   const zip = await JSZip.loadAsync(buffer);
   const names = Object.keys(zip.files);
+  let estimatedUncompressedBytes = 0;
+  let oversizedXmlEntry: string | null = null;
+
+  for (const [name, entry] of Object.entries(zip.files)) {
+    if (entry.dir) continue;
+    const internal = entry as unknown as { _data?: { uncompressedSize?: number } };
+    const size = Number(internal._data?.uncompressedSize ?? 0);
+    estimatedUncompressedBytes += Number.isFinite(size) ? size : 0;
+    if (/\.xml$/i.test(name) && size > MAX_XLSX_XML_ENTRY_BYTES && !oversizedXmlEntry) {
+      oversizedXmlEntry = name;
+    }
+  }
+
   return {
     macrosDetected: names.some((name) => /^xl\/vbaProject\.bin$/i.test(name)),
     externalLinksDetected: names.filter((name) => /^xl\/externalLinks\//i.test(name) && /\.xml$/i.test(name) && !/_rels/i.test(name)).length,
     dataConnectionsDetected: names.filter((name) => /^xl\/connections\.xml$/i.test(name) || /^xl\/queryTables\//i.test(name) || /^customXml\/.*connection/i.test(name)).length,
+    estimatedUncompressedBytes,
+    oversizedXmlEntry,
   };
 }
 
@@ -114,6 +137,26 @@ export async function readWorkbookSafely(input: { buffer: Buffer; fileName: stri
 
   const pkg = await inspectPackage(input.buffer);
 
+  // Proteção contra XLSX extremamente expandido (ZIP bomb / planilha com
+  // formatação muito além da área útil). Em vez de derrubar o worker por
+  // OOM, devolve revisão humana segura e preserva o arquivo original.
+  if (pkg.estimatedUncompressedBytes > MAX_XLSX_UNCOMPRESSED_BYTES || pkg.oversizedXmlEntry) {
+    const reason = pkg.oversizedXmlEntry
+      ? `Entrada XML excessiva: ${pkg.oversizedXmlEntry}.`
+      : `Conteúdo descompactado estimado em ${pkg.estimatedUncompressedBytes} bytes.`;
+    return {
+      safety: {
+        ...empty,
+        macrosDetected: pkg.macrosDetected,
+        externalLinksDetected: pkg.externalLinksDetected,
+        dataConnectionsDetected: pkg.dataConnectionsDetected,
+        notes: [...empty.notes, `Planilha preservada sem leitura automática para evitar estouro de memória. ${reason}`],
+      },
+      sheetIndex: [],
+      grids: [],
+    };
+  }
+
   // ExcelJS.Workbook().xlsx.load() materializa a pasta inteira em memória.
   // Arquivos pequenos em disco podem expandir para vários GB quando têm
   // dimensões/estilos extensos. No worker do GitHub isso já provocou OOM
@@ -131,7 +174,9 @@ export async function readWorkbookSafely(input: { buffer: Buffer; fileName: stri
       entries: "emit",
       sharedStrings: "cache",
       hyperlinks: "ignore",
-      styles: "cache",
+      // Estilos podem explodir memória em planilhas formatadas até centenas
+      // de milhares de linhas; a análise do ACC usa valores, não estilo.
+      styles: "ignore",
       worksheets: "emit",
     });
 
