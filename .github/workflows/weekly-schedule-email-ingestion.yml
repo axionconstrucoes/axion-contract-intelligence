@@ -68,12 +68,27 @@ jobs:
         run: npm ci
 
       - name: Ingest weekly schedules
-        run: >
-          node scripts/weekly-schedule-email-ingest.mjs
-          ${{ github.event.inputs.project_id }}
-          --apply
-          --phase=${{ github.event.inputs.phase || 'all' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_id="${{ github.event.inputs.project_id }}"
+          phase="${{ github.event.inputs.phase || 'all' }}"
+
+          # "all" roda cada fase em um processo Node separado. Isso libera
+          # heap entre intake/compare/classify/workbook/alerts/replies e
+          # evita acumular memória ao processar o pacote semanal completo.
+          if [ "$phase" = "all" ]; then
+            for step in intake promote compare classify workbook alerts replies; do
+              echo "=== Fase: $step ==="
+              node scripts/weekly-schedule-email-ingest.mjs "$project_id" --apply --phase="$step"
+            done
+          else
+            node scripts/weekly-schedule-email-ingest.mjs "$project_id" --apply --phase="$phase"
+          fi
         env:
+          # O runner hospedado tem memória suficiente para elevar o heap
+          # acima do default (~4 GB). Necessário sobretudo para XLSX grandes.
+          NODE_OPTIONS: --max-old-space-size=6144
           ACC_WEEKLY_REPORTS_ENABLED: ${{ vars.ACC_WEEKLY_REPORTS_ENABLED }}
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
