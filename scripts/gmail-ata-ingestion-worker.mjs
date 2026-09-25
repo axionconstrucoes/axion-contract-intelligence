@@ -82,7 +82,7 @@ const [{ data: recent, error: recentError }, { data: ataBySubject, error: ataErr
     .eq("provider", "GMAIL")
     .gte("sent_at", since)
     .order("sent_at", { ascending: false })
-    .limit(150),
+    .limit(50),
   supabase
     .from("emails")
     .select("id,provider_message_id,provider_thread_id,sent_at,subject,from_address")
@@ -90,7 +90,7 @@ const [{ data: recent, error: recentError }, { data: ataBySubject, error: ataErr
     .eq("provider", "GMAIL")
     .or("subject.ilike.%ata%,subject.ilike.%reuni%")
     .order("sent_at", { ascending: false })
-    .limit(250),
+    .limit(150),
 ]);
 
 if (recentError) throw new Error(recentError.message);
