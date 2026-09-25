@@ -1,7 +1,8 @@
 // Promoção de um anexo já ingerido para o pipeline documental
-// (documents/document_versions) — nunca automática: quem chama decide
-// explicitamente `kind`/título/data/resumo (o sistema nunca classifica
-// sozinho que tipo de documento um anexo é). Reaproveita o MESMO objeto
+// (documents/document_versions). Quem chama decide explicitamente
+// `kind`/título/data/resumo. A UI continua permitindo promoção humana;
+// automações determinísticas de alta confiança (ex.: ata pelo nome/assunto)
+// também podem chamar esta função, mantendo idempotência e auditoria. Reaproveita o MESMO objeto
 // já salvo no Supabase Storage — nunca re-upload, nunca duplica bytes.
 //
 // Depois de promovido, o anexo passa a ser um document_version normal:
@@ -34,7 +35,8 @@ export type EmailAttachmentDocumentKind =
   | "CRONOGRAMA_REVISAO"
   | "RELATORIO_SEMANAL"
   | "PROPOSTA_AXION"
-  | "CLARIFICACAO_CLIENTE";
+  | "CLARIFICACAO_CLIENTE"
+  | "ATA_REUNIAO";
 
 export interface LinkEmailAttachmentToDocumentInput {
   attachmentId: string;
