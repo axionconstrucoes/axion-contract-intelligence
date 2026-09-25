@@ -19,6 +19,7 @@ import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ContextScheduleActivity, ContextScheduleRelation } from "../../ai/context/types";
 import { ingestEmailAttachmentsForMessage } from "../../email/attachments/ingest-email-attachments";
+import { linkEmailAttachmentToDocument } from "../../email/attachments/link-email-attachment-to-document";
 import { resolveUserResponsibilityTier, type ResponsibilityMatrixRow } from "../../sla/resolve-user-responsibility-tier";
 import type { ScheduleSnapshot } from "./compare-schedule-versions";
 import { isMppAttachment } from "./evaluate-weekly-schedule-email";
@@ -365,6 +366,17 @@ export function createSupabaseWeeklyScheduleIngestionStore(
         mimeType: row.mimeType,
         fileSizeBytes: row.fileSizeBytes,
       };
+    },
+
+    async promoteMeetingMinutesAttachment(attachment, candidate) {
+      return linkEmailAttachmentToDocument(supabase, {
+        attachmentId: attachment.id,
+        kind: "ATA_REUNIAO",
+        documentTitle: attachment.originalFileName.replace(/\.[^.]+$/, ""),
+        documentDate: candidate.sentAt.slice(0, 10),
+        author: candidate.fromAddress,
+        summary: `Ata do pacote semanal de Planejamento recebida por e-mail. Assunto: ${candidate.subject}`.slice(0, 2000),
+      });
     },
 
     findDocumentVersionBySha: (projectId, sha) => findDocumentVersionBySha(supabase, projectId, sha),

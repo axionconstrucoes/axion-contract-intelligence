@@ -65,6 +65,24 @@ const supabase = createClient(
 );
 
 const mailbox = required("GOOGLE_GMAIL_INBOUND_MAILBOX").toLowerCase();
+
+const { data: planningMembers, error: planningMembersError } = await supabase
+  .from("project_memberships")
+  .select("user_id")
+  .eq("project_id", PROJECT_ID)
+  .eq("status", "ACTIVE")
+  .eq("area", "PLANEJAMENTO");
+if (planningMembersError) throw new Error(planningMembersError.message);
+
+const planningUserIds = (planningMembers ?? []).map((row) => row.user_id);
+const { data: planningProfiles, error: planningProfilesError } = planningUserIds.length
+  ? await supabase.from("profiles").select("email").in("id", planningUserIds)
+  : { data: [], error: null };
+if (planningProfilesError) throw new Error(planningProfilesError.message);
+
+const planningEmails = new Set(
+  (planningProfiles ?? []).map((row) => String(row.email ?? "").trim().toLowerCase()).filter(Boolean)
+);
 const auth = new google.auth.OAuth2(
   required("GOOGLE_GMAIL_INBOUND_CLIENT_ID"),
   required("GOOGLE_GMAIL_INBOUND_CLIENT_SECRET")
@@ -108,6 +126,7 @@ let atasPromoted = 0;
 let failures = 0;
 
 for (const row of byId.values()) {
+  if (!planningEmails.has(String(row.from_address ?? "").trim().toLowerCase())) continue;
   try {
     const full = await gmail.users.messages.get({
       userId: "me",

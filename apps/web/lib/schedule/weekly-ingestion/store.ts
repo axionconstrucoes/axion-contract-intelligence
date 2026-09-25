@@ -114,6 +114,11 @@ export interface WeeklyScheduleIngestionStore {
   resolveSender(projectId: string, email: string, authorizedArea: string): Promise<SenderResolution>;
   /** Reaproveita ingestEmailAttachmentsForMessage (idempotente: nunca baixa/grava duas vezes). */
   ingestAttachment(projectId: string, candidate: WeeklyScheduleEmailCandidate, attachment: EmailAttachmentDescriptor): Promise<IngestedMppAttachment>;
+  /** Promove uma ata do pacote semanal ao pipeline documental, reutilizando o mesmo anexo já ingerido. */
+  promoteMeetingMinutesAttachment(
+    attachment: IngestedMppAttachment,
+    candidate: Pick<WeeklyScheduleEmailCandidate, "sentAt" | "subject" | "fromAddress">
+  ): Promise<{ documentId: string; documentVersionId: string }>;
   findDocumentVersionBySha(projectId: string, sha256Hash: string): Promise<ExistingDocumentVersion | null>;
   /** Garante o documento CRONOGRAMA_REVISAO alvo (cria na primeira vez e persiste em config.target_document_id). */
   ensureTargetDocument(config: WeeklyScheduleIngestionConfig): Promise<string>;
