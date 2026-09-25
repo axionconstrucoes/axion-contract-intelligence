@@ -117,6 +117,7 @@ function createMemoryIngestionStore({ senderResolution, sha = "a".repeat(64), ex
     documents: [],
     versions: existingHashes.map((hash, index) => ({ id: `dv-existing-${index}`, documentId: "doc-existing", sha256Hash: hash, processingStatus: "PROCESSED" })),
     attachmentsIngested: [],
+    meetingMinutesPromoted: [],
     audits: [],
   };
   const store = {
@@ -140,6 +141,11 @@ function createMemoryIngestionStore({ senderResolution, sha = "a".repeat(64), ex
       };
       state.attachmentsIngested.push(row);
       return row;
+    },
+    async promoteMeetingMinutesAttachment(attachment, cand) {
+      const result = { documentId: `doc-ata-${state.meetingMinutesPromoted.length + 1}`, documentVersionId: `dv-ata-${state.meetingMinutesPromoted.length + 1}` };
+      state.meetingMinutesPromoted.push({ attachment, candidate: cand, ...result });
+      return result;
     },
     async findDocumentVersionBySha(projectId, hash) {
       const hit = state.versions.find((row) => row.sha256Hash === hash);
@@ -176,6 +182,27 @@ function createMemoryIngestionStore({ senderResolution, sha = "a".repeat(64), ex
   };
   return store;
 }
+
+await checkAsync("pacote semanal autorizado ingere MPP + Excel + Ata e promove a Ata", async () => {
+  const store = createMemoryIngestionStore({
+    senderResolution: sender(),
+    sha: (attachment) => (attachment.fileName.endsWith(".mpp") ? "a".repeat(64) : attachment.fileName.endsWith(".xlsx") ? "b".repeat(64) : "c".repeat(64)),
+  });
+  const weeklyPackage = candidate({
+    subject: "(W38) WEG - Relatório Semanal",
+    attachments: [
+      mpp("att-mpp", "WEG_W38.mpp"),
+      { gmailAttachmentId: "att-xlsx", fileName: "Relatorio_Semanal_W38.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", sizeBytes: 2048 },
+      { gmailAttachmentId: "att-ata", fileName: "Ata_Reuniao_W38.pdf", mimeType: "application/pdf", sizeBytes: 3072 },
+    ],
+  });
+
+  const outcome = await processWeeklyScheduleEmailCandidate(store, config, weeklyPackage);
+  assert(outcome.kind === "RECORDED" && outcome.status === "AUTHORIZED_AUTO");
+  assert(store.state.attachmentsIngested.length === 3, `esperado 3 anexos ingeridos; obtido ${store.state.attachmentsIngested.length}`);
+  assert(store.state.meetingMinutesPromoted.length === 1, "Ata deveria ser promovida exatamente uma vez");
+  assert(store.state.meetingMinutesPromoted[0].attachment.originalFileName === "Ata_Reuniao_W38.pdf");
+});
 
 // ==================================================================
 // Regra pura — casos 1 a 7 e 9
