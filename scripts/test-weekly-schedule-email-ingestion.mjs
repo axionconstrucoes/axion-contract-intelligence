@@ -23,6 +23,7 @@ const { prepareScheduleComparisons } = await import("../apps/web/lib/schedule/we
 const { createWeeklyAbsenceAlert } = await import("../apps/web/lib/schedule/weekly-ingestion/create-absence-alerts");
 const { compareScheduleSnapshots } = await import("../apps/web/lib/schedule/weekly-ingestion/compare-schedule-versions");
 const { classifyScheduleRisk } = await import("../apps/web/lib/schedule/weekly-ingestion/classify-schedule-risk");
+const { collectSheetCases } = await import("../apps/web/lib/risk-alerts/collect-risk-cases");
 const { resolveWeekStart, resolveWeeklyDeadline, resolveCurrentWeekDeadline } = await import(
   "../apps/web/lib/schedule/weekly-ingestion/week-window"
 );
@@ -643,6 +644,51 @@ await check("Migration: 9 tabelas com RLS, unicidades de idempotência, sem valo
   assert(sql.includes("unique index project_schedule_baselines_one_active_idx"), "uma baseline ativa por projeto");
   assert(sql.includes("'RECEIVED_DUPLICATE'"), "status RECEIVED_DUPLICATE");
   assert(sql.includes("actor_type='SYSTEM'") || sql.includes("'SYSTEM'"), "auditoria SYSTEM documentada");
+});
+
+await check("Anexos Gmail usam SHA-256 como segunda barreira de idempotência quando attachmentId muda", () => {
+  const source = readSource("apps/web/lib/email/attachments/ingest-email-attachments.ts");
+  assert(source.includes("findExistingAttachmentByHash"), "deduplicação por conteúdo precisa existir");
+  assert(source.includes('.eq("sha256_hash", sha256Hash)'), "SHA-256 deve participar da busca do anexo já ingerido");
+  assert(source.includes('return { status: "ALREADY_INGESTED", attachment: existingByHash }'), "conteúdo repetido deve reutilizar a linha existente");
+});
+
+await check("Risco por aba mantém aberta a semana mais recente pela data real do e-mail, não pela data do backfill", () => {
+  const rows = [
+    {
+      id: "sheet-w38",
+      project_id: PROJECT,
+      category: "FINANCEIRO",
+      status: "EXTRACTED",
+      risk_classification: "HIGH",
+      risk_reasons: ["W38"],
+      alerts: [],
+      cutoff_date: null,
+      created_at: "2026-09-29T14:00:00Z",
+      source_sent_at: "2026-09-24T16:48:28Z",
+      work_week_label: "W38",
+      email_id: "email-w38",
+    },
+    {
+      id: "sheet-w34-backfill",
+      project_id: PROJECT,
+      category: "FINANCEIRO",
+      status: "EXTRACTED",
+      risk_classification: "HIGH",
+      risk_reasons: ["W34"],
+      alerts: [],
+      cutoff_date: null,
+      created_at: "2026-09-29T15:00:00Z",
+      source_sent_at: "2026-08-27T16:00:00Z",
+      work_week_label: "W34",
+      email_id: "email-w34",
+    },
+  ];
+  const cases = collectSheetCases(rows);
+  const w38 = cases.find((item) => item.sourceId === "sheet-w38");
+  const w34 = cases.find((item) => item.sourceId === "sheet-w34-backfill");
+  assert(w38 && w38.closed === false, "W38 deve permanecer aberta");
+  assert(w34 && w34.closed === true, "W34 em backfill posterior deve ficar encerrada");
 });
 
 await check("Worker Gmail mantém pacote semanal completo disponível para workbook/Curva S, inclusive backfill histórico", () => {
