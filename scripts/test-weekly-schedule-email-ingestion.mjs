@@ -645,6 +645,13 @@ await check("Migration: 9 tabelas com RLS, unicidades de idempotência, sem valo
   assert(sql.includes("actor_type='SYSTEM'") || sql.includes("'SYSTEM'"), "auditoria SYSTEM documentada");
 });
 
+await check("Worker Gmail mantém pacote semanal completo disponível para workbook/Curva S, inclusive backfill histórico", () => {
+  const worker = readSource("scripts/gmail-ata-ingestion-worker.mjs");
+  assert(worker.includes('.eq("document_classification", "RELATORIO_SEMANAL")'), "worker precisa incluir relatórios semanais já classificados");
+  assert(worker.includes("weeklyReports"), "worker precisa unir relatórios semanais à varredura de anexos");
+  assert(worker.includes("ingestEmailAttachmentsForMessage"), "pacote semanal deve usar ingestão idempotente de todos os anexos");
+});
+
 await check("Código de produção sem remetente/domínio de cliente hardcoded", () => {
   const files = [
     "apps/web/lib/schedule/weekly-ingestion/types.ts",
