@@ -27,8 +27,6 @@ export interface ComparisonSourceRow {
   /** Rótulo humano da semana (WNN) quando conhecido. */
   work_week_label?: string | null;
   email_id?: string | null;
-  /** Data real do e-mail/pacote semanal; prevalece sobre a data do backfill. */
-  source_sent_at?: string | null;
 }
 
 export interface SheetSourceRow {
@@ -43,6 +41,8 @@ export interface SheetSourceRow {
   created_at: string;
   work_week_label?: string | null;
   email_id?: string | null;
+  /** Data real do e-mail/pacote semanal; prevalece sobre a data do backfill. */
+  source_sent_at?: string | null;
 }
 
 export interface IngestionAlertSourceRow {
