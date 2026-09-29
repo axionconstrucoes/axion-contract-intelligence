@@ -94,7 +94,11 @@ const gmail = google.gmail({ version: "v1", auth });
 
 const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-const [{ data: recent, error: recentError }, { data: ataBySubject, error: ataError }] = await Promise.all([
+const [
+  { data: recent, error: recentError },
+  { data: ataBySubject, error: ataError },
+  { data: weeklyReports, error: weeklyReportsError },
+] = await Promise.all([
   supabase
     .from("emails")
     .select("id,provider_message_id,provider_thread_id,sent_at,subject,from_address")
@@ -111,13 +115,25 @@ const [{ data: recent, error: recentError }, { data: ataBySubject, error: ataErr
     .or("subject.ilike.%ata%,subject.ilike.%reuni%")
     .order("sent_at", { ascending: false })
     .limit(150),
+  // Relatórios semanais são um pacote documental: MPP + Excel + PDF/ata.
+  // Não limitar a 24h: isso permite recuperar anexos de pacotes já
+  // sincronizados antes desta regra (ex.: Excel ausente em email_attachments).
+  supabase
+    .from("emails")
+    .select("id,provider_message_id,provider_thread_id,sent_at,subject,from_address")
+    .eq("project_id", PROJECT_ID)
+    .eq("provider", "GMAIL")
+    .eq("document_classification", "RELATORIO_SEMANAL")
+    .order("sent_at", { ascending: false })
+    .limit(150),
 ]);
 
 if (recentError) throw new Error(recentError.message);
 if (ataError) throw new Error(ataError.message);
+if (weeklyReportsError) throw new Error(weeklyReportsError.message);
 
 const byId = new Map();
-for (const row of [...(recent ?? []), ...(ataBySubject ?? [])]) {
+for (const row of [...(recent ?? []), ...(ataBySubject ?? []), ...(weeklyReports ?? [])]) {
   if (row.provider_message_id) byId.set(row.id, row);
 }
 
