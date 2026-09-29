@@ -108,6 +108,11 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
         })
       );
       const workbookById = new Map((workbooks ?? []).map((row) => [row.id as string, row]));
+      const workbookEmailIds = Array.from(new Set((workbooks ?? []).map((row) => row.email_id as string).filter(Boolean)));
+      const { data: workbookEmails } = workbookEmailIds.length
+        ? await client.from("emails").select("id,sent_at").in("id", workbookEmailIds)
+        : { data: [] as Row[] };
+      const workbookEmailSentAt = new Map((workbookEmails ?? []).map((row) => [row.id as string, s(row.sent_at)]));
 
       const comparisonRowsAll: ComparisonSourceRow[] = (comparisons ?? []).map((row) => ({
         ...(row as unknown as ComparisonSourceRow),
@@ -128,11 +133,16 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
       const comparisonRows: ComparisonSourceRow[] = latestScheduleSentAt
         ? comparisonRowsAll.filter((row) => versionMeta.get(row.current_schedule_version_id as string)?.sentAt === latestScheduleSentAt)
         : comparisonRowsAll;
-      const sheetRows: SheetSourceRow[] = (sheets ?? []).map((row) => ({
-        ...(row as unknown as SheetSourceRow),
-        work_week_label: s(workbookById.get(row.workbook_id as string)?.work_week_label),
-        email_id: s(workbookById.get(row.workbook_id as string)?.email_id),
-      }));
+      const sheetRows: SheetSourceRow[] = (sheets ?? []).map((row) => {
+        const workbook = workbookById.get(row.workbook_id as string);
+        const emailId = s(workbook?.email_id);
+        return {
+          ...(row as unknown as SheetSourceRow),
+          work_week_label: s(workbook?.work_week_label),
+          email_id: emailId,
+          source_sent_at: emailId ? (workbookEmailSentAt.get(emailId) ?? null) : null,
+        };
+      });
       const alertRows = (alerts ?? []) as unknown as IngestionAlertSourceRow[];
 
       const existingCases: RiskCaseRecord[] = (existing ?? []).map((row) => ({
