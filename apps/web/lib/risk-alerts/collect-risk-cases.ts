@@ -41,6 +41,8 @@ export interface SheetSourceRow {
   created_at: string;
   work_week_label?: string | null;
   email_id?: string | null;
+  /** Data real do e-mail/pacote semanal; prevalece sobre a data do backfill. */
+  source_sent_at?: string | null;
 }
 
 export interface IngestionAlertSourceRow {
@@ -177,7 +179,11 @@ export function collectComparisonCases(rows: ComparisonSourceRow[]): RiskCaseInp
 
 export function collectSheetCases(rows: SheetSourceRow[]): RiskCaseInput[] {
   const classified = rows.filter((row) => toRiskLevel(row.risk_classification));
-  const latest = latestByKey(classified, (row) => `${row.project_id}:${row.category}`, (row) => row.created_at);
+  const latest = latestByKey(
+    classified,
+    (row) => `${row.project_id}:${row.category}`,
+    (row) => row.source_sent_at ?? row.created_at
+  );
   return classified.map((row) => {
     const level = toRiskLevel(row.risk_classification)!;
     const reasons = reasonsOf(row.risk_reasons);

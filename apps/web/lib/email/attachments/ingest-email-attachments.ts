@@ -129,6 +129,30 @@ async function findExistingAttachment(
   return data ? mapRow(data as EmailAttachmentRow) : null;
 }
 
+async function findExistingAttachmentByHash(
+  supabase: SupabaseClient,
+  emailId: string,
+  sha256Hash: string
+): Promise<EmailAttachment | null> {
+  // O Gmail pode devolver attachmentId diferente para o mesmo anexo em
+  // leituras posteriores da mesma mensagem. O conteúdo (SHA-256) é a
+  // identidade estável para evitar duplicação durante backfills.
+  const { data, error } = await supabase
+    .from("email_attachments")
+    .select("*")
+    .eq("email_id", emailId)
+    .eq("sha256_hash", sha256Hash)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Falha ao verificar anexo existente por SHA-256: ${error.message}`);
+  }
+
+  return data ? mapRow(data as EmailAttachmentRow) : null;
+}
+
 async function ingestSinglePart(
   supabase: SupabaseClient,
   input: Omit<IngestEmailAttachmentsInput, "parts">,
@@ -146,6 +170,15 @@ async function ingestSinglePart(
 
     const bytes = await downloadAttachmentBytes(part);
     const sha256Hash = computeSha256Hex(bytes);
+
+    // Segunda barreira de idempotência: attachmentId do Gmail não é uma
+    // identidade estável entre leituras. Se o mesmo conteúdo já existe no
+    // mesmo e-mail, reutiliza a linha canônica e não cria novo objeto/registro.
+    const existingByHash = await findExistingAttachmentByHash(supabase, emailId, sha256Hash);
+    if (existingByHash) {
+      return { status: "ALREADY_INGESTED", attachment: existingByHash };
+    }
+
     const storagePath = buildEmailAttachmentStoragePath({
       projectId,
       emailId,
