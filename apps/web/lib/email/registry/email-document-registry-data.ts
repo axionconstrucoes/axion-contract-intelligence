@@ -234,6 +234,9 @@ export interface RegistryEmailDetail {
     toAddress: string;
     sentAt: string;
     snippet: string;
+    bodyText: string | null;
+    bodyHtml: string | null;
+    bodyFetchedAt: string | null;
     direction: string | null;
     mailboxAddress: string | null;
     providerMessageId: string | null;
@@ -250,6 +253,13 @@ export interface RegistryEmailDetail {
     sentToClient: boolean;
   };
   attachments: RegistryAttachment[];
+  inlineImages: Array<{
+    id: string;
+    contentId: string;
+    mimeType: string;
+    storageBucket: string;
+    storagePath: string;
+  }>;
   intake: RegistryIntake | null;
   scheduleVersion: { id: string; extractionStatus: string; statusDate: string | null; activityCount: number } | null;
   comparisons: RegistryComparison[];
@@ -274,12 +284,68 @@ export async function getEmailDocumentDetail(projectId: string, emailId: string)
   if (emailError) throw new Error(`Falha ao carregar e-mail: ${emailError.message}`);
   if (!email) return null;
 
-  const [{ data: attachments }, { data: intake }, { data: reviewRows }, { data: baseline }] = await Promise.all([
-    supabase.from("email_attachments").select("*").eq("email_id", emailId).order("original_file_name"),
-    supabase.from("weekly_schedule_email_intakes").select("*").eq("email_id", emailId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    supabase.from("email_document_review_events").select("*").eq("project_id", projectId).order("decided_at", { ascending: false }).limit(200),
-    supabase.from("project_schedule_baselines").select("schedule_version_id,effective_from,justification").eq("project_id", projectId).is("superseded_at", null).maybeSingle(),
+  const [
+    { data: attachments },
+    { data: intake },
+    { data: reviewRows },
+    { data: baseline },
+  ] = await Promise.all([
+    supabase
+      .from("email_attachments")
+      .select("*")
+      .eq("email_id", emailId)
+      .order("original_file_name"),
+
+    supabase
+      .from("weekly_schedule_email_intakes")
+      .select("*")
+      .eq("email_id", emailId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+
+    supabase
+      .from("email_document_review_events")
+      .select("*")
+      .eq("project_id", projectId)
+      .order("decided_at", { ascending: false })
+      .limit(200),
+
+    supabase
+      .from("project_schedule_baselines")
+      .select("schedule_version_id,effective_from,justification")
+      .eq("project_id", projectId)
+      .is("superseded_at", null)
+      .maybeSingle(),
   ]);
+
+  /*
+   * email_inline_images é uma tabela nova desta evolução.
+   * A leitura fica fora do Promise.all principal para não alterar
+   * a inferência dos tipos das quatro consultas já existentes.
+   */
+  const { data: inlineImageRowsRaw, error: inlineImageRowsError } =
+    await supabase
+      .from("email_inline_images" as never)
+      .select(
+        "id,content_id,mime_type,storage_bucket,storage_path" as never
+      )
+      .eq("email_id" as never, emailId);
+
+  if (inlineImageRowsError) {
+    throw new Error(
+      `Falha ao carregar imagens inline do e-mail: ${inlineImageRowsError.message}`
+    );
+  }
+
+  const inlineImageRows =
+    (inlineImageRowsRaw ?? []) as unknown as Array<{
+      id: string;
+      content_id: string;
+      mime_type: string;
+      storage_bucket: string;
+      storage_path: string;
+    }>;
 
   const attachmentIds = (attachments ?? []).map((row) => row.id as string);
   const { data: workbookRows } = attachmentIds.length
@@ -347,6 +413,9 @@ export async function getEmailDocumentDetail(projectId: string, emailId: string)
       toAddress: email.to_address,
       sentAt: email.sent_at,
       snippet: email.snippet,
+      bodyText: (email.body_text as string | null) ?? null,
+      bodyHtml: (email.body_html as string | null) ?? null,
+      bodyFetchedAt: (email.body_fetched_at as string | null) ?? null,
       direction: email.direction,
       mailboxAddress: email.mailbox_address,
       providerMessageId: email.provider_message_id,
@@ -362,6 +431,13 @@ export async function getEmailDocumentDetail(projectId: string, emailId: string)
       workWeekStatus: (email.work_week_status as string) ?? "NOT_IDENTIFIED",
       sentToClient: Boolean(email.sent_to_client),
     },
+    inlineImages: (inlineImageRows ?? []).map((row) => ({
+      id: row.id,
+      contentId: row.content_id,
+      mimeType: row.mime_type,
+      storageBucket: row.storage_bucket,
+      storagePath: row.storage_path,
+    })),
     attachments: (attachments ?? []).map((row) => ({
       id: row.id,
       fileName: row.original_file_name,

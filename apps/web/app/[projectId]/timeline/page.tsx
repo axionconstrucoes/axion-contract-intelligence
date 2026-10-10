@@ -90,6 +90,8 @@ export default async function TimelinePage({ params }: { params: Promise<{ proje
         events={events}
         projectId={projectId}
         projectName={project?.name ?? "Projeto não disponível"}
+        projectStartDate={project?.startDate ?? null}
+        projectEndDate={project?.baselineEndDate ?? null}
         emailEntries={emailEntries}
         documentVersionEntries={documentVersionEntries}
         eventNoteEntries={eventNoteEntries}

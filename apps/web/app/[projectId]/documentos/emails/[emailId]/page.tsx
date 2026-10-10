@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DocumentDownloadButton } from "@/components/documents/document-download-button";
+import { EmailBodyFrame } from "@/components/documents/email-body-frame";
 import {
   INTAKE_STATUS_LABELS,
   RISK_LABELS,
@@ -26,6 +27,7 @@ import { EMAIL_CLASSIFICATION_LABELS } from "@/lib/email/registry/email-document
 import { resolveAttachmentOpenBehavior } from "@/lib/email/registry/resolve-attachment-open-behavior";
 import { hasProjectEditPermission } from "@/lib/users/project-permission";
 import { cn } from "@/lib/utils";
+import { createSupabaseServerClient } from "@axion/db/server";
 
 export const metadata: Metadata = { title: "E-mail · Documentos" };
 
@@ -38,6 +40,59 @@ export const metadata: Metadata = { title: "E-mail · Documentos" };
 function formatDateTime(iso: string | null): string {
   if (!iso) return "—";
   return new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" }).format(new Date(iso));
+}
+
+function buildSafeEmailHtml(
+  html: string,
+  cidUrls: Record<string, string>
+): string {
+  let resolved = html;
+
+  for (const [contentId, url] of Object.entries(cidUrls)) {
+    const escaped =
+      contentId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    resolved =
+      resolved.replace(
+        new RegExp(`cid:${escaped}`, "gi"),
+        url
+      );
+  }
+
+  const cleaned = resolved
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
+    .replace(/<object[\s\S]*?<\/object>/gi, "")
+    .replace(/<embed[^>]*>/gi, "")
+    .replace(/<form[\s\S]*?<\/form>/gi, "");
+
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta
+  http-equiv="Content-Security-Policy"
+  content="default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; font-src data:;"
+>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: white;
+    color: #111827;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+  body { padding: 18px; }
+  table { max-width: 100%; }
+  img { max-width: 100%; height: auto; }
+  pre { white-space: pre-wrap; }
+  a { color: #7f1d1d; }
+</style>
+</head>
+<body>${cleaned}</body>
+</html>`;
 }
 
 function formatBytes(bytes: number): string {
@@ -57,10 +112,25 @@ export default async function EmailDocumentDetailPage({ params }: { params: Prom
   const [detail, permission, projects] = await Promise.all([getEmailDocumentDetail(projectId, emailId), getCurrentProjectPermission(projectId), getProjects()]);
   if (!detail) notFound();
 
-  const { email, attachments, intake, scheduleVersion, comparisons, workbooks, reviewEvents, activeBaseline, extractedScheduleVersions } = detail;
+  const { email, attachments, inlineImages, intake, scheduleVersion, comparisons, workbooks, reviewEvents, activeBaseline, extractedScheduleVersions } = detail;
   const isAdmin = permission === "ADMINISTRADOR";
   const canEdit = hasProjectEditPermission(permission);
   const otherProjects = projects.filter((project) => project.id !== projectId).map((project) => ({ id: project.id, label: `${project.code} — ${project.name}` }));
+  const supabase = await createSupabaseServerClient();
+
+  const cidUrls: Record<string, string> = {};
+
+  for (const image of inlineImages) {
+    const { data } = await supabase.storage
+      .from(image.storageBucket)
+      .createSignedUrl(image.storagePath, 300);
+
+    if (data?.signedUrl) {
+      cidUrls[image.contentId] =
+        data.signedUrl;
+    }
+  }
+
   const isWeeklyReport = email.classification === "RELATORIO_SEMANAL" || intake !== null;
   const attachmentOptions = Object.entries(EMAIL_CLASSIFICATION_LABELS)
     .map(([value, label]) => ({ value, label }))
@@ -73,13 +143,194 @@ export default async function EmailDocumentDetailPage({ params }: { params: Prom
     <div className="flex flex-col gap-6">
       <PageHeader
         title={email.subject}
-        description={`${email.direction ?? "—"} · ${formatDateTime(email.sentAt)} · ${email.fromAddress} → ${email.toAddress}`}
+        description={`E-mail recebido em ${formatDateTime(email.sentAt)}`}
         actions={
-          <Link href={`/${projectId}/documentos?tab=registro-email`} className={cn(buttonVariants({ size: "sm", variant: "outline" }))}>
-            ← Registro por e-mail
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/${projectId}/timeline`}
+              className={cn(
+                buttonVariants({
+                  size: "sm",
+                  variant: "outline",
+                })
+              )}
+            >
+              ← Timeline
+            </Link>
+
+            <Link
+              href={`/${projectId}/documentos?tab=registro-email`}
+              className={cn(
+                buttonVariants({
+                  size: "sm",
+                  variant: "outline",
+                })
+              )}
+            >
+              Registro por e-mail
+            </Link>
+          </div>
         }
       />
+
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <div className="border-b bg-muted/20 px-6 py-5">
+            <div className="grid gap-3 text-sm">
+              <div className="flex flex-wrap gap-x-3">
+                <span className="w-14 shrink-0 font-semibold text-muted-foreground">
+                  De:
+                </span>
+                <strong className="break-all">
+                  {email.fromAddress}
+                </strong>
+              </div>
+
+              <div className="flex flex-wrap gap-x-3">
+                <span className="w-14 shrink-0 font-semibold text-muted-foreground">
+                  Para:
+                </span>
+                <span className="break-all">
+                  {email.toAddress}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-x-3">
+                <span className="w-14 shrink-0 font-semibold text-muted-foreground">
+                  Data:
+                </span>
+                <span>
+                  {formatDateTime(email.sentAt)}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap gap-x-3">
+                <span className="w-14 shrink-0 font-semibold text-muted-foreground">
+                  Assunto:
+                </span>
+                <strong>
+                  {email.subject}
+                </strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-4 py-5 lg:px-6">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Mensagem
+            </p>
+
+            {email.bodyHtml ? (
+              <EmailBodyFrame
+                srcDoc={buildSafeEmailHtml(email.bodyHtml, cidUrls)}
+              />
+            ) : email.bodyText ? (
+              <div className="whitespace-pre-wrap break-words bg-white px-2 py-3 text-[15px] leading-7 text-foreground">
+                {email.bodyText}
+              </div>
+            ) : email.snippet ? (
+              <div className="whitespace-pre-wrap break-words bg-white px-2 py-3 text-[15px] leading-7 text-foreground">
+                {email.snippet}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                O corpo desta mensagem ainda não foi recuperado do Gmail.
+              </p>
+            )}
+
+            {email.bodyFetchedAt ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Corpo integral recuperado do Gmail em {formatDateTime(email.bodyFetchedAt)}.
+              </p>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            Anexos ({attachments.length})
+          </CardTitle>
+        </CardHeader>
+
+        <CardContent>
+          {attachments.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Este e-mail não possui anexo armazenado no ACC.
+            </p>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {attachments.map((attachment) => {
+                const behavior =
+                  resolveAttachmentOpenBehavior(attachment);
+
+                return (
+                  <div
+                    key={attachment.id}
+                    className="flex min-w-0 flex-col justify-between gap-3 rounded-lg border bg-background p-4"
+                  >
+                    <div className="min-w-0">
+                      <p
+                        className="truncate font-semibold"
+                        title={attachment.fileName}
+                      >
+                        {attachment.fileName}
+                      </p>
+
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {attachment.extension || "Arquivo"}
+                        {" · "}
+                        {formatBytes(attachment.sizeBytes)}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {behavior.kind === "PDF" ||
+                      behavior.kind === "IMAGE" ? (
+                        <Link
+                          href={`/${projectId}/documentos/emails/${email.id}/anexos/${attachment.id}`}
+                          className={cn(
+                            buttonVariants({
+                              size: "sm",
+                            })
+                          )}
+                        >
+                          Abrir
+                        </Link>
+                      ) : attachment.documentVersionId ? (
+                        <Link
+                          href={`/${projectId}/documentos/versoes/${attachment.documentVersionId}`}
+                          className={cn(
+                            buttonVariants({
+                              size: "sm",
+                            })
+                          )}
+                        >
+                          Abrir
+                        </Link>
+                      ) : null}
+
+                      <DocumentDownloadButton
+                        bucket={attachment.storageBucket}
+                        filePath={attachment.storagePath}
+                        originalFileName={attachment.fileName}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <details className="rounded-lg border bg-card">
+        <summary className="cursor-pointer px-5 py-4 text-sm font-semibold">
+          Detalhes técnicos / processamento / auditoria
+        </summary>
+
+        <div className="flex flex-col gap-6 border-t p-4">
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
@@ -359,6 +610,9 @@ export default async function EmailDocumentDetailPage({ params }: { params: Prom
           )}
         </CardContent>
       </Card>
+
+        </div>
+      </details>
     </div>
   );
 }

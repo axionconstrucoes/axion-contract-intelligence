@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { createClient } from "@supabase/supabase-js";
+import { extractGmailBody } from "./lib/gmail-message-body.mjs";
 
 const args = process.argv.slice(2);
 
@@ -90,16 +91,7 @@ async function getMessage(gmail, id) {
       return await gmail.users.messages.get({
         userId: "me",
         id,
-        format: "metadata",
-        metadataHeaders: [
-          "From",
-          "To",
-          "Cc",
-          "Bcc",
-          "Date",
-          "Message-ID",
-          "Subject",
-        ],
+        format: "full",
       });
     } catch (error) {
       const status =
@@ -411,6 +403,9 @@ for (
     const headers =
       message.payload?.headers ?? [];
 
+    const { bodyText, bodyHtml } =
+      extractGmailBody(message);
+
     const policy =
       evaluate(
         headers,
@@ -461,6 +456,15 @@ for (
 
       snippet:
         message.snippet ?? "",
+
+      body_text:
+        bodyText || null,
+
+      body_html:
+        bodyHtml || null,
+
+      body_fetched_at:
+        new Date().toISOString(),
 
       provider:
         "GMAIL",
