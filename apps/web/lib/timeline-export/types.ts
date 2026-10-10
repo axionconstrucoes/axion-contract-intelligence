@@ -17,7 +17,8 @@ export interface TimelineFilterCriteria {
   categories: ImplicationCategory[];
   dateFrom: string | null; // ISO date (yyyy-mm-dd)
   dateTo: string | null; // ISO date (yyyy-mm-dd)
-  participants: string[]; // endereços de e-mail selecionados
+  participants: string[];
+  searchText: string; // busca livre por palavra, expressão ou assunto // endereços de e-mail selecionados
   /** Quando não vazio, restringe aos eventIds explicitamente marcados pelo usuário (seleção manual, além dos demais filtros). */
   selectedEventIds: string[] | null;
 }
@@ -29,6 +30,7 @@ export function emptyTimelineFilterCriteria(): TimelineFilterCriteria {
     dateFrom: null,
     dateTo: null,
     participants: [],
+    searchText: "",
     selectedEventIds: null,
   };
 }

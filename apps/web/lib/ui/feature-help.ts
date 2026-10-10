@@ -35,7 +35,7 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
   },
   {
     id: "event-ledger",
-    title: "Event Ledger",
+    title: "EVENTOS",
     shortDescription: "Registro estruturado dos eventos relevantes do contrato.",
     description:
       "Mantém os acontecimentos relevantes identificados no projeto, com origem, evidência, impacto, classificação e rastreabilidade.",

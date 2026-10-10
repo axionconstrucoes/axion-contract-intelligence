@@ -45,8 +45,21 @@ export function TimelinePageClient({
   const participants = useMemo(() => deriveParticipants(events, emailsById), [events, emailsById]);
 
   const visibleEvents = useMemo(
-    () => applyTimelineFilters(events, { ...criteria, selectedEventIds: null }, emailsById),
-    [events, criteria, emailsById]
+    () =>
+      applyTimelineFilters(
+        events,
+        { ...criteria, selectedEventIds: null },
+        emailsById,
+        documentVersionsById,
+        eventNotesByEventId
+      ),
+    [
+      events,
+      criteria,
+      emailsById,
+      documentVersionsById,
+      eventNotesByEventId,
+    ]
   );
 
   // Seleção manual "ativa": interseção entre o que o usuário marcou e o

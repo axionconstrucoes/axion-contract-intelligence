@@ -5,7 +5,76 @@
 // silenciosamente itens fora do filtro".
 
 import type { ContractEvent } from "@axion/types";
-import type { TimelineEmailContext, TimelineFilterCriteria } from "./types";
+import type {
+  TimelineDocumentContext,
+  TimelineEmailContext,
+  TimelineEventNoteContext,
+  TimelineFilterCriteria,
+} from "./types";
+
+function normalizeTimelineSearchText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("pt-BR")
+    .trim();
+}
+
+function buildTimelineSearchText(
+  event: ContractEvent,
+  emailsById: Map<string, TimelineEmailContext>,
+  documentVersionsById: Map<string, TimelineDocumentContext>,
+  eventNotesByEventId: Map<string, TimelineEventNoteContext[]>
+): string {
+  const parts: string[] = [
+    event.title ?? "",
+    event.description ?? "",
+    event.sourceType ?? "",
+  ];
+
+  for (const evidence of event.evidence ?? []) {
+    parts.push(
+      evidence.label ?? "",
+      evidence.locator ?? ""
+    );
+
+    if (evidence.emailId) {
+      const email = emailsById.get(evidence.emailId);
+
+      if (email) {
+        parts.push(
+          email.subject ?? "",
+          email.snippet ?? "",
+          email.from ?? "",
+          email.to ?? ""
+        );
+      }
+    }
+
+    if (evidence.documentVersionId) {
+      const document = documentVersionsById.get(
+        evidence.documentVersionId
+      );
+
+      if (document) {
+        parts.push(
+          document.documentTitle ?? "",
+          document.originalFileName ?? ""
+        );
+      }
+    }
+  }
+
+  for (const note of eventNotesByEventId.get(event.id) ?? []) {
+    parts.push(
+      note.text ?? "",
+      note.category ?? "",
+      note.authorName ?? ""
+    );
+  }
+
+  return normalizeTimelineSearchText(parts.join(" "));
+}
 
 function eventEmailAddresses(
   event: ContractEvent,
@@ -36,7 +105,9 @@ function isWithinDateRange(timestamp: string, dateFrom: string | null, dateTo: s
 export function applyTimelineFilters(
   events: ContractEvent[],
   criteria: TimelineFilterCriteria,
-  emailsById: Map<string, TimelineEmailContext> = new Map()
+  emailsById: Map<string, TimelineEmailContext> = new Map(),
+  documentVersionsById: Map<string, TimelineDocumentContext> = new Map(),
+  eventNotesByEventId: Map<string, TimelineEventNoteContext[]> = new Map()
 ): ContractEvent[] {
   const bySelection =
     criteria.selectedEventIds && criteria.selectedEventIds.length > 0
@@ -61,7 +132,28 @@ export function applyTimelineFilters(
     if (criteria.participants.length > 0) {
       const addresses = eventEmailAddresses(event, emailsById).map((a) => a.toLowerCase());
       const wanted = criteria.participants.map((p) => p.toLowerCase());
+
       if (!wanted.some((w) => addresses.includes(w))) {
+        return false;
+      }
+    }
+
+    const wantedSearchText =
+      normalizeTimelineSearchText(criteria.searchText ?? "");
+
+    if (wantedSearchText) {
+      const searchableText = buildTimelineSearchText(
+        event,
+        emailsById,
+        documentVersionsById,
+        eventNotesByEventId
+      );
+
+      const terms = wantedSearchText
+        .split(/\s+/)
+        .filter(Boolean);
+
+      if (!terms.every((term) => searchableText.includes(term))) {
         return false;
       }
     }

@@ -20,14 +20,13 @@ export interface NavItem {
    * menu nunca é a única barreira — rota, loader, actions e RLS aplicam
    * a mesma regra.
    */
-  restrictedTo?: "financial";
+  restrictedTo?: "financial" | "admin";
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "startup", label: "Start-up ACC", icon: "Rocket", helpId: "startup-acc" },
   { href: "dashboard", label: "Dashboard", icon: "LayoutDashboard", helpId: "dashboard" },
   { href: "timeline", label: "Timeline", icon: "History", helpId: "timeline" },
-  { href: "ledger", label: "Event Ledger", icon: "BookText", helpId: "event-ledger" },
+  { href: "ledger", label: "EVENTOS", icon: "BookText", helpId: "event-ledger" },
   { href: "action-requests", label: "Solicitações", icon: "ListChecks", helpId: "solicitacoes" },
   { href: "acoes", label: "Ações e Escalonamentos", icon: "TimerReset", helpId: "acoes-escalonamentos" },
   { href: "juridico", label: "Jurídico", icon: "Scale", helpId: "juridico" },
@@ -47,4 +46,5 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "integracoes", label: "Integrações", icon: "Plug", helpId: "integracoes" },
   { href: "usuarios", label: "Usuários", icon: "Users", helpId: "usuarios" },
   { href: "auditoria", label: "Auditoria", icon: "AlertTriangle", helpId: "auditoria" },
+  { href: "startup", label: "Start-up ACC", icon: "Rocket", helpId: "startup-acc", restrictedTo: "admin" },
 ];

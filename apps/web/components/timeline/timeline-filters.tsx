@@ -22,15 +22,73 @@ export function TimelineFilters({
 }) {
   return (
     <div className="flex flex-col gap-4 rounded-md border border-border p-4">
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor="timeline-search"
+          className="text-sm font-semibold"
+        >
+          Buscar palavra / assunto
+        </label>
+
+        <input
+          id="timeline-search"
+          type="search"
+          value={criteria.searchText}
+          onChange={(e) =>
+            onChange({
+              ...criteria,
+              searchText: e.target.value,
+            })
+          }
+          placeholder="Ex.: compactação do solo"
+          className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+        />
+
+        <span className="text-xs text-muted-foreground">
+          Pesquisa eventos, assuntos de e-mail, documentos e anotações.
+        </span>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <fieldset className="flex flex-col gap-1.5">
           <legend className="text-xs font-medium text-muted-foreground">Fontes</legend>
+
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={criteria.sources.length === 0}
+              onChange={() =>
+                onChange({
+                  ...criteria,
+                  sources: [],
+                })
+              }
+            />
+            Todos
+          </label>
+
           {sourceTypes.map((s) => (
             <label key={s} className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={criteria.sources.includes(s)}
-                onChange={() => onChange({ ...criteria, sources: toggle(criteria.sources, s) })}
+                checked={
+                  criteria.sources.length === 0 ||
+                  criteria.sources.includes(s)
+                }
+                onChange={() => {
+                  const nextSources =
+                    criteria.sources.length === 0
+                      ? sourceTypes.filter((source) => source !== s)
+                      : toggle(criteria.sources, s);
+
+                  onChange({
+                    ...criteria,
+                    sources:
+                      nextSources.length === sourceTypes.length
+                        ? []
+                        : nextSources,
+                  });
+                }}
               />
               {sourceTypeShortLabels[s]}
             </label>
@@ -39,12 +97,43 @@ export function TimelineFilters({
 
         <fieldset className="flex flex-col gap-1.5">
           <legend className="text-xs font-medium text-muted-foreground">Categorias/Impactos</legend>
+
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={criteria.categories.length === 0}
+              onChange={() =>
+                onChange({
+                  ...criteria,
+                  categories: [],
+                })
+              }
+            />
+            Todos
+          </label>
+
           {categories.map((c) => (
             <label key={c} className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={criteria.categories.includes(c)}
-                onChange={() => onChange({ ...criteria, categories: toggle(criteria.categories, c) })}
+                checked={
+                  criteria.categories.length === 0 ||
+                  criteria.categories.includes(c)
+                }
+                onChange={() => {
+                  const nextCategories =
+                    criteria.categories.length === 0
+                      ? categories.filter((category) => category !== c)
+                      : toggle(criteria.categories, c);
+
+                  onChange({
+                    ...criteria,
+                    categories:
+                      nextCategories.length === categories.length
+                        ? []
+                        : nextCategories,
+                  });
+                }}
               />
               {categoryLabels[c]}
             </label>
@@ -75,6 +164,21 @@ export function TimelineFilters({
 
         <fieldset className="flex flex-col gap-1.5">
           <legend className="text-xs font-medium text-muted-foreground">Participantes (e-mail)</legend>
+
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            <input
+              type="checkbox"
+              checked={criteria.participants.length === 0}
+              onChange={() =>
+                onChange({
+                  ...criteria,
+                  participants: [],
+                })
+              }
+            />
+            Todos
+          </label>
+
           <div className="flex max-h-32 flex-col gap-1 overflow-y-auto">
             {participants.length === 0 ? (
               <span className="text-xs text-muted-foreground">
@@ -85,10 +189,33 @@ export function TimelineFilters({
                 <label key={p.address} className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
-                    checked={criteria.participants.includes(p.address)}
-                    onChange={() =>
-                      onChange({ ...criteria, participants: toggle(criteria.participants, p.address) })
+                    checked={
+                      criteria.participants.length === 0 ||
+                      criteria.participants.includes(p.address)
                     }
+                    onChange={() => {
+                      const allAddresses = participants.map(
+                        (participant) => participant.address
+                      );
+
+                      const nextParticipants =
+                        criteria.participants.length === 0
+                          ? allAddresses.filter(
+                              (address) => address !== p.address
+                            )
+                          : toggle(
+                              criteria.participants,
+                              p.address
+                            );
+
+                      onChange({
+                        ...criteria,
+                        participants:
+                          nextParticipants.length === allAddresses.length
+                            ? []
+                            : nextParticipants,
+                      });
+                    }}
                   />
                   <span className="truncate" title={p.address}>
                     {p.address}

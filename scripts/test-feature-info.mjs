@@ -74,7 +74,7 @@ check("getFeatureHelp devolve null (nunca lança) para um helpId desconhecido", 
 const EXPECTED_SIDEBAR_LABELS = [
   "Dashboard",
   "Timeline",
-  "Event Ledger",
+  "EVENTOS",
   "Solicitações",
   "Ações e Escalonamentos",
   // Expert Jurídico: ponto único para análise de contratos e consultas
