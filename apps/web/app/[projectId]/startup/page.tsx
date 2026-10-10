@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@axion/db/server";
 import { CompleteStartupButton } from "@/components/startup/complete-startup-button";
 import { HistoricalFindingCard } from "@/components/startup/historical-finding-card";
@@ -30,12 +31,21 @@ export default async function StartupPage({ params }: { params: Promise<{ projec
   const { projectId } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const [summary, findings, members, { canComplete, pendingCount }] = await Promise.all([
+  const [summary, findings, members, { canComplete, pendingCount }, { data: authData }] = await Promise.all([
     getStartupSummary(supabase, projectId),
     getHistoricalFindings(supabase, projectId),
     getProjectMembers(projectId),
     canCompleteProjectStartup(supabase, projectId),
+    supabase.auth.getUser(),
   ]);
+
+  const currentMembership = members.find(
+    (member) => member.userId === authData.user?.id && member.status === "ACTIVE"
+  );
+
+  if (!currentMembership || currentMembership.permission !== "ADMINISTRADOR") {
+    notFound();
+  }
 
   const memberOptions = members.map((m) => ({ userId: m.userId, name: m.user.name, email: m.user.email }));
   const highCriticalFindings = findings.filter((f) => f.severity === "HIGH" || f.severity === "CRITICAL");
