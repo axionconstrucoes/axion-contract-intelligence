@@ -78,12 +78,24 @@ export async function getDashboardVisualData(projectId: string, searchParams: { 
   // Status real (reutiliza integralmente o pacote publicado no commit 17c0ee3 — nunca recriado).
   const linkedAccount = emailAccounts.find((account) => account.id === ingestionConfig?.emailAccountId) ?? null;
   const clientDomains = ingestionConfig?.domains.filter((d) => d.domainRole !== "AXION") ?? [];
-  const emailStatus = resolveEmailIntegrationDisplayStatus({
-    configEnabled: ingestionConfig?.enabled ?? null,
-    hasEmailAccount: Boolean(ingestionConfig?.emailAccountId),
-    hasClientDomain: clientDomains.length > 0,
-    accountStatus: linkedAccount?.status ?? null,
-  });
+  const storedEmailIntegration = integrationConfigs.find(
+    (config) => config.sourceType === "EMAIL"
+  );
+
+  const hasSuccessfulEmailSync =
+    Boolean(ingestionConfig?.lastSyncAt) ||
+    Boolean(latestSyncRun?.completedAt);
+
+  const emailStatus =
+    storedEmailIntegration?.status === "CONECTADO" &&
+    hasSuccessfulEmailSync
+      ? "CONECTADO"
+      : resolveEmailIntegrationDisplayStatus({
+          configEnabled: ingestionConfig?.enabled ?? null,
+          hasEmailAccount: Boolean(ingestionConfig?.emailAccountId),
+          hasClientDomain: clientDomains.length > 0,
+          accountStatus: linkedAccount?.status ?? null,
+        });
   const integrationStatusGroups = summarizeIntegrationStatuses(resolveAllIntegrationStatuses(sources, integrationConfigs, emailStatus));
 
   const findingsInRange = filterFindingsByRange(findings, range);

@@ -10,7 +10,7 @@
 import type { MppFactsForCrossCheck } from "../s-curve/analyze-s-curve";
 import type { ScheduleRiskThreshold } from "../weekly-ingestion/types";
 import { analyzeBaselineSheet, analyzeCurvaSSheet, analyzeFinancialSheet, analyzeHistogramSheet, analyzeSsmaSheet, routeSheetToExpert, type OfficialBaselineFacts } from "./analyze-sheets";
-import { extractBaselineSheet, extractCurvaSSheet, extractFinancialSheet, extractHistogramSheet, extractSsmaSheet } from "./extract-sheets";
+import { extractBaselineSheet, extractCurvaSFromBaselineGrid, extractCurvaSSheet, extractFinancialSheet, extractHistogramSheet, extractSsmaSheet } from "./extract-sheets";
 import { identifyWeeklyReportSheets } from "./identify-sheets";
 import type {
   BaselineSheetData,
@@ -121,18 +121,63 @@ export function processWorkbookGrids(input: { grids: SheetGrid[]; safety: Workbo
               : category === "HISTOGRAMA"
                 ? extractHistogramSheet(grid, context.fileName)
                 : extractSsmaSheet(grid, context.fileName);
-      if (!extraction) {
+      let resolvedExtraction = extraction;
+
+      // Formato institucional AXION:
+      // a aba CURVA S pode conter apenas o gráfico.
+      // As séries estruturadas ficam na aba LINHA DE BASE.
+      if (!resolvedExtraction && category === "CURVA_S") {
+        const baselineGrid =
+          [...gridByName.values()].find((candidate) =>
+            /linha\s*de\s*base|baseline/i.test(candidate.name)
+          ) ?? null;
+
+        if (baselineGrid) {
+          resolvedExtraction = extractCurvaSFromBaselineGrid(
+            baselineGrid,
+            context.fileName
+          );
+        }
+      }
+
+      if (!resolvedExtraction) {
         sheet.status = "PENDING_HUMAN_REVIEW";
-        sheet.alerts.push({ code: "TABLE_NOT_RECOGNIZED", detail: `Aba "${grid.name}" localizada, mas nenhuma tabela reconhecível pelos cabeçalhos — validação humana necessária.`, severity: "WARNING" });
+        sheet.alerts.push({
+          code: "TABLE_NOT_RECOGNIZED",
+          detail: `Aba "${grid.name}" localizada, mas nenhuma tabela estruturada reconhecível foi encontrada — validação humana necessária.`,
+          severity: "WARNING",
+        });
       } else {
-        sheet.status = extraction.confidence < 0.6 ? "PENDING_HUMAN_REVIEW" : "EXTRACTED";
-        sheet.data = extraction.data as WeeklyReportSheetData;
-        sheet.locator = extraction.locator;
-        sheet.confidence = extraction.confidence;
-        sheet.cutoffDate = "cutoffDate" in extraction.data ? (extraction.data as CurvaSSheetData).cutoffDate : null;
-        for (const note of extraction.notes) sheet.alerts.push({ code: "EXTRACTION_NOTE", detail: note, severity: "INFO" });
-        if (human?.status === "HUMAN_MAPPED") sheet.status = "HUMAN_MAPPED";
-        raw[category] = { sheet, data: extraction.data as WeeklyReportSheetData };
+        sheet.status =
+          resolvedExtraction.confidence < 0.6
+            ? "PENDING_HUMAN_REVIEW"
+            : "EXTRACTED";
+
+        sheet.data = resolvedExtraction.data as WeeklyReportSheetData;
+        sheet.locator = resolvedExtraction.locator;
+        sheet.confidence = resolvedExtraction.confidence;
+
+        sheet.cutoffDate =
+          "cutoffDate" in resolvedExtraction.data
+            ? (resolvedExtraction.data as CurvaSSheetData).cutoffDate
+            : null;
+
+        for (const note of resolvedExtraction.notes) {
+          sheet.alerts.push({
+            code: "EXTRACTION_NOTE",
+            detail: note,
+            severity: "INFO",
+          });
+        }
+
+        if (human?.status === "HUMAN_MAPPED") {
+          sheet.status = "HUMAN_MAPPED";
+        }
+
+        raw[category] = {
+          sheet,
+          data: resolvedExtraction.data as WeeklyReportSheetData,
+        };
       }
     } catch (error) {
       sheet.status = "FAILED";

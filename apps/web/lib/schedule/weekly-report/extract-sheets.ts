@@ -166,6 +166,219 @@ export interface SheetExtraction<T> {
   notes: string[];
 }
 
+function findWeeklyHeaderAbove(
+  grid: SheetGrid,
+  rowIndex: number
+): { row: number; columns: Array<{ c: number; period: string }> } | null {
+  for (let r = rowIndex; r >= 0; r -= 1) {
+    const columns: Array<{ c: number; period: string }> = [];
+
+    grid.rows[r]?.forEach((cell, c) => {
+      const text = cellText(cell);
+      const match = /^W(\d{1,3})$/i.exec(text);
+
+      if (match) {
+        columns.push({
+          c,
+          period: `W${Number(match[1])}`,
+        });
+      }
+    });
+
+    if (columns.length >= 5) {
+      return { row: r, columns };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Alguns relatórios AXION possuem uma aba visual chamada "CURVA S"
+ * contendo apenas o gráfico. As séries que alimentam esse gráfico ficam
+ * armazenadas na aba LINHA DE BASE.
+ *
+ * Este fallback lê SOMENTE valores persistidos nas células da aba fonte.
+ * Nenhum valor é inferido a partir da imagem/gráfico.
+ */
+export function extractCurvaSFromBaselineGrid(
+  grid: SheetGrid,
+  fileName: string
+): SheetExtraction<CurvaSSheetData> | null {
+  const findSeriesLabel = (pattern: RegExp) => {
+    for (let r = 0; r < grid.rows.length; r += 1) {
+      for (let c = 0; c < grid.rows[r].length; c += 1) {
+        const label = cellText(grid.rows[r][c]);
+        if (label && pattern.test(label)) {
+          return { row: r, col: c, label };
+        }
+      }
+    }
+    return null;
+  };
+
+  const plannedLabel = findSeriesLabel(
+    /f[íi]sico\s+previsto\s+acumulado.*(?:linha\s+de\s+base\s*0?2|lb0?2)/i
+  );
+
+  const actualLabel = findSeriesLabel(
+    /f[íi]sico\s+realizado\s+acumulado.*lb0?2/i
+  );
+
+  if (!plannedLabel || !actualLabel) {
+    return null;
+  }
+
+  // Procura a linha de semanas Wxx mais próxima acima da série.
+  const findWeekHeader = (fromRow: number) => {
+    for (let r = fromRow; r >= 0; r -= 1) {
+      const weeks: Array<{ col: number; period: string }> = [];
+
+      grid.rows[r]?.forEach((cell, c) => {
+        const text = cellText(cell);
+        const match = /^W(\d{1,3})$/i.exec(text);
+
+        if (match) {
+          weeks.push({
+            col: c,
+            period: `W${Number(match[1])}`,
+          });
+        }
+      });
+
+      if (weeks.length >= 5) {
+        return weeks;
+      }
+    }
+
+    return null;
+  };
+
+  const plannedWeeks = findWeekHeader(plannedLabel.row);
+  const actualWeeks = findWeekHeader(actualLabel.row);
+
+  if (!plannedWeeks || !actualWeeks) {
+    return null;
+  }
+
+  // Em alguns formatos AXION o rótulo está numa linha e os valores
+  // consolidados ficam na linha seguinte.
+  const findBestValueRow = (
+    labelRow: number,
+    weeks: Array<{ col: number; period: string }>
+  ) => {
+    let best:
+      | {
+          row: number;
+          values: Array<{ period: string; value: number }>;
+        }
+      | null = null;
+
+    for (
+      let r = labelRow;
+      r <= Math.min(grid.rows.length - 1, labelRow + 3);
+      r += 1
+    ) {
+      const values: Array<{ period: string; value: number }> = [];
+
+      for (const week of weeks) {
+        const value = cellNumber(grid.rows[r]?.[week.col]);
+
+        if (value !== null) {
+          values.push({
+            period: week.period,
+            value,
+          });
+        }
+      }
+
+      if (!best || values.length > best.values.length) {
+        best = { row: r, values };
+      }
+    }
+
+    return best && best.values.length >= 2 ? best : null;
+  };
+
+  const plannedValues = findBestValueRow(
+    plannedLabel.row,
+    plannedWeeks
+  );
+
+  const actualValues = findBestValueRow(
+    actualLabel.row,
+    actualWeeks
+  );
+
+  if (!plannedValues || !actualValues) {
+    return null;
+  }
+
+  const plannedSeries: SCurveSeries = {
+    type: "PHYSICAL_PLANNED",
+    unit: "PERCENT",
+    scale: "CUMULATIVE",
+    sourceLabel: plannedLabel.label,
+    points: plannedValues.values.map((item) => ({
+      period: item.period,
+      date: null,
+      value: item.value,
+    })),
+  };
+
+  const actualSeries: SCurveSeries = {
+    type: "PHYSICAL_ACTUAL",
+    unit: "PERCENT",
+    scale: "CUMULATIVE",
+    sourceLabel: actualLabel.label,
+    points: actualValues.values.map((item) => ({
+      period: item.period,
+      date: null,
+      value: item.value,
+    })),
+  };
+
+  const sharedPeriods = new Set(
+    actualSeries.points.map((point) => point.period)
+  );
+
+  const filteredPlanned = plannedSeries.points.filter((point) =>
+    sharedPeriods.has(point.period)
+  );
+
+  if (filteredPlanned.length < 2) {
+    return null;
+  }
+
+  plannedSeries.points = filteredPlanned;
+
+  return {
+    data: {
+      series: [plannedSeries, actualSeries],
+      cutoffDate: null,
+      headers: [plannedLabel.label, actualLabel.label],
+    },
+    locator: {
+      file: fileName,
+      sheet: grid.name,
+      sheetIndex: grid.index,
+      range:
+        `A${Math.min(plannedLabel.row, actualLabel.row) + 1}:` +
+        `${columnLetter(
+          Math.max(
+            ...plannedWeeks.map((item) => item.col),
+            ...actualWeeks.map((item) => item.col)
+          )
+        )}${Math.max(plannedValues.row, actualValues.row) + 1}`,
+    },
+    confidence: 0.98,
+    notes: [
+      'Formato AXION LB02 reconhecido automaticamente.',
+      'Curva S lida das séries estruturadas da aba LINHA DE BASE.',
+    ],
+  };
+}
+
 export function extractCurvaSSheet(grid: SheetGrid, fileName: string): SheetExtraction<CurvaSSheetData> | null {
   const lastRow = Math.min(grid.rows.length, MAX_HEADER_SCAN_ROWS);
   let best: { r: number; series: Array<{ c: number; label: string }>; periodColumn: number } | null = null;
@@ -370,6 +583,79 @@ function inferResourceType(texts: string[]): { type: HistogramResourceType; evid
 }
 
 export function extractHistogramSheet(grid: SheetGrid, fileName: string): SheetExtraction<HistogramSheetData> | null {
+  // Formato institucional AXION:
+  // Semana do Ano | Sextas | MOD
+  // MOD = mão de obra efetivamente mobilizada.
+  for (
+    let headerRow = 0;
+    headerRow < Math.min(grid.rows.length, 10);
+    headerRow += 1
+  ) {
+    const headers = grid.rows[headerRow].map(cellText);
+
+    const weekColumn = headers.findIndex((value) =>
+      /semana\s+do\s+ano/i.test(value)
+    );
+
+    const modColumn = headers.findIndex((value) =>
+      /^mod$/i.test(value.trim())
+    );
+
+    if (weekColumn >= 0 && modColumn >= 0) {
+      const rows: HistogramSheetData["rows"] = [];
+      let lastRow = headerRow;
+
+      for (let r = headerRow + 1; r < grid.rows.length; r += 1) {
+        const period = cellText(grid.rows[r]?.[weekColumn]);
+        const actual = cellNumber(grid.rows[r]?.[modColumn]);
+
+        if (!/^W\d{1,3}$/i.test(period)) continue;
+        if (actual === null) continue;
+
+        rows.push({
+          period: period.toUpperCase(),
+          date: null,
+          category: "Mão de obra",
+          planned: null,
+          actual,
+          quantity: actual,
+        });
+
+        lastRow = r;
+      }
+
+      if (rows.length >= 2) {
+        return {
+          data: {
+            resourceType: "LABOR",
+            resourceEvidence: "MOD",
+            unit: "pessoas",
+            rows,
+            headers: headers.filter(Boolean),
+          },
+          locator: {
+            file: fileName,
+            sheet: grid.name,
+            sheetIndex: grid.index,
+            headerRow: headerRow + 1,
+            range:
+              `${columnLetter(Math.min(weekColumn, modColumn))}${headerRow + 1}:` +
+              `${columnLetter(Math.max(weekColumn, modColumn))}${lastRow + 1}`,
+            columns: {
+              period: columnLetter(weekColumn),
+              actual: columnLetter(modColumn),
+            },
+          },
+          confidence: 0.95,
+          notes: [
+            "Formato AXION Semana do Ano + MOD reconhecido automaticamente.",
+            "MOD interpretado como mão de obra efetivamente mobilizada.",
+          ],
+        };
+      }
+    }
+  }
+
   const header = findHeaderRow(grid, HISTOGRAM_MATCHERS, 1);
   if (!header) return null;
   const periodColumn = findPeriodColumn(grid, header.headerRow, header.headers);
