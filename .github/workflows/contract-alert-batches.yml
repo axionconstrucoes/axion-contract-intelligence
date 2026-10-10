@@ -1,0 +1,38 @@
+﻿name: Contract Alert Batches
+
+on:
+  schedule:
+    - cron: "10 10 * * 3"
+  workflow_dispatch:
+
+concurrency:
+  group: contract-alert-batches
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run contract alert batches
+        env:
+          ACC_APP_BASE_URL: ${{ vars.ACC_APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ACC_APP_BASE_URL:-}" ]; then
+            echo "::error::ACC_APP_BASE_URL ausente."
+            exit 1
+          fi
+
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET ausente."
+            exit 1
+          fi
+
+          curl --fail-with-body \
+            --silent \
+            --show-error \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${ACC_APP_BASE_URL%/}/api/cron/contract-alert-batches"
