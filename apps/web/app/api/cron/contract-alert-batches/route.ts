@@ -1,4 +1,4 @@
-﻿import { isCronRequestAuthorized } from "@/lib/cron/cron-request-auth";
+import { isCronRequestAuthorized } from "@/lib/cron/cron-request-auth";
 import { runContractAlertBatches } from "@/lib/email/run-contract-alert-batches";
 
 export const runtime = "nodejs";

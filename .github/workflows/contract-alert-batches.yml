@@ -1,4 +1,4 @@
-﻿name: Contract Alert Batches
+name: Contract Alert Batches
 
 on:
   schedule:
