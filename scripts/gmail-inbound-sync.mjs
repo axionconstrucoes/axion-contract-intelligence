@@ -23,6 +23,34 @@ function required(name) {
   return value;
 }
 
+
+function gmailCredentialNames(mailbox) {
+  const localPart = mailbox
+    .split("@")[0]
+    .replace(/[^a-z0-9]+/gi, "_")
+    .toUpperCase();
+
+  const specific = {
+    clientId: `GOOGLE_GMAIL_${localPart}_CLIENT_ID`,
+    clientSecret: `GOOGLE_GMAIL_${localPart}_CLIENT_SECRET`,
+    refreshToken: `GOOGLE_GMAIL_${localPart}_REFRESH_TOKEN`,
+  };
+
+  if (
+    process.env[specific.clientId]?.trim() &&
+    process.env[specific.clientSecret]?.trim() &&
+    process.env[specific.refreshToken]?.trim()
+  ) {
+    return specific;
+  }
+
+  return {
+    clientId: "GOOGLE_GMAIL_INBOUND_CLIENT_ID",
+    clientSecret: "GOOGLE_GMAIL_INBOUND_CLIENT_SECRET",
+    refreshToken: "GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN",
+  };
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -313,17 +341,18 @@ const senderFilter =
 const query =
   `after:${afterEpoch} before:${beforeEpoch} {${senderFilter}}`;
 
+const credentialNames =
+  gmailCredentialNames(mailbox);
+
 const auth =
   new google.auth.OAuth2(
-    required("GOOGLE_GMAIL_INBOUND_CLIENT_ID"),
-    required("GOOGLE_GMAIL_INBOUND_CLIENT_SECRET")
+    required(credentialNames.clientId),
+    required(credentialNames.clientSecret)
   );
 
 auth.setCredentials({
   refresh_token:
-    required(
-      "GOOGLE_GMAIL_INBOUND_REFRESH_TOKEN"
-    ),
+    required(credentialNames.refreshToken),
 });
 
 const gmail =
