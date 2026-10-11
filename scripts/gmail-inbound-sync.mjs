@@ -47,6 +47,78 @@ function getHeader(headers, name) {
   );
 }
 
+
+function normalizeProjectText(value = "") {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function matchesWegLinharesProject({
+  subject,
+  bodyText,
+  snippet,
+  from,
+  recipients,
+}) {
+  const participantText =
+    [...from, ...recipients]
+      .map(normalizeProjectText)
+      .join(" ");
+
+  const contentText =
+    [
+      subject,
+      bodyText,
+      snippet,
+    ]
+      .map(normalizeProjectText)
+      .join(" ");
+
+  /*
+   * Participação direta da WEG é evidência forte.
+   */
+  const hasWegParticipant =
+    participantText.includes("@weg.net");
+
+  /*
+   * Conversas internas AXION só entram se houver
+   * evidência textual do projeto WEG / Fábrica de Fios.
+   */
+  const projectSignals = [
+    "weg",
+    "fabrica de fios",
+    "fabrica de fiols",
+    "linhares",
+    "rfq-1015661",
+    "lanternim",
+    "implantacao de canteiro",
+    "cronograma anexo contratual",
+    "projeto executivo - fabrica de fios",
+  ];
+
+  const hasProjectSignal =
+    projectSignals.some(
+      (term) => contentText.includes(term)
+    );
+
+  /*
+   * Caso aprovado manualmente durante a auditoria.
+   */
+  const approvedSpecialCase =
+    normalizeProjectText(subject)
+      .includes(
+        "negociacao - planilha de custos opcao 5 - alt 17,22m cobertura metalica"
+      );
+
+  return (
+    hasWegParticipant ||
+    hasProjectSignal ||
+    approvedSpecialCase
+  );
+}
+
 function domainOf(address) {
   return address.split("@")[1]?.toLowerCase() ?? null;
 }
@@ -413,7 +485,26 @@ for (
         allowedDomains
       );
 
-    if (!policy.eligible) {
+    const subject =
+      getHeader(headers, "Subject") ??
+      "(sem assunto)";
+
+    const projectMatch =
+      matchesWegLinharesProject({
+        subject,
+        bodyText,
+        snippet:
+          message.snippet ?? "",
+        from:
+          policy.from,
+        recipients:
+          policy.recipients,
+      });
+
+    if (
+      !policy.eligible ||
+      !projectMatch
+    ) {
       rejected += 1;
       continue;
     }
@@ -445,11 +536,7 @@ for (
       to_address:
         policy.recipients.join(", "),
 
-      subject:
-        getHeader(
-          headers,
-          "Subject"
-        ) ?? "(sem assunto)",
+      subject,
 
       sent_at:
         occurredAt.toISOString(),

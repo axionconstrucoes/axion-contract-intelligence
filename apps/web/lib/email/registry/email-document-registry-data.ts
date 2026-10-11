@@ -280,7 +280,13 @@ export async function getEmailDocumentDetail(projectId: string, emailId: string)
   if (!isWeeklyReportsEnabled()) return null;
   const supabase = await createSupabaseServerClient();
 
-  const { data: email, error: emailError } = await supabase.from("emails").select("*").eq("id", emailId).eq("project_id", projectId).maybeSingle();
+  const { data: email, error: emailError } = await supabase
+    .from("emails")
+    .select("*")
+    .eq("id", emailId)
+    .eq("project_id", projectId)
+    .eq("project_scope_status", "IN_SCOPE")
+    .maybeSingle();
   if (emailError) throw new Error(`Falha ao carregar e-mail: ${emailError.message}`);
   if (!email) return null;
 
@@ -401,7 +407,14 @@ export async function getEmailDocumentDetail(projectId: string, emailId: string)
 
   const workWeekNumber = (email.work_week_number as number | null) ?? null;
   const { data: sameWeek } = workWeekNumber
-    ? await supabase.from("emails").select("id,sent_at").eq("project_id", projectId).eq("work_week_number", workWeekNumber).neq("id", emailId).order("sent_at", { ascending: false })
+    ? await supabase
+        .from("emails")
+        .select("id,sent_at")
+        .eq("project_id", projectId)
+        .eq("project_scope_status", "IN_SCOPE")
+        .eq("work_week_number", workWeekNumber)
+        .neq("id", emailId)
+        .order("sent_at", { ascending: false })
     : { data: [] };
 
   return {

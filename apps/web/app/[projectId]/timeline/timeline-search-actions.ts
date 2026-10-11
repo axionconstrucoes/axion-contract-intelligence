@@ -171,7 +171,8 @@ export async function searchTimelineArchive(
       .select(
         "id,from_address,to_address,subject,sent_at,snippet,body_text,body_html"
       )
-      .eq("project_id", input.projectId),
+      .eq("project_id", input.projectId)
+      .eq("project_scope_status", "IN_SCOPE"),
 
     supabase
       .from("email_attachments")
@@ -232,6 +233,9 @@ export async function searchTimelineArchive(
       error: firstError.message,
     };
   }
+
+  const inScopeEmailIds =
+    new Set((emailsResult.data ?? []).map((row) => row.id));
 
   const documents = documentsResult.data ?? [];
   const documentIds = documents.map((row) => row.id);
@@ -373,6 +377,7 @@ export async function searchTimelineArchive(
   // ----------------------------------------------------------
 
   for (const attachment of attachmentsResult.data ?? []) {
+    if (!inScopeEmailIds.has(attachment.email_id)) continue;
     if (!sourceAllowed("EMAIL", input.sources)) continue;
 
     const date =

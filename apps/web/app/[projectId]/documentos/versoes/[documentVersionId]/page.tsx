@@ -175,7 +175,6 @@ export default async function DocumentVersionViewerPage({
               src={signedUrl}
               title={`Visualização de ${fileName}`}
               className="h-[78vh] w-full rounded-md border"
-              sandbox=""
             />
           ) : behavior.kind === "IMAGE" && signedUrl ? (
             // eslint-disable-next-line @next/next/no-img-element

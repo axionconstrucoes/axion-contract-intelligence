@@ -79,7 +79,7 @@ const SCHEDULE_ACTIVITY_COLUMNS =
 // direction (INBOUND/OUTBOUND/null) já é resolvida e gravada na ingestão
 // Gmail (evaluateGmailMessagePolicy — mailboxIsSender ? OUTBOUND : INBOUND,
 // migration 20260820125115) — nunca recalculada/adivinhada aqui, só lida.
-const EMAIL_COLUMNS = "id, project_id, from_address, to_address, subject, sent_at, snippet, direction";
+const EMAIL_COLUMNS = "id, project_id, from_address, to_address, subject, sent_at, snippet, direction, project_scope_status";
 
 const CONTRACT_EVENT_COLUMNS =
   "id, project_id, occurred_at, title, description, source_type, status, created_by_type, created_by_user_id, created_by_label, created_at";
@@ -810,6 +810,7 @@ export async function getEmails(projectId: string) {
     .from("emails")
     .select(EMAIL_COLUMNS)
     .eq("project_id", projectId)
+    .eq("project_scope_status", "IN_SCOPE")
     .order("sent_at", { ascending: false });
 
   if (error) {

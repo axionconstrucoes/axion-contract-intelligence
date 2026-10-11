@@ -98,6 +98,7 @@ export default async function DocumentosPage({
       .from("emails")
       .select("id,from_address,subject,sent_at")
       .eq("project_id", projectId)
+      .eq("project_scope_status", "IN_SCOPE")
       .order("sent_at", { ascending: false })
       .limit(200)
       .then(({ data, error }) => {
