@@ -52,6 +52,9 @@ export interface ProjectEmailIngestionConfig {
   lastSyncAt: string | null;
   includeAttachments: boolean;
   emailAccountId: string | null;
+  requireProjectScopeMatch: boolean;
+  scopeKeywords: string[];
+  scopeExactSubjects: string[];
   mailboxes: EmailIngestionMailbox[];
   domains: EmailIngestionDomain[];
   participants: EmailIngestionParticipant[];

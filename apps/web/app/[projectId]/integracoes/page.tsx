@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "@axion/db/server";
 import { EmailAccountsPanel } from "@/components/integrations/email-accounts-panel";
 import { EmailIngestionConfigForm } from "@/components/integrations/email-ingestion-config-form";
 import { EmailIntegrationCard } from "@/components/integrations/email-integration-card";
+import { EmailProjectScopeForm } from "@/components/integrations/email-project-scope-form";
 import { EmailSyncConfirmationPanel } from "@/components/integrations/email-sync-confirmation-panel";
 import { EmailSyncPanel } from "@/components/integrations/email-sync-panel";
 import { IntegrationCard } from "@/components/integrations/integration-card";
@@ -110,6 +111,20 @@ export default async function IntegracoesPage({
             ) : (
               <EmailIngestionConfigForm projectId={projectId} accounts={accounts} config={ingestionConfig} />
             )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {canManage && ingestionConfig ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Escopo automático dos e-mails</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EmailProjectScopeForm
+              projectId={projectId}
+              config={ingestionConfig}
+            />
           </CardContent>
         </Card>
       ) : null}

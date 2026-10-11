@@ -11,6 +11,17 @@ export const initialDisconnectEmailAccountState: DisconnectEmailAccountState = {
 export type SaveEmailIngestionConfigState = { error: string | null; success: boolean };
 export const initialSaveEmailIngestionConfigState: SaveEmailIngestionConfigState = { error: null, success: false };
 
+
+export type SaveEmailProjectScopeState = {
+  error: string | null;
+  success: boolean;
+};
+
+export const initialSaveEmailProjectScopeState: SaveEmailProjectScopeState = {
+  error: null,
+  success: false,
+};
+
 export type StartEmailSyncState = { error: string | null; success: boolean; syncRunId: string | null };
 export const initialStartEmailSyncState: StartEmailSyncState = { error: null, success: false, syncRunId: null };
 

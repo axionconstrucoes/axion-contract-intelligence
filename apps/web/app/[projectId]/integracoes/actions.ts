@@ -42,6 +42,7 @@ import type {
   PrepareConstrumanagerContentState,
   RegisterEmailAccountState,
   SaveEmailIngestionConfigState,
+  SaveEmailProjectScopeState,
   SaveIntegrationOriginState,
   StartEmailSyncState,
   SyncConstrumanagerMetadataState,
@@ -160,6 +161,63 @@ export async function saveEmailIngestionConfigAction(
     return { error: null, success: true };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Falha ao salvar configuração de ingestão.", success: false };
+  }
+}
+
+
+export async function saveEmailProjectScopeAction(
+  _prevState: SaveEmailProjectScopeState,
+  formData: FormData
+): Promise<SaveEmailProjectScopeState> {
+  const supabase = await createSupabaseServerClient();
+
+  try {
+    await requireUser(supabase);
+
+    const projectId = requiredField(formData, "projectId");
+
+    const requireMatch =
+      formData.get("requireProjectScopeMatch") === "on";
+
+    const parseLines = (name: string): string[] =>
+      Array.from(
+        new Set(
+          String(formData.get(name) ?? "")
+            .split(/\r?\n/)
+            .map((value) => value.trim())
+            .filter(Boolean)
+        )
+      ).slice(0, 100);
+
+    const keywords = parseLines("scopeKeywords");
+    const exactSubjects = parseLines("scopeExactSubjects");
+
+    const { error } = await supabase.rpc(
+      "save_project_email_scope_rules",
+      {
+        p_project_id: projectId,
+        p_require_match: requireMatch,
+        p_keywords: keywords,
+        p_exact_subjects: exactSubjects,
+      }
+    );
+
+    if (error) throw new Error(error.message);
+
+    revalidatePath(`/${projectId}/integracoes`);
+
+    return {
+      error: null,
+      success: true,
+    };
+  } catch (error) {
+    return {
+      error:
+        error instanceof Error
+          ? error.message
+          : "Falha ao salvar regras de escopo.",
+      success: false,
+    };
   }
 }
 

@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProjectEmailIngestionConfig } from "./types";
 
 const CONFIG_COLUMNS =
-  "id,project_id,enabled,window_mode,custom_start_at,custom_end_at,monitoring_started_at,last_sync_at,include_attachments,email_account_id";
+  "id,project_id,enabled,window_mode,custom_start_at,custom_end_at,monitoring_started_at,last_sync_at,include_attachments,email_account_id,require_project_scope_match,scope_keywords,scope_exact_subjects";
 
 export async function getProjectEmailIngestionConfig(
   supabase: SupabaseClient,
@@ -39,6 +39,9 @@ export async function getProjectEmailIngestionConfig(
     lastSyncAt: configRow.last_sync_at,
     includeAttachments: configRow.include_attachments,
     emailAccountId: configRow.email_account_id,
+    requireProjectScopeMatch: configRow.require_project_scope_match !== false,
+    scopeKeywords: (configRow.scope_keywords as string[] | null) ?? [],
+    scopeExactSubjects: (configRow.scope_exact_subjects as string[] | null) ?? [],
     mailboxes: (mailboxRows ?? []).map((row) => ({ id: row.id, mailboxAddress: row.mailbox_address, enabled: row.enabled })),
     domains: (domainRows ?? []).map((row) => ({ id: row.id, domain: row.domain, domainRole: row.domain_role, enabled: row.enabled })),
     participants: (participantRows ?? []).map((row) => ({
