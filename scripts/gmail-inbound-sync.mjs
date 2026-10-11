@@ -83,68 +83,62 @@ function normalizeProjectText(value = "") {
     .toLowerCase();
 }
 
-function matchesWegLinharesProject({
+function matchesConfiguredProjectScope({
   subject,
   bodyText,
   snippet,
   from,
   recipients,
+  clientDomains,
+  keywords,
+  exactSubjects,
+  requireMatch,
 }) {
-  const participantText =
+  if (!requireMatch) {
+    return true;
+  }
+
+  const participantDomains =
     [...from, ...recipients]
-      .map(normalizeProjectText)
-      .join(" ");
+      .map(domainOf)
+      .filter(Boolean);
 
-  const contentText =
-    [
-      subject,
-      bodyText,
-      snippet,
-    ]
-      .map(normalizeProjectText)
-      .join(" ");
-
-  /*
-   * Participação direta da WEG é evidência forte.
-   */
-  const hasWegParticipant =
-    participantText.includes("@weg.net");
-
-  /*
-   * Conversas internas AXION só entram se houver
-   * evidência textual do projeto WEG / Fábrica de Fios.
-   */
-  const projectSignals = [
-    "weg",
-    "fabrica de fios",
-    "fabrica de fiols",
-    "linhares",
-    "rfq-1015661",
-    "lanternim",
-    "implantacao de canteiro",
-    "cronograma anexo contratual",
-    "projeto executivo - fabrica de fios",
-  ];
-
-  const hasProjectSignal =
-    projectSignals.some(
-      (term) => contentText.includes(term)
+  const hasClientParticipant =
+    participantDomains.some(
+      (domain) => clientDomains.has(domain)
     );
 
-  /*
-   * Caso aprovado manualmente durante a auditoria.
-   */
-  const approvedSpecialCase =
-    normalizeProjectText(subject)
-      .includes(
-        "negociacao - planilha de custos opcao 5 - alt 17,22m cobertura metalica"
-      );
+  if (hasClientParticipant) {
+    return true;
+  }
 
-  return (
-    hasWegParticipant ||
-    hasProjectSignal ||
-    approvedSpecialCase
-  );
+  const contentText =
+    [subject, bodyText, snippet]
+      .map(normalizeProjectText)
+      .join(" ");
+
+  const hasKeyword =
+    keywords.some((term) =>
+      contentText.includes(
+        normalizeProjectText(term)
+      )
+    );
+
+  if (hasKeyword) {
+    return true;
+  }
+
+  const normalizedSubject =
+    normalizeProjectText(subject);
+
+  const hasApprovedSubject =
+    exactSubjects.some(
+      (approvedSubject) =>
+        normalizedSubject ===
+        normalizeProjectText(approvedSubject)
+    );
+
+  return hasApprovedSubject;
 }
 
 function domainOf(address) {
@@ -269,7 +263,7 @@ if (mailboxError) {
 const { data: domains, error: domainError } =
   await supabase
     .from("project_email_ingestion_domains")
-    .select("domain")
+    .select("domain,domain_role")
     .eq("config_id", config.id)
     .eq("enabled", true);
 
@@ -298,6 +292,33 @@ const allowedDomains =
       (row) => row.domain.toLowerCase()
     )
   );
+
+const clientDomains =
+  new Set(
+    domains
+      .filter(
+        (row) =>
+          String(row.domain_role ?? "")
+            .toUpperCase() === "CLIENT"
+      )
+      .map(
+        (row) =>
+          row.domain.toLowerCase()
+      )
+  );
+
+const scopeKeywords =
+  Array.isArray(config.scope_keywords)
+    ? config.scope_keywords
+    : [];
+
+const scopeExactSubjects =
+  Array.isArray(config.scope_exact_subjects)
+    ? config.scope_exact_subjects
+    : [];
+
+const requireProjectScopeMatch =
+  config.require_project_scope_match !== false;
 
 /*
  * Overlap de 10 minutos.
@@ -519,7 +540,7 @@ for (
       "(sem assunto)";
 
     const projectMatch =
-      matchesWegLinharesProject({
+      matchesConfiguredProjectScope({
         subject,
         bodyText,
         snippet:
@@ -528,6 +549,13 @@ for (
           policy.from,
         recipients:
           policy.recipients,
+        clientDomains,
+        keywords:
+          scopeKeywords,
+        exactSubjects:
+          scopeExactSubjects,
+        requireMatch:
+          requireProjectScopeMatch,
       });
 
     if (
