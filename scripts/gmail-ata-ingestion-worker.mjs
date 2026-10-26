@@ -1,6 +1,7 @@
 import { register } from "node:module";
 import { google } from "googleapis";
 import { createClient } from "@supabase/supabase-js";
+import { computeExitCode, formatSummary, processMessageRows } from "./lib/gmail-ata-processing.mjs";
 
 register("./ts-module-resolver.mjs", import.meta.url);
 
@@ -137,82 +138,20 @@ for (const row of [...(recent ?? []), ...(ataBySubject ?? []), ...(weeklyReports
   if (row.provider_message_id) byId.set(row.id, row);
 }
 
-let scanned = 0;
-let attachmentsSeen = 0;
-let attachmentsIngested = 0;
-let atasPromoted = 0;
-let failures = 0;
-
-for (const row of byId.values()) {
-  if (!planningEmails.has(String(row.from_address ?? "").trim().toLowerCase())) continue;
-  try {
-    const full = await gmail.users.messages.get({
-      userId: "me",
-      id: row.provider_message_id,
-      format: "full",
-    });
-
-    const parts = collectParts(full.data.payload);
-    if (parts.length === 0) {
-      scanned += 1;
-      continue;
-    }
-
-    const results = await ingestEmailAttachmentsForMessage(supabase, {
-      projectId: PROJECT_ID,
-      emailId: row.id,
-      gmailMessageId: row.provider_message_id,
-      gmailThreadId: row.provider_thread_id ?? full.data.threadId ?? null,
-      receivedAt: row.sent_at,
-      parts,
-      downloadAttachmentBytes: async (part) => {
-        const response = await gmail.users.messages.attachments.get({
-          userId: "me",
-          messageId: row.provider_message_id,
-          id: part.gmailAttachmentId,
-        });
-        return decodeBase64Url(response.data.data);
-      },
-    });
-
-    attachmentsSeen += parts.length;
-
-    for (const result of results) {
-      if (result.status === "FAILED") {
-        failures += 1;
-        continue;
-      }
-
-      if (result.status === "INGESTED") attachmentsIngested += 1;
-
-      const attachment = result.attachment;
-      if (!isMeetingMinutes(attachment.originalFileName)) continue;
-
-      await linkEmailAttachmentToDocument(supabase, {
-        attachmentId: attachment.id,
-        kind: "ATA_REUNIAO",
-        documentTitle: attachment.originalFileName.replace(/\.[^.]+$/, ""),
-        documentDate: String(row.sent_at).slice(0, 10),
-        author: row.from_address || mailbox,
-        summary: `Ata de reunião recebida por e-mail. Assunto: ${row.subject || "(sem assunto)"}`,
-      });
-      atasPromoted += 1;
-    }
-
-    scanned += 1;
-  } catch (error) {
-    failures += 1;
-    console.error("[gmail-ata-worker] falha:", error instanceof Error ? error.message : String(error));
-  }
-}
-
-console.log(JSON.stringify({
+const summary = await processMessageRows({
+  rows: byId.values(),
+  planningEmails,
+  gmail,
+  ingest: (input) => ingestEmailAttachmentsForMessage(supabase, { projectId: PROJECT_ID, ...input }),
+  link: (input) => linkEmailAttachmentToDocument(supabase, input),
+  collectParts,
+  decodeBase64Url,
+  isMeetingMinutes,
   projectId: PROJECT_ID,
-  scanned,
-  attachmentsSeen,
-  attachmentsIngested,
-  atasPromoted,
-  failures,
-}));
+  mailbox,
+});
 
-if (failures > 0) process.exitCode = 1;
+console.log(JSON.stringify({ projectId: PROJECT_ID, ...summary }));
+console.log(formatSummary(summary));
+
+process.exitCode = computeExitCode(summary);

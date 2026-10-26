@@ -11,7 +11,7 @@
     "build": "npm run build --workspace=apps/web",
     "lint": "npm run lint --workspace=apps/web",
     "test": "npm run test --workspace=apps/web",
-    "test:scripts": "node scripts/test-clause-decimal-detector.mjs && node scripts/test-extraction-coverage.mjs && node scripts/test-font-encoding-repair.mjs && node scripts/test-contract-attachments.mjs"
+    "test:scripts": "node scripts/test-clause-decimal-detector.mjs && node scripts/test-extraction-coverage.mjs && node scripts/test-font-encoding-repair.mjs && node scripts/test-contract-attachments.mjs && node scripts/test-gmail-ata-processing.mjs"
   },
   "devDependencies": {
     "js-yaml": "^4.3.1",
