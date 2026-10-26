@@ -15,6 +15,7 @@
 | Tabela de providências (SQL) | `supabase/migrations/20261027130000_project_delivery_items.sql` |
 | Resposta PARCIAL de lote (SQL) | `supabase/migrations/20261027140000_alert_batch_partial_responses.sql` |
 | Ações do alerta de providência (SQL) | `supabase/migrations/20261027150000_delivery_item_respond.sql` |
+| Histórico da mudança do término previsto (SQL) | `supabase/migrations/20261027160000_delivery_end_date_change_history.sql` |
 | Origem verificável de cláusula/evidência (links, "Pendente de confirmação") | `apps/web/lib/alerts/alert-source-links.ts`, `load-event-alert-context.ts` |
 | Acompanhamento do e-mail individual manual | `apps/web/lib/alerts/manual-alert-tracking.ts` |
 | Regras de providências, D−60 e CNO (especificação executável) | `apps/web/lib/delivery/delivery-items.ts` |
@@ -27,8 +28,9 @@
 2. Aplicar `20261027130000_project_delivery_items.sql`.
 3. Aplicar `20261027140000_alert_batch_partial_responses.sql` (depende das tabelas de lote `20260921130000`, já existentes, e de 1).
 4. Aplicar `20261027150000_delivery_item_respond.sql` (depende de 1 e 2).
-5. Publicar o código (a página de providências degrada com aviso se a migration ainda não existir).
-6. Só então o workflow de lembretes passa a ter o que processar.
+5. Aplicar `20261027160000_delivery_end_date_change_history.sql` (depende de 2).
+6. Publicar o código (a página de providências degrada com aviso se a migration ainda não existir).
+7. Só então o workflow de lembretes passa a ter o que processar.
 
 ## Frequência real do agendamento
 
@@ -66,6 +68,8 @@ prazo legal **não é calculado**; só um prazo interno informado manualmente va
 - Alertas de evento só têm cláusula quando há vínculo APROVADO evento↔cláusula; sem ele o e-mail
   mostra "Pendente de confirmação" (nunca uma cláusula inferida).
 - Lembretes de alerta pendente chegam como e-mails separados por alerta (um acompanhamento por alerta).
-- A mudança do término previsto recalcula os marcos automaticamente (cálculo sem estado), mas o
-  registro `END_DATE_CHANGED` no histórico ainda não é gravado pela tela de edição da obra.
+- A mudança do término previsto recalcula os marcos automaticamente (cálculo sem estado) e a
+  migration `20261027160000_delivery_end_date_change_history.sql` (gatilho em `projects`) grava
+  `END_DATE_CHANGED` no histórico de cada providência da obra, com quem alterou e as datas antiga e
+  nova, qualquer que seja o caminho de edição. Atrasos já registrados continuam vencidos.
 - Não validado em clientes de e-mail reais (Gmail, Outlook, celulares) — só HTML renderizado no Chrome.

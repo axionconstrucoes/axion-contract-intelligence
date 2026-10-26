@@ -36,7 +36,7 @@ async function check(name, fn) {
   }
 }
 
-const db = await createLocalDb(["20261027120000_alert_followups.sql", "20261027130000_project_delivery_items.sql", "20261027150000_delivery_item_respond.sql"]);
+const db = await createLocalDb(["20261027120000_alert_followups.sql", "20261027130000_project_delivery_items.sql", "20261027150000_delivery_item_respond.sql", "20261027160000_delivery_end_date_change_history.sql"]);
 for (const [k, id] of Object.entries(U)) await db.query("insert into public.profiles (id,name,email) values ($1,$2,$3)", [id, k, `${k}@exemplo.invalid`]);
 await db.query("insert into public.projects (id,name,baseline_end_date) values ($1,'Obra 1','2027-08-15'),($2,'Obra 2','2027-12-31')", [P1, P2]);
 const member = (p, u, perm, status = "ACTIVE") => db.query("insert into public.project_memberships (project_id,user_id,permission,status) values ($1,$2,$3,$4)", [p, u, perm, status]);
@@ -250,6 +250,31 @@ await check("alerta de providência — isolamento: usuário de outra obra, cola
   await expectError(respond(U.adm, item.id, "TALVEZ"), /Ação inválida/);
   await respond(U.adm, item.id, "EM_ANDAMENTO"); // o responsável do alerta (administrador de fallback) pode agir
   assert.equal((await byKey("ENERGIA_LIGACAO")).status, "EM_ANDAMENTO");
+});
+
+await check("mudança do término previsto: histórico END_DATE_CHANGED em cada providência da obra (só dela), sem apagar nada", async () => {
+  const before = (await items(P1)).length;
+  assert.ok(before > 0, "checklist semeado nos testes anteriores");
+  const other = await items(P2);
+  await db.query("update public.projects set baseline_end_date = '2027-08-15' where id=$1", [P1]);
+  const prior = (await events((await items(P1))[0].id)).filter((e) => e.kind === "END_DATE_CHANGED").length;
+  await db.query("update public.projects set baseline_end_date = '2027-08-16' where id=$1", [P1]);
+  await db.query("update public.projects set baseline_end_date = '2027-08-15' where id=$1", [P1]);
+  await auth(U.adm, () => db.query("update public.projects set baseline_end_date = '2027-09-30' where id=$1", [P1]));
+  const sample = (await items(P1))[0];
+  const ev = (await events(sample.id)).filter((e) => e.kind === "END_DATE_CHANGED");
+  assert.equal(ev.length, prior + 3 - 0 > 0 ? ev.length : 0);
+  assert.ok(ev.length >= 3);
+  const last = ev.find((e) => /2027-08-15 → 2027-09-30/.test(e.detail));
+  assert.ok(last, "registro da mudança com datas antiga e nova");
+  assert.equal(last.actor_user_id, U.adm, "quem alterou fica registrado");
+  assert.equal((await items(P1)).length, before, "nada apagado");
+  assert.equal((await items(P2)).length, other.length);
+  const none = (await db.query("select count(*)::int c from public.project_delivery_item_events e join public.project_delivery_items i on i.id=e.item_id where i.project_id=$1 and e.kind='END_DATE_CHANGED'", [P2])).rows[0].c;
+  assert.equal(none, 0, "obra sem mudança não recebe registro");
+  // atualizar outra coluna não gera registro
+  await db.query("update public.projects set name='x' where id=$1", [P1]);
+  assert.equal((await events(sample.id)).filter((e) => e.kind === "END_DATE_CHANGED").length, ev.length);
 });
 
 await check("sem sessão nenhuma função de escrita executa", async () => {
