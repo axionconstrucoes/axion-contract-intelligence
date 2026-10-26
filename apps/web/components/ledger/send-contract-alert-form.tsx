@@ -40,9 +40,15 @@ export function SendContractAlertForm({
       <input type="hidden" name="projectId" value={projectId} />
       <input type="hidden" name="eventId" value={eventId} />
 
-      <p className="text-xs font-medium text-muted-foreground">
-        Enviar este achado como alerta por e-mail (padrão institucional ACC)
-      </p>
+      {/* Logo oficial ACC (vinho), mesmo arquivo usado em sidebar/páginas de
+          ação por e-mail — altura fixa, largura automática: preserva
+          proporção e transparência. */}
+      <div className="flex items-center gap-2">
+        <img src="/branding/acc-logo.png" alt="ACC" className="h-7 w-auto shrink-0" />
+        <p className="text-xs font-medium text-muted-foreground">
+          Enviar este achado como alerta por e-mail (padrão institucional ACC)
+        </p>
+      </div>
 
       {hasEligibleRecipients ? (
         <div className="flex flex-wrap gap-2">
