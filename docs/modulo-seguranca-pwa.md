@@ -85,12 +85,15 @@ Testado (`npm run test:ssma`):
 - O que fica no aparelho: fila de registros e fotos pendentes; contexto mínimo por usuário (nome da obra,
   id/nome dos membros ativos, se o usuário é gestor). **Nunca** tokens, senhas ou dados de outras obras.
 
-## Consulta ao especialista de SSMA (gancho)
+## Consulta ao especialista de SSMA
 
-O detalhe do registro (`record-detail.tsx`) tem um aviso no lugar da consulta. A consulta por IA dos alertas
-(`/alertas/consulta-ia/...`) é outra frente; quando liberada, o especialista de SSMA poderá receber o contexto
-do registro (obra, registro, ação e fotos) pelo mesmo mecanismo de consulta existente, com as mesmas regras:
-somente leitura, sem alterar o registro, com fontes consultáveis e sem dados de outras obras.
+O detalhe do registro (`record-detail.tsx`) traz a caixa "Consultar IA — especialista de SSMA"
+(`record-consult.tsx` → `app/ssma/consult-actions.ts` → `lib/ssma/field-records/run-record-consult.ts` →
+`lib/ai/alert-consult/ssma-consult.ts`). Regras: exige conexão e vínculo ativo com a obra; o registro é lido
+com a sessão do usuário (RLS), então registro de outra obra é recusado; o contexto enviado traz só os fatos
+registrados (categoria, descrição, local, data, risco relatado, responsável, estado da ação e contagem de
+evidências); somente leitura (não altera o registro nem a ação e não declara conclusão); a resposta indica
+quando vem de provedor simulado. Testes: `scripts/test-ssma-record-consult.mjs` (provedor simulado, sem rede).
 
 ## Restrições herdadas
 

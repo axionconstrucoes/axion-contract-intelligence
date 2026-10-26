@@ -14,6 +14,7 @@ import {
   extractServerErrorCode,
   messageForServerError,
 } from "@/lib/ssma/field-records/types";
+import { RecordConsult } from "@/components/ssma/field-records/record-consult";
 import { cn } from "@/lib/utils";
 
 interface ActionEvent {
@@ -213,9 +214,7 @@ export function RecordDetail({
         <p className="rounded-xl bg-white p-4 text-sm text-slate-600 shadow-sm">Este registro não tem ação corretiva.</p>
       )}
 
-      <p className="text-center text-xs text-slate-500">
-        Consulta ao especialista de SSMA neste registro: disponível quando o módulo de consulta por IA for liberado (ver docs/modulo-seguranca-pwa.md).
-      </p>
+      <RecordConsult projectId={projectId} recordId={record.id} online={online} />
     </article>
   );
 }
