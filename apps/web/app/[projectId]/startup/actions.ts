@@ -47,6 +47,7 @@ export async function configureStartupAction(_prevState: ConfigureStartupState, 
     await configureProjectStartup(supabase, {
       projectId,
       projectStartDate: requiredField(formData, "projectStartDate"),
+      baselineEndDate: requiredField(formData, "baselineEndDate"),
       accOperationalStartDate: optionalField(formData, "accOperationalStartDate") ?? undefined,
     });
 

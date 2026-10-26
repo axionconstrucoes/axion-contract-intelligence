@@ -7,17 +7,21 @@ import { configureStartupAction } from "@/app/[projectId]/startup/actions";
 import { initialConfigureStartupState } from "@/app/[projectId]/startup/actions-state";
 import type { ProjectStartupConfig } from "@/lib/startup/types";
 
-/** Seção 1/4 — as duas datas nunca cortam Timeline/e-mails/documentos/contexto de IA (só classificam finding como histórico). */
+/** Datas de referência da obra e de ativação ACC; não cortam Timeline/e-mails/documentos/contexto de IA. */
 export function StartupConfigForm({ projectId, config }: { projectId: string; config: ProjectStartupConfig }) {
   const [state, formAction, pending] = useActionState(configureStartupAction, initialConfigureStartupState);
 
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded-md border p-4">
       <input type="hidden" name="projectId" value={projectId} />
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           Data de início da obra
           <Input type="date" name="projectStartDate" defaultValue={config.projectStartDate ?? ""} required />
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm font-medium">
+          Data de término da baseline
+          <Input type="date" name="baselineEndDate" defaultValue={config.baselineEndDate} required />
         </label>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           Data de início operacional ACC

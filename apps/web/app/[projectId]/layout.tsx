@@ -53,7 +53,7 @@ export default async function WorkspaceLayout({
       <AppSidebar projectId={projectId} hiddenHrefs={hiddenHrefs} />
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <TopBar projectId={projectId} />
+        <TopBar projectId={projectId} canEditProject={isAdmin} />
 
         <main className="flex-1 overflow-y-auto bg-gray-100 p-6">
           {children}

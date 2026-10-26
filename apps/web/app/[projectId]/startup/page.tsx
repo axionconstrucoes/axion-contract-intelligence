@@ -67,21 +67,22 @@ export default async function StartupPage({ params }: { params: Promise<{ projec
           <CardTitle className="text-sm">Cabeçalho</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="grid gap-2 text-sm sm:grid-cols-2">
+          <div className="grid gap-2 text-sm sm:grid-cols-3">
             <p className="flex items-center gap-1.5">
               Data de início da obra: {summary.config.projectStartDate ? formatDate(summary.config.projectStartDate) : "Não configurada"}
               <FeatureInfo helpId="startup-project-start-date" />
             </p>
+            <p>Data de término da baseline: {formatDate(summary.config.baselineEndDate)}</p>
             <p className="flex items-center gap-1.5">
               Data de início operacional ACC: {formatDate(summary.config.accOperationalStartDate)}
               <FeatureInfo helpId="startup-acc-operational-start-date" />
             </p>
             {summary.config.projectStartDate ? (
-              <p className="sm:col-span-2 text-xs text-muted-foreground">
+              <p className="sm:col-span-3 text-xs text-muted-foreground">
                 Período histórico analisado: {formatDate(summary.config.projectStartDate)} → dia anterior ao início operacional
               </p>
             ) : null}
-            <p className="sm:col-span-2">
+            <p className="sm:col-span-3">
               <Badge variant={summary.status === "COMPLETED" ? "default" : "secondary"}>{STATUS_LABELS[summary.status]}</Badge>
             </p>
           </div>
