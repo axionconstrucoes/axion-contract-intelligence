@@ -1,8 +1,18 @@
 ﻿import { createClient } from "@supabase/supabase-js";
 
+import { register } from "node:module";
 import {
   detectClauseCandidates,
 } from "./clause-structure-detector.mjs";
+
+register("./ts-module-resolver.mjs", import.meta.url);
+
+// Camada normalizada (codificação de fonte corrigida) — a detecção roda
+// sobre ela; o vínculo com o segmento original (sourceSegmentId) e o
+// texto armazenado permanecem intactos.
+const { normalizeSegmentText } = await import(
+  "../apps/web/lib/documents/extraction/repair-font-encoding.ts"
+);
 
 const documentVersionId =
   process.argv[2];
@@ -51,7 +61,7 @@ const {
 } = await supabase
   .from("document_versions")
   .select(
-    "id,document_id,version_label,processing_status"
+    "id,document_id,project_id,version_label,processing_status"
   )
   .eq(
     "id",
@@ -89,7 +99,7 @@ const {
 } = await supabase
   .from("document_extractions")
   .select(
-    "id,extractor,extractor_version,completed_at"
+    "id,extractor,extractor_version,completed_at,error_message"
   )
   .eq(
     "document_version_id",
@@ -154,21 +164,45 @@ if (!segmentRows?.length) {
   );
 }
 
+// Cobertura parcial (OCR): a análise de cláusulas NUNCA é apresentada
+// como análise do documento inteiro.
+const partialCoverage =
+  String(extraction.error_message ?? "").startsWith("COBERTURA PARCIAL");
+
+if (partialCoverage) {
+  console.warn("");
+  console.warn("ATENCAO: extracao com cobertura parcial — clausulas em paginas pendentes nao serao detectadas.");
+  console.warn(extraction.error_message);
+}
+
+let normalizationRepairs = 0;
+
 const segments =
-  segmentRows.map(
-    (segment) => ({
-      id:
-        segment.id,
-      segmentIndex:
-        segment.segment_index,
-      pageNumber:
-        segment.page_number,
-      locator:
-        segment.locator,
-      textContent:
-        segment.text_content,
-    })
-  );
+  segmentRows
+    // Marcadores de página não lida não são texto do documento.
+    .filter((segment) => !/· PENDENTE:/.test(segment.locator ?? ""))
+    .map(
+      (segment) => {
+        const normalized = normalizeSegmentText(segment.text_content, segment.locator);
+        normalizationRepairs += normalized.repairs.length;
+        return {
+          id:
+            segment.id,
+          segmentIndex:
+            segment.segment_index,
+          pageNumber:
+            segment.page_number,
+          locator:
+            segment.locator,
+          textContent:
+            normalized.text,
+        };
+      }
+    );
+
+if (normalizationRepairs > 0) {
+  console.log(`Camada normalizada: ${normalizationRepairs} correcoes de codificacao de fonte aplicadas a deteccao (texto armazenado inalterado).`);
+}
 
 
 // ============================================================
@@ -185,12 +219,50 @@ console.log(
   `Candidatos detectados: ${candidates.length}`
 );
 
-if (candidates.length === 0) {
-  console.log(
-    "Nenhuma estrutura de clausula detectada."
-  );
-  process.exit(0);
+async function writeDetectionAudit(action, detail) {
+  const { error } = await supabase.from("audit_log_entries").insert({
+    project_id: version.project_id,
+    actor_type: "SYSTEM",
+    actor_user_id: null,
+    actor_label: null,
+    action,
+    entity_type: "DOCUMENT_VERSION",
+    entity_id: documentVersionId,
+    detail,
+  });
+  if (error) console.error("Aviso: falha ao registrar auditoria:", error.message);
 }
+
+// Zero candidatos é FALHA DE DETECÇÃO — nunca conclusão de que o
+// documento não tem cláusulas (nem de que não tem riscos).
+if (candidates.length === 0) {
+  const message =
+    "FALHA DE DETECCAO: nenhum candidato a clausula foi reconhecido. Isto NAO significa que o documento " +
+    "nao tenha clausulas ou riscos — o formato pode nao ser suportado pelo detector" +
+    (partialCoverage ? " e a extracao tem cobertura parcial" : "") +
+    ". Revisao humana do documento original e obrigatoria.";
+  console.error("");
+  console.error(message);
+  await writeDetectionAudit("CLAUSE_DETECTION_NO_CANDIDATES", `${message} Extracao ${extraction.id}.`);
+  process.exit(3);
+}
+
+// Fila existente ANTES do registro — a RPC faz upsert por
+// (versao, detector, versao do detector, candidate_key) e nunca altera
+// candidato ja revisado (APPROVED/REJECTED): reexecutar nao duplica.
+const { data: queueBefore, error: queueBeforeError } = await supabase
+  .from("clause_extraction_candidates")
+  .select("id,status,detector,detector_version,candidate_key")
+  .eq("document_version_id", documentVersionId);
+
+if (queueBeforeError) {
+  throw queueBeforeError;
+}
+
+const existingKeys = new Set(
+  (queueBefore ?? []).map((row) => `${row.detector}|${row.detector_version}|${row.candidate_key}`)
+);
+const flaggedCandidates = candidates.filter((candidate) => candidate.flags?.length);
 
 
 // ============================================================
@@ -277,13 +349,14 @@ const {
     "document_version_id",
     documentVersionId
   )
+  // Detector que realmente rodou (formato "CLÁUSULA" ou decimal).
   .eq(
     "detector",
-    "clause-structure"
+    candidates[0].detector
   )
   .eq(
     "detector_version",
-    "2"
+    candidates[0].detectorVersion
   )
   .order(
     "created_at",
@@ -297,12 +370,34 @@ if (queueError) {
 }
 
 console.log("");
-console.table(queue ?? []);
+console.log(`Fila: ${queue?.length ?? 0} candidatos (detalhe omitido; consulte a tela de revisao de clausulas).`);
+
+const newCandidates = candidates.filter(
+  (candidate) => !existingKeys.has(`${candidate.detector}|${candidate.detectorVersion}|${candidate.candidateKey}`)
+).length;
+
+await writeDetectionAudit(
+  "CLAUSE_DETECTION_COMPLETED",
+  `Deteccao de clausulas (${candidates[0].detector} ${candidates[0].detectorVersion}) na extracao ${extraction.id}: ` +
+    `${candidates.length} candidatos (${newCandidates} novos, ${candidates.length - newCandidates} ja existentes atualizados/preservados), ` +
+    `todos PENDING_REVIEW — nenhuma clausula aprovada automaticamente. ` +
+    (flaggedCandidates.length
+      ? `${flaggedCandidates.length} sinalizados para revisao: ${flaggedCandidates.map((candidate) => candidate.proposedClauseNumber).join(", ")}. `
+      : "") +
+    (partialCoverage
+      ? `COBERTURA PARCIAL da extracao: clausulas em paginas nao lidas nao foram detectadas; nao e analise integral do contrato.`
+      : `Nao e conclusao de analise integral: candidatos dependem de revisao humana.`)
+);
 
 console.log("");
 console.log("=======================================");
 console.log("CLAUSE CANDIDATE REGISTRATION: OK");
 console.log("=======================================");
+console.log("Novos nesta execucao:", newCandidates);
+console.log("Sinalizados para revisao:", flaggedCandidates.length);
+if (partialCoverage) {
+  console.log("ATENCAO: cobertura parcial — nao e analise integral do contrato.");
+}
 console.log(
   "Detectados:",
   candidates.length

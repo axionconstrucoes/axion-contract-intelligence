@@ -1,4 +1,6 @@
-﻿const DETECTOR = "clause-structure";
+﻿import { detectDecimalClauseCandidates } from "./clause-decimal-detector.mjs";
+
+const DETECTOR = "clause-structure";
 const DETECTOR_VERSION = "2";
 
 const ORDINAL_WORDS = new Map([
@@ -358,8 +360,11 @@ export function detectClauseCandidates(
     }
   }
 
+  // Sem o formato "CLÁUSULA PRIMEIRA – ...": tenta a numeração decimal
+  // (ex.: 6, 6.5, 6.5.1). Nunca os dois juntos — evita contar a mesma
+  // cláusula duas vezes em contratos que usam os dois estilos.
   if (!markers.length) {
-    return [];
+    return detectDecimalClauseCandidates(segments);
   }
 
   return markers.map(

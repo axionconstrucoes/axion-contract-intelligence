@@ -10,16 +10,20 @@
     "dev": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspace=apps/web",
     "lint": "npm run lint --workspace=apps/web",
-    "test": "npm run test --workspace=apps/web"
+    "test": "npm run test --workspace=apps/web",
+    "test:scripts": "node scripts/test-clause-decimal-detector.mjs && node scripts/test-extraction-coverage.mjs && node scripts/test-font-encoding-repair.mjs && node scripts/test-contract-attachments.mjs"
   },
   "devDependencies": {
     "js-yaml": "^4.3.1",
     "supabase": "2.114.0"
   },
   "dependencies": {
+    "@napi-rs/canvas": "1.0.7",
+    "@tesseract.js-data/por": "1.0.0",
     "exceljs": "^4.4.0",
     "franc-min": "^6.2.0",
     "mammoth": "^1.12.1",
-    "pdfjs-dist": "^6.2.108"
+    "pdfjs-dist": "^6.2.108",
+    "tesseract.js": "7.0.0"
   }
 }
