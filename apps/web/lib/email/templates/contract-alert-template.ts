@@ -286,7 +286,7 @@ export function buildContractAlertEmail(input: ContractAlertEmailInput): Contrac
       ? `<p style="margin:0 0 12px 0;${font}font-size:${ACC_FONT_SIZE_AUX};color:${tone.text};">Atraso contratual com baixa probabilidade de recuperação</p>`
       : "";
 
-  const actionsColumnHtml = `${buildOpenEventButtonHtml(input.eventUrl, input.severity)}${renderEmailActionButtonsHtml(input.actionButtons, input.summary)}`;
+  const actionsColumnHtml = `${buildOpenEventButtonHtml(input.eventUrl, input.severity)}${renderEmailActionButtonsHtml(input.actionButtons, input.summary, tone.dark ? tone.muted : undefined)}`;
 
   const boxInner = `
     ${buildAlertHeaderHtml(input.severity, riskLabel, logos)}

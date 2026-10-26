@@ -247,6 +247,14 @@ check("texto puro do lote traz classificação e 'Repete' por alerta e não traz
   for (const s of SEVERITIES) assert.ok(batch.text.includes(policy.repeatNoticeText(s)));
 });
 
+check("legendas dos botões de ação ficam legíveis: brancas em fundo escuro (CRÍTICO/ALTO), cinza institucional em fundo branco", () => {
+  const caption = (html) => (html.match(/color:(#[0-9A-Fa-f]{6});text-align:center;">Confirma que você tomou conhecimento/) ?? [])[1];
+  assert.equal(caption(individual("CRITICA").html), "#FFFFFF");
+  assert.equal(caption(individual("ALTA").html), "#FFFFFF");
+  assert.equal(caption(individual("MEDIA").html), "#4B5563");
+  assert.equal(caption(individual("BAIXA").html), "#4B5563");
+});
+
 check("e-mail individual não expõe destinatários de outras pessoas", () => {
   const e = individual("MEDIA");
   const body = e.html.replace(/<style>.*?<\/style>/s, "").replace(/https?:\/\/[^"\s<]+/g, "");
