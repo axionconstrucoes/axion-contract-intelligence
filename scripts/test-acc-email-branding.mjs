@@ -37,7 +37,9 @@ const { loadAccLogoInlineImage } = await import("../apps/web/lib/email/branding/
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
-const readSource = (relativePath) => readFileSync(path.join(repoRoot, relativePath), "utf8");
+// Normaliza CRLF -> LF (Windows/core.autocrlf): as verificações multilinha usam LF.
+const readSource = (relativePath) =>
+  readFileSync(path.join(repoRoot, relativePath), "utf8").replaceAll(String.fromCharCode(13, 10), String.fromCharCode(10));
 
 let passed = 0;
 let failed = 0;
@@ -159,7 +161,7 @@ check("acc_ia@axion.com.br ainda não é o remetente configurado (não inventamo
 check("subject com nome da obra e nível de risco dinâmicos", () => {
   const subject = buildContractAlertSubject("WEG Fábrica de Arames", "ALTA");
   assert(
-    subject === "🟠 [RISCO ALTO] ACC - OBRA WEG FÁBRICA DE ARAMES",
+    subject === "🟡 [RISCO ALTO] ACC - OBRA WEG FÁBRICA DE ARAMES",
     `subject inesperado: ${subject}`
   );
 });

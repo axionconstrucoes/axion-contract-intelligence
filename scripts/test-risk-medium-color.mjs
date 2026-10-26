@@ -22,7 +22,8 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
 function readSource(relativePath) {
-  return readFileSync(path.join(repoRoot, relativePath), "utf8");
+  // Normaliza CRLF -> LF (Windows/core.autocrlf): as verificações multilinha usam LF.
+  return readFileSync(path.join(repoRoot, relativePath), "utf8").replaceAll(String.fromCharCode(13, 10), String.fromCharCode(10));
 }
 
 let passed = 0;
@@ -115,9 +116,12 @@ check("contract-alert-template.ts: BADGE_STYLES.MEDIA é azul (#2563eb) com text
   assert(!/#f59e0b|#eab308|#fbbf24|#f97316/.test(mediaMatch), `MEDIA não pode usar âmbar/amarelo/laranja: "${mediaMatch}"`);
 });
 
-check("contract-alert-template.ts: BADGE_STYLES.ALTA permanece #f97316 (laranja) — não afetado", () => {
+// BADGE_STYLES (usado por SLA/alertas de risco) mantém ALTA no amarelo de atenção vigente (#FFD600/preto);
+// a caixa dos alertas de contrato usa o amarelo escuro com texto branco (alert-box-style.ts, testado em
+// scripts/test-alert-box-templates.mjs). A mudança do MÉDIO para azul nunca tocou o ALTO.
+check("contract-alert-template.ts: BADGE_STYLES.ALTA permanece amarelo de atenção (#FFD600) — não afetado pelo MÉDIO", () => {
   const altaMatch = contractAlertSource.match(/ALTA:\s*\{[^}]*\}/)?.[0] ?? "";
-  assert(altaMatch.includes("#f97316"), `ALTA deveria continuar #f97316: "${altaMatch}"`);
+  assert(altaMatch.includes("#FFD600"), `ALTA deveria continuar #FFD600: "${altaMatch}"`);
 });
 
 check("sla-escalation-template.ts: reaproveita BADGE_STYLES de contract-alert-template.ts — nunca duplica o mapa de cores", () => {
