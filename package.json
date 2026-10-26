@@ -14,6 +14,7 @@
     "test:scripts": "node scripts/test-clause-decimal-detector.mjs && node scripts/test-extraction-coverage.mjs && node scripts/test-font-encoding-repair.mjs && node scripts/test-contract-attachments.mjs && node scripts/test-gmail-ata-processing.mjs"
   },
   "devDependencies": {
+    "gaxios": "^7.3.1",
     "js-yaml": "^4.3.1",
     "supabase": "2.114.0"
   },
