@@ -30,7 +30,9 @@ register("./ts-module-resolver.mjs", import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
 function readSource(relativePath) {
-  return readFileSync(path.join(repoRoot, relativePath), "utf8");
+  // Normaliza CRLF -> LF: no Windows (core.autocrlf) os arquivos chegam com
+  // CRLF e as comparacoes de trechos multilinha abaixo usam LF.
+  return readFileSync(path.join(repoRoot, relativePath), "utf8").replaceAll("\r\n", "\n");
 }
 
 let passed = 0;
