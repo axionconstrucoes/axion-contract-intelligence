@@ -117,7 +117,7 @@ returns boolean
 language plpgsql
 stable
 security definer
-set search_path = public, storage
+set search_path = ''
 as $$
 declare
   v_parts text[] := storage.foldername(p_name);
@@ -170,7 +170,7 @@ create or replace function public.ssma_field_record_submit(
 returns uuid
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_user uuid := auth.uid();
@@ -244,7 +244,7 @@ create or replace function public.ssma_field_record_register_photo(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, storage
+set search_path = ''
 as $$
 declare
   v_user uuid := auth.uid();
@@ -310,7 +310,7 @@ create or replace function public.ssma_corrective_action_update(
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   v_user uuid := auth.uid();
