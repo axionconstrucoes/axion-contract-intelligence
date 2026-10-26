@@ -24,6 +24,7 @@
 //   node scripts/generate-alert-email-preview.mjs
 
 import { mkdirSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { register } from "node:module";
@@ -43,7 +44,8 @@ const { deriveScheduleDelaySeverity } = await import(
   "../apps/web/lib/ai/experts/planning-director/derive-schedule-delay-severity.ts"
 );
 
-const OUT_DIR = "C:\\Users\\User\\axion-acc-previews";
+// Sem caminho absoluto de usuário: padrão = pasta temporária do sistema; ACC_PREVIEW_OUT_DIR troca.
+const OUT_DIR = process.env.ACC_PREVIEW_OUT_DIR ?? path.join(os.tmpdir(), "axion-acc-previews");
 mkdirSync(OUT_DIR, { recursive: true });
 
 // Nomes/identificadores 100% fictícios — nunca um contrato real ("DUX

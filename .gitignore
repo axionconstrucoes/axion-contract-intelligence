@@ -12,3 +12,7 @@ npm-debug.log*
 .vercel
 .env*
 !**/*.example
+
+# Credenciais OAuth e logs locais (nunca versionar; antes só estavam em .git/info/exclude, local deste computador)
+client_secret_*.json
+next-dev-*.log
