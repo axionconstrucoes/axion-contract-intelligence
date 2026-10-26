@@ -9,8 +9,8 @@ import * as stack from "./sql/lib/clean-stack-config.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoConfig = readFileSync(path.join(here, "..", "supabase", "config.toml"), "utf8").replace(/\r\n/g, "\n");
-const bootstrap = readFileSync(path.join(here, "sql", "bootstrap-default-privileges.sql"), "utf8");
-const starter = readFileSync(path.join(here, "sql", "start-clean-local-stack.mjs"), "utf8");
+const bootstrap = readFileSync(path.join(here, "sql", "bootstrap-default-privileges.sql"), "utf8").replace(/\r\n/g, "\n");
+const starter = readFileSync(path.join(here, "sql", "start-clean-local-stack.mjs"), "utf8").replace(/\r\n/g, "\n");
 
 let passed = 0;
 let failed = 0;
