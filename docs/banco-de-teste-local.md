@@ -44,8 +44,10 @@ receberam `GRANT ALL` antes de reaplicar; a migration então passou.
 
 **Impacto:** um `supabase db reset --local` limpo, ou um projeto Supabase novo criado com os padrões
 restritivos atuais, **falha nessa migration**. O banco remoto existente não é afetado (já aplicada).
-**Recomendação (não aplicada):** tornar a migration independente do padrão, concedendo explicitamente os
-privilégios necessários às 9 tabelas antes dos `REVOKE` — alterar migration já aplicada exige decisão sua.
+**Solução preparada (sem reescrever histórico aplicado):** bootstrap versionado fora das migrations, usado por
+`scripts/sql/start-clean-local-stack.mjs` num stack descartável identificado (`acc-disposable-*`, portas 57xxx).
+Opções A–D, impactos, recomendação e resultados (PostgreSQL, Auth e Storage, **118/118** migrations em
+inicialização limpa) em `docs/migration-privilegios-inicializacao-limpa.md`.
 
 ## Limites desta validação
 
