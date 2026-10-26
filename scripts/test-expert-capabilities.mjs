@@ -231,14 +231,17 @@ check("compatibilidade com os Experts já implementados: expertId/version batem 
   assert(ESG_DIRECTOR_DEFINITION.version === ESG_DIRECTOR_VERSION);
   assert(ESG_DIRECTOR_DEFINITION.status === "IMPLEMENTED");
 
-  assert(CEO_DEFINITION.status === "PLANNED");
-  assert(LEGAL_CONSULTANT_DEFINITION.status === "PLANNED");
-  assert(PLANNING_DIRECTOR_DEFINITION.status === "PLANNED");
+  // Todos os Experts oficiais estão operacionais hoje (consulta conversacional); a versão da definição
+  // sempre acompanha a do identity.ts.
+  assert(CEO_DEFINITION.status === "IMPLEMENTED");
+  assert(LEGAL_CONSULTANT_DEFINITION.status === "IMPLEMENTED");
+  assert(PLANNING_DIRECTOR_DEFINITION.status === "IMPLEMENTED");
 });
 
 check("formatExpertVersionTag produz a tag versionada esperada", () => {
-  assert(formatExpertVersionTag(COMMERCIAL_DIRECTOR_DEFINITION) === "commercial-director:v2");
-  assert(formatExpertVersionTag(CEO_DEFINITION) === "ceo:v1");
+  assert(formatExpertVersionTag(COMMERCIAL_DIRECTOR_DEFINITION) === `commercial-director:${COMMERCIAL_DIRECTOR_VERSION}`);
+  assert(formatExpertVersionTag(CEO_DEFINITION) === `ceo:${CEO_DEFINITION.version}`);
+  assert(/^v\d+$/.test(CEO_DEFINITION.version));
 });
 
 check("typicalQuestions contém exatamente a pergunta de exemplo especificada por Expert", () => {

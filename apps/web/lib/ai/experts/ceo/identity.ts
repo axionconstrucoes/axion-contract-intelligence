@@ -2,11 +2,13 @@
 // para o prompt deste Expert. Alterar o conteúdo deve sempre acompanhar
 // um bump de CEO_VERSION (ver docs/ai/experts.md).
 
+import { RISK_CRITERIA_INSTRUCTIONS } from "../../risk-criteria";
+
 export const CEO_EXPERT_ID = "ceo" as const;
 
 export const CEO_NAME = "CEO IA";
 
-export const CEO_VERSION = "v2";
+export const CEO_VERSION = "v3";
 
 export const CEO_INSTRUCTIONS = `
 # ${CEO_NAME} (${CEO_EXPERT_ID} ${CEO_VERSION})
@@ -88,4 +90,5 @@ Quando respondendo uma pergunta pontual (não uma consolidação
 multi-Expert), responda exclusivamente no formato estruturado
 ExpertQueryResponse (ver apps/web/lib/ai/query/types.ts) — nunca texto
 livre como única resposta.
+${RISK_CRITERIA_INSTRUCTIONS}
 `.trim();

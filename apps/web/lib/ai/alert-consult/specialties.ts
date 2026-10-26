@@ -97,9 +97,18 @@ export function preselectSpecialtyForArea(area: MembershipArea | string | null |
   }
 }
 
+/** Critérios de risco (texto exato da definição AXION) — mesmo texto dos prompts dos Experts. */
+export const CONSULT_RISK_CRITERIA_TEXT =
+  "Critérios de risco AXION: CRÍTICO = risco iminente de descumprimento e penalização contratual, exigindo ação imediata; " +
+  "ALTO = risco iminente de descumprimento e penalização, com tempo para mitigação; " +
+  "MÉDIO = risco com possível consequência a médio prazo; BAIXO = risco processual de acompanhamento ou organização. " +
+  "Não existe número fixo de dias separando os níveis: não invente limites nem prazos. Penalização só pode ser afirmada com a cláusula que a prevê; " +
+  "sem vínculo contratual ou prazo no contexto, diga que a informação está ausente e peça a confirmação em vez de afirmar certeza.";
+
 const GUARDRAILS =
-  "Regras desta consulta: apresente opções práticas e os critérios para escolher entre elas; use SOMENTE o contexto desta obra e cite as fontes consultáveis; explique informações ausentes e incertezas; " +
-  "separe fato, inferência e recomendação; esta consulta NÃO executa ações nem altera o alerta; não afirme que uma providência foi concluída sem registro correspondente.";
+  "Regras desta consulta: apresente opções PRÁTICAS conforme a sua especialidade (o que fazer, quem envolve, que evidência registrar) e os critérios para escolher entre elas; use SOMENTE o contexto desta obra e cite as fontes consultáveis; explique informações ausentes e incertezas; " +
+  "separe fato, inferência e recomendação; esta consulta NÃO executa ações nem altera o alerta; não afirme que uma providência foi concluída sem registro correspondente. " +
+  CONSULT_RISK_CRITERIA_TEXT;
 
 /** Pergunta enviada ao Expert: foco da especialidade + pergunta do usuário + regras da consulta. */
 export function composeSpecialtyQuestion(

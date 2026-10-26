@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getUser } from "@/lib/data";
 import { loadRiskSourceContext } from "@/lib/risk-classification/load-risk-source-context";
+import { buildPreSendRiskNotice } from "@/lib/risk-classification/pre-send-notice";
 
 function today(): string {
   return new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10); // dia corrido em America/Sao_Paulo
@@ -57,5 +58,49 @@ export async function EventRiskReviewSection({ projectId, eventId }: { projectId
         />
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Aviso antes do ENVIO do alerta: grau atual, origem (automática × revisada) e o que falta
+ * confirmar pelos critérios. Não bloqueia o envio nem altera nada — a classificação só muda pela
+ * revisão com justificativa e histórico (seção "Classificação de risco" abaixo).
+ */
+export async function EventRiskPreSendNotice({ projectId, eventId }: { projectId: string; eventId: string }) {
+  const supabase = await createSupabaseServerClient();
+  const context = await loadRiskSourceContext(supabase, { projectId, sourceType: "CONTRACT_EVENT", sourceId: eventId, today: today() });
+  if (!context) return null;
+  const notice = buildPreSendRiskNotice({
+    currentLevel: context.currentLevel,
+    originalLevel: context.originalLevel,
+    hasHumanReview: context.history.length > 0,
+    verifiedClause: context.verifiedClause,
+    obligationDescription: context.obligationDescription,
+    evidence: context.evidence,
+    deadline: context.deadline,
+  });
+  return (
+    <div
+      role="note"
+      data-testid="pre-send-risk-notice"
+      className={`max-w-prose rounded-md border p-3 text-xs ${notice.needsConfirmation ? "border-amber-400 bg-amber-50 text-amber-900" : "border-emerald-300 bg-emerald-50 text-emerald-900"}`}
+    >
+      <p className="font-semibold">{notice.headline}</p>
+      {notice.needsConfirmation ? (
+        <>
+          <p className="mt-1">
+            Antes de enviar, confirme a classificação na seção &ldquo;Classificação de risco&rdquo; desta página. A sugestão pelos critérios
+            {notice.suggestion.status === "INDETERMINADA" ? " ainda não distingue o nível com os dados disponíveis" : ""}.
+          </p>
+          {notice.missingInformation.length > 0 ? (
+            <ul className="mt-1 list-disc pl-4">
+              {notice.missingInformation.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      ) : null}
+    </div>
   );
 }

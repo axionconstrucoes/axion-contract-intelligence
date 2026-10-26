@@ -68,6 +68,39 @@ Penalidade só entra como fato com descrição **e** cláusula verificada confir
 formulário de revisão e histórico. Aparece no detalhe do evento (`/[projectId]/ledger/[eventId]`) e no editor de
 cada providência. Apenas gestor/gerente/administrador revisa; os demais só leem.
 
+## 3.1 Critérios nos prompts de IA e integração no fluxo (rodada seguinte)
+
+**Prompts.** O texto dos quatro critérios está em `apps/web/lib/ai/risk-criteria.ts`
+(`RISK_CRITERIA_INSTRUCTIONS`, v1) e é incluído nas instruções dos cinco Experts — CEO v3, Comercial v4,
+ESG v3, Jurídico v5 e Planejamento v5 — e na consulta por especialidade
+(`lib/ai/alert-consult/specialties.ts`, `CONSULT_RISK_CRITERIA_TEXT`). O bloco: não existe limite fixo de
+dias (nunca inventar); distinguir fato × inferência × informação ausente; citar cláusulas e evidências do
+contexto; "penalização" só com a cláusula que a prevê; sem prazo/vínculo contratual, indicar os níveis
+compatíveis e pedir confirmação em `informacoesFaltantes`; a classificação da IA é provisória e a efetiva é
+a revisão humana. O ESG continua com o risco ESG calculado por regra determinística (os critérios apenas
+orientam a interpretação). Teste: `scripts/test-risk-criteria-integration.mjs`.
+
+**A sugestão é usada no fluxo? (evidência no teste acima)**
+
+| Ponto do fluxo | Situação |
+|---|---|
+| Painel de revisão do evento (`ledger/[eventId]`) e de cada providência | já existia: sugestão pelos critérios + revisão com justificativa e histórico |
+| Grau efetivo em leitura/lista de eventos (`lib/data.ts`), no envio manual e no produtor de lotes | já existia: usa a revisão humana mais recente |
+| Revisão de providência → grau da providência e intervalo do acompanhamento | já existia (SQL `review_risk_classification`) |
+| **Aviso antes do envio manual do alerta** (`EventRiskPreSendNotice`, `lib/risk-classification/pre-send-notice.ts`) | **novo**: mostra o grau atual, se é automático ou revisado e, sem revisão, o que falta confirmar. Não bloqueia nem altera nada |
+| **Criação de providência** (`delivery-admin-controls.tsx`) | **novo**: texto explicando que nasce MÉDIO provisório e como obter sugestão/revisão |
+
+Não há criação de eventos por IA em `apps/web` fora do atraso de cronograma (regra
+`derive-schedule-delay-severity.ts`, sem limiar de dias). Fora do escopo e não alterados: as heurísticas por
+categoria de `scripts/event-clause-confrontation-analyzer.mjs` (`inferSeverity`) e as regras do Diário de
+Obra (`finding-rules.ts`, que usam janelas de dias para edição tardia, não para separar níveis de risco).
+
+**ADMINISTRATIVO → Documentação e Entrega: NÃO mapeado.** A área `ADMINISTRATIVO` existe no cadastro
+(`MembershipArea`, formulário de membros, constraint SQL e `SlaArea`), mas nenhum documento nem tela define o
+seu escopo (o framework só a lista entre as áreas conceituais), então a correspondência com "Documentação e
+Entrega" seria suposição. A pré-seleção continua `Geral` e o usuário escolhe manualmente. Para mapear,
+basta uma decisão sua e uma linha em `preselectSpecialtyForArea`.
+
 ## 4. Limitações
 - Eventos não têm prazo cadastrado: a pessoa informa o status do prazo. Providências usam o prazo do registro.
 - Providências não têm vínculo cláusula↔obrigação: sem esse vínculo a sugestão tende a "indeterminada" e pede a

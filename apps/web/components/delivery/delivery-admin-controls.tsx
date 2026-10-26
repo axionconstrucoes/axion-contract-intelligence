@@ -48,6 +48,10 @@ export function DeliveryAdminControls({ projectId, hasItems }: { projectId: stri
         <Button type="submit" size="sm" variant="outline" disabled={addPending}>
           {addPending ? "Adicionando…" : "Adicionar"}
         </Button>
+        <p className="w-full max-w-xl text-[11px] text-muted-foreground">
+          A nova providência começa com grau MÉDIO provisório (nunca crítico por padrão). Depois de criar, use &ldquo;Classificação de risco&rdquo; na linha:
+          a sugestão pelos critérios pede cláusula, prazo e a avaliação de iminência e de tempo para mitigação, e só a revisão com justificativa muda o grau.
+        </p>
         {addState.error ? <p className="w-full text-xs text-destructive">{addState.error}</p> : null}
         {addState.success ? <p className="w-full text-xs text-emerald-700">{addState.success}</p> : null}
       </form>
