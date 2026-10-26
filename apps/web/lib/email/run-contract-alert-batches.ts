@@ -1,5 +1,7 @@
 import "server-only";
 
+import { projectRecipientKey } from "../alerts/batch-grouping";
+
 import { createSupabaseAdminClient } from "@axion/db/admin";
 
 import { loadEventAlertContexts } from "../alerts/load-event-alert-context";
@@ -50,9 +52,7 @@ const SLA_TO_ALERT_SEVERITY = {
   MEDIUM: "MEDIA",
 } as const;
 
-function groupKey(projectId: string, responsibleUserId: string): string {
-  return `${projectId}:${responsibleUserId}`;
-}
+const groupKey = projectRecipientKey; // um e-mail por OBRA e destinatário (lib/alerts/batch-grouping.ts)
 
 export interface ContractAlertBatchRunResult {
   groupsFound: number;

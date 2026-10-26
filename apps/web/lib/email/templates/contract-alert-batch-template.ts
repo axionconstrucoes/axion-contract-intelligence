@@ -30,6 +30,7 @@ import {
   ALERT_TONES,
   BUTTON_COLUMN_WIDTH_PX,
   HEADER_GAP_PX,
+  ALERT_MOBILE_CSS,
   buildActionsPanelHtml,
   buildAlertBoxHtml,
   buildAlertHeaderHtml,
@@ -86,13 +87,6 @@ export interface ContractAlertBatchEmail {
   text: string;
 }
 
-const alertRiskSubjectMarkers: Record<AlertSeverity, string> = {
-  BAIXA: "🟢",
-  MEDIA: "🔵",
-  ALTA: "🟡",
-  CRITICA: "🔴",
-};
-
 const SEVERITY_ORDER: Record<AlertSeverity, number> = { CRITICA: 0, ALTA: 1, MEDIA: 2, BAIXA: 3 };
 
 function highestSeverity(items: readonly ContractAlertBatchEmailItem[]): AlertSeverity {
@@ -106,15 +100,26 @@ function projectOf(item: ContractAlertBatchEmailItem, fallback: string): string 
   return item.projectName?.trim() || fallback;
 }
 
-// Assunto: quantidade de alertas e o maior grau de risco; obra única -> nome da obra; obras
-// diferentes -> contagem de obras (nunca finge que o lote é de uma obra só).
+// Obras distintas entre os alertas do lote (nome informado pelo item ou a obra padrão).
+export function distinctProjectNames(projectName: string, items: readonly ContractAlertBatchEmailItem[]): string[] {
+  return Array.from(new Set(items.map((item) => projectOf(item, projectName))));
+}
+
+// Assunto (decisão de produto): um e-mail por OBRA e destinatário.
+//   com risco crítico  -> "[RISCO CRÍTICO] OBRA | N alertas | ACC"
+//   senão, com alto    -> "[RISCO ALTO] OBRA | N alertas | ACC"
+//   só médio/baixo     -> "OBRA | N alertas | ACC" (sem mencionar o risco)
+// Um lote NUNCA mistura obras: a montagem falha em vez de produzir um assunto enganoso.
 export function buildContractAlertBatchSubject(projectName: string, items: readonly ContractAlertBatchEmailItem[]): string {
+  const projects = distinctProjectNames(projectName, items);
+  if (projects.length !== 1) {
+    throw new Error("Um e-mail de alertas não pode misturar obras: gere um e-mail por obra e destinatário.");
+  }
   const worst = highestSeverity(items);
   const count = items.length;
-  const plural = count === 1 ? "alerta" : "alertas";
-  const projects = Array.from(new Set(items.map((item) => projectOf(item, projectName))));
-  const where = projects.length === 1 ? `OBRA ${projects[0].toUpperCase()}` : `${projects.length} obras`;
-  return `${alertRiskSubjectMarkers[worst]} [ACC] ${count} ${plural} de contrato — ${where}`;
+  const countLabel = `${count} ${count === 1 ? "alerta" : "alertas"}`;
+  const prefix = worst === "CRITICA" ? "[RISCO CRÍTICO] " : worst === "ALTA" ? "[RISCO ALTO] " : "";
+  return `${prefix}${projects[0]} | ${countLabel} | ACC`;
 }
 
 // Cabeçalho do e-mail (fora das caixas): logo oficial + "ACC - Acompanhamento de Contratos".
@@ -192,7 +197,7 @@ export function buildContractAlertBatchEmail(input: ContractAlertBatchEmailInput
 <style>
   @media only screen and (max-width:640px) {
     .acc-batch-content-col, .acc-batch-actions-col { display:block !important; width:100% !important; }
-    .acc-batch-actions-col { padding:16px 0 0 0 !important; }
+    .acc-batch-actions-col { padding:16px 0 0 0 !important; }${ALERT_MOBILE_CSS}
   }
 </style>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">

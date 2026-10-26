@@ -17,6 +17,7 @@ import {
   ALERT_TONES,
   BUTTON_COLUMN_WIDTH_PX,
   HEADER_GAP_PX,
+  ALERT_MOBILE_CSS,
   buildActionsPanelHtml,
   buildAlertBoxHtml,
   buildAlertHeaderHtml,
@@ -316,7 +317,7 @@ export function buildContractAlertEmail(input: ContractAlertEmailInput): Contrac
 <style>
   @media only screen and (max-width:640px) {
     .acc-content-col, .acc-actions-col { display:block !important; width:100% !important; }
-    .acc-actions-col { padding:16px 0 0 0 !important; }
+    .acc-actions-col { padding:16px 0 0 0 !important; }${ALERT_MOBILE_CSS}
   }
   .${ACC_ACTION_BUTTON_CLASS}:hover { background-color:${ACC_COLOR_HEADING} !important; color:#ffffff !important; }
 </style>

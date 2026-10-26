@@ -83,6 +83,10 @@ export function contrastRatio(foregroundHex: string, backgroundHex: string): num
 export const ALERT_FONT_SIZE = "14px";
 export const ALERT_LINE_HEIGHT = "20px";
 
+/** Corpo MAIOR (cabeçalho "RISCO … | OBRA" e título do alerta); o restante segue em 14px. */
+export const ALERT_EMPHASIS_FONT_SIZE = "16px";
+export const ALERT_EMPHASIS_LINE_HEIGHT = "22px";
+
 /** Família "black" só para o título (Arial Black onde existir; cai para Arial negrito). */
 // Aspas SIMPLES: o valor vai dentro de style="..." (aspas duplas quebrariam o atributo).
 export const ALERT_TITLE_FONT_FAMILY = `'Arial Black', ${ACC_FONT_FAMILY}`;
@@ -90,9 +94,11 @@ export const ALERT_TITLE_FONT_FAMILY = `'Arial Black', ${ACC_FONT_FAMILY}`;
 export const WEIGHT = { regular: 400, bold: 700, black: 900 } as const;
 
 /** Estilo base inline de qualquer texto do alerta (mesmo tamanho; muda só o peso). */
-export function textStyle(weight: keyof typeof WEIGHT, color: string, extra = ""): string {
+export function textStyle(weight: keyof typeof WEIGHT, color: string, extra = "", emphasis = false): string {
   const family = weight === "black" ? ALERT_TITLE_FONT_FAMILY : ACC_FONT_FAMILY;
-  return `font-family:${family};font-size:${ALERT_FONT_SIZE};line-height:${ALERT_LINE_HEIGHT};font-weight:${WEIGHT[weight]};color:${color};${extra}`;
+  const size = emphasis ? ALERT_EMPHASIS_FONT_SIZE : ALERT_FONT_SIZE;
+  const line = emphasis ? ALERT_EMPHASIS_LINE_HEIGHT : ALERT_LINE_HEIGHT;
+  return `font-family:${family};font-size:${size};line-height:${line};font-weight:${WEIGHT[weight]};color:${color};${extra}`;
 }
 
 // ---------- logo / cabeçalho ----------
@@ -140,7 +146,7 @@ export function buildAlertHeaderHtml(
     ? `<td class="acc-box-logo" width="${size + 12}" valign="middle" style="width:${size + 12}px;vertical-align:middle;padding:0 12px 0 0;"><img src="cid:${logoCidFor(tone.logo)}" alt="ACC" width="${size}" height="${size}" style="display:block;border:0;width:${size}px;height:${size}px;" /></td>`
     : "";
 
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>${logoCell}<td class="acc-box-risk" valign="middle" align="center" style="vertical-align:middle;text-align:center;${textStyle("bold", tone.label, "letter-spacing:0.03em;word-break:break-word;overflow-wrap:anywhere;")}">RISCO ${escapeAttr(riskWord)} | ${escapeAttr(projectName)}</td></tr></table>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>${logoCell}<td class="acc-box-risk" valign="middle" align="center" style="vertical-align:middle;text-align:center;${textStyle("bold", tone.label, "letter-spacing:0.03em;word-break:break-word;overflow-wrap:anywhere;", true)}">RISCO ${escapeAttr(riskWord)} | ${escapeAttr(projectName)}</td></tr></table>`;
 }
 
 // ---------- caixa ----------
@@ -223,11 +229,31 @@ export function buildThreeActionButtonsHtml(urlFor: (action: ThreeActions) => st
  */
 export function buildConsultAiHtml(href: string): string {
   const w = BUTTON_WIDTH_PX;
-  return `<table class="acc-consult-ai" role="presentation" align="center" width="${w}" cellpadding="0" cellspacing="0" style="width:${w}px;margin:0 auto 10px auto;border-collapse:separate;"><tr><td width="${w}" height="${BUTTON_HEIGHT_PX}" align="center" bgcolor="#FFFFFF" style="width:${w}px;height:${BUTTON_HEIGHT_PX}px;background-color:#FFFFFF;border:2px solid #7F1D1D;border-radius:6px;text-align:center;"><a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" title="Abre a consulta a especialistas de IA no ACC — a consulta não altera o alerta." aria-label="CONSULTAR IA — abre no ACC" style="display:block;width:${w - 4}px;line-height:${BUTTON_HEIGHT_PX - 4}px;margin:0;padding:0;color:#7F1D1D;font-family:${ACC_FONT_FAMILY};font-size:${BUTTON_FONT_SIZE_PX}px;font-weight:700;text-decoration:none;text-align:center;white-space:nowrap;overflow:hidden;">&#10022; CONSULTAR IA</a></td></tr></table>`;
+  return `<table class="acc-consult-ai" role="presentation" align="center" width="${w}" cellpadding="0" cellspacing="0" style="width:${w}px;margin:0 auto;border-collapse:separate;"><tr><td width="${w}" height="${BUTTON_HEIGHT_PX}" align="center" bgcolor="#FFFFFF" style="width:${w}px;height:${BUTTON_HEIGHT_PX}px;background-color:#FFFFFF;border:2px solid #7F1D1D;border-radius:6px;text-align:center;"><a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" title="Abre a consulta a especialistas de IA no ACC — a consulta não altera o alerta." aria-label="CONSULTAR IA — abre no ACC" style="display:block;width:${w - 4}px;line-height:${BUTTON_HEIGHT_PX - 4}px;margin:0;padding:0;color:#7F1D1D;font-family:${ACC_FONT_FAMILY};font-size:${BUTTON_FONT_SIZE_PX}px;font-weight:700;text-decoration:none;text-align:center;white-space:nowrap;overflow:hidden;">&#10022; CONSULTAR IA</a></td></tr></table>`;
 }
 
 /** Coluna BRANCA dos botões (largura = botões + pequena margem lateral), centralizada. */
 export function buildActionsPanelHtml(innerHtml: string, consultAiHref?: string | null): string {
   const w = BUTTON_COLUMN_WIDTH_PX;
-  return `<table class="acc-actions-panel" role="presentation" align="center" width="${w}" cellpadding="0" cellspacing="0" bgcolor="#FFFFFF" style="width:${w}px;border-collapse:separate;background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:6px;margin:0 auto;"><tr><td align="center" style="padding:${BUTTON_COLUMN_MARGIN_PX}px;text-align:center;">${consultAiHref ? buildConsultAiHtml(consultAiHref) : ""}${innerHtml}</td></tr></table>`;
+  const pad = BUTTON_COLUMN_MARGIN_PX;
+  const consultWrap = consultAiHref
+    ? `<div class="acc-consult-wrap" style="margin:0 0 ${pad}px 0;text-align:center;">${buildConsultAiHtml(consultAiHref)}</div>`
+    : "";
+  return `<table class="acc-actions-panel" role="presentation" align="center" width="${w}" cellpadding="0" cellspacing="0" bgcolor="#FFFFFF" style="width:${w}px;border-collapse:separate;background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:6px;margin:0 auto;"><tr><td class="acc-panel-cell" align="center" valign="middle" style="padding:${pad}px;text-align:center;">${consultWrap}<div class="acc-buttons-wrap" style="text-align:center;">${innerHtml}</div></td></tr></table>`;
 }
+
+/**
+ * CSS responsivo comum aos e-mails de alerta (individual e lote). No celular a coluna de ações vai para
+ * BAIXO do conteúdo (nunca o cobre) e o CONSULTAR IA fica AO LADO dos três botões, com áreas de toque
+ * de 44px (inline-block, sem flex/grid). Sem suporte a <style> no cliente, vale o layout vertical padrão.
+ */
+export const ALERT_MOBILE_CSS = `
+    .acc-actions-panel { width:100% !important; }
+    .acc-consult-wrap, .acc-buttons-wrap { display:inline-block !important; vertical-align:middle !important; box-sizing:border-box !important; margin:0 !important; }
+    .acc-consult-wrap { width:43% !important; padding:0 4px !important; }
+    .acc-buttons-wrap { width:55% !important; padding:0 4px !important; }
+    .acc-consult-ai { width:100% !important; max-width:138px !important; }
+    .acc-consult-ai td { height:48px !important; width:auto !important; }
+    .acc-consult-ai a { height:44px !important; line-height:44px !important; width:auto !important; font-size:12px !important; }
+    .acc-compact-btn td { height:44px !important; }
+    .acc-compact-btn a { height:44px !important; line-height:44px !important; }`;

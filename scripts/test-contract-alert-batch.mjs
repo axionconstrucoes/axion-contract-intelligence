@@ -282,7 +282,7 @@ check("cada alerta do e-mail tem seu próprio bloco com âncora e coluna de aç�
 });
 
 check("assunto e corpo refletem graus de risco diferentes no mesmo lote (requisito 7)", () => {
-  assert.match(email.subject, /🔴 \[ACC\] 2 alertas/);
+  assert.equal(email.subject, "[RISCO CRÍTICO] Complexo Residencial Horizonte | 2 alertas | ACC");
   assert(email.html.includes("RISCO CRÍTICO"));
   assert(email.html.includes("RISCO MÉDIO"));
 });

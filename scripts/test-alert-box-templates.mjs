@@ -14,6 +14,7 @@ const { buildContractAlertEmail } = await import("../apps/web/lib/email/template
 const { buildContractAlertBatchEmail, buildContractAlertBatchSubject } = await import("../apps/web/lib/email/templates/contract-alert-batch-template.ts");
 const style = await import("../apps/web/lib/email/templates/alert-box-style.ts");
 const policy = await import("../apps/web/lib/alerts/repeat-policy.ts");
+const grouping = await import("../apps/web/lib/alerts/batch-grouping.ts");
 const links = await import("../apps/web/lib/alerts/alert-source-links.ts");
 
 let passed = 0;
@@ -65,7 +66,9 @@ function individual(severity, extra = {}) {
   });
 }
 
-const projects = ["NEWPORT - Galpão C100 — Goiânia · 0079", "Edifício Mirante — Campinas · 0112", "Centro Logístico Aurora — Betim · 0094", "NEWPORT - Galpão C100 — Goiânia · 0079"];
+const PROJECT_A = "NEWPORT - Galpão C100 — Goiânia · 0079";
+const PROJECT_B = "Edifício Mirante — Campinas · 0112";
+const projects = [PROJECT_A, PROJECT_A, PROJECT_A, PROJECT_A];
 const batchItems = SEVERITIES.map((severity, i) => ({
   eventId: `ev-${i + 1}`,
   projectName: projects[i],
@@ -172,19 +175,54 @@ check("sem logo disponível o cabeçalho nunca referencia cid quebrado (só o te
   assert.ok(h.includes("RISCO CRÍTICO | Obra"));
 });
 
-check("OBRA POR ALERTA: cada caixa do lote mostra a obra do PRÓPRIO alerta; sem obra própria usa a padrão", () => {
+check("OBRA: um e-mail por obra; cada caixa mostra RISCO [NÍVEL] | [OBRA] com a obra do alerta; sem obra própria usa a padrão", () => {
   for (const item of batchItems) assert.ok(batch.html.includes(`RISCO ${WORD[item.severity]} | ${item.projectName}`), item.projectName);
   const noProject = buildContractAlertBatchEmail({ recipientName: null, projectName: "Obra padrão", batchUrl: `${BASE}/l`, hasInlineLogo: true, items: [{ ...batchItems[0], projectName: undefined }] });
   assert.ok(noProject.html.includes("RISCO CRÍTICO | Obra padrão"));
-  assert.ok(batch.text.includes("RISCO ALTO | Edifício Mirante — Campinas · 0112"));
-  assert.match(buildContractAlertBatchSubject("Obra padrão", batchItems), /4 alertas de contrato — 3 obras/);
-  assert.match(buildContractAlertBatchSubject("Obra padrão", [batchItems[0]]), /OBRA NEWPORT/);
+  assert.ok(batch.text.includes(`RISCO ALTO | ${PROJECT_A}`));
 });
 
-check("TIPOGRAFIA ÚNICA: um só tamanho (14px) em todo o alerta; título black/link, cláusula+evidência+Repete em negrito, descrição regular", () => {
+check("ASSUNTO: crítico -> '[RISCO CRÍTICO] OBRA | N alertas | ACC'; sem crítico e com alto -> '[RISCO ALTO] …'; só médio/baixo -> 'OBRA | N alertas | ACC' sem risco", () => {
+  const at = (sevs) => buildContractAlertBatchSubject("Obra padrão", batchItems.filter((it) => sevs.includes(it.severity)));
+  assert.equal(at(["CRITICA", "ALTA", "MEDIA", "BAIXA"]), `[RISCO CRÍTICO] ${PROJECT_A} | 4 alertas | ACC`);
+  assert.equal(at(["CRITICA"]), `[RISCO CRÍTICO] ${PROJECT_A} | 1 alerta | ACC`);
+  assert.equal(at(["ALTA", "MEDIA", "BAIXA"]), `[RISCO ALTO] ${PROJECT_A} | 3 alertas | ACC`);
+  assert.equal(at(["MEDIA", "BAIXA"]), `${PROJECT_A} | 2 alertas | ACC`);
+  assert.equal(at(["BAIXA"]), `${PROJECT_A} | 1 alerta | ACC`);
+  for (const sevs of [["MEDIA", "BAIXA"], ["MEDIA"], ["BAIXA"]]) assert.ok(!/RISCO|CRÍTICO|ALTO|MÉDIO|BAIXO/i.test(at(sevs)), `sem risco no assunto: ${at(sevs)}`);
+  assert.equal(batch.subject, `[RISCO CRÍTICO] ${PROJECT_A} | 4 alertas | ACC`);
+});
+
+check("lote só com MÉDIO e BAIXO: assunto sem risco, caixas brancas, cada alerta com o próprio risco no corpo", () => {
+  const only = buildContractAlertBatchEmail({ recipientName: "Ana", projectName: "Obra padrão", batchUrl: `${BASE}/lote/2`, hasInlineLogo: true, items: batchItems.filter((it) => it.severity === "MEDIA" || it.severity === "BAIXA") });
+  assert.equal(only.subject, `${PROJECT_A} | 2 alertas | ACC`);
+  assert.ok(only.html.includes("RISCO MÉDIO |") && only.html.includes("RISCO BAIXO |"));
+  assert.ok(!only.html.includes("#CC0000") && !only.html.includes("#FFC700"));
+});
+
+check("NUNCA mistura obras: dois projetos para o mesmo destinatário geram DOIS e-mails separados, cada um com o assunto correto; misturar é recusado", () => {
+  const mk = (project, sev, n) => ({ ...batchItems[0], eventId: `x${n}`, projectName: project, severity: sev, title: `T${n}`, eventUrl: `${BASE}/ev/${n}`, respondItemUrl: `${BASE}/l#e${n}`, quickActionUrl: `${BASE}/a/${n}` });
+  const all = [mk(PROJECT_A, "ALTA", 1), mk(PROJECT_B, "MEDIA", 2), mk(PROJECT_A, "BAIXA", 3), mk(PROJECT_B, "CRITICA", 4)];
+  // agrupamento do produtor: (projeto, destinatário)
+  const groups = grouping.groupByProjectAndRecipient(all.map((it) => ({ projectId: it.projectName, recipientId: "ana", item: it })));
+  assert.equal(groups.length, 2);
+  const mails = groups.map((g) => buildContractAlertBatchEmail({ recipientName: "Ana", projectName: g.projectId, batchUrl: `${BASE}/lote`, hasInlineLogo: true, items: g.items.map((x) => x.item) }));
+  assert.deepEqual(mails.map((m) => m.subject).sort(), [`[RISCO ALTO] ${PROJECT_A} | 2 alertas | ACC`, `[RISCO CRÍTICO] ${PROJECT_B} | 2 alertas | ACC`].sort());
+  for (const m of mails) {
+    const names = [PROJECT_A, PROJECT_B].filter((n) => m.html.includes(`| ${n}`));
+    assert.equal(names.length, 1, "cada e-mail traz uma única obra");
+  }
+  assert.throws(() => buildContractAlertBatchEmail({ recipientName: null, projectName: "x", batchUrl: `${BASE}/l`, hasInlineLogo: true, items: all }), /não pode misturar obras/);
+});
+
+check("TIPOGRAFIA: corpo padrão único de 14px; SÓ o cabeçalho 'RISCO | OBRA' (negrito) e o título (black) usam corpo maior (16px)", () => {
   const first = boxes(batch.html)[0];
   const sizes = new Set(Array.from(first.matchAll(/font-size:(\d+px)/g)).map((m) => m[1]));
-  assert.deepEqual([...sizes], ["14px"]);
+  assert.deepEqual([...sizes].sort(), ["14px", "16px"]);
+  assert.ok(/class="acc-box-risk"[^>]*font-size:16px[^>]*font-weight:700/.test(first) || /class="acc-box-risk"[^>]*font-weight:700[^>]*font-size:16px/.test(first), "cabeçalho 16px negrito");
+  assert.ok(/<a [^>]*font-size:16px[^>]*font-weight:900|<a [^>]*font-weight:900[^>]*font-size:16px/.test(first), "título 16px black");
+  const rest = first.replace(/class="acc-box-risk"[^>]*>[^<]*/, "").replace(/<p style="margin:0 0 8px 0;[^"]*font-size:16px[^"]*"><a [^>]*>[^<]*<\/a><\/p>/, "");
+  assert.ok(!/font-size:16px/.test(rest.replace(/<style[\s\S]*?<\/style>/g, "")) , "demais textos continuam em 14px");
   assert.ok(first.includes("font-weight:900"), "título black");
   assert.ok(/<a [^>]*font-weight:900[^>]*>Alerta CRITICA<\/a>/.test(first), "título é link");
   assert.ok(/font-weight:400;color:#FFFFFF;[^"]*">Descrição CRITICA/.test(first), "descrição regular");
@@ -193,7 +231,7 @@ check("TIPOGRAFIA ÚNICA: um só tamanho (14px) em todo o alerta; título black/
   assert.ok(/<a [^>]*font-weight:700[^>]*>Cronograma: Linha de base<\/a>/.test(first), "evidência (link) em negrito");
   const ind = individual("MEDIA", { repeatNotice: true }).html;
   const indBox = ind.slice(ind.indexOf("border:2px solid"), ind.indexOf('<td style="padding:16px 24px;border-top'));
-  assert.deepEqual([...new Set(Array.from(indBox.matchAll(/font-size:(\d+px)/g)).map((m) => m[1]))], ["14px"]);
+  assert.deepEqual([...new Set(Array.from(indBox.matchAll(/font-size:(\d+px)/g)).map((m) => m[1]))].sort(), ["14px", "16px"]);
 });
 
 check("o TÍTULO é o link do evento (VER EVENTO não existe mais) — individual e lote", () => {
@@ -377,6 +415,20 @@ check("CONSULTAR IA: link para a página do ACC ACIMA dos três botões, só tex
   assert.ok(b.text.includes("CONSULTAR IA:"));
   // continua exatamente três botões de ação iguais
   assert.equal((b.html.match(/class="acc-compact-btn"/g) ?? []).length, 12);
+});
+
+check("CELULAR: CONSULTAR IA fica AO LADO dos botões (inline-block, sem flex/grid), abaixo do conteúdo, com áreas de toque de 44px; sem CSS o layout vertical continua válido", () => {
+  const html = individual("MEDIA", { quickActionUrls: QUICK, aiConsultUrl: `${BASE}/alertas/consulta-ia/p/evento/e` }).html;
+  const css = html.slice(html.indexOf("@media only screen and (max-width:640px)"), html.indexOf("</style>"));
+  assert.match(css, /\.acc-consult-wrap, \.acc-buttons-wrap \{ display:inline-block !important; vertical-align:middle !important/);
+  assert.match(css, /\.acc-consult-wrap \{ width:43% !important/);
+  assert.match(css, /\.acc-buttons-wrap \{ width:55% !important/);
+  assert.match(css, /\.acc-compact-btn td \{ height:44px !important; \}/);
+  assert.match(css, /\.acc-consult-ai a \{ height:44px !important/);
+  assert.match(css, /\.acc-content-col, \.acc-actions-col \{ display:block !important; width:100% !important; \}/, "coluna de ações vai para BAIXO do conteúdo (não o cobre)");
+  assert.ok(!/display:\s*flex|display:\s*grid/.test(html), "sem flex/grid");
+  const panel = html.slice(html.indexOf('class="acc-actions-panel"'));
+  assert.ok(panel.indexOf("acc-consult-wrap") < panel.indexOf("acc-buttons-wrap"), "layout padrão: consultar acima dos botões, mesma coluna branca");
 });
 
 console.log(`RESULTADO: ${passed} passaram, ${failed} falharam`);

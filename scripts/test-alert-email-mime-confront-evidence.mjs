@@ -436,7 +436,7 @@ check("família tipográfica é SEMPRE Arial/Helvetica/sans-serif no template (n
   assert(!/font-family:(?!Arial, Helvetica, sans-serif|'Arial Black', Arial, Helvetica, sans-serif)[^;"]+;/.test(html), "nenhuma outra font-family deveria aparecer no HTML");
 });
 
-check("hierarquia de tamanhos LIMITADA a 20/15/14/12px — nenhum outro valor de font-size solto no template", () => {
+check("hierarquia de tamanhos LIMITADA a 20/16/15/14/12px (16px só no cabeçalho de risco e no título do alerta) — nenhum outro valor de font-size solto no template", () => {
   assert(ACC_FONT_SIZE_TITLE === "20px");
   assert(ACC_FONT_SIZE_SECTION === "15px");
   assert(ACC_FONT_SIZE_BODY === "14px");
@@ -451,7 +451,7 @@ check("hierarquia de tamanhos LIMITADA a 20/15/14/12px — nenhum outro valor de
     actionButtons: [{ action: "RESPOND", url: "https://app.axion.com.br/email-actions/tok" }],
   });
 
-  const allowed = new Set(["20px", "15px", "14px", "12px"]);
+  const allowed = new Set(["20px", "16px", "15px", "14px", "12px"]);
   const found = Array.from(html.matchAll(/font-size:(\d+px)/g)).map((m) => m[1]);
   assert(found.length > 5, "esperado um número razoável de declarações font-size no HTML completo");
   const disallowed = found.filter((size) => !allowed.has(size));
@@ -471,11 +471,11 @@ check("título principal (h1) com a cor de texto da caixa; painéis internos man
 });
 
 // DEFINIÇÃO FINAL: UM único tamanho (14px) em todo o alerta; só o peso diferencia.
-check("alerta usa um único tamanho de fonte (14px); evidência e cláusula em negrito, descrição em regular", () => {
+check("alerta usa corpo padrão de 14px (16px só no cabeçalho de risco e no título); evidência e cláusula em negrito, descrição em regular", () => {
   const { html } = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA", keyEvidence: [], impactedClause: { label: "Cláusula 8.2 – Prazos", text: null } });
   const box = html.slice(html.indexOf("border:2px solid"), html.indexOf('<td style="padding:16px 24px;border-top'));
   const sizes = new Set(Array.from(box.matchAll(/font-size:(\d+px)/g)).map((m) => m[1]));
-  assert(JSON.stringify([...sizes]) === JSON.stringify(["14px"]), `tamanhos no alerta: ${[...sizes].join(", ")}`);
+  assert(JSON.stringify([...sizes].sort()) === JSON.stringify(["14px", "16px"]), `tamanhos no alerta: ${[...sizes].join(", ")}`);
   assert(/font-weight:700;color:#000000;[^"]*">Cláusula 8\.2 – Prazos</.test(html));
   assert(/font-weight:400;color:#000000;[^"]*">O cliente notificou atraso de 20 dias\.</.test(html));
 });
