@@ -1,47 +1,47 @@
 // Puro, sem I/O — deliberadamente sem "server-only" (testável por script Node).
 //
 // Identidade visual da CAIXA de cada alerta (e-mail individual e de lote):
-// cor de fundo/borda/texto por grau de risco, cabeçalho (logo oficial à
-// esquerda + classificação em negrito na MESMA linha, centralizada na área
-// de texto) e os botões compactos de ação.
+// cor de fundo/borda/texto por grau de risco, cabeçalho (logo oficial à esquerda +
+// "RISCO [NÍVEL] | [OBRA]" em negrito na MESMA linha, centralizado na área de texto), tipografia
+// única e coluna branca com os três botões de ação.
 //
 // Decisão de produto (substitui orientações visuais anteriores):
 //   CRÍTICO : fundo vermelho,                 texto branco, logo invertido
 //   ALTO    : fundo amarelo escuro,           texto branco, logo invertido
 //   MÉDIO   : fundo branco,                   texto preto,  logo vinho
 //   BAIXO   : fundo branco,                   texto preto,  logo vinho
-//   Borda contínua de 2px: tom mais escuro que o fundo nos coloridos,
-//   cinza médio nos brancos.
+//   Borda contínua de 2px: tom mais escuro que o fundo nos coloridos, cinza médio nos brancos.
+//   UM único tamanho de fonte em todo o alerta (14px); só o PESO diferencia: título "black",
+//   cabeçalho/cláusula/evidência/"Repete" em negrito, descrição em regular.
 //
-// BADGE_STYLES (contract-alert-template.ts) NÃO é alterado: continua sendo
-// usado pelos demais e-mails (SLA, alertas de risco) que não fazem parte
-// desta definição.
+// BADGE_STYLES (contract-alert-template.ts) NÃO é alterado: continua sendo usado pelos demais
+// e-mails (SLA, alertas de risco) que não fazem parte desta definição.
 
 import type { AlertSeverity } from "@axion/types";
 
 import { ACC_EMAIL_LOGO_CID, ACC_EMAIL_LOGO_INVERTED_CID } from "@/lib/email/branding/acc-email-signature";
-import { ACC_FONT_FAMILY, ACC_FONT_SIZE_TITLE } from "@/lib/email/brand-style";
+import { ACC_FONT_FAMILY } from "@/lib/email/brand-style";
 
 export type LogoVariant = "inverted" | "maroon";
 
 export interface AlertTone {
   background: string;
   border: string;
-  /** Texto principal (título, resumo, rótulos) diretamente sobre o fundo da caixa. */
+  /** Texto principal (título, descrição, cláusula, evidência) diretamente sobre o fundo da caixa. */
   text: string;
   /** Texto secundário diretamente sobre o fundo da caixa. */
   muted: string;
   /** Cor de links diretamente sobre o fundo da caixa. */
   link: string;
-  /** Cor da classificação "RISCO …" no cabeçalho. */
+  /** Cor do cabeçalho "RISCO … | OBRA". */
   label: string;
   logo: LogoVariant;
   /** Fundo escuro: blocos internos de detalhe viram painéis brancos. */
   dark: boolean;
 }
 
-// Amarelo de atenção ESCURO para ALTO — Tailwind yellow-700. Texto branco
-// sobre ele: ver contrastRatio() e o teste (≥ 4,5:1, WCAG AA para texto normal).
+// Amarelo de atenção ESCURO para ALTO — Tailwind yellow-700. Texto branco sobre ele:
+// ver contrastRatio() e o teste (≥ 4,5:1, WCAG AA para texto normal).
 export const ALTO_BACKGROUND = "#A16207";
 export const ALTO_BORDER = "#713F12"; // yellow-900, mais escuro que o fundo
 export const CRITICO_BACKGROUND = "#DC2626";
@@ -49,46 +49,10 @@ export const CRITICO_BORDER = "#991B1B"; // red-800, mais escuro que o fundo
 export const NEUTRAL_BORDER = "#9CA3AF"; // cinza médio (gray-400)
 
 export const ALERT_TONES: Record<AlertSeverity, AlertTone> = {
-  CRITICA: {
-    background: CRITICO_BACKGROUND,
-    border: CRITICO_BORDER,
-    text: "#FFFFFF",
-    muted: "#FFFFFF",
-    link: "#FFFFFF",
-    label: "#FFFFFF",
-    logo: "inverted",
-    dark: true,
-  },
-  ALTA: {
-    background: ALTO_BACKGROUND,
-    border: ALTO_BORDER,
-    text: "#FFFFFF",
-    muted: "#FFFFFF",
-    link: "#FFFFFF",
-    label: "#FFFFFF",
-    logo: "inverted",
-    dark: true,
-  },
-  MEDIA: {
-    background: "#FFFFFF",
-    border: NEUTRAL_BORDER,
-    text: "#000000",
-    muted: "#374151",
-    link: "#7F1D1D",
-    label: "#000000",
-    logo: "maroon",
-    dark: false,
-  },
-  BAIXA: {
-    background: "#FFFFFF",
-    border: NEUTRAL_BORDER,
-    text: "#000000",
-    muted: "#374151",
-    link: "#7F1D1D",
-    label: "#000000",
-    logo: "maroon",
-    dark: false,
-  },
+  CRITICA: { background: CRITICO_BACKGROUND, border: CRITICO_BORDER, text: "#FFFFFF", muted: "#FFFFFF", link: "#FFFFFF", label: "#FFFFFF", logo: "inverted", dark: true },
+  ALTA: { background: ALTO_BACKGROUND, border: ALTO_BORDER, text: "#FFFFFF", muted: "#FFFFFF", link: "#FFFFFF", label: "#FFFFFF", logo: "inverted", dark: true },
+  MEDIA: { background: "#FFFFFF", border: NEUTRAL_BORDER, text: "#000000", muted: "#374151", link: "#000000", label: "#000000", logo: "maroon", dark: false },
+  BAIXA: { background: "#FFFFFF", border: NEUTRAL_BORDER, text: "#000000", muted: "#374151", link: "#000000", label: "#000000", logo: "maroon", dark: false },
 };
 
 // ---------- contraste (WCAG 2.x) ----------
@@ -113,10 +77,27 @@ export function contrastRatio(foregroundHex: string, backgroundHex: string): num
   return (light + 0.05) / (dark + 0.05);
 }
 
+// ---------- tipografia ÚNICA ----------
+
+/** Tamanho de fonte único de todo texto do alerta (cabeçalho, título, descrição, cláusula, evidência, "Repete", botões). */
+export const ALERT_FONT_SIZE = "14px";
+export const ALERT_LINE_HEIGHT = "20px";
+
+/** Família "black" só para o título (Arial Black onde existir; cai para Arial negrito). */
+// Aspas SIMPLES: o valor vai dentro de style="..." (aspas duplas quebrariam o atributo).
+export const ALERT_TITLE_FONT_FAMILY = `'Arial Black', ${ACC_FONT_FAMILY}`;
+
+export const WEIGHT = { regular: 400, bold: 700, black: 900 } as const;
+
+/** Estilo base inline de qualquer texto do alerta (mesmo tamanho; muda só o peso). */
+export function textStyle(weight: keyof typeof WEIGHT, color: string, extra = ""): string {
+  const family = weight === "black" ? ALERT_TITLE_FONT_FAMILY : ACC_FONT_FAMILY;
+  return `font-family:${family};font-size:${ALERT_FONT_SIZE};line-height:${ALERT_LINE_HEIGHT};font-weight:${WEIGHT[weight]};color:${color};${extra}`;
+}
+
 // ---------- logo / cabeçalho ----------
 
-// Logo oficial 44px (quadrado). Mantém proporção 1:1 do arquivo oficial —
-// width E height fixos iguais, nunca só um deles.
+// Logo oficial 44px (quadrado). Mantém proporção 1:1 do arquivo oficial.
 export const ALERT_LOGO_SIZE_PX = 44;
 
 export function logoCidFor(variant: LogoVariant): string {
@@ -140,15 +121,15 @@ export function escapeAttr(value: string): string {
 }
 
 /**
- * Cabeçalho da caixa: logo oficial à ESQUERDA e "RISCO …" na MESMA linha,
- * em negrito, centralizado vertical (valign=middle nas duas células) e
- * horizontalmente na área de texto (a célula do texto ocupa todo o espaço
- * restante e tem text-align:center — o logo não se desloca). Sem selo
- * arredondado. Sem flexbox (Gmail/Outlook).
+ * Cabeçalho da caixa: logo oficial à ESQUERDA e "RISCO [NÍVEL] | [OBRA]" na MESMA linha, em
+ * negrito, centralizado vertical (valign=middle nas duas células) e horizontalmente na área de
+ * texto. A obra é a do PRÓPRIO alerta (um lote pode reunir alertas de obras diferentes). Nomes
+ * longos quebram linha dentro da célula, sem sobrepor o logo. Sem flexbox (Gmail/Outlook).
  */
 export function buildAlertHeaderHtml(
   severity: AlertSeverity,
   riskWord: string,
+  projectName: string,
   logos: AlertLogoAvailability
 ): string {
   const tone = ALERT_TONES[severity];
@@ -159,10 +140,13 @@ export function buildAlertHeaderHtml(
     ? `<td class="acc-box-logo" width="${size + 12}" valign="middle" style="width:${size + 12}px;vertical-align:middle;padding:0 12px 0 0;"><img src="cid:${logoCidFor(tone.logo)}" alt="ACC" width="${size}" height="${size}" style="display:block;border:0;width:${size}px;height:${size}px;" /></td>`
     : "";
 
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>${logoCell}<td class="acc-box-risk" valign="middle" align="center" style="vertical-align:middle;text-align:center;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_TITLE};line-height:28px;font-weight:bold;letter-spacing:0.05em;color:${tone.label};">RISCO ${escapeAttr(riskWord)}</td></tr></table>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>${logoCell}<td class="acc-box-risk" valign="middle" align="center" style="vertical-align:middle;text-align:center;${textStyle("bold", tone.label, "letter-spacing:0.03em;word-break:break-word;overflow-wrap:anywhere;")}">RISCO ${escapeAttr(riskWord)} | ${escapeAttr(projectName)}</td></tr></table>`;
 }
 
 // ---------- caixa ----------
+
+/** Espaço visível entre a linha logo/risco e o primeiro texto abaixo. */
+export const HEADER_GAP_PX = 18;
 
 /** Caixa individual de UM alerta: borda contínua de 2px, cantos arredondados. */
 export function buildAlertBoxHtml(severity: AlertSeverity, innerHtml: string): string {
@@ -177,19 +161,21 @@ export function panelStyle(severity: AlertSeverity): string {
     : "";
 }
 
-// ---------- botões ----------
+// ---------- botões (RESOLVIDO / EM ANDAMENTO / ENVIADO P/) ----------
 
-export const BUTTON_FONT_SIZE_PX = 12;
-// Largura do texto "EM ANDAMENTO" em Arial negrito 12px MEDIDA NO HTML
-// RENDERIZADO (Chrome, escala 1x, Range.getBoundingClientRect): 93px.
-// Largura do botão = texto + 12px à esquerda + 12px à direita = 117px.
-// Observação: a métrica tipográfica sem hinting (canvas/FreeType) dá ~98,7px;
-// clientes que renderizam nessa métrica ficam com ~9px de folga lateral em vez
-// de 12px — nunca cortam o texto (nowrap, largura fixa maior que o texto).
-export const EM_ANDAMENTO_TEXT_WIDTH_PX = 93;
+export const BUTTON_FONT_SIZE_PX = 14;
+// Largura do texto "EM ANDAMENTO" em Arial negrito 14px MEDIDA NO HTML RENDERIZADO (Chrome,
+// escala 1x, getBoundingClientRect): 114px. Largura do botão = texto + 12px de cada lado = 138px.
+// Observação: a métrica sem hinting pode diferir ~1–5%; a folga lateral varia um pouco, sem cortar
+// o texto (nowrap, largura fixa maior que o texto).
+export const EM_ANDAMENTO_TEXT_WIDTH_PX = 114;
 export const BUTTON_SIDE_PADDING_PX = 12;
-export const BUTTON_WIDTH_PX = Math.ceil(EM_ANDAMENTO_TEXT_WIDTH_PX + 2 * BUTTON_SIDE_PADDING_PX); // 117
-export const BUTTON_HEIGHT_PX = 32;
+export const BUTTON_WIDTH_PX = Math.ceil(EM_ANDAMENTO_TEXT_WIDTH_PX + 2 * BUTTON_SIDE_PADDING_PX); // 138
+export const BUTTON_HEIGHT_PX = 34;
+
+/** Coluna branca dos botões: um pouco mais larga que os botões, com pequena margem lateral. */
+export const BUTTON_COLUMN_MARGIN_PX = 8;
+export const BUTTON_COLUMN_WIDTH_PX = BUTTON_WIDTH_PX + 2 * BUTTON_COLUMN_MARGIN_PX; // 154
 
 export interface AlertActionButtonStyle {
   background: string;
@@ -199,18 +185,39 @@ export interface AlertActionButtonStyle {
 
 /**
  * Botão compacto de largura/altura FIXAS e iguais para todos. Estrutura
- * <table width=W><td width=W height=H bgcolor> + <a display:block width:W
- * height:H line-height:H> — sem padding horizontal, sem min-width e sem
- * largura 100%: nada herdado consegue alargá-lo. Centralizado na coluna.
+ * <table width=W><td width=W height=H bgcolor> + <a display:block width:W height:H line-height:H>
+ * — sem padding horizontal, sem min-width e sem largura 100%: nada herdado consegue alargá-lo.
  */
-export function buildCompactButtonHtml(
-  href: string,
-  style: AlertActionButtonStyle,
-  title: string,
-  isFirst: boolean
-): string {
+export function buildCompactButtonHtml(href: string, style: AlertActionButtonStyle, title: string, isFirst: boolean): string {
   const w = BUTTON_WIDTH_PX;
   const h = BUTTON_HEIGHT_PX;
-  return `<table class="acc-compact-btn" role="presentation" align="center" width="${w}" cellpadding="0" cellspacing="0" style="width:${w}px;margin:${isFirst ? "0" : "8px"} auto 0 auto;border-collapse:separate;"><tr><td width="${w}" height="${h}" align="center" bgcolor="${style.background}" style="width:${w}px;height:${h}px;background-color:${style.background};border-radius:6px;text-align:center;"><a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(title)}" aria-label="${escapeAttr(`${style.label} — ${title}`)}" style="display:block;width:${w}px;height:${h}px;line-height:${h}px;margin:0;padding:0;color:${style.color};font-family:${ACC_FONT_FAMILY};font-size:${BUTTON_FONT_SIZE_PX}px;font-weight:bold;text-decoration:none;text-align:center;white-space:nowrap;overflow:hidden;">${escapeAttr(style.label)}</a></td></tr></table>`;
+  return `<table class="acc-compact-btn" role="presentation" align="center" width="${w}" cellpadding="0" cellspacing="0" style="width:${w}px;margin:${isFirst ? "0" : "8px"} auto 0 auto;border-collapse:separate;"><tr><td width="${w}" height="${h}" align="center" bgcolor="${style.background}" style="width:${w}px;height:${h}px;background-color:${style.background};border-radius:6px;text-align:center;"><a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" title="${escapeAttr(title)}" aria-label="${escapeAttr(`${style.label} — ${title}`)}" style="display:block;width:${w}px;height:${h}px;line-height:${h}px;margin:0;padding:0;color:${style.color};font-family:${ACC_FONT_FAMILY};font-size:${BUTTON_FONT_SIZE_PX}px;font-weight:700;text-decoration:none;text-align:center;white-space:nowrap;overflow:hidden;">${escapeAttr(style.label)}</a></td></tr></table>`;
 }
 
+/** Cores e rótulos dos três botões (cores e funções preservadas do layout aprovado). */
+export const ACTION_BUTTON_STYLES = {
+  RESOLVIDO: { background: "#1B2A4A", color: "#ffffff", label: "RESOLVIDO" },
+  EM_ANDAMENTO: { background: "#15803D", color: "#ffffff", label: "EM ANDAMENTO" },
+  ENVIADO_PARA: { background: "#F97316", color: "#ffffff", label: "ENVIADO P/" },
+} as const;
+
+export type ThreeActions = "RESOLVIDO" | "EM_ANDAMENTO" | "ENVIADO_PARA";
+
+const ACTION_TITLES: Record<ThreeActions, string> = {
+  RESOLVIDO: "Abre a confirmação de RESOLVIDO — nada é registrado até você confirmar.",
+  EM_ANDAMENTO: "Abre a confirmação de EM ANDAMENTO — nada é registrado até você confirmar.",
+  ENVIADO_PARA: "Abre a confirmação de ENVIADO P/ com a lista de colaboradores — nada é registrado até você confirmar.",
+};
+
+/** Os três botões, na ordem RESOLVIDO / EM ANDAMENTO / ENVIADO P/. */
+export function buildThreeActionButtonsHtml(urlFor: (action: ThreeActions) => string): string {
+  return (["RESOLVIDO", "EM_ANDAMENTO", "ENVIADO_PARA"] as const)
+    .map((action, index) => buildCompactButtonHtml(urlFor(action), ACTION_BUTTON_STYLES[action], ACTION_TITLES[action], index === 0))
+    .join("");
+}
+
+/** Coluna BRANCA dos botões (largura = botões + pequena margem lateral), centralizada. */
+export function buildActionsPanelHtml(innerHtml: string): string {
+  const w = BUTTON_COLUMN_WIDTH_PX;
+  return `<table class="acc-actions-panel" role="presentation" align="center" width="${w}" cellpadding="0" cellspacing="0" bgcolor="#FFFFFF" style="width:${w}px;border-collapse:separate;background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:6px;margin:0 auto;"><tr><td align="center" style="padding:${BUTTON_COLUMN_MARGIN_PX}px;text-align:center;">${innerHtml}</td></tr></table>`;
+}

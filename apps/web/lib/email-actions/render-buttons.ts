@@ -47,7 +47,9 @@ export function renderEmailActionButtonsHtml(
   buttons: EmailActionButton[],
   alertCause?: string,
   // Cor da legenda sob cada botão — padrão cinza institucional; caixas de fundo escuro passam branco.
-  captionColor: string = ACC_COLOR_MUTED
+  captionColor: string = ACC_COLOR_MUTED,
+  // Tamanho único opcional (alertas de contrato usam 14px em todo o texto); padrão preserva os demais e-mails.
+  captionFontSize: string = ACC_FONT_SIZE_AUX
 ): string {
   if (buttons.length === 0) return "";
 
@@ -64,7 +66,7 @@ export function renderEmailActionButtonsHtml(
       )}" class="${ACC_ACTION_BUTTON_CLASS}" style="display:block;width:100%;box-sizing:border-box;margin:${marginTop} 0 0 0;padding:10px 14px;background-color:#ffffff;color:${ACC_COLOR_BODY};font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_BODY};font-weight:bold;text-decoration:none;border-radius:6px;border:1px solid ${ACC_COLOR_HEADING};text-align:center;">${escapeHtml(
         label
       )}</a>`;
-      const captionHtml = `<p style="margin:4px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${captionColor};text-align:center;">${escapeHtml(
+      const captionHtml = `<p style="margin:4px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${captionFontSize};color:${captionColor};text-align:center;">${escapeHtml(
         description
       )}</p>`;
       return `${buttonHtml}${captionHtml}`;

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { buildEvidenceItem, formatClauseLabel, summarizeClauseText } from "@/lib/alerts/alert-source-links";
 import { getAppBaseUrl } from "@/lib/app-base-url";
 import { issueEmailAlertActionButtons } from "@/lib/email-actions/issue-tokens";
 import { buildConfrontationBlock, type ContractConfrontationBlock } from "@/lib/email/build-confrontation-block";
@@ -188,7 +189,19 @@ export async function sendContractAlertEmailAction(
         }
       }
 
-      return { kind: "OTHER", url, sourceTypeLabel: sourceTypeShortLabels[e.sourceType], label: e.label };
+      // Link para a origem: documento (na página, quando o localizador a informa) ou o cartão da
+      // evidência no evento; sem identificador verificável: "Pendente de confirmação".
+      return buildEvidenceItem({
+        baseUrl,
+        projectId,
+        eventId,
+        evidenceId: e.id,
+        documentVersionId: e.documentVersionId ?? null,
+        emailId: e.emailId ?? null,
+        locator: e.locator ?? null,
+        label: e.label,
+        sourceTypeLabel: sourceTypeShortLabels[e.sourceType],
+      });
     })
   );
 
@@ -219,6 +232,13 @@ export async function sendContractAlertEmailAction(
         relatedEventTitle: event.title,
         contractualBasis,
         confrontationBlocks,
+        // Cláusula impactada VERIFICADA (confronto aprovado); sem ela: "Pendente de confirmação".
+        impactedClause: relevantApprovedCandidates[0]
+          ? {
+              label: formatClauseLabel(relevantApprovedCandidates[0].clauseNumber, relevantApprovedCandidates[0].clauseTitle),
+              text: summarizeClauseText(relevantApprovedCandidates[0].clauseText),
+            }
+          : null,
         keyEvidence,
         potentialImpact: findingTypeLabels[event.aiAssessment.findingType],
         recommendedAction: null,

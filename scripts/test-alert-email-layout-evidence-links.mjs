@@ -32,7 +32,8 @@ register("./ts-module-resolver.mjs", import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
 function readSource(relativePath) {
-  return readFileSync(path.join(repoRoot, relativePath), "utf8");
+  // Normaliza CRLF -> LF (Windows/core.autocrlf): as verificações multilinha usam LF.
+  return readFileSync(path.join(repoRoot, relativePath), "utf8").replaceAll(String.fromCharCode(13, 10), String.fromCharCode(10));
 }
 
 let passed = 0;
@@ -145,7 +146,10 @@ check("send-alert-actions.ts: constrói keyEvidence com evidenceAnchorId + event
   assert(source.includes('import { evidenceAnchorId } from "@/lib/ledger/evidence-anchor";'));
   assert(source.includes("evidenceAnchorId(e.id)"));
   assert(source.includes("`${eventUrl}#${evidenceAnchorId(e.id)}`"));
-  assert(!source.includes("e.locator"), "e.locator (gmail://...) não deveria mais ser embutido no e-mail");
+  // O localizador só é PASSADO ao construtor de links (que apenas extrai um número de página explícito);
+  // nunca é concatenado em URL — ver scripts/test-alert-box-templates.mjs (localizador gmail:// nunca vaza).
+  const locatorUses = source.match(/e\.locator/g) ?? [];
+  assert(locatorUses.length === 1 && /locator: e\.locator \?\? null,/.test(source) && source.includes("buildEvidenceItem({"), "e.locator só entra como parâmetro de buildEvidenceItem");
 });
 
 check("EvidenceViewer: renderiza id=evidenceAnchorId(evidence.id) — a página do evento expõe as âncoras que o e-mail referencia", () => {
@@ -209,11 +213,19 @@ check("estrutura principal usa <table> (Gmail/Outlook) — não depende só de f
   assert((templateSource.match(/<table/g) ?? []).length >= 4, "estrutura deveria continuar baseada em múltiplas <table>");
 });
 
-check("duas colunas no desktop: coluna de conteúdo (~64%) e coluna estreita de ações (~36%) à direita", () => {
+check("duas colunas no desktop: coluna de conteúdo à esquerda e coluna ESTREITA e branca dos botões à direita", () => {
   assert(templateSource.includes('class="acc-content-col"'));
   assert(templateSource.includes('class="acc-actions-col"'));
-  const contentBeforeActions = templateSource.indexOf('class="acc-content-col"') < templateSource.indexOf('class="acc-actions-col"');
-  assert(contentBeforeActions, "coluna de conteúdo deveria vir antes (à esquerda) da coluna de ações no HTML");
+  const { html } = buildContractAlertEmail({
+    ...baseAlertInput,
+    quickActionUrls: {
+      RESOLVIDO: "https://app.axion.com.br/alertas/acao/p/b/e?acao=RESOLVIDO",
+      EM_ANDAMENTO: "https://app.axion.com.br/alertas/acao/p/b/e?acao=EM_ANDAMENTO",
+      ENVIADO_PARA: "https://app.axion.com.br/alertas/acao/p/b/e?acao=ENVIADO_PARA",
+    },
+  });
+  assert(html.indexOf('class="acc-content-col"') < html.indexOf('class="acc-actions-col"'), "coluna de conteúdo deveria vir antes (à esquerda) da coluna de ações no HTML");
+  assert(/class="acc-actions-panel"[^>]*bgcolor="#FFFFFF"/.test(html), "coluna dos botões branca");
 });
 
 check("mobile: media query empilha as colunas e ocupa largura total (não depende de JS)", () => {
@@ -267,15 +279,16 @@ check("renderEmailActionButtonsText permanece IDÊNTICO ('RÓTULO: url', sem leg
   assert(text === "DEFINIR PRAZO: https://app.axion.com.br/email-actions/tok3", `formato do texto puro não pode mudar, obtido: "${text}"`);
 });
 
-check("ABRIR EVENTO NO ACC também ganha title/aria-label e o mesmo estilo de bloco vertical da coluna de ações", () => {
+// DEFINIÇÃO FINAL: o TÍTULO do alerta é o link do evento (substitui o botão "Abrir evento no ACC").
+check("o TÍTULO do alerta é o link para o evento no ACC, com title descritivo", () => {
   const { html } = buildContractAlertEmail(baseAlertInput);
-  assert(/<a href="https:\/\/app\.axion\.com\.br\/proj-1\/ledger\/evt-1" title="[^"]+"/.test(html), "botão Abrir evento no ACC deveria ter title descritivo");
-  assert(html.includes("Abrir evento no ACC"));
+  assert(/<a href="https:\/\/app\.axion\.com\.br\/proj-1\/ledger\/evt-1"[^>]*title="Abrir o evento no ACC"/.test(html), "título deveria ser link do evento");
+  assert(!html.includes("Abrir evento no ACC"), "botão separado removido");
 });
 
 check("as 5 ações exigidas continuam presentes e com a MESMA url/token (nada de autorização/expiração/uso único alterado aqui)", () => {
   const { html, text } = buildContractAlertEmail(baseAlertInput);
-  assert(html.includes("Abrir evento no ACC") && html.includes(baseAlertInput.eventUrl));
+  assert(html.includes(baseAlertInput.eventUrl), "link do evento (título)");
   assert(html.includes("DAR CIÊNCIA") && html.includes("tok-ack"));
   assert(html.includes("RESPONDER AO ACC") && html.includes("tok-respond"));
   assert(text.includes("DAR CIÊNCIA: https://app.axion.com.br/email-actions/tok-ack"));

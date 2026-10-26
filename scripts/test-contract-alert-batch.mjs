@@ -301,9 +301,10 @@ check("e-mail nunca contém <select>/<form>/<script> (ENVIADO P/ só é escolhid
 check("cabeçalho usa o texto e cores do layout final aprovado", () => {
   assert(email.html.includes("ACC - Acompanhamento de Contratos"));
   assert(email.text.includes("ACC - Acompanhamento de Contratos"));
-  // Nome do projeto em vermelho/negrito (ACC_COLOR_HEADING = #7F1D1D).
-  assert(email.html.includes('color:#7F1D1D;">Complexo Residencial Horizonte'));
-  // Logo do lote é ~25% menor que o do e-mail de alerta único (38px).
+  // A OBRA aparece no cabeçalho de CADA caixa ("RISCO [NÍVEL] | [OBRA]"): um lote pode reunir obras diferentes.
+  assert(email.html.includes("RISCO CRÍTICO | Complexo Residencial Horizonte"));
+  assert(email.html.includes("RISCO MÉDIO | Complexo Residencial Horizonte"));
+  // Logo do cabeçalho geral continua compacto (29px); logos das caixas têm 44px.
   assert(email.html.includes('width="29"'));
 });
 
@@ -322,28 +323,31 @@ check("classificação de risco no cabeçalho (mesma linha do logo) e título do
 
 check("CRÍTICO usa fundo vermelho e fonte branca/negrito", () => {
   assert(email.html.toLowerCase().includes("background-color:#dc2626;border:2px solid #991b1b"));
-  assert(/color:#FFFFFF;">RISCO CRÍTICO/.test(email.html));
-  assert(/font-weight:bold;letter-spacing:0\.05em;color:#FFFFFF;">RISCO CRÍTICO/.test(email.html));
+  assert(/font-weight:700;color:#FFFFFF;[^"]*">RISCO CRÍTICO \| /.test(email.html));
 });
 
-check('descrição do risco usa o rótulo explícito "Risco: "', () => {
-  assert(email.html.includes("<strong>Risco:</strong> Constructec Ltda. pediu 45 dias de aditivo."));
-  assert(email.text.includes("Risco: Constructec Ltda. pediu 45 dias de aditivo."));
+// DEFINIÇÃO FINAL: a descrição é texto REGULAR (sem o rótulo "Risco:"); o risco está no cabeçalho.
+check("descrição do risco aparece em peso regular, sem rótulo", () => {
+  assert(email.html.includes("Constructec Ltda. pediu 45 dias de aditivo."));
+  assert(!email.html.includes("<strong>Risco:</strong>"));
+  assert(email.text.includes("Constructec Ltda. pediu 45 dias de aditivo."));
 });
 
 check("os 4 botões de ação usam exatamente as cores do layout aprovado", () => {
+  // DEFINIÇÃO FINAL: VER EVENTO foi removido (o TÍTULO é o link do evento); ficam três botões.
   // Botões compactos: cor de fundo na célula (bgcolor/background-color) e cor do texto no <a>.
-  assert(email.html.includes('bgcolor="#FFD600"') && email.html.includes("color:#000000;font-family") && email.html.includes(">VER EVENTO<"));
+  assert(!email.html.includes(">VER EVENTO<") && !email.html.includes('bgcolor="#FFD600"'));
   assert(email.html.includes('bgcolor="#1B2A4A"') && email.html.includes(">RESOLVIDO<"));
   assert(email.html.includes('bgcolor="#15803D"') && email.html.includes(">EM ANDAMENTO<"));
   assert(email.html.includes('bgcolor="#F97316"') && email.html.includes(">ENVIADO P/<"));
-  // Cada evento tem seu próprio conjunto de 4 botões (2 eventos = 2 de cada).
-  assert.equal((email.html.match(/>VER EVENTO</g) ?? []).length, 2);
+  // Cada evento tem seu próprio conjunto de 3 botões (2 eventos = 2 de cada).
   assert.equal((email.html.match(/>RESOLVIDO</g) ?? []).length, 2);
   assert.equal((email.html.match(/>EM ANDAMENTO</g) ?? []).length, 2);
   assert.equal((email.html.match(/>ENVIADO P\/</g) ?? []).length, 2);
-  assert.equal((email.html.match(/target="_blank"/g) ?? []).length, 8);
-  assert.equal((email.html.match(/rel="noopener noreferrer"/g) ?? []).length, 8);
+  // 6 botões + 2 títulos (link do evento) + 2 evidências com link + ... — todos abrem em nova aba com rel seguro.
+  assert((email.html.match(/class="acc-compact-btn"/g) ?? []).length === 6);
+  assert((email.html.match(/target="_blank"/g) ?? []).length >= 8);
+  assert.equal((email.html.match(/target="_blank"/g) ?? []).length, (email.html.match(/rel="noopener noreferrer"/g) ?? []).length);
 });
 
 check("botões de ação do e-mail multi-alerta apontam para a página compacta do lote", () => {
@@ -353,9 +357,15 @@ check("botões de ação do e-mail multi-alerta apontam para a página compacta 
   assert(email.html.includes("/alertas/lote/proj-1/batch-1?evento=evt-2&amp;acao=ENVIADO_PARA"));
 });
 
-check("evidências continuam acessíveis a partir de cada alerta (link para o evento no ACC)", () => {
-  assert(email.html.includes("Abrir evidência no ACC"));
-  assert(email.html.includes("https://acc.exemplo/obra/ledger/evt-1"));
+check("evidências são LINKS para a origem; sem referência verificável: 'Pendente de confirmação'; título é o link do evento", () => {
+  assert(email.html.includes('href="https://acc.exemplo/obra/evidencias/evt-1-a"'), "evidência com url vira link");
+  assert(email.html.includes("Diário de Obra: Registro de atraso de insumos"));
+  assert(email.html.includes("Evidência: E-mail do fornecedor de 10/09/2026 — Pendente de confirmação"), "texto sem url nunca vira link");
+  assert(email.html.includes("Evidência: Pendente de confirmação"), "sem evidência: pendente");
+  assert(email.html.includes('href="https://acc.exemplo/obra/ledger/evt-1"'), "título do alerta é o link do evento");
+  assert(email.html.includes("Cláusula 8.2 – Prazos e Cronograma"), "cláusula com número e título, sem cabeçalho separado");
+  assert(!email.html.includes("Cláusula impactada"));
+  assert(email.html.includes("Cláusula: Pendente de confirmação"), "sem cláusula verificada: pendente");
 });
 
 check("sem logo real disponível, o cabeçalho nunca referencia cid: (mesma regra do e-mail de alerta único)", () => {

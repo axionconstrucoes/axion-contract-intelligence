@@ -148,6 +148,7 @@ export async function createAndSendContractAlertBatch(
   const batchUrl = `${baseUrl}/${input.projectId}/ledger/lote-alertas/${batchId}`;
   const emailItems: ContractAlertBatchEmailItem[] = input.items.map((item) => ({
     ...item,
+    projectName: item.projectName ?? (project.name as string),
     respondItemUrl: `${batchUrl}#evento-${item.eventId}`,
     quickActionUrl:
       input.items.length === 1

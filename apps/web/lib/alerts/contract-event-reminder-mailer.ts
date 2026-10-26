@@ -6,6 +6,7 @@ import type { AlertSeverity } from "@axion/types";
 import { getAppBaseUrl } from "../app-base-url";
 import { createAndSendContractAlertBatch } from "../email/create-and-send-contract-alert-batch";
 import type { ReminderMailer, ReminderMessage } from "./followup-engine";
+import { loadEventAlertContexts } from "./load-event-alert-context";
 
 class ReminderError extends Error {
   constructor(name: string) {
@@ -28,10 +29,10 @@ export class ContractEventReminderMailer implements ReminderMailer {
     const eventId = message.followup.sourceId;
     const projectId = message.followup.projectId;
 
-    const [{ data: event }, { data: assessment }, { data: evidence }, { data: config }] = await Promise.all([
+    const [{ data: event }, { data: assessment }, contexts, { data: config }] = await Promise.all([
       admin.from("contract_events").select("id,project_id,title,description").eq("id", eventId).maybeSingle(),
       admin.from("event_ai_assessments").select("severity,summary").eq("event_id", eventId).maybeSingle(),
-      admin.from("event_evidence").select("source_type,label").eq("event_id", eventId),
+      loadEventAlertContexts(admin, [eventId], getAppBaseUrl()),
       admin
         .from("project_weekly_schedule_ingestion_configs")
         .select("pilot_delivery_override_email")
@@ -55,9 +56,10 @@ export class ContractEventReminderMailer implements ReminderMailer {
             title: event.title,
             severity,
             riskDescription,
-            clauseLabel: null,
-            clauseText: null,
-            evidence: (evidence ?? []).map((row) => `${row.source_type}: ${row.label}`),
+            projectName: contexts.get(eventId)?.projectName,
+            clauseLabel: contexts.get(eventId)?.clause?.label ?? null,
+            clauseText: contexts.get(eventId)?.clause?.text ?? null,
+            evidence: contexts.get(eventId)?.evidence ?? [],
             eventUrl: `${getAppBaseUrl()}/${projectId}/ledger/${event.id}`,
           },
         ],

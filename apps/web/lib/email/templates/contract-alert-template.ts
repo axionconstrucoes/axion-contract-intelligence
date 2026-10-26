@@ -10,12 +10,32 @@ import {
   ACC_FONT_FAMILY,
   ACC_FONT_SIZE_AUX,
   ACC_FONT_SIZE_BODY,
-  ACC_FONT_SIZE_SECTION,
-  ACC_FONT_SIZE_TITLE,
 } from "@/lib/email/brand-style";
 import { repeatNoticeText } from "@/lib/alerts/repeat-policy";
 import type { ContractConfrontationBlock } from "@/lib/email/build-confrontation-block";
-import { ALERT_TONES, buildAlertBoxHtml, buildAlertHeaderHtml, panelStyle } from "@/lib/email/templates/alert-box-style";
+import {
+  ALERT_TONES,
+  BUTTON_COLUMN_WIDTH_PX,
+  HEADER_GAP_PX,
+  buildActionsPanelHtml,
+  buildAlertBoxHtml,
+  buildAlertHeaderHtml,
+  buildThreeActionButtonsHtml,
+  textStyle,
+  type ThreeActions,
+} from "@/lib/email/templates/alert-box-style";
+import {
+  alertClauseHtml,
+  alertClauseText,
+  alertConfrontationHtml,
+  alertDescriptionHtml,
+  alertEvidenceHtml,
+  alertEvidenceText,
+  alertFieldRowHtml,
+  alertRepeatHtml,
+  alertTitleHtml,
+} from "@/lib/email/templates/alert-body-parts";
+import { EMAIL_ALERT_ACTION_LABELS } from "@/lib/email-actions/types";
 import { EVIDENCE_EMAIL_DIRECTION_LABELS, type EvidenceEmailDirection } from "@/lib/email/evidence-email-direction";
 import type { EmailActionButton } from "@/lib/email-actions/render-buttons";
 import { ACC_ACTION_BUTTON_CLASS, renderEmailActionButtonsHtml, renderEmailActionButtonsText } from "@/lib/email-actions/render-buttons";
@@ -123,6 +143,13 @@ export interface ContractAlertEmailInput {
   // true só quando o alerta tem acompanhamento recorrente ativo (mostra
   // "Repete: …"). Padrão false: o e-mail individual manual não promete repetição.
   repeatNotice?: boolean;
+  // Links dos três botões (RESOLVIDO / EM ANDAMENTO / ENVIADO P/) — só informados quando há
+  // acompanhamento válido (página de confirmação + follow-up). Sem eles, os botões por token
+  // existentes (actionButtons) continuam como antes.
+  quickActionUrls?: Record<ThreeActions, string> | null;
+  // Cláusula impactada VERIFICADA (número e título). undefined = derivar do confronto aprovado,
+  // se houver; null/sem rótulo = "Cláusula: Pendente de confirmação".
+  impactedClause?: { label: string | null; text?: string | null } | null;
 }
 
 export interface ContractAlertEmail {
@@ -185,23 +212,6 @@ export function evidenceItemText(item: ContractAlertEvidenceItem): string {
   return `- ${item.sourceTypeLabel} — ${item.label} — ${item.url}`;
 }
 
-function confrontationBlockHtml(block: ContractConfrontationBlock): string {
-  const section = (title: string, value: string) => `
-    <p style="margin:0 0 2px 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;color:${ACC_COLOR_HEADING};text-transform:uppercase;letter-spacing:0.02em;">${escapeHtml(title)}</p>
-    <p style="margin:0 0 10px 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_BODY};color:${ACC_COLOR_BODY};word-break:break-word;">${escapeHtml(value)}</p>`;
-
-  return `
-  <div style="margin-top:12px;border:1px solid #e5e7eb;border-radius:6px;padding:12px 14px;background-color:#fafafa;">
-    <p style="margin:0 0 10px 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_SECTION};font-weight:bold;color:${ACC_COLOR_HEADING};">Confronto contratual — Cláusula ${escapeHtml(block.clauseNumber)}</p>
-    ${section("O que foi identificado no evento", block.eventFinding)}
-    ${section("O que o contrato estabelece", block.contractProvision)}
-    ${section("Conclusão do confronto", block.conclusion)}
-    ${section("Possível impacto", block.potentialImpact)}
-    <p style="margin:8px 0 6px 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;color:${ACC_COLOR_HEADING};">${escapeHtml(block.approvedByLine)}</p>
-    <a href="${escapeHtml(block.detailUrl)}" style="font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${ACC_COLOR_HEADING};text-decoration:underline;">Ver confronto completo no ACC</a>
-  </div>`;
-}
-
 function confrontationBlockText(block: ContractConfrontationBlock): string {
   return [
     `Confronto contratual — Cláusula ${block.clauseNumber}`,
@@ -214,38 +224,21 @@ function confrontationBlockText(block: ContractConfrontationBlock): string {
   ].join("\n");
 }
 
-// Abre em ${eventUrl} (link neutro, sem token) — sempre disponível, mesmo
-// sem qualquer botão de ação acionável emitido. Rótulo curto: a explicação
-// vai em title/aria-label + legenda discreta sempre visível abaixo. Em
-// caixas de fundo escuro o botão inverte (fundo branco, texto vinho) para
-// manter contraste.
-function buildOpenEventButtonHtml(eventUrl: string, severity: AlertSeverity): string {
-  const dark = ALERT_TONES[severity].dark;
-  const description = "Abre o evento completo no ACC.";
-  const bg = dark ? "#ffffff" : ACC_COLOR_HEADING;
-  const fg = dark ? ACC_COLOR_HEADING : "#ffffff";
-  const button = `<a href="${escapeHtml(eventUrl)}" title="${escapeHtml(description)}" aria-label="${escapeHtml(
-    `Abrir evento no ACC — ${description}`
-  )}" class="acc-open-event-btn" style="display:block;width:100%;box-sizing:border-box;margin:0;padding:10px 14px;background-color:${bg};color:${fg};font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_BODY};font-weight:bold;text-decoration:none;border-radius:6px;text-align:center;">Abrir evento no ACC</a>`;
-  const caption = `<p style="margin:4px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${ALERT_TONES[severity].muted};text-align:center;">${escapeHtml(description)}</p>`;
-  return `${button}${caption}`;
-}
-
-// Constrói {subject, html, text} do padrão institucional de alerta
-// contratual. Nunca inventa "prazo"/"ação recomendada" — quando o caller
-// não tem essa informação real, o campo fica null e a linha correspondente
-// simplesmente não aparece (nunca um placeholder fabricado tipo "A definir").
+// Constrói {subject, html, text} do padrão institucional de alerta contratual. Nunca inventa
+// "prazo"/"ação recomendada" — quando o caller não tem essa informação real, o campo fica null e a
+// linha simplesmente não aparece (nunca um placeholder fabricado).
 //
-// "Responsável" NÃO aparece no corpo do e-mail: quem recebe o alerta já é o
-// destinatário. O responsável continua registrado nos registros internos, no
-// histórico e na tabela de providências (input.responsibleName é mantido só
-// por compatibilidade de chamadores e não é renderizado).
+// "Responsável" NÃO aparece no corpo do e-mail: quem recebe o alerta já é o destinatário. O
+// responsável continua nos registros internos, no histórico e na tabela de providências
+// (input.responsibleName é mantido só por compatibilidade e não é renderizado).
 //
-// Caixa do alerta (alert-box-style.ts): cabeçalho com o LOGO OFICIAL à
-// esquerda e "RISCO …" em negrito na mesma linha, cor/borda por grau de
-// risco; título do evento logo abaixo do cabeçalho. Duas colunas em telas
-// largas — conteúdo (~64%) e ações (~36%); estrutura em <table>+estilos
-// inline (Gmail/Outlook); só o empilhamento mobile vem de <style>+@media.
+// Caixa do alerta (alert-box-style.ts): cabeçalho com o LOGO OFICIAL à esquerda e
+// "RISCO [NÍVEL] | [OBRA]" em negrito na mesma linha; espaço visível; título do evento como LINK
+// para o ACC; descrição; cláusula (número e título, sem cabeçalho) ou "Pendente de confirmação";
+// evidência como link para a origem; "Repete". UM único tamanho de fonte; só o peso muda. Os três
+// botões (RESOLVIDO / EM ANDAMENTO / ENVIADO P/) ficam numa coluna BRANCA estreita quando há
+// acompanhamento válido (quickActionUrls); sem ele, o comportamento anterior (botões por token) é
+// preservado. Estrutura em <table>+estilos inline (Gmail/Outlook).
 export function buildContractAlertEmail(input: ContractAlertEmailInput): ContractAlertEmail {
   const subject = buildContractAlertSubject(input.projectName, input.severity);
   const tone = ALERT_TONES[input.severity];
@@ -255,77 +248,65 @@ export function buildContractAlertEmail(input: ContractAlertEmailInput): Contrac
     maroon: input.hasInlineLogo,
     inverted: input.hasInlineInvertedLogo ?? input.hasInlineLogo,
   };
-  const panel = panelStyle(input.severity);
-  const font = `font-family:${ACC_FONT_FAMILY};`;
 
-  const evidenceListHtml =
-    input.keyEvidence.length > 0
-      ? `<ul style="margin:4px 0 0 0;padding-left:16px;">${input.keyEvidence.map(evidenceItemHtml).join("")}</ul>`
-      : `<span style="${font}color:${tone.dark ? ACC_COLOR_BODY : tone.text};font-size:${ACC_FONT_SIZE_BODY};">Nenhuma evidência vinculada nesta fase.</span>`;
-  // Fundo escuro: a lista de evidências (cores próprias de texto escuro) vai
-  // num painel branco, para continuar legível.
-  const evidenceHtml = tone.dark ? `<div style="${panel}">${evidenceListHtml}</div>` : evidenceListHtml;
+  const clause =
+    input.impactedClause !== undefined
+      ? input.impactedClause
+      : input.confrontationBlocks[0]
+        ? { label: `Cláusula ${input.confrontationBlocks[0].clauseNumber}`, text: null }
+        : null;
 
-  const confrontationHtml = input.confrontationBlocks.map(confrontationBlockHtml).join("");
-
-  const toneRow = (label: string, value: string | null): string => {
-    if (!value) return "";
-    return `
-    <tr>
-      <td style="padding:6px 0;color:${tone.text};${font}font-size:${ACC_FONT_SIZE_BODY};font-weight:bold;vertical-align:top;white-space:nowrap;">${escapeHtml(label)}</td>
-      <td style="padding:6px 0 6px 12px;color:${tone.text};${font}font-size:${ACC_FONT_SIZE_BODY};word-break:break-word;">${escapeHtml(value)}</td>
-    </tr>`;
-  };
-
-  const repeatHtml = input.repeatNotice
-    ? `<p style="margin:12px 0 0 0;${font}font-size:${ACC_FONT_SIZE_BODY};font-weight:bold;color:${tone.text};">${escapeHtml(repeatNoticeText(input.severity))}</p>`
-    : "";
-
-  const criticalSentenceHtml =
-    input.severity === "CRITICA"
-      ? `<p style="margin:0 0 12px 0;${font}font-size:${ACC_FONT_SIZE_AUX};color:${tone.text};">Atraso contratual com baixa probabilidade de recuperação</p>`
+  const quick = input.quickActionUrls ?? null;
+  const tokenLinksHtml =
+    quick && input.actionButtons.length > 0
+      ? `<p style="margin:12px 0 0 0;${textStyle("regular", tone.text)}">Outras ações: ${input.actionButtons
+          .map(
+            (b) =>
+              `<a href="${escapeHtml(b.url)}" style="${textStyle("regular", tone.link, "text-decoration:underline;")}">${escapeHtml(EMAIL_ALERT_ACTION_LABELS[b.action])}</a>`
+          )
+          .join(" · ")}</p>`
       : "";
 
-  const actionsColumnHtml = `${buildOpenEventButtonHtml(input.eventUrl, input.severity)}${renderEmailActionButtonsHtml(input.actionButtons, input.summary, tone.dark ? tone.muted : undefined)}`;
+  const rows = [
+    alertFieldRowHtml("Evento relacionado", input.relatedEventTitle, input.severity),
+    alertFieldRowHtml("Base contratual", input.contractualBasis, input.severity),
+    alertFieldRowHtml("Impacto potencial", input.potentialImpact, input.severity),
+    alertFieldRowHtml("Ação recomendada", input.recommendedAction, input.severity),
+    alertFieldRowHtml("Prazo", input.dueDate, input.severity),
+  ].join("");
+
+  const criticalSentence =
+    input.severity === "CRITICA"
+      ? `<p style="margin:0 0 12px 0;${textStyle("regular", tone.text)}">Atraso contratual com baixa probabilidade de recuperação</p>`
+      : "";
+
+  const contentHtml = `
+          ${alertTitleHtml(input.title, input.eventUrl, input.severity)}
+          ${alertDescriptionHtml(input.summary, input.severity)}
+          ${criticalSentence}
+          ${alertClauseHtml(clause, input.severity)}
+          ${rows}
+          ${input.confrontationBlocks.map((b) => alertConfrontationHtml(b, input.severity)).join("")}
+          ${alertEvidenceHtml(input.keyEvidence, input.severity)}
+          ${input.repeatNotice ? alertRepeatHtml(input.severity) : ""}
+          ${tokenLinksHtml}`;
+
+  // Coluna de ações: três botões numa coluna BRANCA estreita (acompanhamento válido) ou, sem ele,
+  // a coluna anterior com os botões por token (preservada).
+  let actionsColumnHtml = "";
+  if (quick) {
+    actionsColumnHtml = `<td class="acc-actions-col" valign="top" width="${BUTTON_COLUMN_WIDTH_PX}" style="width:${BUTTON_COLUMN_WIDTH_PX}px;padding:0 0 0 16px;">${buildActionsPanelHtml(buildThreeActionButtonsHtml((action) => quick[action]))}</td>`;
+  } else if (input.actionButtons.length > 0) {
+    actionsColumnHtml = `<td class="acc-actions-col" valign="top" width="36%" style="width:36%;padding:0 0 0 16px;"><div style="background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:6px;padding:8px;">${renderEmailActionButtonsHtml(input.actionButtons, input.summary, "#4B5563", "14px")}</div></td>`;
+  }
 
   const boxInner = `
-    ${buildAlertHeaderHtml(input.severity, riskLabel, logos)}
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;">
+    ${buildAlertHeaderHtml(input.severity, riskLabel, input.projectName, logos)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:${HEADER_GAP_PX}px;">
       <tr>
-        <td class="acc-content-col" valign="top" width="64%" style="width:64%;padding:0 24px 0 0;word-break:break-word;color:${tone.text};">
-          <h1 style="margin:0 0 4px 0;${font}color:${tone.text};font-size:${ACC_FONT_SIZE_TITLE};word-break:break-word;">${escapeHtml(input.title)}</h1>
-          <p style="margin:0 0 12px 0;${font}color:${tone.text};font-size:${ACC_FONT_SIZE_BODY};">Obra: <strong>${escapeHtml(input.projectName)}</strong></p>
-          ${criticalSentenceHtml}
-          <p style="margin:0 0 16px 0;${font}color:${tone.text};font-size:${ACC_FONT_SIZE_BODY};">${escapeHtml(input.summary)}</p>
-
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-            ${toneRow("Evento relacionado", input.relatedEventTitle)}
-            ${toneRow("Base contratual", input.contractualBasis)}
-            ${toneRow("Impacto potencial", input.potentialImpact)}
-            ${toneRow("Ação recomendada", input.recommendedAction)}
-            ${toneRow("Prazo", input.dueDate)}
-          </table>
-
-          ${confrontationHtml}
-
-          <p style="margin:16px 0 6px 0;${font}font-size:${ACC_FONT_SIZE_SECTION};font-weight:bold;color:${tone.text};">Evidências principais</p>
-          ${evidenceHtml}
-          ${repeatHtml}
+        <td class="acc-content-col" valign="top" style="padding:0;word-break:break-word;color:${tone.text};">${contentHtml}
         </td>
-        <td class="acc-actions-col" valign="top" width="36%" style="width:36%;padding:0 0 0 4px;border-left:1px solid ${tone.dark ? "#ffffff" : "#e5e7eb"};">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="padding:0 0 8px 20px;">
-                <p style="margin:0;${font}font-size:${ACC_FONT_SIZE_SECTION};font-weight:bold;color:${tone.text};">Ações disponíveis</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 0 0 20px;">
-                ${actionsColumnHtml}
-              </td>
-            </tr>
-          </table>
-        </td>
+        ${actionsColumnHtml}
       </tr>
     </table>`;
 
@@ -333,10 +314,8 @@ export function buildContractAlertEmail(input: ContractAlertEmailInput): Contrac
 <style>
   @media only screen and (max-width:640px) {
     .acc-content-col, .acc-actions-col { display:block !important; width:100% !important; }
-    .acc-content-col { padding:0 !important; }
-    .acc-actions-col { padding:20px 0 0 0 !important; border-left:none !important; border-top:1px solid ${tone.dark ? "#ffffff" : "#e5e7eb"} !important; }
+    .acc-actions-col { padding:16px 0 0 0 !important; }
   }
-  .acc-open-event-btn:hover { background-color:${tone.dark ? "#f3f4f6" : "#5c1616"} !important; }
   .${ACC_ACTION_BUTTON_CLASS}:hover { background-color:${ACC_COLOR_HEADING} !important; color:#ffffff !important; }
 </style>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
@@ -345,7 +324,7 @@ export function buildContractAlertEmail(input: ContractAlertEmailInput): Contrac
       <table role="presentation" width="820" cellpadding="0" cellspacing="0" style="width:100%;max-width:820px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:8px;">
         <tr>
           <td style="padding:20px 24px 12px 24px;">
-            <p style="margin:0;${font}color:${ACC_COLOR_BODY};font-size:${ACC_FONT_SIZE_BODY};">${escapeHtml(greeting)}</p>
+            <p style="margin:0;font-family:${ACC_FONT_FAMILY};color:${ACC_COLOR_BODY};font-size:${ACC_FONT_SIZE_BODY};">${escapeHtml(greeting)}</p>
           </td>
         </tr>
         <tr>
@@ -355,7 +334,7 @@ export function buildContractAlertEmail(input: ContractAlertEmailInput): Contrac
         </tr>
         <tr>
           <td style="padding:16px 24px;border-top:1px solid #e5e7eb;">
-            <p style="margin:0;${font}color:${ACC_COLOR_MUTED};font-size:${ACC_FONT_SIZE_AUX};">
+            <p style="margin:0;font-family:${ACC_FONT_FAMILY};color:${ACC_COLOR_MUTED};font-size:${ACC_FONT_SIZE_AUX};">
               Este alerta é uma sugestão de análise automatizada e exige revisão humana — não é uma decisão contratual ou jurídica definitiva.
               Você também pode responder diretamente a este e-mail (Responder do Gmail).
             </p>
@@ -376,23 +355,22 @@ export function buildContractAlertEmail(input: ContractAlertEmailInput): Contrac
 
   const text = [
     `ACC - AXION Controle de Contratos`,
-    `RISCO ${riskLabel}`,
+    `RISCO ${riskLabel} | ${input.projectName}`,
     ...(input.severity === "CRITICA" ? ["Atraso contratual com baixa probabilidade de recuperação"] : []),
     "",
     greeting,
-    input.title,
-    `Obra: ${input.projectName}`,
+    `${input.title} — ${input.eventUrl}`,
     "",
     input.summary,
+    "",
+    alertClauseText(clause),
     ...(fieldRows.length > 0 ? ["", ...fieldRows] : []),
     ...(input.confrontationBlocks.length > 0 ? ["", ...input.confrontationBlocks.map(confrontationBlockText)] : []),
     "",
-    "Evidências principais:",
-    input.keyEvidence.length > 0 ? input.keyEvidence.map(evidenceItemText).join("\n") : "Nenhuma evidência vinculada nesta fase.",
+    alertEvidenceText(input.keyEvidence),
     ...(input.repeatNotice ? ["", repeatNoticeText(input.severity)] : []),
-    "",
-    `Abrir evento no ACC: ${input.eventUrl}`,
-    ...(input.actionButtons.length > 0 ? ["", "Ações disponíveis:", renderEmailActionButtonsText(input.actionButtons)] : []),
+    ...(quick ? ["", "Ações:", `RESOLVIDO: ${quick.RESOLVIDO}`, `EM ANDAMENTO: ${quick.EM_ANDAMENTO}`, `ENVIADO P/: ${quick.ENVIADO_PARA}`] : []),
+    ...(input.actionButtons.length > 0 ? ["", quick ? "Outras ações:" : "Ações disponíveis:", renderEmailActionButtonsText(input.actionButtons)] : []),
     "",
     "Este alerta é uma sugestão de análise automatizada e exige revisão humana — não é uma decisão contratual ou jurídica definitiva.",
   ].join("\n");

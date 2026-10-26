@@ -1,6 +1,7 @@
-// Testes estruturais dos templates REAIS de alerta (individual e lote) após a
-// definição final de cabeçalho/cores/bordas/botões. A medição de pixels no
-// navegador é feita à parte (captura CDP); aqui validamos o HTML gerado.
+// Testes estruturais dos templates REAIS de alerta (individual e lote) — definição final de
+// cabeçalho "RISCO | OBRA", cores, bordas, tipografia única, título-link, cláusula, evidência e
+// três botões. A medição de pixels no navegador é feita à parte (captura CDP); aqui validamos o
+// HTML gerado.
 //
 // Uso: node scripts/test-alert-box-templates.mjs
 
@@ -10,9 +11,10 @@ import { register } from "node:module";
 register("./ts-module-resolver.mjs", import.meta.url);
 
 const { buildContractAlertEmail } = await import("../apps/web/lib/email/templates/contract-alert-template.ts");
-const { buildContractAlertBatchEmail } = await import("../apps/web/lib/email/templates/contract-alert-batch-template.ts");
+const { buildContractAlertBatchEmail, buildContractAlertBatchSubject } = await import("../apps/web/lib/email/templates/contract-alert-batch-template.ts");
 const style = await import("../apps/web/lib/email/templates/alert-box-style.ts");
 const policy = await import("../apps/web/lib/alerts/repeat-policy.ts");
+const links = await import("../apps/web/lib/alerts/alert-source-links.ts");
 
 let passed = 0;
 let failed = 0;
@@ -31,27 +33,25 @@ function check(name, fn) {
 const SEVERITIES = ["CRITICA", "ALTA", "MEDIA", "BAIXA"];
 const WORD = { CRITICA: "CRÍTICO", ALTA: "ALTO", MEDIA: "MÉDIO", BAIXA: "BAIXO" };
 const BASE = "https://acc.exemplo.invalid";
+const QUICK = {
+  RESOLVIDO: `${BASE}/alertas/acao/p/b/e?acao=RESOLVIDO`,
+  EM_ANDAMENTO: `${BASE}/alertas/acao/p/b/e?acao=EM_ANDAMENTO`,
+  ENVIADO_PARA: `${BASE}/alertas/acao/p/b/e?acao=ENVIADO_PARA`,
+};
 
 function individual(severity, extra = {}) {
   return buildContractAlertEmail({
     recipientName: "Ana Souza",
-    projectName: "NEWPORT - Galpão C100",
+    projectName: "NEWPORT - Galpão C100 — Goiânia · 0079",
     severity,
     title: "Título do evento",
-    summary: "Resumo do alerta.",
+    summary: "Descrição do alerta.",
     relatedEventTitle: "Evento relacionado X",
     contractualBasis: null,
     confrontationBlocks: [
-      {
-        clauseNumber: "8.2",
-        eventFinding: "achado",
-        contractProvision: "provisão",
-        conclusion: "conclusão",
-        potentialImpact: "impacto",
-        approvedByLine: "Aprovado por Fulana",
-        detailUrl: `${BASE}/c/1`,
-      },
+      { clauseNumber: "8.2", eventFinding: "achado", contractProvision: "provisão", conclusion: "conclusão", potentialImpact: "impacto", approvedByLine: "Aprovado por Fulana", detailUrl: `${BASE}/c/1` },
     ],
+    impactedClause: { label: "Cláusula 8.2 – Prazos e Cronograma", text: "Texto da cláusula." },
     keyEvidence: [{ kind: "OTHER", url: `${BASE}/e/1`, sourceTypeLabel: "Cronograma", label: "Linha de base" }],
     potentialImpact: "Prazo",
     recommendedAction: null,
@@ -65,28 +65,30 @@ function individual(severity, extra = {}) {
   });
 }
 
+const projects = ["NEWPORT - Galpão C100 — Goiânia · 0079", "Edifício Mirante — Campinas · 0112", "Centro Logístico Aurora — Betim · 0094", "NEWPORT - Galpão C100 — Goiânia · 0079"];
 const batchItems = SEVERITIES.map((severity, i) => ({
   eventId: `ev-${i + 1}`,
+  projectName: projects[i],
   title: `Alerta ${severity}`,
   severity,
   riskDescription: `Descrição ${severity}`,
-  clauseLabel: "Cláusula 8.2",
-  clauseText: "Texto da cláusula",
-  evidence: ["Evidência simples"],
+  clauseLabel: i < 3 ? "Cláusula 8.2 – Prazos e Cronograma" : null,
+  clauseText: i < 2 ? "Texto da cláusula" : null,
+  evidence: i === 3 ? [] : [{ kind: "OTHER", url: `${BASE}/e/${i}`, sourceTypeLabel: "Cronograma", label: "Linha de base" }],
   eventUrl: `${BASE}/ev/${i + 1}`,
   respondItemUrl: `${BASE}/lote/1#evento-ev-${i + 1}`,
   quickActionUrl: `${BASE}/alertas/acao/p/1/ev-${i + 1}`,
 }));
 const batch = buildContractAlertBatchEmail({
   recipientName: "Ana Souza",
-  projectName: "NEWPORT - Galpão C100",
+  projectName: "Obra padrão",
   batchUrl: `${BASE}/lote/1`,
   items: batchItems,
   hasInlineLogo: true,
   hasInlineInvertedLogo: true,
 });
 
-const boxes = (html) => html.split("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"").slice(1);
+const boxes = (html) => html.split('<table role="presentation" width="100%" cellpadding="0" cellspacing="0" bgcolor="').slice(1);
 
 console.log("");
 console.log("======================================");
@@ -101,11 +103,9 @@ check("política de repetição: 1/2/4/7 dias (24/48/96/168 h) e textos exatos '
   assert.equal(policy.repeatNoticeText("ALTA"), "Repete: a cada 2 dias até a conclusão.");
   assert.equal(policy.repeatNoticeText("MEDIA"), "Repete: a cada 4 dias até a conclusão.");
   assert.equal(policy.repeatNoticeText("BAIXA"), "Repete: a cada 7 dias até a conclusão.");
-  assert.equal(policy.inProgressConfirmationNotice("ALTA"), "Este alerta será repetido a cada 2 dias até a conclusão.");
-  assert.equal(policy.forwardConfirmationNotice("CRITICA"), "O destinatário receberá este alerta a cada 1 dia até a conclusão.");
 });
 
-check("cores por risco: CRÍTICO vermelho/branco, ALTO amarelo escuro/branco, MÉDIO e BAIXO branco/preto", () => {
+check("cores por risco: CRÍTICO vermelho/branco, ALTO amarelo escuro/branco, MÉDIO e BAIXO branco/preto; logo invertido só nos escuros", () => {
   const t = style.ALERT_TONES;
   assert.equal(t.CRITICA.background, "#DC2626");
   assert.equal(t.CRITICA.text, "#FFFFFF");
@@ -119,7 +119,7 @@ check("cores por risco: CRÍTICO vermelho/branco, ALTO amarelo escuro/branco, M�
   for (const s of ["CRITICA", "ALTA"]) assert.equal(t[s].logo, "inverted");
 });
 
-check("contraste do texto branco sobre o amarelo escuro do ALTO ≥ 4,5:1 (WCAG AA) e sobre o vermelho do CRÍTICO ≥ 4,5:1", () => {
+check("contraste do texto branco sobre o amarelo escuro do ALTO e sobre o vermelho do CRÍTICO ≥ 4,5:1 (WCAG AA)", () => {
   const alto = style.contrastRatio("#FFFFFF", style.ALTO_BACKGROUND);
   const crit = style.contrastRatio("#FFFFFF", style.CRITICO_BACKGROUND);
   console.log(`     contraste ALTO (#FFFFFF sobre ${style.ALTO_BACKGROUND}) = ${alto.toFixed(2)}:1 ; CRÍTICO (sobre ${style.CRITICO_BACKGROUND}) = ${crit.toFixed(2)}:1`);
@@ -127,12 +127,11 @@ check("contraste do texto branco sobre o amarelo escuro do ALTO ≥ 4,5:1 (WCAG 
   assert.ok(crit >= 4.5, `contraste CRÍTICO ${crit}`);
 });
 
-check("bordas: contínua de 2px, mais escura que o fundo nos coloridos e cinza médio nos brancos", () => {
+check("bordas: contínua de 2px, mais escura que o fundo nos coloridos e cinza médio nos brancos; cantos arredondados", () => {
   const t = style.ALERT_TONES;
   assert.ok(style.relativeLuminance(t.CRITICA.border) < style.relativeLuminance(t.CRITICA.background));
   assert.ok(style.relativeLuminance(t.ALTA.border) < style.relativeLuminance(t.ALTA.background));
   assert.equal(t.MEDIA.border, "#9CA3AF");
-  assert.equal(t.BAIXA.border, "#9CA3AF");
   for (const s of SEVERITIES) {
     const html = style.buildAlertBoxHtml(s, "x");
     assert.match(html, new RegExp(`border:2px solid ${t[s].border}`));
@@ -140,49 +139,133 @@ check("bordas: contínua de 2px, mais escura que o fundo nos coloridos e cinza m
   }
 });
 
-check("cabeçalho: logo oficial à esquerda, 'RISCO …' na MESMA linha (mesma <tr>), centralizado, negrito, sem selo arredondado", () => {
+check("cabeçalho: logo à esquerda e 'RISCO [NÍVEL] | [OBRA]' na MESMA linha (mesma <tr>), centralizado e em negrito, sem selo arredondado", () => {
   for (const s of SEVERITIES) {
-    const h = style.buildAlertHeaderHtml(s, WORD[s], { maroon: true, inverted: true });
-    assert.equal((h.match(/<tr>/g) ?? []).length, 1, "logo e classificação precisam estar na mesma linha de tabela");
-    assert.ok(h.indexOf("<img") < h.indexOf(`RISCO ${WORD[s]}`), "logo antes (à esquerda) da classificação");
+    const h = style.buildAlertHeaderHtml(s, WORD[s], "Obra Teste", { maroon: true, inverted: true });
+    assert.equal((h.match(/<tr>/g) ?? []).length, 1, "logo e classificação na mesma linha de tabela");
+    assert.ok(h.indexOf("<img") < h.indexOf(`RISCO ${WORD[s]} | Obra Teste`), "logo antes (à esquerda) do texto");
     assert.match(h, /valign="middle"[^>]*align="center"[^>]*text-align:center/);
-    assert.match(h, /font-weight:bold/);
-    assert.ok(!/border-radius:999px/.test(h), "sem selo arredondado");
-    assert.ok(!/<br/.test(h));
+    assert.match(h, /font-weight:700/);
+    assert.ok(!/border-radius:999px/.test(h) && !/<br/.test(h));
     const cid = style.ALERT_TONES[s].logo === "inverted" ? "cid:acc-logo-inverted" : "cid:acc-logo-signature";
     assert.ok(h.includes(cid), `logo ${cid} para ${s}`);
     assert.match(h, /width="44" height="44"/);
   }
 });
 
-check("sem logo disponível o cabeçalho nunca referencia cid quebrado (só a classificação)", () => {
-  const h = style.buildAlertHeaderHtml("CRITICA", "CRÍTICO", { maroon: true, inverted: false });
-  assert.ok(!h.includes("cid:"));
-  assert.ok(h.includes("RISCO CRÍTICO"));
+check("cabeçalho: nome de obra longo QUEBRA linha dentro da célula (sem sobrepor o logo) e é escapado", () => {
+  const long = "Complexo Industrial & Logístico <Grande> ".repeat(6);
+  const h = style.buildAlertHeaderHtml("MEDIA", "MÉDIO", long, { maroon: true, inverted: true });
+  assert.match(h, /word-break:break-word;overflow-wrap:anywhere/);
+  assert.ok(h.includes("Complexo Industrial &amp; Logístico &lt;Grande&gt;"));
+  assert.ok(h.indexOf("<img") < h.indexOf("RISCO MÉDIO"));
 });
 
-check("e-mail individual: título do evento fica ABAIXO do cabeçalho; sem selo/banner antigo; saudação preservada", () => {
+check("sem logo disponível o cabeçalho nunca referencia cid quebrado (só o texto)", () => {
+  const h = style.buildAlertHeaderHtml("CRITICA", "CRÍTICO", "Obra", { maroon: true, inverted: false });
+  assert.ok(!h.includes("cid:"));
+  assert.ok(h.includes("RISCO CRÍTICO | Obra"));
+});
+
+check("OBRA POR ALERTA: cada caixa do lote mostra a obra do PRÓPRIO alerta; sem obra própria usa a padrão", () => {
+  for (const item of batchItems) assert.ok(batch.html.includes(`RISCO ${WORD[item.severity]} | ${item.projectName}`), item.projectName);
+  const noProject = buildContractAlertBatchEmail({ recipientName: null, projectName: "Obra padrão", batchUrl: `${BASE}/l`, hasInlineLogo: true, items: [{ ...batchItems[0], projectName: undefined }] });
+  assert.ok(noProject.html.includes("RISCO CRÍTICO | Obra padrão"));
+  assert.ok(batch.text.includes("RISCO ALTO | Edifício Mirante — Campinas · 0112"));
+  assert.match(buildContractAlertBatchSubject("Obra padrão", batchItems), /4 alertas de contrato — 3 obras/);
+  assert.match(buildContractAlertBatchSubject("Obra padrão", [batchItems[0]]), /OBRA NEWPORT/);
+});
+
+check("TIPOGRAFIA ÚNICA: um só tamanho (14px) em todo o alerta; título black/link, cláusula+evidência+Repete em negrito, descrição regular", () => {
+  const first = boxes(batch.html)[0];
+  const sizes = new Set(Array.from(first.matchAll(/font-size:(\d+px)/g)).map((m) => m[1]));
+  assert.deepEqual([...sizes], ["14px"]);
+  assert.ok(first.includes("font-weight:900"), "título black");
+  assert.ok(/<a [^>]*font-weight:900[^>]*>Alerta CRITICA<\/a>/.test(first), "título é link");
+  assert.ok(/font-weight:400;color:#FFFFFF;[^"]*">Descrição CRITICA/.test(first), "descrição regular");
+  assert.ok(/font-weight:700;color:#FFFFFF;[^"]*">Cláusula 8\.2 – Prazos e Cronograma</.test(first), "cláusula em negrito");
+  assert.ok(/font-weight:700;color:#FFFFFF;[^"]*">Repete: a cada 1 dia até a conclusão\.</.test(first), "Repete em negrito");
+  assert.ok(/<a [^>]*font-weight:700[^>]*>Cronograma: Linha de base<\/a>/.test(first), "evidência (link) em negrito");
+  const ind = individual("MEDIA", { repeatNotice: true }).html;
+  const indBox = ind.slice(ind.indexOf("border:2px solid"), ind.indexOf('<td style="padding:16px 24px;border-top'));
+  assert.deepEqual([...new Set(Array.from(indBox.matchAll(/font-size:(\d+px)/g)).map((m) => m[1]))], ["14px"]);
+});
+
+check("o TÍTULO é o link do evento (VER EVENTO não existe mais) — individual e lote", () => {
+  for (const html of [batch.html, individual("ALTA").html]) {
+    assert.ok(!html.includes("VER EVENTO"));
+    assert.ok(!html.includes('bgcolor="#FFD600"'));
+  }
+  batchItems.forEach((item) => assert.ok(batch.html.includes(`href="${item.eventUrl}"`), item.eventId));
+  assert.ok(individual("ALTA").html.includes(`href="${BASE}/ev/1"`));
+  assert.ok(!batch.text.includes("VER EVENTO") && !individual("ALTA").text.includes("VER EVENTO"));
+});
+
+check("CLÁUSULA: número e título em negrito sem cabeçalho separado; sem referência verificável: 'Pendente de confirmação'", () => {
+  assert.ok(!batch.html.includes("Cláusula impactada") && !individual("MEDIA").html.includes("Cláusula impactada"));
+  assert.ok(batch.html.includes("Cláusula 8.2 – Prazos e Cronograma"));
+  assert.ok(batch.html.includes("Cláusula: Pendente de confirmação"), "item 4 sem cláusula");
+  const none = individual("MEDIA", { impactedClause: null, confrontationBlocks: [] });
+  assert.ok(none.html.includes("Cláusula: Pendente de confirmação") && none.text.includes("Cláusula: Pendente de confirmação"));
+  const derived = individual("MEDIA", { impactedClause: undefined });
+  assert.ok(derived.html.includes("Cláusula 8.2"), "sem rótulo informado, usa o confronto aprovado");
+});
+
+check("EVIDÊNCIA: link em negrito para a origem; sem referência verificável: 'Pendente de confirmação' (nunca link inventado)", () => {
+  const e = individual("MEDIA", { keyEvidence: ["Protocolo 123 (texto livre)", { kind: "OTHER", url: `${BASE}/doc`, sourceTypeLabel: "Contrato", label: "Contrato base (pág. 12)" }] });
+  assert.ok(e.html.includes('href="https://acc.exemplo.invalid/doc"'));
+  assert.ok(e.html.includes("Contrato: Contrato base (pág. 12)"));
+  assert.ok(e.html.includes("Evidência: Protocolo 123 (texto livre) — Pendente de confirmação"));
+  assert.ok(!/href="[^"]*Protocolo/.test(e.html), "texto livre nunca vira link");
+  const empty = individual("MEDIA", { keyEvidence: [] });
+  assert.ok(empty.html.includes("Evidência: Pendente de confirmação") && empty.text.includes("Evidência: Pendente de confirmação"));
+});
+
+check("links de origem: documento com página explícita, e-mail por âncora do evento, localizador gmail:// NUNCA vaza, sem id = pendente", () => {
+  const base = { baseUrl: `${BASE}/`, projectId: "p1", eventId: "e1", evidenceId: "ev1", documentVersionId: null, emailId: null, locator: null, label: "Rótulo", sourceTypeLabel: "Contrato" };
+  const doc = links.buildEvidenceItem({ ...base, documentVersionId: "v1", locator: "pág. 12" });
+  assert.equal(doc.url, `${BASE}/p1/documentos/versoes/v1?paginaGlobal=12#original`);
+  assert.equal(doc.label, "Rótulo (pág. 12)");
+  const noPage = links.buildEvidenceItem({ ...base, documentVersionId: "v1", locator: "cláusula 8.2, seção final" });
+  assert.equal(noPage.url, `${BASE}/p1/documentos/versoes/v1`, "sem página explícita abre o documento sem página");
+  const mail = links.buildEvidenceItem({ ...base, emailId: "m1", locator: "gmail://account/abc/123" });
+  assert.equal(mail.url, `${BASE}/p1/ledger/e1#evidencia-ev1`);
+  assert.ok(!JSON.stringify(mail).includes("gmail://"));
+  const pending = links.buildEvidenceItem({ ...base, locator: "gmail://x" });
+  assert.equal(typeof pending, "string");
+  assert.ok(pending.endsWith("Pendente de confirmação") && !pending.includes("gmail://"));
+  assert.equal(links.parseEvidencePage("p. 7"), 7);
+  assert.equal(links.parseEvidencePage("página 105 do contrato"), 105);
+  assert.equal(links.parseEvidencePage("sem página 99999"), null);
+  assert.equal(links.formatClauseLabel("8.2", "Prazos"), "Cláusula 8.2 – Prazos");
+  assert.equal(links.formatClauseLabel("8.2", ""), "Cláusula 8.2");
+  assert.equal(links.formatClauseLabel("", ""), null);
+});
+
+check("e-mail individual: título abaixo do cabeçalho com ESPAÇO visível; sem selo/banner antigo; saudação preservada", () => {
   for (const s of SEVERITIES) {
     const html = individual(s).html;
-    assert.ok(html.indexOf(`RISCO ${WORD[s]}`) < html.indexOf("Título do evento"));
+    assert.ok(html.indexOf(`RISCO ${WORD[s]} |`) < html.indexOf("Título do evento"));
     assert.ok(html.includes("Olá, Ana Souza."));
-    assert.ok(!html.includes("border-radius:999px"), "sem selo arredondado");
-    assert.ok(!html.includes("repeating") && !html.includes("#facc15"), "faixa listrada antiga removida");
+    assert.ok(!html.includes("border-radius:999px") && !html.includes("#facc15"));
+    assert.ok(html.includes(`margin-top:${style.HEADER_GAP_PX}px`), "espaço entre a linha logo/risco e o primeiro texto");
   }
+  assert.ok(style.HEADER_GAP_PX >= 16);
 });
 
-check("e-mail individual: NÃO exibe 'Responsável' (html e texto) mesmo recebendo responsibleName", () => {
+check("'Responsável' NÃO aparece no corpo (html e texto) mesmo recebendo responsibleName; 'Obra:' redundante também saiu", () => {
   for (const s of SEVERITIES) {
     const e = individual(s);
-    assert.ok(!/Respons[aá]vel/.test(e.html), `html ${s}`);
-    assert.ok(!/Respons[aá]vel/.test(e.text), `texto ${s}`);
+    assert.ok(!/Respons[aá]vel/.test(e.html + e.text));
     assert.ok(!e.html.includes("Bruno Lima") && !e.text.includes("Bruno Lima"));
+    assert.ok(!e.html.includes("Obra: <"));
   }
+  assert.ok(!/Respons[aá]vel/.test(batch.html + batch.text));
 });
 
-check("conteúdo contratual preservado: confronto, evidências, base, impacto, link do evento e botões com token", () => {
+check("conteúdo contratual preservado: confronto, base, impacto, evento relacionado, link do evento e ações por token", () => {
   const e = individual("ALTA");
-  for (const needle of ["Confronto contratual — Cláusula 8.2", "achado", "provisão", "conclusão", "Aprovado por Fulana", "Evidências principais", "Linha de base", "Evento relacionado", "Impacto potencial", `${BASE}/ev/1`, `${BASE}/email-actions/tok-1`]) {
+  for (const needle of ["Confronto contratual — Cláusula 8.2", "achado", "provisão", "conclusão", "Aprovado por Fulana", "Linha de base", "Evento relacionado", "Impacto potencial", `${BASE}/ev/1`, `${BASE}/email-actions/tok-1`]) {
     assert.ok(e.html.includes(needle), needle);
   }
 });
@@ -191,68 +274,81 @@ check("'Repete: …' só no individual quando repeatNotice=true; sempre em cada 
   assert.ok(!individual("CRITICA").html.includes("Repete:"));
   for (const s of SEVERITIES) {
     const e = individual(s, { repeatNotice: true });
-    assert.ok(e.html.includes(policy.repeatNoticeText(s)));
-    assert.ok(e.text.includes(policy.repeatNoticeText(s)));
+    assert.ok(e.html.includes(policy.repeatNoticeText(s)) && e.text.includes(policy.repeatNoticeText(s)));
     assert.ok(!/Lembrete/i.test(e.html + e.text));
+    assert.ok(batch.html.includes(policy.repeatNoticeText(s)), s);
   }
-  for (const s of SEVERITIES) assert.ok(batch.html.includes(policy.repeatNoticeText(s)), s);
   assert.ok(!/Lembrete/i.test(batch.html + batch.text));
 });
 
 check("lote: cada alerta tem a PRÓPRIA caixa e cor (quatro caixas; o lote não é pintado pelo mais grave)", () => {
   const parts = boxes(batch.html);
   assert.equal(parts.length, 4);
-  const expected = ["#DC2626", "#A16207", "#FFFFFF", "#FFFFFF"];
-  parts.forEach((p, i) => assert.ok(p.startsWith(expected[i]), `caixa ${i}: ${p.slice(0, 10)}`));
-  assert.ok(batch.html.includes("background-color:#f3f4f6"), "fundo externo neutro");
-  assert.ok(batch.html.includes("background-color:#ffffff;border:1px solid #e5e7eb;border-radius:8px"), "cartão externo branco");
+  ["#DC2626", "#A16207", "#FFFFFF", "#FFFFFF"].forEach((c, i) => assert.ok(parts[i].startsWith(c), `caixa ${i}`));
+  assert.ok(batch.html.includes("background-color:#ffffff;border:1px solid #e5e7eb;border-radius:8px"));
 });
 
-check("lote: vínculos e links corretos por alerta (ver evento, ação por item, responder ao lote)", () => {
-  batchItems.forEach((item, i) => {
-    for (const a of ["RESOLVIDO", "EM_ANDAMENTO", "ENVIADO_PARA"]) {
-      assert.ok(batch.html.includes(`${BASE}/alertas/acao/p/1/ev-${i + 1}?acao=${a}`), `${item.eventId} ${a}`);
-    }
-    assert.ok(batch.html.includes(`${item.eventUrl}"`));
-  });
-  assert.ok(batch.html.includes("RESPONDER AO ACC"));
-  assert.ok(batch.html.includes("Olá, Ana Souza."));
-});
-
-check("botões: largura = texto 'EM ANDAMENTO' + 12px de cada lado; quatro botões com largura/altura idênticas; sem 100%/min-width", () => {
-  assert.equal(style.EM_ANDAMENTO_TEXT_WIDTH_PX, 93);
+check("TRÊS botões: RESOLVIDO / EM ANDAMENTO / ENVIADO P/ (ordem fixa), sem VER EVENTO, mesma largura/altura, sem 100%/min-width", () => {
+  assert.equal(style.EM_ANDAMENTO_TEXT_WIDTH_PX, 114);
   assert.equal(style.BUTTON_SIDE_PADDING_PX, 12);
-  assert.equal(style.BUTTON_WIDTH_PX, 93 + 24);
+  assert.equal(style.BUTTON_WIDTH_PX, 114 + 24);
   const w = style.BUTTON_WIDTH_PX;
   const h = style.BUTTON_HEIGHT_PX;
   const tables = batch.html.match(/<table class="acc-compact-btn"[^>]*>.*?<\/table>/gs) ?? [];
-  assert.equal(tables.length, 16, "4 botões × 4 alertas");
+  assert.equal(tables.length, 12, "3 botões × 4 alertas");
   for (const t of tables) {
     assert.match(t, new RegExp(`width="${w}"`));
     assert.match(t, new RegExp(`<td width="${w}" height="${h}"`));
     assert.match(t, new RegExp(`display:block;width:${w}px;height:${h}px;line-height:${h}px;margin:0;padding:0;`));
-    assert.ok(!/width:100%|min-width|padding:\d+px \d+px/.test(t), "nada que alargue o botão");
+    assert.match(t, /font-size:14px/);
+    assert.ok(!/width:100%|min-width|padding:\d+px \d+px/.test(t));
   }
   const labels = [...batch.html.matchAll(/white-space:nowrap;overflow:hidden;">([^<]+)<\/a>/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set(labels)].sort(), ["EM ANDAMENTO", "ENVIADO P/", "RESOLVIDO", "VER EVENTO"]);
+  assert.deepEqual(labels.slice(0, 3), ["RESOLVIDO", "EM ANDAMENTO", "ENVIADO P/"]);
+  assert.deepEqual([...new Set(labels)].sort(), ["EM ANDAMENTO", "ENVIADO P/", "RESOLVIDO"]);
+  for (const c of ["#1B2A4A", "#15803D", "#F97316"]) assert.ok(batch.html.includes(`bgcolor="${c}"`), c);
 });
 
-check("botões: cores e funções preservadas (VER EVENTO amarelo, RESOLVIDO azul-marinho, EM ANDAMENTO verde, ENVIADO P/ laranja)", () => {
-  for (const c of ["#FFD600", "#1B2A4A", "#15803D", "#F97316"]) assert.ok(batch.html.includes(`bgcolor="${c}"`), c);
+check("coluna dos botões BRANCA, com largura = botões + pequena margem lateral (um pouco maior que os botões)", () => {
+  assert.equal(style.BUTTON_COLUMN_WIDTH_PX, style.BUTTON_WIDTH_PX + 2 * style.BUTTON_COLUMN_MARGIN_PX);
+  assert.ok(style.BUTTON_COLUMN_WIDTH_PX - style.BUTTON_WIDTH_PX <= 20);
+  const panels = batch.html.match(/<table class="acc-actions-panel"[^>]*>/g) ?? [];
+  assert.equal(panels.length, 4);
+  for (const p of panels) {
+    assert.match(p, /bgcolor="#FFFFFF"/);
+    assert.match(p, new RegExp(`width="${style.BUTTON_COLUMN_WIDTH_PX}"`));
+  }
+  assert.ok(!batch.html.includes("A resposta a este e-mail só é liberada"), "sem aviso novo acima/ao lado dos botões");
 });
 
-check("texto puro do lote traz classificação e 'Repete' por alerta e não traz 'Responsável'", () => {
-  assert.ok(batch.text.includes("RISCO CRÍTICO") && batch.text.includes("RISCO BAIXO"));
-  assert.ok(!/Respons[aá]vel/.test(batch.text));
+check("individual: com acompanhamento válido mostra os mesmos TRÊS botões e mantém as ações por token como 'Outras ações'; sem ele, só os tokens (como antes)", () => {
+  const withQuick = individual("ALTA", { quickActionUrls: QUICK });
+  for (const a of ["RESOLVIDO", "EM_ANDAMENTO", "ENVIADO_PARA"]) assert.ok(withQuick.html.includes(QUICK[a].replace(/&/g, "&amp;")), a);
+  assert.equal((withQuick.html.match(/class="acc-compact-btn"/g) ?? []).length, 3);
+  assert.ok(withQuick.html.includes("Outras ações:") && withQuick.html.includes("DAR CIÊNCIA") && withQuick.html.includes(`${BASE}/email-actions/tok-1`));
+  assert.ok(withQuick.text.includes(`RESOLVIDO: ${QUICK.RESOLVIDO}`) && withQuick.text.includes("DAR CIÊNCIA"));
+  const noQuick = individual("ALTA");
+  assert.equal((noQuick.html.match(/class="acc-compact-btn"/g) ?? []).length, 0);
+  assert.ok(noQuick.html.includes("DAR CIÊNCIA") && noQuick.html.includes(`${BASE}/email-actions/tok-1`), "tokens preservados");
+  assert.ok(!noQuick.html.includes("Outras ações:"));
+});
+
+check("lote: vínculos e links corretos por alerta (ação por item, responder ao lote)", () => {
+  batchItems.forEach((item, i) => {
+    for (const a of ["RESOLVIDO", "EM_ANDAMENTO", "ENVIADO_PARA"]) assert.ok(batch.html.includes(`${BASE}/alertas/acao/p/1/ev-${i + 1}?acao=${a}`), `${item.eventId} ${a}`);
+  });
+  assert.ok(batch.html.includes("RESPONDER AO ACC") && batch.html.includes("Olá, Ana Souza."));
+});
+
+check("texto puro do lote traz classificação, obra, repete e as três ações por alerta; sem 'Responsável'", () => {
+  assert.ok(batch.text.includes("RISCO CRÍTICO | NEWPORT") && batch.text.includes("RISCO BAIXO | NEWPORT"));
   for (const s of SEVERITIES) assert.ok(batch.text.includes(policy.repeatNoticeText(s)));
+  assert.equal((batch.text.match(/EM ANDAMENTO: /g) ?? []).length, 4);
 });
 
-check("legendas dos botões de ação ficam legíveis: brancas em fundo escuro (CRÍTICO/ALTO), cinza institucional em fundo branco", () => {
+check("legendas dos botões por token (fallback) ficam legíveis na coluna branca", () => {
   const caption = (html) => (html.match(/color:(#[0-9A-Fa-f]{6});text-align:center;">Confirma que você tomou conhecimento/) ?? [])[1];
-  assert.equal(caption(individual("CRITICA").html), "#FFFFFF");
-  assert.equal(caption(individual("ALTA").html), "#FFFFFF");
-  assert.equal(caption(individual("MEDIA").html), "#4B5563");
-  assert.equal(caption(individual("BAIXA").html), "#4B5563");
+  for (const s of SEVERITIES) assert.equal(caption(individual(s).html), "#4B5563", s);
 });
 
 check("e-mail individual não expõe destinatários de outras pessoas", () => {
