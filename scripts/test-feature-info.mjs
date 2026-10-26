@@ -88,6 +88,8 @@ const EXPECTED_SIDEBAR_LABELS = [
   // "Análise Contratual"/"Análise de Cláusulas" saíram do menu: o Expert
   // Jurídico é o ponto único (rotas e ajuda preservadas).
   "Documentos",
+  // Providências e pendências para entrega (tabela única compartilhada com os alertas).
+  "Providências",
   // Financeiro: item restrito (só aparece para quem passa em
   // evaluateFinancialDashboardAccess), mas faz parte de NAV_ITEMS.
   "Financeiro",

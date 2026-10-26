@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   try {
     const reminders = await runAlertReminders();
     // Resumo sem conteúdo de e-mail: só contagens e códigos curtos de falha.
-    return Response.json({ reminders }, { status: reminders.failed > 0 ? 207 : 200 });
+    return Response.json({ reminders }, { status: reminders.failed > 0 || "error" in reminders.deliveryScan ? 207 : 200 });
   } catch {
     return Response.json({ error: "Falha ao processar os lembretes de alertas." }, { status: 500 });
   }
