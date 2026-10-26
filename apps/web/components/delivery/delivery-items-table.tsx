@@ -1,5 +1,8 @@
 import { Badge } from "@/components/ui/badge";
+import { reviewRiskClassificationAction } from "@/app/[projectId]/risco/actions";
 import { DeliveryItemEditor } from "@/components/delivery/delivery-item-editor";
+import { RiskReviewPanel, type RiskReviewHistoryItem } from "@/components/risk/risk-review-panel";
+import { deadlineStatusFromDate } from "@/lib/risk-classification/facts-builders";
 import {
   DELIVERY_PHASE_LABELS,
   DELIVERY_STATUS_LABELS,
@@ -49,6 +52,7 @@ export function DeliveryItemsTable({
   startCandidates,
   today,
   canEdit,
+  riskHistoryByItem = {},
 }: {
   projectId: string;
   items: DeliveryItem[];
@@ -59,6 +63,8 @@ export function DeliveryItemsTable({
   startCandidates?: string[];
   today: string;
   canEdit: boolean;
+  /** Histórico de classificação de risco por providência (mais recente primeiro). */
+  riskHistoryByItem?: Record<string, RiskReviewHistoryItem[]>;
 }) {
   const nameById = new Map(members.map((m) => [m.userId, m.name]));
   const cno = items.find((i) => i.checklistKey === "CNO");
@@ -155,7 +161,25 @@ export function DeliveryItemsTable({
                   <td className="px-3 py-2 max-w-[240px] text-xs text-muted-foreground">{schedule.message}</td>
                   {canEdit ? (
                     <td className="px-3 py-2 min-w-[120px]">
-                      <DeliveryItemEditor projectId={projectId} item={item} members={members} />
+                      <DeliveryItemEditor
+                        projectId={projectId}
+                        item={item}
+                        members={members}
+                        riskPanel={
+                          <RiskReviewPanel
+                            action={reviewRiskClassificationAction.bind(null, projectId, "DELIVERY_ITEM", item.id)}
+                            currentLevel={item.risk}
+                            originalLevel={(riskHistoryByItem[item.id] ?? []).at(-1)?.previousLevel ?? null}
+                            originalLabel="Classificação inicial"
+                            canReview={canEdit}
+                            verifiedClause={null}
+                            obligationDescription={null}
+                            evidence={item.evidence ? [{ kind: "EVIDENCIA", label: item.evidence }] : []}
+                            recordDeadline={{ status: deadlineStatusFromDate(item.deadline, today), date: item.deadline }}
+                            history={riskHistoryByItem[item.id] ?? []}
+                          />
+                        }
+                      />
                     </td>
                   ) : null}
                 </tr>

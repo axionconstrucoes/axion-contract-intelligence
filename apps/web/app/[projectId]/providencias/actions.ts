@@ -53,7 +53,8 @@ export async function updateDeliveryItemAction(
     responsible_user_id: text(formData, "responsible_user_id"),
     dependency_kind: text(formData, "dependency_kind"),
     dependency_name: text(formData, "dependency_name"),
-    risk: text(formData, "risk"),
+    // "risk" NÃO é enviado aqui: o grau de risco só muda pela revisão com justificativa e histórico
+    // (app/[projectId]/risco/actions.ts), nunca em branco por um formulário sem o campo.
     blocks_delivery: formData.get("blocks_delivery") === "on",
     applicability_confirmed: formData.get("applicability_confirmed") === "on",
     cno_number: text(formData, "cno_number"),

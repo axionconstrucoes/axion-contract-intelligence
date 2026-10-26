@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,22 +15,17 @@ import {
   type DeliveryStatus,
 } from "@/lib/delivery/delivery-items";
 
-const RISK_OPTIONS = [
-  { value: "", label: "A definir" },
-  { value: "BAIXA", label: "Baixo (repete a cada 7 dias)" },
-  { value: "MEDIA", label: "Médio (repete a cada 4 dias)" },
-  { value: "ALTA", label: "Alto (repete a cada 2 dias)" },
-  { value: "CRITICA", label: "Crítico (repete a cada 1 dia)" },
-];
-
 export function DeliveryItemEditor({
   projectId,
   item,
   members,
+  riskPanel,
 }: {
   projectId: string;
   item: DeliveryItem;
   members: Array<{ userId: string; name: string }>;
+  /** Painel de classificação de risco (critérios, sugestão, revisão com justificativa e histórico). */
+  riskPanel?: ReactNode;
 }) {
   const [fieldsState, fieldsAction, fieldsPending] = useActionState(
     updateDeliveryItemAction.bind(null, projectId, item.id),
@@ -84,16 +79,6 @@ export function DeliveryItemEditor({
               <Input name="dependency_name" defaultValue={item.dependencyName ?? ""} />
             </label>
           </div>
-          <label className="grid gap-1 text-xs">
-            Grau de risco
-            <Select name="risk" defaultValue={item.risk ?? ""}>
-              {RISK_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </label>
           {item.checklistKey === "CNO" ? (
             <label className="grid gap-1 text-xs">
               Número do CNO
@@ -156,6 +141,13 @@ export function DeliveryItemEditor({
             {statusPending ? "Confirmando…" : "Confirmar situação"}
           </Button>
         </form>
+
+        {riskPanel ? (
+          <div className="border-t pt-3 lg:col-span-2">
+            <p className="mb-2 text-xs font-semibold text-foreground">Grau de risco</p>
+            {riskPanel}
+          </div>
+        ) : null}
       </div>
     </details>
   );

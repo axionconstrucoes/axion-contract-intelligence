@@ -11,6 +11,7 @@ import { EmailAlertActionHistoryPanel } from "@/components/email-actions/email-a
 import { EventNotesSection } from "@/components/ledger/event-notes-section";
 import { EvidenceViewer } from "@/components/ledger/evidence-viewer";
 import { RunMultiExpertCurationButton } from "@/components/ledger/run-multi-expert-curation-button";
+import { EventRiskReviewSection } from "@/components/risk/risk-review-section";
 import { SendContractAlertForm } from "@/components/ledger/send-contract-alert-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -149,6 +150,8 @@ export default async function EventDetailPage({
           </CardContent>
         </Card>
       )}
+
+      {event.aiAssessment && <EventRiskReviewSection projectId={projectId} eventId={event.id} />}
 
       <div>
         <h2 className="mb-2 text-sm font-semibold">Evidência original</h2>

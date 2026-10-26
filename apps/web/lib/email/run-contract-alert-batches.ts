@@ -3,6 +3,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@axion/db/admin";
 
 import { loadEventAlertContexts } from "../alerts/load-event-alert-context";
+import { loadReviewedEventSeverities } from "../risk-classification/reviewed-severity";
 import { getAppBaseUrl } from "../app-base-url";
 import { createAndSendContractAlertBatch, type ContractAlertBatchSourceItem } from "./create-and-send-contract-alert-batch";
 
@@ -153,6 +154,8 @@ export async function runContractAlertBatches(): Promise<ContractAlertBatchRunRe
   const assessmentByEventId = new Map(((assessments ?? []) as AssessmentRow[]).map((row) => [row.event_id, row]));
   // Obra, cláusula (só vínculo aprovado) e evidências com link para a origem — por evento.
   const contextByEventId = await loadEventAlertContexts(admin, eligibleEventIds, getAppBaseUrl());
+  // Grau revisado por pessoa autorizada (se houver) prevalece sobre a classificação original.
+  const reviewedSeverityByEventId = await loadReviewedEventSeverities(admin, eligibleEventIds);
 
   const projectIds = Array.from(new Set(dedupedActions.map((action) => action.project_id)));
   const { data: configRows, error: configError } = projectIds.length
@@ -200,7 +203,7 @@ export async function runContractAlertBatches(): Promise<ContractAlertBatchRunRe
         if (!event) return null;
 
         const assessment = assessmentByEventId.get(event.id);
-        const severity = assessment?.severity ?? SLA_TO_ALERT_SEVERITY[action.risk_level];
+        const severity = reviewedSeverityByEventId.get(event.id) ?? assessment?.severity ?? SLA_TO_ALERT_SEVERITY[action.risk_level];
         const riskDescription =
           assessment?.summary?.trim() ||
           action.description?.trim() ||
