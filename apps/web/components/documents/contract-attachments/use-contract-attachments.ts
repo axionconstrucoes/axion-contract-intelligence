@@ -88,7 +88,8 @@ export function useContractAttachments(projectId: string, documentId: string, do
         .select("id,document_version_id,original_file_name,mime_type,file_size_bytes,description,uploaded_at,uploaded_by,storage_bucket,storage_path")
         .eq("document_version_id", documentVersionId)
         .eq("file_role", "ANEXO_CONTRATUAL")
-        .order("uploaded_at", { ascending: false });
+        // Mesma ordem usada na análise do contrato (worker): envio mais antigo primeiro.
+        .order("uploaded_at", { ascending: true });
 
       if (error) throw error;
 
@@ -115,7 +116,7 @@ export function useContractAttachments(projectId: string, documentId: string, do
   }, [documentVersionId]);
 
   const uploadOne = useCallback(
-    async (file: File): Promise<void> => {
+    async (file: File, description: string | null): Promise<void> => {
       const itemId = crypto.randomUUID();
       const setStatus = (patch: Partial<UploadItem>) =>
         setUploadItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, ...patch } : item)));
@@ -182,7 +183,7 @@ export function useContractAttachments(projectId: string, documentId: string, do
           p_file_size_bytes: file.size,
           p_sha256_hash: sha256Hash,
           p_origin: "UPLOAD",
-          p_description: null,
+          p_description: description,
           p_replaces_file_id: null,
         });
 
@@ -220,11 +221,14 @@ export function useContractAttachments(projectId: string, documentId: string, do
   );
 
   const addFiles = useCallback(
-    async (files: FileList | File[]) => {
+    // description: identificação opcional (ex.: "Parte 2 de 2 —
+    // páginas 158–314"), gravada em document_version_files.description
+    // pela mesma RPC — aplicada a todos os arquivos deste envio.
+    async (files: FileList | File[], description: string | null = null) => {
       const list = Array.from(files);
       for (let i = 0; i < list.length; i += UPLOAD_CONCURRENCY) {
         const batch = list.slice(i, i + UPLOAD_CONCURRENCY);
-        await Promise.all(batch.map((file) => uploadOne(file)));
+        await Promise.all(batch.map((file) => uploadOne(file, description)));
       }
       await fetchAttachments();
     },

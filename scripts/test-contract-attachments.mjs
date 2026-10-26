@@ -86,8 +86,8 @@ check("card só mostra o painel para document.kind elegível (CONTRATO_BASE), vi
 
 // --- 1. Contrato sem anexos ---
 
-check("1. contrato sem anexos: painel mostra 'Nenhum anexo cadastrado' quando a lista carregada está vazia", () => {
-  assert(panelSource.includes("Nenhum anexo cadastrado"), "mensagem de vazio ausente");
+check("1. contrato sem anexos: painel mostra 'Nenhuma parte ou anexo cadastrado' quando a lista carregada está vazia", () => {
+  assert(panelSource.includes("Nenhuma parte ou anexo cadastrado"), "mensagem de vazio ausente");
   assert(/loaded && attachments\.length === 0/.test(panelSource), "condição de vazio deveria checar loaded && length === 0");
 });
 
@@ -97,8 +97,8 @@ check("2. contrato com um ou vários anexos: painel mapeia TODOS os itens de `at
   assert(/attachments\.map\(\(attachment\)/.test(panelSource), "deveria mapear todos os anexos, um AttachmentRow por item");
 });
 
-check("4. contador: resumo mostra 'Anexos do Contrato (N)', N = attachments.length quando carregado, senão initialCount (SSR)", () => {
-  assert(panelSource.includes("Anexos do Contrato ({count})"), "texto do contador ausente/alterado");
+check("4. contador: resumo mostra 'Partes e anexos do contrato (N)', N = attachments.length quando carregado, senão initialCount (SSR)", () => {
+  assert(panelSource.includes("Partes e anexos do contrato ({count})"), "texto do contador ausente/alterado");
   assert(/const count = loaded \? attachments\.length : initialCount/.test(panelSource), "lógica do contador incorreta");
 });
 
