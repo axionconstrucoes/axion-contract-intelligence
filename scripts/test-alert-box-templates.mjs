@@ -10,11 +10,13 @@ import { register } from "node:module";
 
 register("./ts-module-resolver.mjs", import.meta.url);
 
-const { buildContractAlertEmail } = await import("../apps/web/lib/email/templates/contract-alert-template.ts");
+const sub = await import("../apps/web/lib/email/templates/contract-alert-template.ts");
+const { buildContractAlertEmail } = sub;
 const { buildContractAlertBatchEmail, buildContractAlertBatchSubject } = await import("../apps/web/lib/email/templates/contract-alert-batch-template.ts");
 const style = await import("../apps/web/lib/email/templates/alert-box-style.ts");
 const policy = await import("../apps/web/lib/alerts/repeat-policy.ts");
 const grouping = await import("../apps/web/lib/alerts/batch-grouping.ts");
+const pilot = await import("../apps/web/lib/email/pilot-outbound-guard.ts");
 const links = await import("../apps/web/lib/alerts/alert-source-links.ts");
 
 let passed = 0;
@@ -429,6 +431,29 @@ check("CELULAR: CONSULTAR IA fica AO LADO dos botões (inline-block, sem flex/gr
   assert.ok(!/display:\s*flex|display:\s*grid/.test(html), "sem flex/grid");
   const panel = html.slice(html.indexOf('class="acc-actions-panel"'));
   assert.ok(panel.indexOf("acc-consult-wrap") < panel.indexOf("acc-buttons-wrap"), "layout padrão: consultar acima dos botões, mesma coluna branca");
+});
+
+check("ASSUNTO INDIVIDUAL (envio manual): crítico/alto com risco; médio/baixo 'OBRA | ACC' sem risco; prefixo do piloto só pelo guard, sem duplicar", () => {
+  const subj = (sev) => individual(sev).subject;
+  assert.equal(subj("CRITICA"), `[RISCO CRÍTICO] ${PROJECT_A} | ACC`);
+  assert.equal(subj("ALTA"), `[RISCO ALTO] ${PROJECT_A} | ACC`);
+  assert.equal(subj("MEDIA"), `${PROJECT_A} | ACC`);
+  assert.equal(subj("BAIXA"), `${PROJECT_A} | ACC`);
+  for (const sev of ["MEDIA", "BAIXA"]) assert.ok(!/RISCO|CRÍTICO|ALTO|MÉDIO|BAIXO/i.test(subj(sev)), sev);
+  // o template NUNCA prefixa [TESTE CONTROLADO]; o guard do modo piloto o aplica uma única vez (sem envio real)
+  for (const sev of SEVERITIES) {
+    assert.ok(!subj(sev).startsWith(pilot.PILOT_SUBJECT_PREFIX));
+    const base = { to: "cliente@empresa.com.br", subject: subj(sev), text: "t", html: "<p>h</p>" };
+    const piloted = pilot.applyPilotOutboundGuard(base, { outboundMode: "pilot", pilotRecipient: "crm@axion.com.br" });
+    assert.equal(piloted.subject, `${pilot.PILOT_SUBJECT_PREFIX}${subj(sev)}`);
+    assert.equal(piloted.to, "crm@axion.com.br");
+    const again = pilot.applyPilotOutboundGuard({ ...base, subject: piloted.subject }, { outboundMode: "pilot", pilotRecipient: "crm@axion.com.br" });
+    assert.equal(again.subject, piloted.subject, "prefixo não duplica");
+    const prod = pilot.applyPilotOutboundGuard(base, { outboundMode: "production", now: new Date("2026-09-22T03:00:00.000Z") });
+    assert.equal(prod.subject, subj(sev), "em produção o assunto segue sem prefixo");
+  }
+  // os demais fluxos que usam buildContractAlertSubject (SLA, riscos, SSMA) não mudaram
+  assert.match(sub.buildContractAlertSubject("Obra X", "ALTA"), /\[RISCO ALTO\] ACC - OBRA OBRA X$/);
 });
 
 console.log(`RESULTADO: ${passed} passaram, ${failed} falharam`);

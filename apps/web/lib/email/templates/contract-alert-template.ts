@@ -65,6 +65,15 @@ export function buildContractAlertSubject(projectName: string, severity: AlertSe
   return `${alertRiskSubjectMarkers[severity]} [RISCO ${alertRiskLevelLabels[severity]}] ACC - OBRA ${projectName.toUpperCase()}`;
 }
 
+// Assunto do e-mail INDIVIDUAL do envio manual (mesmo padrão do lote, para um único alerta):
+//   crítico -> "[RISCO CRÍTICO] OBRA | ACC"; alto -> "[RISCO ALTO] OBRA | ACC";
+//   médio/baixo -> "OBRA | ACC" (sem risco no assunto). O prefixo do modo piloto NÃO é aplicado
+// aqui: quem o coloca é applyPilotOutboundGuard, no momento do envio.
+export function buildIndividualAlertSubject(projectName: string, severity: AlertSeverity): string {
+  const prefix = severity === "CRITICA" ? "[RISCO CRÍTICO] " : severity === "ALTA" ? "[RISCO ALTO] " : "";
+  return `${prefix}${projectName} | ACC`;
+}
+
 interface BadgeStyle {
   background: string;
   color: string;
@@ -243,7 +252,7 @@ function confrontationBlockText(block: ContractConfrontationBlock): string {
 // acompanhamento válido (quickActionUrls); sem ele, o comportamento anterior (botões por token) é
 // preservado. Estrutura em <table>+estilos inline (Gmail/Outlook).
 export function buildContractAlertEmail(input: ContractAlertEmailInput): ContractAlertEmail {
-  const subject = buildContractAlertSubject(input.projectName, input.severity);
+  const subject = buildIndividualAlertSubject(input.projectName, input.severity);
   const tone = ALERT_TONES[input.severity];
   const riskLabel = alertRiskLevelLabels[input.severity];
   const greeting = input.recipientName ? `Olá, ${input.recipientName}.` : "Olá.";
