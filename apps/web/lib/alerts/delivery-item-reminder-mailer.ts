@@ -53,6 +53,7 @@ export class DeliveryItemReminderMailer implements ReminderMailer {
     const dark = severity === "CRITICA" || severity === "ALTA";
     const logos = loadAccAlertLogos({ maroon: !dark, inverted: dark });
     const eventUrl = `${getAppBaseUrl()}/${projectId}/providencias#item-${item.id}`;
+    const actionBase = `${getAppBaseUrl()}/alertas/providencia/${projectId}/${item.id}`;
 
     const summaryParts = [
       `${DELIVERY_PHASE_LABELS[item.phase]} — situação: ${DELIVERY_STATUS_LABELS[item.status]}.`,
@@ -70,12 +71,22 @@ export class DeliveryItemReminderMailer implements ReminderMailer {
       relatedEventTitle: null,
       contractualBasis: null,
       confrontationBlocks: [],
-      keyEvidence: item.evidence ? [item.evidence] : [],
+      // Evidência registrada na tabela: o link abre a linha da providência (registro verificável).
+      // Sem evidência registrada: o e-mail mostra "Pendente de confirmação".
+      keyEvidence: item.evidence ? [{ kind: "OTHER" as const, url: eventUrl, sourceTypeLabel: "Providência", label: item.evidence }] : [],
       potentialImpact: "Entrega da obra",
       recommendedAction: null,
       responsibleName: null,
       dueDate: item.deadline ? formatDay(item.deadline) : null,
       eventUrl,
+      // Três ações com confirmação explícita na página do ACC (providência + acompanhamento válidos:
+      // este e-mail só é gerado por um acompanhamento aberto, com responsável ativo da obra).
+      quickActionUrls: {
+        RESOLVIDO: `${actionBase}?acao=RESOLVIDO`,
+        EM_ANDAMENTO: `${actionBase}?acao=EM_ANDAMENTO`,
+        ENVIADO_PARA: `${actionBase}?acao=ENVIADO_PARA`,
+      },
+      impactedClause: null,
       actionButtons: [],
       hasInlineLogo: logos.availability.maroon,
       hasInlineInvertedLogo: logos.availability.inverted,

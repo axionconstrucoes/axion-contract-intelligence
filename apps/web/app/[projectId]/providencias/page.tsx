@@ -40,6 +40,7 @@ export default async function ProvidenciasPage({ params }: { params: Promise<{ p
               members={overview.members}
               projectEndDay={overview.projectEndDay}
               projectStartDay={overview.projectStartDay}
+              startCandidates={overview.startCandidates}
               today={todayDay()}
               canEdit={overview.canEdit}
             />

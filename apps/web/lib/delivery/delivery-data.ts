@@ -20,6 +20,8 @@ export interface DeliveryOverview {
   projectEndDay: string | null;
   /** Início da obra cadastrado (AAAA-MM-DD) ou null. */
   projectStartDay: string | null;
+  /** Datas de início cadastradas e distintas (start_date x project_start_date): >1 = divergência. */
+  startCandidates: string[];
   items: DeliveryItem[];
   members: DeliveryMember[];
   canEdit: boolean;
@@ -32,7 +34,7 @@ export async function getDeliveryOverview(projectId: string): Promise<DeliveryOv
 
   const { data: project } = await supabase
     .from("projects")
-    .select("id,name,start_date,baseline_end_date")
+    .select("id,name,start_date,project_start_date,baseline_end_date")
     .eq("id", projectId)
     .maybeSingle();
   if (!project) return null;
@@ -47,6 +49,9 @@ export async function getDeliveryOverview(projectId: string): Promise<DeliveryOv
     projectName: project.name as string,
     projectEndDay: project.baseline_end_date ? String(project.baseline_end_date).slice(0, 10) : null,
     projectStartDay: project.start_date ? String(project.start_date).slice(0, 10) : null,
+    startCandidates: Array.from(
+      new Set([project.start_date, project.project_start_date].filter(Boolean).map((d) => String(d).slice(0, 10)))
+    ),
   };
 
   if (itemsError) {

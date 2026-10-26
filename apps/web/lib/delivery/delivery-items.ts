@@ -376,16 +376,19 @@ export function recalculateAfterEndDateChange(
 
 // ---------- CNO (providência de INÍCIO) ----------
 
-// Referência discutida: inscrição em até 30 dias do início da obra/atividades (IN RFB 1.845/2018,
-// mantida em termos equivalentes pela IN RFB 2.061/2021 segundo fontes secundárias). O texto
-// oficial NÃO foi verificado em fonte primária nesta etapa — por isso o prazo é CONFIGURÁVEL e a
-// interface o apresenta como "referência a confirmar".
+// Fonte OFICIAL consultada (Receita Federal, gov.br/receitafederal/.../construcao-civil/cno/cno):
+// "no prazo de 30 (trinta) dias contados do início das atividades de construção". A página não cita
+// o número da norma; por isso o prazo continua CONFIGURÁVEL (prazo interno antecipado e dias
+// legais) e o cálculo só é DEFINITIVO com o início das atividades confirmado e sem divergência.
 export const CNO_DEFAULT_DEADLINE_DAYS = 30;
+export const CNO_OFFICIAL_SOURCE_URL = "https://www.gov.br/receitafederal/pt-br/assuntos/construcao-civil/cno/cno";
 
 export interface CnoDeadline {
   deadline: string | null;
   /** false enquanto o início da obra não estiver confirmado — o cálculo não é definitivo. */
   definitive: boolean;
+  /** true quando há mais de uma data de início candidata (ex.: cadastro x histórico). */
+  divergent: boolean;
   basis: string;
 }
 
@@ -394,9 +397,21 @@ export function computeCnoDeadline(input: {
   startConfirmed: boolean;
   internalDeadline?: string | null;
   deadlineDays?: number;
+  /** Datas de início candidatas conhecidas (ex.: cadastro e histórico). Mais de uma distinta = divergência. */
+  startCandidates?: readonly string[];
 }): CnoDeadline {
+  const candidates = Array.from(new Set((input.startCandidates ?? []).filter(Boolean)));
+  if (candidates.length > 1) {
+    // Nunca escolhe uma data por conta própria: sem decisão sobre o início não há prazo legal calculado.
+    return {
+      deadline: input.internalDeadline ?? null,
+      definitive: false,
+      divergent: true,
+      basis: `Início da obra DIVERGENTE (${candidates.join(" × ")}): prazo legal NÃO calculado até a decisão sobre a data de início das atividades de construção.`,
+    };
+  }
   if (!input.constructionStartDay) {
-    return { deadline: input.internalDeadline ?? null, definitive: false, basis: "Sem data de início da obra: prazo legal não calculado." };
+    return { deadline: input.internalDeadline ?? null, definitive: false, divergent: false, basis: "Sem data de início da obra: prazo legal não calculado." };
   }
   const days = input.deadlineDays ?? CNO_DEFAULT_DEADLINE_DAYS;
   const legal = addDays(input.constructionStartDay, days);
@@ -404,9 +419,10 @@ export function computeCnoDeadline(input: {
   return {
     deadline,
     definitive: input.startConfirmed,
+    divergent: false,
     basis: input.startConfirmed
-      ? `Início da obra confirmado + ${days} dias (referência a confirmar na norma vigente).`
-      : `ESTIMADO: início da obra não confirmado + ${days} dias (referência a confirmar na norma vigente).`,
+      ? `Início das atividades confirmado + ${days} dias (Receita Federal, CNO).`
+      : `ESTIMADO: início das atividades não confirmado + ${days} dias (Receita Federal, CNO).`,
   };
 }
 

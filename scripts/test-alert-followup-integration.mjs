@@ -129,6 +129,61 @@ check("workflow de lembretes: agendador existente (GitHub Actions + CRON_SECRET)
   assert.match(wf, /2 a 5 horas/);
 });
 
+// ---------- alerta individual manual: mesmas três ações, com acompanhamento válido ----------
+
+check("individual manual: registra um lote de UM item ANTES de montar o e-mail, abre o acompanhamento DEPOIS do aceite do provedor e marca falha se o envio falhar", () => {
+  const s = src("apps/web/lib/email/send-contract-alert-email.ts");
+  const regIdx = s.indexOf("registerManualAlertBatch(");
+  const buildIdx = s.indexOf("buildContractAlertEmail({");
+  const sendIdx = s.indexOf("provider.send({");
+  const finalizeIdx = s.indexOf("finalizeManualAlertBatch(adminForTracking");
+  assert.ok(regIdx > 0 && regIdx < buildIdx && buildIdx < sendIdx && sendIdx < finalizeIdx, "ordem: registrar -> montar -> enviar -> finalizar");
+  assert.ok(s.includes("failManualAlertBatch(adminForTracking, tracking.batchId)"), "falha de envio nunca deixa o lote como enviado");
+  assert.ok(s.includes("repeatNotice: tracking !== null"), "'Repete' só quando há acompanhamento");
+  assert.ok(s.includes("quickActionUrls: quickBase"), "três botões só com acompanhamento válido");
+  const t = src("apps/web/lib/alerts/manual-alert-tracking.ts");
+  assert.ok(/eq\("status", "ACTIVE"\)/.test(t), "destinatário precisa ser membro ATIVO da obra");
+  assert.ok(t.includes("return null;"), "sem acompanhamento válido o e-mail segue com os tokens existentes");
+  assert.ok(t.indexOf("openFollowupsForSentBatch(") > t.indexOf('status: "SENT"'), "acompanhamento só depois do SENT");
+});
+
+check("individual manual: ações por token preservadas; barreiras de segurança do envio (ADMINISTRADOR, guard de piloto) intactas", () => {
+  const a = src("apps/web/app/[projectId]/ledger/[eventId]/send-alert-actions.ts");
+  assert.ok(a.includes("issueEmailAlertActionButtons({"));
+  const s = src("apps/web/lib/email/send-contract-alert-email.ts");
+  assert.ok(s.includes('permission !== "ADMINISTRADOR"') && s.includes("resolveEffectiveRecipient(input.recipientEmail)") && s.includes("assertNotEmailFixtureData"));
+});
+
+check("cláusula e evidência dos alertas vêm de referências VERIFICADAS: vínculo aprovado de cláusula e links de origem (individual e lote)", () => {
+  const a = src("apps/web/app/[projectId]/ledger/[eventId]/send-alert-actions.ts");
+  assert.ok(a.includes("formatClauseLabel(relevantApprovedCandidates[0].clauseNumber, relevantApprovedCandidates[0].clauseTitle)"));
+  assert.ok(a.includes("buildEvidenceItem({"));
+  const r = src("apps/web/lib/alerts/contract-event-reminder-mailer.ts");
+  assert.ok(r.includes("loadEventAlertContexts(") && r.includes("projectName: contexts.get(eventId)?.projectName"));
+  const l = src("apps/web/lib/alerts/load-event-alert-context.ts");
+  assert.ok(l.includes('.not("clause_id", "is", null)'), "só vínculos de cláusula existentes (aprovados)");
+});
+
+// ---------- lote com respostas parciais ----------
+
+check("lote: cada ação é salva na hora pela função SQL; a resposta final continua exigindo todos; a ação espelha no acompanhamento", () => {
+  const sql = src("supabase/migrations/20261027140000_alert_batch_partial_responses.sql");
+  assert.ok(sql.includes("function public.save_contract_alert_batch_item_response("));
+  assert.ok(!/update public\.contract_alert_batches\s+set status = 'RESPONDED'/.test(sql), "salvar um item nunca encerra o lote");
+  const save = src("apps/web/lib/email-actions/save-contract-alert-batch-item.ts");
+  assert.ok(save.includes('rpc("save_contract_alert_batch_item_response"') && save.includes("applyBatchResponsesToFollowups("));
+  const act = src("apps/web/app/[projectId]/ledger/lote-alertas/[batchId]/actions.ts");
+  assert.ok(act.includes("export async function saveContractAlertBatchItemAction(") && act.includes("saveContractAlertBatchItem({"));
+  assert.ok(act.includes("respondToContractAlertBatch({ batchId, responses })"), "resposta final inalterada");
+});
+
+check("lote (página): botão 'Salvar esta ação' por alerta (type=button, nunca envia o formulário); ações salvas voltam preenchidas; final só com todos", () => {
+  const form = src(BATCH_FORM);
+  assert.ok(form.includes("Salvar esta ação") && /type="button"[\s\S]{0,200}Salvar esta ação|type="button"[\s\S]{0,400}saveItem/.test(form));
+  assert.ok(form.includes("item.action ??"), "ação salva vem do banco ao retornar");
+  assert.ok(form.includes("disabled={!answeredState.allEventsAnswered || pending}"));
+});
+
 check("migration só adiciona (sem DROP/ALTER de tabelas existentes)", () => {
   const sql = src("supabase/migrations/20261027120000_alert_followups.sql");
   assert.ok(!/\bdrop (table|column)\b/i.test(sql));

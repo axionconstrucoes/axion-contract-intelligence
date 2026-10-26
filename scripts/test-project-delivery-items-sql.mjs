@@ -36,7 +36,7 @@ async function check(name, fn) {
   }
 }
 
-const db = await createLocalDb(["20261027120000_alert_followups.sql", "20261027130000_project_delivery_items.sql"]);
+const db = await createLocalDb(["20261027120000_alert_followups.sql", "20261027130000_project_delivery_items.sql", "20261027150000_delivery_item_respond.sql"]);
 for (const [k, id] of Object.entries(U)) await db.query("insert into public.profiles (id,name,email) values ($1,$2,$3)", [id, k, `${k}@exemplo.invalid`]);
 await db.query("insert into public.projects (id,name,baseline_end_date) values ($1,'Obra 1','2027-08-15'),($2,'Obra 2','2027-12-31')", [P1, P2]);
 const member = (p, u, perm, status = "ACTIVE") => db.query("insert into public.project_memberships (project_id,user_id,permission,status) values ($1,$2,$3,$4)", [p, u, perm, status]);
@@ -184,6 +184,72 @@ await check("isolamento entre obras: nada de uma obra é visível ou alterável 
   const seen = await auth(U.adm2, async () => (await db.query("select count(*)::int c from public.project_delivery_items where project_id=$1", [P1])).rows[0].c);
   assert.equal(seen, 0);
   assert.equal((await items(P2)).length, 14);
+});
+
+// ---------- ações do ALERTA de providência (RESOLVIDO / EM ANDAMENTO / ENVIADO P/) ----------
+
+const respond = (uid, itemId, action, to = null, just = null, ev = null) =>
+  auth(uid, () => db.query("select public.delivery_item_respond($1,$2,$3,$4,$5)", [itemId, action, to, just, ev]));
+const openFollow = (itemId, resp, sev = "ALTA") =>
+  svc(async () => (await db.query("select public.alert_followup_open($1,'DELIVERY_ITEM',$2,$3,$4,'2027-06-16T12:00:00Z') as id", [P1, itemId, sev, resp])).rows[0].id);
+const followRow = async (id) => (await db.query("select * from public.alert_followups where id=$1", [id])).rows[0];
+
+await check("alerta de providência — EM ANDAMENTO: o responsável (colaborador) confirma; a providência passa a EM_ANDAMENTO; calendário do alerta não muda", async () => {
+  const item = await byKey("AGUA_LIGACAO");
+  await auth(U.ger, () => db.query("select public.delivery_item_update_fields($1,$2::jsonb)", [item.id, JSON.stringify({ responsible_user_id: U.ana })]));
+  const fid = await openFollow(item.id, U.ana);
+  const before = (await followRow(fid)).next_reminder_at;
+  await respond(U.ana, item.id, "EM_ANDAMENTO");
+  await respond(U.ana, item.id, "EM_ANDAMENTO"); // repetir não posterga
+  const r = await byKey("AGUA_LIGACAO");
+  assert.equal(r.status, "EM_ANDAMENTO");
+  const f = await followRow(fid);
+  assert.deepEqual([f.status, f.in_progress], ["OPEN", true]);
+  assert.equal(new Date(f.next_reminder_at).getTime(), new Date(before).getTime());
+  assert.ok((await events(item.id)).some((e) => /PENDENTE → EM_ANDAMENTO \(confirmado no alerta\)/.test(e.detail)));
+});
+
+await check("alerta de providência — ENVIADO P/: colaborador ATIVO da obra; troca o responsável da providência E do alerta sem concluir nem reiniciar prazo", async () => {
+  const item = await byKey("AGUA_LIGACAO");
+  const fid = (await db.query("select id from public.alert_followups where source_id=$1 and status='OPEN'", [item.id])).rows[0].id;
+  const before = (await followRow(fid)).next_reminder_at;
+  await expectError(respond(U.ana, item.id, "ENVIADO_PARA", U.carla), /colaborador ativo/);
+  await expectError(respond(U.ana, item.id, "ENVIADO_PARA", U.fora), /colaborador ativo/);
+  await expectError(respond(U.ana, item.id, "ENVIADO_PARA", null), /Selecione/);
+  await expectError(respond(U.ana, item.id, "ENVIADO_PARA", U.ana), /já está com este responsável/);
+  await respond(U.ana, item.id, "ENVIADO_PARA", U.bruno);
+  const r = await byKey("AGUA_LIGACAO");
+  assert.equal(r.responsible_user_id, U.bruno);
+  assert.equal(r.status, "EM_ANDAMENTO", "encaminhar não conclui");
+  const f = await followRow(fid);
+  assert.deepEqual([f.status, f.responsible_user_id], ["OPEN", U.bruno]);
+  assert.equal(new Date(f.next_reminder_at).getTime(), new Date(before).getTime());
+  await expectError(respond(U.ana, item.id, "EM_ANDAMENTO"), /permissão/, "o responsável anterior perde a autoridade");
+});
+
+await check("alerta de providência — RESOLVIDO = conclusão: colaborador NÃO conclui (orientação clara); gestor conclui só com evidência/justificativa; resolve o alerta", async () => {
+  const item = await byKey("AGUA_LIGACAO");
+  await expectError(respond(U.bruno, item.id, "RESOLVIDO", null, "feito", null), /usuário autorizado.*EM ANDAMENTO ou ENVIADO P\//);
+  await expectError(respond(U.ger, item.id, "RESOLVIDO"), /evidência.*justificativa/);
+  await respond(U.ger, item.id, "RESOLVIDO", null, null, "Ligação efetivada — OS 8891");
+  const r = await byKey("AGUA_LIGACAO");
+  assert.deepEqual([r.status, r.evidence, r.concluded_by_user_id], ["CONCLUIDO", "Ligação efetivada — OS 8891", U.ger]);
+  const f = (await db.query("select status, next_reminder_at, resolved_by_user_id from public.alert_followups where source_id=$1 order by created_at desc limit 1", [item.id])).rows[0];
+  assert.deepEqual([f.status, f.next_reminder_at, f.resolved_by_user_id], ["RESOLVED", null, U.ger]);
+  await expectError(respond(U.ger, item.id, "EM_ANDAMENTO"), /já está encerrada/);
+});
+
+await check("alerta de providência — isolamento: usuário de outra obra, colaborador sem relação e sessão ausente não agem; ação inválida recusada", async () => {
+  const item = await byKey("ENERGIA_LIGACAO");
+  await openFollow(item.id, U.adm);
+  for (const [who, uid] of [["adm2", U.adm2], ["fora", U.fora], ["ana", U.ana]]) {
+    try { await respond(uid, item.id, "EM_ANDAMENTO"); } catch (e) { assert.match(String(e.message), /permissão/, who); continue; }
+    throw new Error(`${who} foi aceito indevidamente (status=${(await byKey("ENERGIA_LIGACAO")).status}; resp=${(await byKey("ENERGIA_LIGACAO")).responsible_user_id})`);
+  }
+  await expectError(respond(null, item.id, "EM_ANDAMENTO"), /Sessão expirada/);
+  await expectError(respond(U.adm, item.id, "TALVEZ"), /Ação inválida/);
+  await respond(U.adm, item.id, "EM_ANDAMENTO"); // o responsável do alerta (administrador de fallback) pode agir
+  assert.equal((await byKey("ENERGIA_LIGACAO")).status, "EM_ANDAMENTO");
 });
 
 await check("sem sessão nenhuma função de escrita executa", async () => {

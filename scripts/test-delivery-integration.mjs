@@ -153,6 +153,30 @@ check("lembrete de providência: responsável ATUAL, caixa por risco com 'Repete
   assert.ok(run.includes("VARREDURA_FALHOU"), "falha na varredura não impede os lembretes");
 });
 
+check("alerta de providência: três ações com confirmação explícita (GET nunca grava); regras no banco; página só para membros", () => {
+  const m = src("apps/web/lib/alerts/delivery-item-reminder-mailer.ts");
+  assert.ok(m.includes("quickActionUrls: {") && m.includes("/alertas/providencia/"));
+  for (const a of ["RESOLVIDO", "EM_ANDAMENTO", "ENVIADO_PARA"]) assert.ok(m.includes(`?acao=${a}`), a);
+  const page = src("apps/web/app/alertas/providencia/[projectId]/[itemId]/page.tsx");
+  assert.ok(!/\.rpc\(|\.insert\(|\.update\(|\.delete\(/.test(page), "página somente leitura");
+  assert.ok(page.includes("seu usuário não tem acesso"), "sem acesso (RLS) a página não vaza a providência");
+  const form = src("apps/web/app/alertas/providencia/[projectId]/[itemId]/delivery-alert-action-form.tsx");
+  assert.ok(!/requestSubmit|useEffect|window\.close/.test(form) && form.includes("CONFIRMAR") && form.includes("AlertActionNotice"));
+  const act = src("apps/web/app/alertas/providencia/[projectId]/[itemId]/actions.ts");
+  assert.ok(act.includes('rpc("delivery_item_respond"') && !act.includes("createSupabaseAdminClient"), "sessão do usuário + regras na função SQL");
+  const sql = src("supabase/migrations/20261027150000_delivery_item_respond.sql");
+  assert.ok(sql.includes("coalesce(v_item.responsible_user_id = v_actor, false)"), "lógica NULL-safe de autorização");
+  assert.ok(sql.includes("Concluir exige confirmação de um usuário autorizado"));
+});
+
+check("CNO: fonte oficial registrada e divergência de início bloqueia o prazo definitivo", () => {
+  const d = src("apps/web/lib/delivery/delivery-items.ts");
+  assert.ok(d.includes("gov.br/receitafederal/pt-br/assuntos/construcao-civil/cno/cno"));
+  assert.ok(d.includes("início das atividades de construção"));
+  const t = src("apps/web/components/delivery/delivery-items-table.tsx");
+  assert.ok(t.includes("startCandidates"));
+});
+
 check("navegação: item Providências na sidebar com ajuda registrada", () => {
   assert.ok(src("apps/web/lib/ui/nav-items.ts").includes('href: "providencias"'));
   assert.ok(src("apps/web/lib/ui/feature-help.ts").includes('id: "providencias"'));

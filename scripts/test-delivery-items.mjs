@@ -225,6 +225,21 @@ check("CNO: prazo interno antecipado prevalece sobre o legal; sem data de iníci
   assert.match(none.basis, /não calculado/);
 });
 
+check("CNO: início DIVERGENTE (cadastro 19/10 × histórico 23/10) NÃO gera prazo definitivo nem escolhe uma data; só o prazo interno, se houver", () => {
+  const r = D.computeCnoDeadline({ constructionStartDay: "2026-10-19", startConfirmed: false, startCandidates: ["2026-10-19", "2026-10-23"] });
+  assert.equal(r.deadline, null);
+  assert.equal(r.definitive, false);
+  assert.equal(r.divergent, true);
+  assert.match(r.basis, /DIVERGENTE \(2026-10-19 × 2026-10-23\).*NÃO calculado/);
+  const withInternal = D.computeCnoDeadline({ constructionStartDay: "2026-10-19", startConfirmed: false, startCandidates: ["2026-10-19", "2026-10-23"], internalDeadline: "2026-11-05" });
+  assert.equal(withInternal.deadline, "2026-11-05", "prazo interno configurável continua valendo");
+  assert.equal(withInternal.definitive, false);
+  const same = D.computeCnoDeadline({ constructionStartDay: "2026-10-19", startConfirmed: true, startCandidates: ["2026-10-19", "2026-10-19"] });
+  assert.equal(same.divergent, false);
+  assert.equal(same.deadline, "2026-11-18");
+  assert.match(D.CNO_OFFICIAL_SOURCE_URL, /gov\.br\/receitafederal.*\/cno\/cno$/);
+});
+
 check("CNO: confere inscrição existente antes de propor nova", () => {
   assert.equal(D.shouldProposeCnoRegistration({ status: "PENDENTE", cnoNumber: null, evidence: null }), true);
   assert.equal(D.shouldProposeCnoRegistration({ status: "PENDENTE", cnoNumber: "90.123.45678/70", evidence: null }), false);

@@ -46,6 +46,7 @@ export function DeliveryItemsTable({
   members,
   projectEndDay,
   projectStartDay,
+  startCandidates,
   today,
   canEdit,
 }: {
@@ -54,6 +55,8 @@ export function DeliveryItemsTable({
   members: Array<{ userId: string; name: string }>;
   projectEndDay: string | null;
   projectStartDay: string | null;
+  /** Datas de início candidatas conhecidas (cadastro x histórico) — divergência bloqueia o cálculo do CNO. */
+  startCandidates?: string[];
   today: string;
   canEdit: boolean;
 }) {
@@ -63,6 +66,7 @@ export function DeliveryItemsTable({
     constructionStartDay: projectStartDay,
     startConfirmed: false,
     internalDeadline: cno?.internalDeadline ?? null,
+    startCandidates,
   });
 
   return (
