@@ -1,34 +1,107 @@
-# Módulo de Segurança (futuro) — decisão registrada
+# Módulo de campo SSMA (PWA) — decisões, estado e limites
 
-> **Status: decisão documentada. NADA foi implementado.** Este registro existe para que a
-> implementação futura não reabra as escolhas já tomadas.
+> **Status: primeira versão implementada LOCALMENTE e testada em computador (Chrome headless, PostgreSQL
+> descartável). NADA foi publicado nem aplicado em banco real. NÃO foi validado em iPhone nem Android
+> reais.** A migration `20261028130000_ssma_field_records.sql` está preparada e **não aplicada**.
 
-## Decisões
+## Decisões (inalteradas)
 
-1. **PWA distribuído por link e QR Code, sem publicação nas lojas** (App Store / Google Play).
-   O acesso é pelo navegador do celular; o usuário pode "instalar" o PWA na tela inicial.
-2. **QR Code com endereço permanente, sem credenciais.** O QR Code aponta para uma URL estável do ACC
-   (por obra). Ele **nunca** carrega token, senha, identificador de sessão ou qualquer segredo. Quem
-   escaneia ainda precisa autenticar. Trocar o QR Code não deve ser necessário para revogar acesso.
-3. **Login e permissões por obra.** Mesma identidade e mesmo RBAC do ACC (papel por projeto); o PWA
-   nunca concede acesso a uma obra de que o usuário não participa. Isolamento entre obras continua
-   sendo imposto no banco (RLS), não só na interface.
-4. **Funcionamento offline é requisito a DETALHAR e TESTAR** (ainda não especificado):
-   - o que precisa funcionar sem rede (consulta de checklists? registro de ocorrência? fotos?);
-   - fila local de envios e reconciliação ao reconectar (idempotência, conflitos, ordem);
-   - o que NÃO pode ficar em cache no aparelho (dados sensíveis, tokens, evidências de outras obras);
-   - expiração/revogação de sessão e dados locais ao perder o acesso à obra;
-   - testes em aparelhos reais e em redes ruins antes de prometer o recurso.
+1. **PWA distribuído por link e QR Code, sem publicação nas lojas.** Acesso pelo navegador do celular;
+   o usuário pode "instalar" na tela inicial.
+2. **QR Code com endereço permanente, sem credenciais.** Contém somente a URL (validada: https — http só em
+   localhost —, sem usuário/senha, sem query, sem fragmento). Quem escaneia ainda precisa entrar.
+3. **Login e permissões por obra.** Mesma identidade e RBAC do ACC; o isolamento entre obras é imposto no
+   banco (RLS/RPCs), não só na interface.
+4. **Offline: só o que foi testado é afirmado** (ver "Operação sem sinal").
 
-## Restrições herdadas das regras permanentes do projeto
+## O que existe
 
-- Nenhum segredo no frontend/PWA; integrações reais só com configuração server-side.
-- Evidências originais preservadas; todo dado derivado mantém rastreabilidade até a fonte.
-- Registros criados offline precisam manter autoria e horário reais (não o da sincronização).
+| Parte | Onde |
+|---|---|
+| Seletor de obras autorizadas | `app/ssma/page.tsx` |
+| App de campo (checklists existentes + registros) | `app/ssma/[projectId]/page.tsx`, `components/ssma/ssma-field-app.tsx` |
+| Registro de ocorrência/inspeção (categoria, descrição, local, data, risco, responsável, prazo, fotos) | `components/ssma/field-records/new-record-form.tsx` |
+| Lista, detalhe, andamento e conclusão com evidência | `field-records-app.tsx`, `record-detail.tsx` |
+| Fila offline (módulo puro) | `lib/ssma/field-records/queue-core.ts` |
+| Adaptador IndexedDB / transporte Supabase / hook | `idb-store.ts`, `supabase-transport.ts`, `use-field-queue.ts` |
+| Casca offline sem dados | `app/ssma/offline/page.tsx`, `components/ssma/ssma-offline-shell.tsx` |
+| Service worker | `public/sw.js` |
+| Instalação (link + QR + instruções iOS/Android) | `components/ssma/ssma-install-card.tsx`, `lib/ssma/pwa-install.ts` |
+| Painel no ACC | `app/[projectId]/ssma-registros/page.tsx` (link na tela ESG/SSMA) |
+| Fotos no painel (URL assinada, só leitura) | `app/api/ssma/records/photos/[photoId]/route.ts` |
+| Banco | `supabase/migrations/20261028130000_ssma_field_records.sql` |
 
-## Em aberto (decidir antes de implementar)
+Os formulários/checklists SSMA anteriores (`ssma_form_submissions`) **não foram alterados**; continuam
+exigindo conexão para enviar.
 
-- Escopo funcional do módulo (ocorrências, DDS, inspeções, quase-acidentes, fotos).
-- Política de retenção de fotos/arquivos no aparelho.
-- Estratégia de versionamento do service worker e de atualização do PWA.
-- Identificação do dispositivo e política para aparelhos compartilhados em obra.
+## Configuração
+
+- `ACC_SSMA_PWA_URL` — URL pública do app de campo (ex.: `https://<dominio-do-acc>/ssma`). Se ausente, usa
+  `AXION_APP_BASE_URL` + `/ssma`. **Sem nenhuma das duas, a tela avisa e não gera QR Code** (o endereço
+  definitivo não foi inventado).
+
+## Operação sem sinal — o que foi e o que NÃO foi testado
+
+Estados mostrados ao usuário: **Salvo no aparelho** → **Aguardando envio** → **Sincronizado** (e **Falha no
+envio**, com motivo, nova tentativa e descarte).
+
+Testado (`npm run test:ssma`):
+- lógica da fila (18 casos, módulo puro): gravação sem rede, reconexão, duplicidade, queda no meio do envio
+  (retoma sem reenviar), falha do servidor, erro permanente, troca de conta, isolamento por usuário e obra,
+  execuções simultâneas, falta de espaço, arquivo local ausente;
+- IndexedDB **real** e corte de rede **real** em Chrome (persistência entre recarregamentos, fotos, isolamento,
+  envio na reconexão, sem duplicar);
+- service worker real em Chrome: guarda só a casca e estáticos; nunca páginas com dados nem API; sem rede,
+  navegação para `/ssma/...` recebe a casca;
+- migration em PostgreSQL 17 descartável (20 casos): idempotência por id, autoria = `auth.uid()`,
+  `USER_MISMATCH` na troca de conta, RLS por obra, perfis (LEITURA não registra), upload no Storage, andamento
+  e conclusão com evidência.
+
+**Não testado / limitações:**
+- **Nenhum aparelho real** (iPhone/Safari, Android/Chrome). Comportamento do IndexedDB, câmera, instalação e
+  service worker em celulares reais pode diferir.
+- iOS/Safari pode **apagar dados de sites** não usados por semanas e limita o armazenamento; o app pede
+  armazenamento persistente (`navigator.storage.persist()`), mas isso não é garantia. Registros importantes
+  devem ser sincronizados assim que houver sinal.
+- A casca offline real do Next (hidratação e chunks) **não foi aberta sem rede com o app autenticado**; só o
+  mecanismo do service worker foi provado com servidor falso. Para abrir sem sinal é preciso ter aberto o app
+  de campo **uma vez com internet** depois da instalação (a casca e o contexto da obra são guardados então).
+- **Andamento e conclusão de ações corretivas exigem conexão** (não entram na fila offline nesta versão).
+- A lista de registros da obra (servidor) não é guardada no aparelho: sem sinal só aparecem os registros do
+  próprio aparelho.
+- Fotos: JPG/PNG até 15 MB, máximo 20 por registro; não há compressão. HEIC não é aceito.
+- Erro de rede é detectado pela mensagem do cliente Supabase; mensagens diferentes poderiam ser tratadas como
+  falha (visível, com nova tentativa) em vez de "sem conexão".
+
+## Autoria, horário e troca de conta
+
+- O id do registro e de cada foto nasce no aparelho (UUID); o servidor é idempotente por id.
+- `client_created_at` guarda o horário real no aparelho; `received_at` é o do servidor — nunca um sobrescreve o
+  outro. A autoria no servidor é `auth.uid()`, e o aparelho declara o usuário esperado (`p_claimed_user_id`):
+  sessão diferente ⇒ `USER_MISMATCH`, nada é gravado.
+- A fila é filtrada por usuário: outra conta no mesmo aparelho **não lista nem envia** os registros pendentes de
+  quem criou (só vê a contagem). Sair da conta **não apaga** registros ainda não enviados; remover dados de
+  outras contas é uma ação explícita e confirmada. Sair apaga o contexto guardado (obra e nomes dos membros).
+- O que fica no aparelho: fila de registros e fotos pendentes; contexto mínimo por usuário (nome da obra,
+  id/nome dos membros ativos, se o usuário é gestor). **Nunca** tokens, senhas ou dados de outras obras.
+
+## Consulta ao especialista de SSMA (gancho)
+
+O detalhe do registro (`record-detail.tsx`) tem um aviso no lugar da consulta. A consulta por IA dos alertas
+(`/alertas/consulta-ia/...`) é outra frente; quando liberada, o especialista de SSMA poderá receber o contexto
+do registro (obra, registro, ação e fotos) pelo mesmo mecanismo de consulta existente, com as mesmas regras:
+somente leitura, sem alterar o registro, com fontes consultáveis e sem dados de outras obras.
+
+## Restrições herdadas
+
+- Nenhum segredo no frontend; integrações reais só server-side.
+- Evidências originais preservadas; o histórico das ações corretivas é imutável (somente inclusão).
+- Registros criados offline mantêm autoria e horário reais.
+
+## Em aberto
+
+- Escopo funcional adicional (DDS, quase-acidente com fluxo próprio, integração com o fluxo de acidente).
+- Política de retenção de fotos no aparelho e compressão de imagens.
+- Estratégia de versionamento/atualização do service worker em produção (hoje: `VERSION` em `public/sw.js`).
+- Identificação do dispositivo e política para aparelhos compartilhados em obra (hoje: isolamento por conta).
+- Fila offline para andamento/conclusão de ações; cache de leitura dos registros da obra.

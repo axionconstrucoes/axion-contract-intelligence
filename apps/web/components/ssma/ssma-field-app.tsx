@@ -2,24 +2,25 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@axion/db/browser";
 import {
-  ArrowLeft,
   Camera,
   CheckCircle2,
   ChevronRight,
   ClipboardCheck,
   CloudUpload,
   FileText,
-  History,
-  Home,
+  Plus,
   Send,
   ShieldAlert,
   Siren,
   Truck,
-  UserRound,
   X,
 } from "lucide-react";
+import { FieldRecordsApp, type FieldProject } from "@/components/ssma/field-records/field-records-app";
+import { SsmaBottomNav, SsmaHeader, type SsmaTab } from "@/components/ssma/ssma-chrome";
+import { useFieldQueue } from "@/lib/ssma/field-records/use-field-queue";
 import {
   SSMA_CHECKLISTS,
   SSMA_RISK_LEVELS,
@@ -36,6 +37,13 @@ type SsmaFieldAppProps = {
   projectLabel: string;
   technicianLabel: string;
   initialDateTime: string;
+};
+
+type SsmaFieldAppRootProps = SsmaFieldAppProps & {
+  /** Usuário autenticado (id) — dono da fila offline deste aparelho. */
+  userId: string;
+  /** Obra autorizada, com os membros ativos (para escolher responsável) e a permissão de gestão. */
+  project: FieldProject;
 };
 
 type CheckState = Record<string, SsmaChecklistState | undefined>;
@@ -205,35 +213,6 @@ function PhotoUploadPanel({
         </div>
       ) : null}
     </section>
-  );
-}
-
-function SsmaHeader({ title, onBack }: { title: string; onBack?: () => void }) {
-  return (
-    <header className="relative flex min-h-24 items-center bg-[#7f1d1d] px-4 text-white shadow-sm">
-      {onBack ? (
-        <button
-          type="button"
-          onClick={onBack}
-          className="absolute left-2 top-1/2 z-10 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/15"
-          aria-label="Voltar"
-        >
-          <ArrowLeft className="size-6" />
-        </button>
-      ) : null}
-      <Image
-        src="/branding/acc-logo.png"
-        alt="ACC"
-        width={1254}
-        height={1254}
-        priority
-        className={cn(
-          "absolute top-1/2 size-16 -translate-y-1/2 object-cover",
-          onBack ? "left-14" : "left-4"
-        )}
-      />
-      <h1 className="mx-auto max-w-[58%] text-center text-lg font-black uppercase leading-tight sm:text-xl">{title}</h1>
-    </header>
   );
 }
 
@@ -546,14 +525,44 @@ function ChecklistForm({
   );
 }
 
-export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initialDateTime }: SsmaFieldAppProps) {
+export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initialDateTime, userId, project }: SsmaFieldAppRootProps) {
+  const router = useRouter();
+  const queue = useFieldQueue(userId);
+  const [view, setView] = useState<"home" | "field">("home");
+  const [fieldTab, setFieldTab] = useState<SsmaTab>("registros");
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
+  const { ready, rememberContext } = queue;
+
+  // Guarda, neste aparelho e para esta conta, o mínimo para abrir o formulário sem rede.
+  useEffect(() => {
+    if (ready) void rememberContext(technicianLabel, project);
+  }, [ready, rememberContext, technicianLabel, project]);
+
+  const signOut = async () => {
+    await createSupabaseBrowserClient().auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
   const [completed, setCompleted] = useState<Set<string>>(() => new Set());
 
   const active = useMemo(
     () => SSMA_CHECKLISTS.find((definition) => definition.slug === activeSlug) ?? null,
     [activeSlug]
   );
+
+  if (view === "field") {
+    return (
+      <FieldRecordsApp
+        queue={queue}
+        userId={userId}
+        userLabel={technicianLabel}
+        project={project}
+        initialTab={fieldTab}
+        onHome={() => setView("home")}
+        onSignOut={signOut}
+      />
+    );
+  }
 
   if (active) {
     return (
@@ -587,8 +596,9 @@ export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initial
 
         <div className="flex items-center justify-between gap-3">
           <p className="text-base font-bold text-slate-900">Olá, {technicianLabel.split(" — ")[0]}</p>
-          <span className="flex items-center gap-1 text-xs font-bold text-green-700">
-            <CloudUpload className="size-5" /> Sincronizado
+          <span className={cn("flex items-center gap-1 text-xs font-bold", queue.items.some((item) => item.status !== "SYNCED") ? "text-amber-700" : "text-green-700")}>
+            <CloudUpload className="size-5" />
+            {queue.items.some((item) => item.status !== "SYNCED") ? "Aguardando envio" : "Sincronizado"}
           </span>
         </div>
 
@@ -604,6 +614,19 @@ export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initial
             </div>
           </div>
         </section>
+
+        <button
+          type="button"
+          onClick={() => { setFieldTab("registros"); setView("field"); }}
+          className="flex min-h-20 w-full items-center gap-3 rounded-xl border-2 border-[#7f1d1d] bg-white p-4 text-left shadow-sm"
+        >
+          <Plus className="size-7 shrink-0 text-[#7f1d1d]" />
+          <span className="min-w-0 flex-1">
+            <span className="block font-black text-slate-900">Registrar ocorrência / inspeção</span>
+            <span className="block text-xs text-slate-600">Funciona sem sinal · fotos, responsável e prazo</span>
+          </span>
+          <ChevronRight className="size-5 shrink-0 text-[#7f1d1d]" />
+        </button>
 
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {routine.map((definition) => (
@@ -654,12 +677,15 @@ export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initial
         })}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t border-slate-300 bg-white px-2 py-2 text-[11px] font-semibold text-slate-600">
-        <span className="flex flex-col items-center gap-1 text-[#7f1d1d]"><Home className="size-5" />Início</span>
-        <span className="flex flex-col items-center gap-1"><History className="size-5" />Histórico</span>
-        <span className="flex flex-col items-center gap-1"><CloudUpload className="size-5" />Sincronização</span>
-        <span className="flex flex-col items-center gap-1"><UserRound className="size-5" />Perfil</span>
-      </nav>
+      <SsmaBottomNav
+        active="home"
+        pendingCount={queue.items.filter((item) => item.status !== "SYNCED").length}
+        onChange={(tab) => {
+          if (tab === "home") return;
+          setFieldTab(tab);
+          setView("field");
+        }}
+      />
     </div>
   );
 }
