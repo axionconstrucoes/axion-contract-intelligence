@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test \"lib/**/*.test.mjs\""
+    "test": "node --import ../../scripts/lib/block-live-ai.mjs --test \"lib/**/*.test.mjs\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.120.0",
