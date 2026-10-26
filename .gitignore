@@ -16,3 +16,14 @@ npm-debug.log*
 # Credenciais OAuth e logs locais (nunca versionar; antes só estavam em .git/info/exclude, local deste computador)
 client_secret_*.json
 next-dev-*.log
+
+# Artefatos locais de trabalho (nunca versionar): contratos em PDF, imagens/anotações de sessão,
+# diagnósticos exportados, notas de entrega e resíduos de edição. Antes de 2026-10-26 parte disto só
+# estava em .git/info/exclude (regra local deste computador).
+.claude/*.pdf
+.claude/*.txt
+/diagnostico-*.txt
+/LEIA-ME-ANTES.txt
+*.backup-*
+/patch-*.py
+/fix-formalizedVariation.py
