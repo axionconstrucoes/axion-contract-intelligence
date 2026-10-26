@@ -10,6 +10,8 @@ import { loadAccAlertLogos } from "./branding/load-acc-logo-inline-image";
 import { EmailSendError } from "./email-provider";
 import { assertNotEmailFixtureData } from "./fixture-safety-guard";
 import { getEmailProvider } from "./get-email-provider";
+import { resolveEffectiveRecipient } from "./pilot-outbound-guard";
+import type { OutboundMode } from "./send-outcome";
 import { buildContractAlertEmail, type ContractAlertEmailInput } from "./templates/contract-alert-template";
 
 export class NotAuthorizedError extends Error {
@@ -30,6 +32,12 @@ export interface SendContractAlertEmailInput {
 }
 
 export interface SendContractAlertEmailResult {
+  /** Modo de saída decidido pelo guard (só "PRODUCTION" exato libera o destinatário escolhido). */
+  outboundMode: OutboundMode;
+  /** Destinatário escolhido na tela. */
+  intendedRecipientEmail: string;
+  /** Destino EFETIVO decidido pelo guard — em piloto, a caixa de teste. */
+  effectiveRecipientEmail: string;
   emailId: string;
   provider: string;
   providerMessageId: string;
@@ -110,6 +118,11 @@ export async function sendContractAlertEmail(
   // cabeçalho; SLA/solicitação de ação continuam com o default true).
   const signed = appendAccEmailSignature({ text, html }, hasInlineLogo, false);
 
+  // Mesma fonte única que o provider usa (applyPilotOutboundGuard): decide o destino
+  // efetivo ANTES do envio para a tela/auditoria poderem relatar o resultado real. Fail-closed
+  // (lança EmailSendError se o piloto estiver mal configurado), igual ao envio.
+  const resolvedRecipient = resolveEffectiveRecipient(input.recipientEmail);
+
   const provider = getEmailProvider();
   const correlationId = crypto.randomUUID();
 
@@ -160,7 +173,10 @@ export async function sendContractAlertEmail(
     entity_type: "CONTRACT_EVENT",
     entity_id: input.eventId,
     // Resumo compacto — nunca o corpo integral do alerta no log de auditoria.
-    detail: `Alerta de contrato (RISCO ${input.alert.severity}) enviado para ${input.recipientEmail}.`,
+    detail:
+      resolvedRecipient.mode === "PILOT"
+        ? `Alerta de contrato (RISCO ${input.alert.severity}) destinado a ${input.recipientEmail}; MODO PILOTO: entrega efetiva redirecionada para ${resolvedRecipient.effectiveRecipientEmail} (aceite do provedor, entrega não confirmada).`
+        : `Alerta de contrato (RISCO ${input.alert.severity}) aceito pelo provedor para ${input.recipientEmail} (entrega não confirmada).`,
   });
 
   if (auditError) {
@@ -168,6 +184,9 @@ export async function sendContractAlertEmail(
   }
 
   return {
+    outboundMode: resolvedRecipient.mode,
+    intendedRecipientEmail: input.recipientEmail,
+    effectiveRecipientEmail: resolvedRecipient.effectiveRecipientEmail,
     emailId,
     provider: sendResult.provider,
     providerMessageId: sendResult.providerMessageId,

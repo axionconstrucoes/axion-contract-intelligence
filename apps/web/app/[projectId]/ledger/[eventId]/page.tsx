@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getEvent, getProjectMembers, getUser } from "@/lib/data";
 import { getEventClauseConfrontationCandidates } from "@/lib/event-clause-confrontation-review";
+import { getPilotSendNotice } from "@/lib/email/pilot-notice";
 import { alertRiskLevelLabels } from "@/lib/email/templates/contract-alert-template";
 import { confrontationAnchorId } from "@/lib/ledger/confrontation-anchor";
 import { validateConfrontationJustification } from "@/lib/ledger/confrontation-justification-validation";
@@ -141,6 +142,7 @@ export default async function EventDetailPage({
                   projectId={projectId}
                   eventId={event.id}
                   eligibleRecipients={eligibleAlertRecipients}
+                  pilotNotice={getPilotSendNotice()}
                 />
               </>
             )}

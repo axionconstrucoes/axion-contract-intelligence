@@ -8,6 +8,7 @@ import { buildConfrontationBlock, type ContractConfrontationBlock } from "@/lib/
 import { EmailSendError } from "@/lib/email/email-provider";
 import { toEvidenceEmailDirection } from "@/lib/email/evidence-email-direction";
 import { NotAuthorizedError, sendContractAlertEmail } from "@/lib/email/send-contract-alert-email";
+import { describeAlertSendOutcome } from "@/lib/email/send-outcome";
 import type { ContractAlertEvidenceItem } from "@/lib/email/templates/contract-alert-template";
 import { getEmail, getEvent, getProject, getProjectMembers, getUser } from "@/lib/data";
 import {
@@ -203,8 +204,9 @@ export async function sendContractAlertEmailAction(
     intendedRecipientEmail: recipientEmail,
   }).catch(() => []);
 
+  let sendResult;
   try {
-    await sendContractAlertEmail({
+    sendResult = await sendContractAlertEmail({
       projectId,
       eventId,
       recipientEmail,
@@ -234,5 +236,12 @@ export async function sendContractAlertEmailAction(
   }
 
   revalidatePath(`/${projectId}/ledger/${eventId}`);
-  return { error: null, success: `Alerta enviado para ${recipientEmail}.` };
+  // Mensagem baseada no resultado REAL do servidor: em piloto o destino efetivo é a caixa de
+  // teste e o colaborador escolhido não recebe; aceite do provedor nunca é "entrega confirmada".
+  const outcome = describeAlertSendOutcome({
+    mode: sendResult.outboundMode,
+    intendedRecipientEmail: sendResult.intendedRecipientEmail,
+    effectiveRecipientEmail: sendResult.effectiveRecipientEmail,
+  });
+  return { error: null, success: outcome.message };
 }
