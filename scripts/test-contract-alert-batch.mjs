@@ -322,7 +322,7 @@ check("classificação de risco no cabeçalho (mesma linha do logo) e título do
 });
 
 check("CRÍTICO usa fundo vermelho e fonte branca/negrito", () => {
-  assert(email.html.toLowerCase().includes("background-color:#dc2626;border:2px solid #991b1b"));
+  assert(email.html.toLowerCase().includes("background-color:#cc0000;border:2px solid #7f0000"));
   assert(/font-weight:700;color:#FFFFFF;[^"]*">RISCO CRÍTICO \| /.test(email.html));
 });
 
