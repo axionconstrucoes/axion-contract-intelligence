@@ -222,11 +222,11 @@ check("TIPOGRAFIA: corpo padrão único de 14px; SÓ o cabeçalho 'RISCO | OBRA'
   const sizes = new Set(Array.from(first.matchAll(/font-size:(\d+px)/g)).map((m) => m[1]));
   assert.deepEqual([...sizes].sort(), ["14px", "16px"]);
   assert.ok(/class="acc-box-risk"[^>]*font-size:16px[^>]*font-weight:700/.test(first) || /class="acc-box-risk"[^>]*font-weight:700[^>]*font-size:16px/.test(first), "cabeçalho 16px negrito");
-  assert.ok(/<a [^>]*font-size:16px[^>]*font-weight:900|<a [^>]*font-weight:900[^>]*font-size:16px/.test(first), "título 16px black");
+  assert.ok(/<a [^>]*font-size:16px[^>]*font-weight:700|<a [^>]*font-weight:700[^>]*font-size:16px/.test(first), "título 16px negrito");
   const rest = first.replace(/class="acc-box-risk"[^>]*>[^<]*/, "").replace(/<p style="margin:0 0 8px 0;[^"]*font-size:16px[^"]*"><a [^>]*>[^<]*<\/a><\/p>/, "");
   assert.ok(!/font-size:16px/.test(rest.replace(/<style[\s\S]*?<\/style>/g, "")) , "demais textos continuam em 14px");
-  assert.ok(first.includes("font-weight:900"), "título black");
-  assert.ok(/<a [^>]*font-weight:900[^>]*>Alerta CRITICA<\/a>/.test(first), "título é link");
+  assert.ok(!/font-weight:\s*(800|900)|Arial Black/.test(first), "nenhum peso black/900 nem Arial Black no alerta");
+  assert.ok(/<a [^>]*font-weight:700[^>]*>Alerta CRITICA<\/a>/.test(first), "título é link");
   assert.ok(/font-weight:400;color:#FFFFFF;[^"]*">Descrição CRITICA/.test(first), "descrição regular");
   assert.ok(/font-weight:700;color:#FFFFFF;[^"]*">Cláusula 8\.2 – Prazos e Cronograma</.test(first), "cláusula em negrito");
   assert.ok(/font-weight:700;color:#FFFFFF;[^"]*">Repete: a cada 1 dia até a conclusão\.</.test(first), "Repete em negrito");

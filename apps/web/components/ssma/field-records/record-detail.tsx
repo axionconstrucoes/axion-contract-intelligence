@@ -135,10 +135,10 @@ export function RecordDetail({
       {action ? (
         <section className="space-y-3 rounded-xl bg-white p-4 shadow-sm" aria-label="Ação corretiva">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="font-black uppercase text-slate-900">Ação corretiva</h2>
+            <h2 className="font-bold uppercase text-slate-900">Ação corretiva</h2>
             <span
               className={cn(
-                "rounded px-2 py-1 text-xs font-black",
+                "rounded px-2 py-1 text-xs font-bold",
                 action.status === "CONCLUIDA" ? "bg-green-100 text-green-800" : isActionOverdue(action, today) ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-900"
               )}
             >
@@ -176,7 +176,7 @@ export function RecordDetail({
                     type="button"
                     aria-pressed={event === value}
                     onClick={() => setEvent(value)}
-                    className={cn("min-h-11 rounded-lg border-2 px-2 text-xs font-black uppercase", event === value ? "border-[#7f1d1d] bg-[#7f1d1d] text-white" : "border-slate-300 bg-white text-slate-800")}
+                    className={cn("min-h-11 rounded-lg border-2 px-2 text-xs font-bold uppercase", event === value ? "border-[#7f1d1d] bg-[#7f1d1d] text-white" : "border-slate-300 bg-white text-slate-800")}
                   >
                     {value === "ANDAMENTO" ? "Registrar andamento" : "Concluir ação"}
                   </button>
@@ -187,7 +187,7 @@ export function RecordDetail({
                 <textarea value={note} onChange={(item) => setNote(item.target.value)} rows={3} className="mt-1 block w-full rounded-lg border-2 border-slate-300 bg-white px-3 py-2 text-base outline-none focus:border-[#7f1d1d]" />
               </label>
               {event === "CONCLUIDA" ? (
-                <label className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-[#7f1d1d] bg-white px-3 text-sm font-black uppercase text-[#7f1d1d]">
+                <label className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-[#7f1d1d] bg-white px-3 text-sm font-bold uppercase text-[#7f1d1d]">
                   <Camera className="size-5" /> {file ? file.name : "Foto de evidência"}
                   <input type="file" accept="image/jpeg,image/png" capture="environment" className="sr-only" onChange={(item) => setFile(item.target.files?.[0] ?? null)} />
                 </label>
@@ -201,7 +201,7 @@ export function RecordDetail({
               {done ? (
                 <p className="flex items-center gap-1 text-sm font-bold text-green-700"><CheckCircle2 className="size-4" /> {done}</p>
               ) : null}
-              <button type="submit" disabled={busy || !online} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 font-black uppercase text-white disabled:opacity-50">
+              <button type="submit" disabled={busy || !online} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 font-bold uppercase text-white disabled:opacity-50">
                 {busy ? <Loader2 className="size-5 animate-spin" /> : <Clock className="size-5" />} {event === "ANDAMENTO" ? "Registrar andamento" : "Concluir"}
               </button>
               {!online ? <p className="text-center text-xs font-semibold text-amber-700">Sem conexão: andamento e conclusão só podem ser registrados online.</p> : null}

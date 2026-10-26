@@ -27,7 +27,7 @@ export default async function SsmaProjectPickerPage() {
     <div className="min-h-dvh bg-slate-100">
       <SsmaHeader title="SSMA/ESG" />
       <main className="mx-auto max-w-2xl space-y-4 p-4">
-        <h2 className="text-base font-black text-slate-900">Selecione a obra</h2>
+        <h2 className="text-base font-bold text-slate-900">Selecione a obra</h2>
         {authorized.length === 0 ? (
           <p className="rounded-xl bg-white p-4 text-sm text-slate-700 shadow-sm">Você ainda não participa de nenhuma obra ativa. Peça a um administrador para vincular a sua conta.</p>
         ) : (
@@ -36,7 +36,7 @@ export default async function SsmaProjectPickerPage() {
               <li key={project.id}>
                 <Link href={`/ssma/${project.id}`} className="flex min-h-16 items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-[#7f1d1d]">
                   <span className="min-w-0 flex-1">
-                    <span className="block font-black text-slate-900">{project.name}</span>
+                    <span className="block font-bold text-slate-900">{project.name}</span>
                     <span className="block text-xs text-slate-600">{project.code}{project.client ? ` · ${project.client}` : ""}</span>
                   </span>
                   <ChevronRight className="size-5 shrink-0 text-[#7f1d1d]" />

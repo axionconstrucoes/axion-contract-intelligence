@@ -10,7 +10,7 @@ export async function SsmaInstallCard() {
 
   return (
     <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Instalar o app de campo">
-      <h2 className="font-black uppercase text-slate-900">Instalar no celular</h2>
+      <h2 className="font-bold uppercase text-slate-900">Instalar no celular</h2>
       {install.ok ? (
         <div className="flex flex-wrap items-start gap-4">
           <div role="img" aria-label="QR Code com o endereço do app de campo" className="size-48 shrink-0 rounded-lg border border-slate-300 bg-white p-1 [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: svg ?? "" }} />
@@ -25,11 +25,11 @@ export async function SsmaInstallCard() {
       )}
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <p className="text-sm font-black text-slate-900">iPhone (Safari)</p>
+          <p className="text-sm font-bold text-slate-900">iPhone (Safari)</p>
           <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-700">{INSTALL_INSTRUCTIONS.ios.map((step) => <li key={step}>{step}</li>)}</ol>
         </div>
         <div>
-          <p className="text-sm font-black text-slate-900">Android (Chrome)</p>
+          <p className="text-sm font-bold text-slate-900">Android (Chrome)</p>
           <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-700">{INSTALL_INSTRUCTIONS.android.map((step) => <li key={step}>{step}</li>)}</ol>
         </div>
       </div>

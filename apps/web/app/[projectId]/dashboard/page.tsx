@@ -702,7 +702,7 @@ export default async function DashboardPage({
                   : "bg-red-600 text-white ring-2 ring-red-400/40"
               }`}
             >
-              <span className="block w-full whitespace-nowrap text-center text-[17px] font-extrabold uppercase tracking-wide leading-none">
+              <span className="block w-full whitespace-nowrap text-center text-[17px] font-bold uppercase tracking-wide leading-none">
                 {systemOperational ? "SISTEMA OPERACIONAL" : "SISTEMA NÃO OPERACIONAL"}
               </span>
             </div>
@@ -976,7 +976,7 @@ export default async function DashboardPage({
                     <span className="text-[15px] font-medium uppercase tracking-[0.14em] text-[#d8c0c4]">
                       Realizado
                     </span>
-                    <span className="mt-1 text-4xl font-extrabold text-white">
+                    <span className="mt-1 text-4xl font-bold text-white">
                       {physicalActual !== null
                         ? `${physicalActual.toLocaleString("pt-BR", {
                             maximumFractionDigits: 1,
@@ -1029,7 +1029,7 @@ export default async function DashboardPage({
                       Realizado
                     </span>
 
-                    <span className="mt-1 text-4xl font-extrabold text-white">
+                    <span className="mt-1 text-4xl font-bold text-white">
                       {financialProgressPercent !== null
                         ? `${financialProgressPercent.toLocaleString("pt-BR", {
                             maximumFractionDigits: 1,

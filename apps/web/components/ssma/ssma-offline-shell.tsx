@@ -41,7 +41,7 @@ export function SsmaOfflineShell() {
       <div className="min-h-dvh bg-slate-100">
         <SsmaHeader title="SSMA/ESG" />
         <main className="mx-auto max-w-md space-y-3 p-6 text-center">
-          <p className="text-lg font-black text-slate-900">Sem conexão</p>
+          <p className="text-lg font-bold text-slate-900">Sem conexão</p>
           <p className="text-sm text-slate-700">Este aparelho ainda não tem uma obra guardada para uso sem sinal. Abra o app com internet, entre com a sua conta e acesse a obra uma vez.</p>
         </main>
       </div>

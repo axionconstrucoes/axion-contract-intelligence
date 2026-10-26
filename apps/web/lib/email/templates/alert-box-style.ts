@@ -11,7 +11,7 @@
 //   MÉDIO   : fundo branco,                   texto preto,  logo vinho
 //   BAIXO   : fundo branco,                   texto preto,  logo vinho
 //   Borda contínua de 2px: tom mais escuro que o fundo nos coloridos, cinza médio nos brancos.
-//   UM único tamanho de fonte em todo o alerta (14px); só o PESO diferencia: título "black",
+//   UM único tamanho de fonte em todo o alerta (14px); só o PESO diferencia (regular ou negrito; nunca black/900); o cabeçalho de risco e o título usam corpo maior,
 //   cabeçalho/cláusula/evidência/"Repete" em negrito, descrição em regular.
 //
 // BADGE_STYLES (contract-alert-template.ts) NÃO é alterado: continua sendo usado pelos demais
@@ -87,15 +87,11 @@ export const ALERT_LINE_HEIGHT = "20px";
 export const ALERT_EMPHASIS_FONT_SIZE = "16px";
 export const ALERT_EMPHASIS_LINE_HEIGHT = "22px";
 
-/** Família "black" só para o título (Arial Black onde existir; cai para Arial negrito). */
-// Aspas SIMPLES: o valor vai dentro de style="..." (aspas duplas quebrariam o atributo).
-export const ALERT_TITLE_FONT_FAMILY = `'Arial Black', ${ACC_FONT_FAMILY}`;
-
-export const WEIGHT = { regular: 400, bold: 700, black: 900 } as const;
+export const WEIGHT = { regular: 400, bold: 700 } as const;
 
 /** Estilo base inline de qualquer texto do alerta (mesmo tamanho; muda só o peso). */
 export function textStyle(weight: keyof typeof WEIGHT, color: string, extra = "", emphasis = false): string {
-  const family = weight === "black" ? ALERT_TITLE_FONT_FAMILY : ACC_FONT_FAMILY;
+  const family = ACC_FONT_FAMILY;
   const size = emphasis ? ALERT_EMPHASIS_FONT_SIZE : ALERT_FONT_SIZE;
   const line = emphasis ? ALERT_EMPHASIS_LINE_HEIGHT : ALERT_LINE_HEIGHT;
   return `font-family:${family};font-size:${size};line-height:${line};font-weight:${WEIGHT[weight]};color:${color};${extra}`;

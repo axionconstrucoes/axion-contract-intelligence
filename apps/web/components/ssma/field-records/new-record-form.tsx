@@ -146,7 +146,7 @@ export function NewRecordForm({
               type="button"
               onClick={() => setKind(option.value)}
               aria-pressed={kind === option.value}
-              className={cn("min-h-12 rounded-lg border-2 px-3 text-sm font-black uppercase", kind === option.value ? "border-[#7f1d1d] bg-[#7f1d1d] text-white" : "border-slate-300 bg-white text-slate-800")}
+              className={cn("min-h-12 rounded-lg border-2 px-3 text-sm font-bold uppercase", kind === option.value ? "border-[#7f1d1d] bg-[#7f1d1d] text-white" : "border-slate-300 bg-white text-slate-800")}
             >
               {option.label}
             </button>
@@ -198,7 +198,7 @@ export function NewRecordForm({
       </fieldset>
 
       <section className="space-y-3 rounded-lg border-2 border-slate-200 bg-slate-50 p-3">
-        <p className="text-sm font-black uppercase text-slate-900">Ação corretiva (opcional)</p>
+        <p className="text-sm font-bold uppercase text-slate-900">Ação corretiva (opcional)</p>
         <label className="block text-sm font-bold text-slate-900">
           Responsável
           <select value={responsible} onChange={(event) => setResponsible(event.target.value)} className={fieldClass}>
@@ -220,10 +220,10 @@ export function NewRecordForm({
         <input ref={cameraRef} type="file" accept="image/jpeg,image/png" capture="environment" onChange={(event) => addFiles(event.target.files)} className="sr-only" aria-label="Tirar foto" />
         <input ref={galleryRef} type="file" multiple accept="image/jpeg,image/png,.jpg,.jpeg,.png" onChange={(event) => addFiles(event.target.files)} className="sr-only" aria-label="Escolher fotos" />
         <div className="grid gap-2 sm:grid-cols-2">
-          <button type="button" onClick={() => cameraRef.current?.click()} className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 font-black uppercase text-white">
+          <button type="button" onClick={() => cameraRef.current?.click()} className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 font-bold uppercase text-white">
             <Camera className="size-6" /> Tirar foto
           </button>
-          <button type="button" onClick={() => galleryRef.current?.click()} className="flex min-h-14 items-center justify-center gap-2 rounded-lg border-2 border-[#7f1d1d] bg-white px-4 font-black uppercase text-[#7f1d1d]">
+          <button type="button" onClick={() => galleryRef.current?.click()} className="flex min-h-14 items-center justify-center gap-2 rounded-lg border-2 border-[#7f1d1d] bg-white px-4 font-bold uppercase text-[#7f1d1d]">
             <CloudUpload className="size-5" /> Da galeria
           </button>
         </div>
@@ -255,10 +255,10 @@ export function NewRecordForm({
       </p>
 
       <div className="grid grid-cols-2 gap-2">
-        <button type="button" onClick={onCancel} disabled={saving} className="min-h-14 rounded-lg border-2 border-slate-300 bg-white px-4 font-black uppercase text-slate-700 disabled:opacity-50">
+        <button type="button" onClick={onCancel} disabled={saving} className="min-h-14 rounded-lg border-2 border-slate-300 bg-white px-4 font-bold uppercase text-slate-700 disabled:opacity-50">
           Cancelar
         </button>
-        <button type="submit" disabled={saving} className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 font-black uppercase text-white disabled:opacity-50">
+        <button type="submit" disabled={saving} className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 font-bold uppercase text-white disabled:opacity-50">
           <Save className="size-5" /> {saving ? "Salvando…" : "Salvar registro"}
         </button>
       </div>

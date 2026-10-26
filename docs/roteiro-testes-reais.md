@@ -36,7 +36,7 @@ Pré-requisitos: ambiente de teste em modo piloto; obra de teste; destinatário 
 3. Confirmar que **abrir** os links (GET) não altera nada; só a confirmação explícita registra a ação.
 4. Registrar: cliente, versão, desktop/celular, captura da tela e o que difere do esperado.
 
-Limitações conhecidas: `Arial Black` depende do cliente (cai para Arial negrito); Outlook para Windows (motor do Word) não segue algumas regras de CSS.
+Limitações conhecidas: Outlook para Windows (motor do Word) não segue algumas regras de CSS.
 
 ## B. Instalar o PWA por QR Code (iPhone e Android)
 

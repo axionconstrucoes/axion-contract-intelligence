@@ -27,7 +27,7 @@ export function SsmaHeader({ title, onBack }: { title: string; onBack?: () => vo
         priority
         className={cn("size-16 shrink-0 object-cover", !onBack && "ml-2")}
       />
-      <h1 className="min-w-0 flex-1 break-words text-center text-lg font-black uppercase leading-tight sm:text-xl">{title}</h1>
+      <h1 className="min-w-0 flex-1 break-words text-center text-lg font-bold uppercase leading-tight sm:text-xl">{title}</h1>
     </header>
   );
 }
@@ -53,7 +53,7 @@ export function SsmaBottomNav({ active, onChange, pendingCount = 0 }: { active: 
           <Icon className="size-5" />
           {label}
           {tab === "sync" && pendingCount > 0 ? (
-            <span className="absolute right-[22%] top-0 flex min-w-4 items-center justify-center rounded-full bg-[#7f1d1d] px-1 text-[10px] font-black text-white">{pendingCount}</span>
+            <span className="absolute right-[22%] top-0 flex min-w-4 items-center justify-center rounded-full bg-[#7f1d1d] px-1 text-[10px] font-bold text-white">{pendingCount}</span>
           ) : null}
         </button>
       ))}

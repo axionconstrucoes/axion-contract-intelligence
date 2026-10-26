@@ -17,7 +17,7 @@ const esc = escapeAttr;
 /** Título do alerta COMO LINK para o evento no ACC (substitui o botão VER EVENTO). */
 export function alertTitleHtml(title: string, eventUrl: string, severity: AlertSeverity): string {
   const tone = ALERT_TONES[severity];
-  return `<p style="margin:0 0 8px 0;${textStyle("black", tone.text, "word-break:break-word;", true)}"><a href="${esc(eventUrl)}" target="_blank" rel="noopener noreferrer" title="Abrir o evento no ACC" style="${textStyle("black", tone.text, "text-decoration:underline;", true)}">${esc(title)}</a></p>`;
+  return `<p style="margin:0 0 8px 0;${textStyle("bold", tone.text, "word-break:break-word;", true)}"><a href="${esc(eventUrl)}" target="_blank" rel="noopener noreferrer" title="Abrir o evento no ACC" style="${textStyle("bold", tone.text, "text-decoration:underline;", true)}">${esc(title)}</a></p>`;
 }
 
 export function alertDescriptionHtml(text: string, severity: AlertSeverity): string {

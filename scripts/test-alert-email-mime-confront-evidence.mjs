@@ -432,8 +432,9 @@ check("família tipográfica é SEMPRE Arial/Helvetica/sans-serif no template (n
   const { html } = buildContractAlertEmail(baseAlertInput);
   assert(ACC_FONT_FAMILY === "Arial, Helvetica, sans-serif");
   assert(html.includes(`font-family:${ACC_FONT_FAMILY}`));
-  // Única exceção: o TÍTULO do alerta usa Arial Black (peso "black"), sempre com Arial como fallback.
-  assert(!/font-family:(?!Arial, Helvetica, sans-serif|'Arial Black', Arial, Helvetica, sans-serif)[^;"]+;/.test(html), "nenhuma outra font-family deveria aparecer no HTML");
+  // Sem exceções: nenhuma família além da institucional (o título usa Arial em negrito, nunca Arial Black).
+  assert(!/font-family:(?!Arial, Helvetica, sans-serif)[^;"]+;/.test(html), "nenhuma outra font-family deveria aparecer no HTML");
+  assert(!/Arial Black|font-weight:\s*(800|900)/.test(html), "nenhum peso black/900");
 });
 
 check("hierarquia de tamanhos LIMITADA a 20/16/15/14/12px (16px só no cabeçalho de risco e no título do alerta) — nenhum outro valor de font-size solto no template", () => {
@@ -464,9 +465,9 @@ check("título principal (h1) com a cor de texto da caixa; painéis internos man
   assert(ACC_COLOR_HEADING === "#7F1D1D");
   assert(ACC_COLOR_BODY === "#111111");
   const alta = buildContractAlertEmail(baseAlertInput).html;
-  assert(/<a [^>]*font-weight:900;color:#000000;[^>]*>Possível atraso na entrega da estrutura<\/a>/.test(alta), "título (link do evento, peso black) preto sobre o amarelo do ALTO");
+  assert(/<a [^>]*font-weight:700;color:#000000;[^>]*>Possível atraso na entrega da estrutura<\/a>/.test(alta), "título (link do evento, peso black) preto sobre o amarelo do ALTO");
   const media = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" }).html;
-  assert(/<a [^>]*font-weight:900;color:#000000;[^>]*>Possível atraso na entrega da estrutura<\/a>/.test(media), "título preto na caixa branca");
+  assert(/<a [^>]*font-weight:700;color:#000000;[^>]*>Possível atraso na entrega da estrutura<\/a>/.test(media), "título preto na caixa branca");
   assert(media.includes(`color:${ACC_COLOR_BODY}`), "corpo deveria usar a cor preta institucional");
 });
 

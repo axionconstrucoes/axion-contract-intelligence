@@ -21,9 +21,9 @@ export const SSMA_PHOTO_LIMITS = "Fotos: JPG ou PNG, até 15 MB cada, no máximo
 export function SsmaOfflineCapabilities() {
   return (
     <section className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700" aria-label="O que funciona sem sinal">
-      <p className="font-black text-slate-900">O que funciona sem sinal</p>
+      <p className="font-bold text-slate-900">O que funciona sem sinal</p>
       <ul className="list-disc space-y-1 pl-5">{SSMA_WORKS_OFFLINE.map((item) => <li key={item}>{item}</li>)}</ul>
-      <p className="font-black text-slate-900">O que exige internet</p>
+      <p className="font-bold text-slate-900">O que exige internet</p>
       <ul className="list-disc space-y-1 pl-5">{SSMA_NEEDS_INTERNET.map((item) => <li key={item}>{item}</li>)}</ul>
       <p className="text-xs text-slate-500">{SSMA_PHOTO_LIMITS}</p>
       <p className="text-xs text-slate-500">O funcionamento sem sinal foi testado em navegador Chrome (IndexedDB e service worker reais); não foi validado em iPhone ou Android reais.</p>

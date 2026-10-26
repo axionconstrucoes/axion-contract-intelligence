@@ -26,7 +26,7 @@ const RISK_DOT: Record<string, string> = { BAIXA: "bg-[#166534]", MEDIA: "bg-[#2
 const dateTime = (iso: string) => new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
 function StatusPill({ status }: { status: QueueStatus }) {
-  return <span className={cn("rounded px-2 py-1 text-[11px] font-black", STATUS_STYLES[status])}>{QUEUE_STATUS_LABELS[status]}</span>;
+  return <span className={cn("rounded px-2 py-1 text-[11px] font-bold", STATUS_STYLES[status])}>{QUEUE_STATUS_LABELS[status]}</span>;
 }
 
 export function FieldRecordsApp({
@@ -137,22 +137,22 @@ export function FieldRecordsApp({
         <main className="mx-auto max-w-2xl space-y-3 p-4">
           <div className="rounded-xl border-2 border-slate-400 bg-white p-3">
             <p className="text-xs font-semibold text-slate-500">Obra</p>
-            <p className="font-black text-slate-900">{project.label}</p>
+            <p className="font-bold text-slate-900">{project.label}</p>
           </div>
-          <button type="button" onClick={() => setCreating(true)} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 font-black uppercase text-white">
+          <button type="button" onClick={() => setCreating(true)} className="flex min-h-14 w-full items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 font-bold uppercase text-white">
             <Plus className="size-6" /> Novo registro
           </button>
 
           {localOnly.length > 0 ? (
             <section aria-label="Neste aparelho" className="space-y-2">
-              <h2 className="text-xs font-black uppercase text-slate-600">Neste aparelho</h2>
+              <h2 className="text-xs font-bold uppercase text-slate-600">Neste aparelho</h2>
               {localOnly.map((item) => <LocalRow key={item.clientId} item={item} />)}
             </section>
           ) : null}
 
           <section aria-label="Registros da obra" className="space-y-2">
             <div className="flex items-center justify-between">
-              <h2 className="text-xs font-black uppercase text-slate-600">Registros da obra</h2>
+              <h2 className="text-xs font-bold uppercase text-slate-600">Registros da obra</h2>
               {!offlineShell ? (
                 <button type="button" onClick={() => { setLoadingServer(true); void loadServer(); }} className="flex min-h-11 items-center gap-1 px-2 text-xs font-bold text-[#7f1d1d]" disabled={loadingServer || !online}>
                   <RefreshCw className={cn("size-4", loadingServer && "animate-spin")} /> Atualizar
@@ -189,7 +189,7 @@ function LocalRow({ item }: { item: QueuedRecord }) {
   return (
     <article className="rounded-xl bg-white p-3 shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 flex-1 text-sm font-black text-slate-900">{item.draft.category} · {item.draft.location}</p>
+        <p className="min-w-0 flex-1 text-sm font-bold text-slate-900">{item.draft.category} · {item.draft.location}</p>
         <StatusPill status={item.status} />
       </div>
       <p className="mt-1 line-clamp-2 text-sm text-slate-700">{item.draft.description}</p>
@@ -208,8 +208,8 @@ function ServerRow({ record, onOpen }: { record: FieldRecordView; onOpen: () => 
   return (
     <button type="button" onClick={onOpen} className="block w-full rounded-xl bg-white p-3 text-left shadow-sm hover:ring-2 hover:ring-[#7f1d1d]/40">
       <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 flex-1 text-sm font-black text-slate-900">{record.category} · {record.location}</p>
-        <span className="flex items-center gap-1 text-[11px] font-black text-green-700"><CheckCircle2 className="size-4" /> {QUEUE_STATUS_LABELS.SYNCED}</span>
+        <p className="min-w-0 flex-1 text-sm font-bold text-slate-900">{record.category} · {record.location}</p>
+        <span className="flex items-center gap-1 text-[11px] font-bold text-green-700"><CheckCircle2 className="size-4" /> {QUEUE_STATUS_LABELS.SYNCED}</span>
       </div>
       <p className="mt-1 line-clamp-2 text-sm text-slate-700">{record.description}</p>
       <p className="mt-1 text-xs text-slate-500">
@@ -252,12 +252,12 @@ function SyncView({
       <section className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Resumo da fila">
         {(["SAVED_ON_DEVICE", "WAITING_SEND", "SYNCED", "FAILED"] as const).map((status) => (
           <div key={status} className="rounded-xl bg-white p-3 text-center shadow-sm">
-            <p className="text-2xl font-black text-slate-900">{counts(status)}</p>
+            <p className="text-2xl font-bold text-slate-900">{counts(status)}</p>
             <p className="text-[11px] font-bold text-slate-600">{QUEUE_STATUS_LABELS[status]}</p>
           </div>
         ))}
       </section>
-      <button type="button" onClick={onRetry} disabled={syncing || !online} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 font-black uppercase text-white disabled:opacity-50">
+      <button type="button" onClick={onRetry} disabled={syncing || !online} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 font-bold uppercase text-white disabled:opacity-50">
         <CloudUpload className={cn("size-5", syncing && "animate-pulse")} /> {syncing ? "Enviando…" : "Enviar agora / tentar de novo"}
       </button>
       {!online ? <p className="flex items-center gap-2 text-sm font-semibold text-amber-800"><CloudOff className="size-5" /> Sem conexão: os itens seguem salvos no aparelho.</p> : null}
@@ -268,7 +268,7 @@ function SyncView({
         {items.map((item) => (
           <li key={item.clientId} className="rounded-xl bg-white p-3 shadow-sm">
             <div className="flex items-start justify-between gap-2">
-              <p className="min-w-0 flex-1 text-sm font-black text-slate-900">{item.draft.category} · {item.draft.location}{item.projectId !== projectId ? " (outra obra)" : ""}</p>
+              <p className="min-w-0 flex-1 text-sm font-bold text-slate-900">{item.draft.category} · {item.draft.location}{item.projectId !== projectId ? " (outra obra)" : ""}</p>
               <StatusPill status={item.status} />
             </div>
             <p className="mt-1 text-xs text-slate-500">Criado em {dateTime(item.clientCreatedAt)} · {item.photos.length} foto(s) · {item.attempts} tentativa(s){item.syncedAt ? ` · enviado em ${dateTime(item.syncedAt)}` : ""}</p>
@@ -290,8 +290,8 @@ function SyncView({
           </p>
           {confirmPurge ? (
             <div className="flex gap-2">
-              <button type="button" onClick={() => { onPurge(); setConfirmPurge(false); }} className="min-h-11 flex-1 rounded-lg bg-red-700 px-3 text-sm font-black uppercase text-white">Apagar do aparelho</button>
-              <button type="button" onClick={() => setConfirmPurge(false)} className="min-h-11 flex-1 rounded-lg border-2 border-slate-300 bg-white px-3 text-sm font-black uppercase text-slate-700">Manter</button>
+              <button type="button" onClick={() => { onPurge(); setConfirmPurge(false); }} className="min-h-11 flex-1 rounded-lg bg-red-700 px-3 text-sm font-bold uppercase text-white">Apagar do aparelho</button>
+              <button type="button" onClick={() => setConfirmPurge(false)} className="min-h-11 flex-1 rounded-lg border-2 border-slate-300 bg-white px-3 text-sm font-bold uppercase text-slate-700">Manter</button>
             </div>
           ) : (
             <button type="button" onClick={() => setConfirmPurge(true)} className="flex min-h-11 items-center text-left text-xs font-bold text-red-700 underline">Remover os registros de outras contas deste aparelho…</button>
@@ -324,18 +324,18 @@ function ProfileView({
     <main className="mx-auto max-w-2xl space-y-3 p-4">
       <section className="rounded-xl bg-white p-4 shadow-sm">
         <p className="text-xs font-semibold text-slate-500">Conta</p>
-        <p className="font-black text-slate-900">{userLabel}</p>
+        <p className="font-bold text-slate-900">{userLabel}</p>
         <p className="mt-2 text-xs font-semibold text-slate-500">Obra</p>
         <p className="font-bold text-slate-900">{projectLabel}</p>
       </section>
       <section className="space-y-1 rounded-xl bg-white p-4 text-sm text-slate-700 shadow-sm">
-        <p className="font-black uppercase text-slate-900">Neste aparelho</p>
+        <p className="font-bold uppercase text-slate-900">Neste aparelho</p>
         <p>Registros aguardando envio: <strong>{pendingCount}</strong></p>
         <p>De outras contas: <strong>{foreignPending}</strong></p>
         <p className="text-xs text-slate-500">Os registros são guardados no navegador do aparelho, separados por conta. Sair da conta NÃO apaga registros ainda não enviados.</p>
       </section>
       {foreignPending > 0 ? (
-        <button type="button" onClick={onPurge} className="min-h-11 w-full rounded-lg border-2 border-red-700 bg-white px-3 text-sm font-black uppercase text-red-700">
+        <button type="button" onClick={onPurge} className="min-h-11 w-full rounded-lg border-2 border-red-700 bg-white px-3 text-sm font-bold uppercase text-red-700">
           Remover registros de outras contas
         </button>
       ) : null}
@@ -346,12 +346,12 @@ function ProfileView({
               {pendingCount > 0 ? `Há ${pendingCount} registro(s) ainda não enviados. Eles continuam no aparelho e serão enviados quando você entrar de novo com esta conta.` : "Sair e apagar da tela o contexto da obra guardado neste aparelho?"}
             </p>
             <div className="flex gap-2">
-              <button type="button" onClick={() => void onSignOut()} className="min-h-11 flex-1 rounded-lg bg-[#7f1d1d] px-3 text-sm font-black uppercase text-white">Sair</button>
-              <button type="button" onClick={() => setConfirmSignOut(false)} className="min-h-11 flex-1 rounded-lg border-2 border-slate-300 bg-white px-3 text-sm font-black uppercase text-slate-700">Cancelar</button>
+              <button type="button" onClick={() => void onSignOut()} className="min-h-11 flex-1 rounded-lg bg-[#7f1d1d] px-3 text-sm font-bold uppercase text-white">Sair</button>
+              <button type="button" onClick={() => setConfirmSignOut(false)} className="min-h-11 flex-1 rounded-lg border-2 border-slate-300 bg-white px-3 text-sm font-bold uppercase text-slate-700">Cancelar</button>
             </div>
           </div>
         ) : (
-          <button type="button" onClick={() => setConfirmSignOut(true)} className="min-h-12 w-full rounded-lg bg-slate-800 px-3 font-black uppercase text-white">Sair da conta</button>
+          <button type="button" onClick={() => setConfirmSignOut(true)} className="min-h-12 w-full rounded-lg bg-slate-800 px-3 font-bold uppercase text-white">Sair da conta</button>
         )
       ) : (
         <p className="text-xs text-slate-500">Sem conexão: para trocar de conta, abra o app com internet.</p>

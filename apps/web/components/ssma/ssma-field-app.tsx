@@ -163,7 +163,7 @@ function PhotoUploadPanel({
             type="button"
             disabled={disabled}
             onClick={() => openPhotoPicker(action)}
-            className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 font-black uppercase text-white disabled:opacity-50"
+            className="flex min-h-14 items-center justify-center gap-2 rounded-lg bg-slate-800 px-4 font-bold uppercase text-white disabled:opacity-50"
           >
             <Camera className="size-6" /> {action}
           </button>
@@ -174,7 +174,7 @@ function PhotoUploadPanel({
         type="button"
         disabled={disabled}
         onClick={() => openPhotoPicker(actions[0] ?? "Foto")}
-        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-[#7f1d1d] bg-white px-4 text-sm font-black uppercase text-[#7f1d1d] disabled:opacity-50"
+        className="flex min-h-12 w-full items-center justify-center gap-2 rounded-lg border-2 border-[#7f1d1d] bg-white px-4 text-sm font-bold uppercase text-[#7f1d1d] disabled:opacity-50"
       >
         <CloudUpload className="size-5" /> Selecionar fotos do computador
       </button>
@@ -184,7 +184,7 @@ function PhotoUploadPanel({
 
       {photos.length > 0 ? (
         <div className="space-y-2" aria-live="polite">
-          <p className="text-sm font-black text-slate-900">
+          <p className="text-sm font-bold text-slate-900">
             {photos.length} {photos.length === 1 ? "foto selecionada" : "fotos selecionadas"}
           </p>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -467,7 +467,7 @@ function ChecklistForm({
 
         <fieldset className="overflow-hidden rounded-lg border-2 border-slate-300">
           <legend className="sr-only">Checklist</legend>
-          <div className="bg-slate-200 px-3 py-2 text-sm font-black uppercase text-slate-900">Checklist</div>
+          <div className="bg-slate-200 px-3 py-2 text-sm font-bold uppercase text-slate-900">Checklist</div>
           {definition.checks.map((check) => (
             <div key={check} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-t border-slate-300 px-3 py-3 first:border-t-0">
               <span className="text-sm font-semibold text-slate-900">{check}</span>
@@ -512,7 +512,7 @@ function ChecklistForm({
         <button
           type="submit"
           disabled={!allChecksAnswered || !allRequiredPhotosSelected || submitting}
-          className="flex min-h-14 w-full items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 text-base font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex min-h-14 w-full items-center justify-center gap-2 rounded-lg bg-[#7f1d1d] px-4 text-base font-bold uppercase text-white disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Send className="size-6" /> {submitting ? "Enviando…" : "Enviar dados"}
         </button>
@@ -591,7 +591,7 @@ export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initial
       <main className="mx-auto max-w-4xl space-y-4 p-4">
         <section className="rounded-xl border-2 border-slate-500 bg-white p-3">
           <p className="text-xs font-semibold text-slate-500">Projeto atual</p>
-          <p className="mt-1 font-black text-slate-900">{projectLabel}</p>
+          <p className="mt-1 font-bold text-slate-900">{projectLabel}</p>
         </section>
 
         <div className="flex items-center justify-between gap-3">
@@ -606,7 +606,7 @@ export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initial
           <div className="flex items-center gap-3">
             <ClipboardCheck className="size-9 text-[#7f1d1d]" />
             <div className="flex-1">
-              <p className="font-black text-slate-900">Checklist de hoje</p>
+              <p className="font-bold text-slate-900">Checklist de hoje</p>
               <p className="text-sm text-slate-600">{completedRoutine} de 10 concluídos</p>
               <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
                 <div className="h-full bg-[#7f1d1d]" style={{ width: `${completedRoutine * 10}%` }} />
@@ -622,7 +622,7 @@ export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initial
         >
           <Plus className="size-7 shrink-0 text-[#7f1d1d]" />
           <span className="min-w-0 flex-1">
-            <span className="block font-black text-slate-900">Registrar ocorrência / inspeção</span>
+            <span className="block font-bold text-slate-900">Registrar ocorrência / inspeção</span>
             <span className="block text-xs text-slate-600">Funciona sem sinal · fotos, responsável e prazo</span>
           </span>
           <ChevronRight className="size-5 shrink-0 text-[#7f1d1d]" />
@@ -642,7 +642,7 @@ export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initial
                 <FileText className="size-7 shrink-0 text-slate-800" />
               )}
               <span className="min-w-0 flex-1">
-                <span className="block font-black text-slate-900">
+                <span className="block font-bold text-slate-900">
                   {String(definition.number).padStart(2, "0")} {definition.shortTitle}
                 </span>
                 <span className={cn("mt-1 block text-xs font-bold", completed.has(definition.slug) ? "text-green-700" : "text-amber-600")}>
@@ -665,7 +665,7 @@ export function SsmaFieldApp({ projectId, projectLabel, technicianLabel, initial
             >
               <Icon className="size-7 shrink-0 text-[#7f1d1d]" />
               <span className="min-w-0 flex-1">
-                <span className="block font-black text-slate-900">
+                <span className="block font-bold text-slate-900">
                   {String(definition.number).padStart(2, "0")} {definition.shortTitle}
                 </span>
                 <span className="block text-xs text-slate-600">Tarefa independente</span>
