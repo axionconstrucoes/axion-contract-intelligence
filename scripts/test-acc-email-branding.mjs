@@ -206,13 +206,13 @@ const baseAlertInput = {
 check("CRÍTICO usa fundo vermelho, texto branco e forte destaque", () => {
   const { html } = buildContractAlertEmail({ ...baseAlertInput, severity: "CRITICA" });
   assert(html.includes("RISCO CRÍTICO"), "classificação deveria mostrar COR + TEXTO (RISCO CRÍTICO)");
-  assert(html.toLowerCase().includes("background-color:#dc2626"), "fundo vermelho ausente");
+  assert(html.toLowerCase().includes("background-color:#cc0000"), "fundo vermelho ausente");
   assert(/color:#FFFFFF/i.test(html), "texto branco ausente na caixa crítica");
 });
 
 // DEFINIÇÃO FINAL (substitui verde/azul/laranja): BAIXO e MÉDIO = caixa branca, texto preto,
 // borda cinza; ALTO = amarelo escuro com texto BRANCO; CRÍTICO = vermelho com texto branco.
-check("BAIXO e MÉDIO usam caixa branca com texto preto; ALTO usa amarelo escuro com texto branco", () => {
+check("BAIXO e MÉDIO usam caixa branca com texto preto; ALTO usa amarelo forte com texto preto", () => {
   const low = buildContractAlertEmail({ ...baseAlertInput, severity: "BAIXA" }).html;
   const medium = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" }).html;
   const high = buildContractAlertEmail({ ...baseAlertInput, severity: "ALTA" }).html;
@@ -222,8 +222,8 @@ check("BAIXO e MÉDIO usam caixa branca com texto preto; ALTO usa amarelo escuro
     assert(/color:#000000;/i.test(html), `texto preto (${word})`);
   }
   assert(!/#16a34a|#2563eb/i.test(low + medium), "sem selos verde/azul antigos");
-  assert(high.includes("RISCO ALTO") && high.toLowerCase().includes("background-color:#a16207"), "caixa ALTO amarelo escuro");
-  assert(/color:#FFFFFF/i.test(high), "texto branco no ALTO");
+  assert(high.includes("RISCO ALTO") && high.toLowerCase().includes("background-color:#ffc700"), "caixa ALTO amarelo forte");
+  assert(/color:#000000/i.test(high), "texto preto no ALTO");
 });
 
 check("corpo principal do e-mail é preto (#111111 ou #000000 — Parte C.4) nas caixas de fundo branco, nunca parágrafo inteiro colorido", () => {

@@ -379,13 +379,15 @@ const baseAlertInput = {
 // DEFINIÇÃO FINAL (substitui "risco à esquerda, marca à direita"): LOGO oficial à ESQUERDA e a
 // classificação "RISCO …" na mesma linha. ALTO/CRÍTICO usam o logo INVERTIDO (cid próprio).
 check("hasInlineLogo=true: cabeçalho referencia cid: do logo ANTES da classificação de RISCO (logo à esquerda)", () => {
-  const { html } = buildContractAlertEmail(baseAlertInput); // ALTA => logo invertido
-  const riskIndex = html.indexOf("RISCO ALTO");
+  const { html } = buildContractAlertEmail({ ...baseAlertInput, severity: "CRITICA" }); // CRÍTICO => logo invertido
+  const riskIndex = html.indexOf("RISCO CRÍTICO");
   const logoIndex = html.indexOf(`cid:${ACC_EMAIL_LOGO_INVERTED_CID}`);
   assert(logoIndex !== -1, "cabeçalho deveria referenciar cid: do logo quando hasInlineLogo=true");
   assert(logoIndex < riskIndex, "logo deveria aparecer ANTES da classificação (à esquerda)");
   const medium = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" }).html;
   assert(medium.indexOf(`cid:${ACC_EMAIL_LOGO_CID}`) !== -1, "MÉDIO usa o logo vinho oficial");
+  const alto = buildContractAlertEmail(baseAlertInput).html;
+  assert(alto.indexOf(`cid:${ACC_EMAIL_LOGO_CID}`) !== -1 && !alto.includes(`cid:${ACC_EMAIL_LOGO_INVERTED_CID}`), "ALTO (amarelo) usa o logo vinho oficial");
 });
 
 check("hasInlineLogo=false: cabeçalho NUNCA referencia cid: (nunca uma imagem quebrada)", () => {
@@ -462,7 +464,7 @@ check("título principal (h1) com a cor de texto da caixa; painéis internos man
   assert(ACC_COLOR_HEADING === "#7F1D1D");
   assert(ACC_COLOR_BODY === "#111111");
   const alta = buildContractAlertEmail(baseAlertInput).html;
-  assert(/<a [^>]*font-weight:900;color:#FFFFFF;[^>]*>Possível atraso na entrega da estrutura<\/a>/.test(alta), "título (link do evento, peso black) branco sobre o fundo escuro do ALTO");
+  assert(/<a [^>]*font-weight:900;color:#000000;[^>]*>Possível atraso na entrega da estrutura<\/a>/.test(alta), "título (link do evento, peso black) preto sobre o amarelo do ALTO");
   const media = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" }).html;
   assert(/<a [^>]*font-weight:900;color:#000000;[^>]*>Possível atraso na entrega da estrutura<\/a>/.test(media), "título preto na caixa branca");
   assert(media.includes(`color:${ACC_COLOR_BODY}`), "corpo deveria usar a cor preta institucional");
