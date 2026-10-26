@@ -112,6 +112,60 @@ async function inspectPackage(buffer: Buffer): Promise<PackageInspection> {
   };
 }
 
+/**
+ * Confere o tamanho descompactado REAL (não o declarado no cabeçalho do ZIP, que é controlado por quem
+ * enviou o arquivo). Descompacta cada entrada em fluxo, só contando bytes: aborta ao passar dos limites e
+ * trata qualquer divergência entre o tamanho declarado e o real como pacote inconsistente. Medido com um
+ * pacote sintético de ~0,9 MB no disco e ~900 MB reais, com cabeçalho declarando ~1 KB: sem esta conferência
+ * o caminho em memória acumulava ~900 MB de heap antes de falhar ("uncompressed data size mismatch").
+ * Arquivos legítimos nunca divergem; o resultado de leitura deles não muda.
+ */
+interface ZipStreamHelper {
+  on(event: "data", listener: (data: Uint8Array) => void): ZipStreamHelper;
+  on(event: "error", listener: (error: Error) => void): ZipStreamHelper;
+  on(event: "end", listener: () => void): ZipStreamHelper;
+  pause(): ZipStreamHelper;
+  resume(): ZipStreamHelper;
+}
+
+export async function verifyActualUncompressedSize(
+  buffer: Buffer,
+  limits: { totalBytes: number; xmlEntryBytes: number } = { totalBytes: MAX_XLSX_UNCOMPRESSED_BYTES, xmlEntryBytes: MAX_XLSX_XML_ENTRY_BYTES }
+): Promise<{ ok: true; totalBytes: number } | { ok: false; reason: string }> {
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+    let total = 0;
+    for (const [name, entry] of Object.entries(zip.files)) {
+      if (entry.dir) continue;
+      let entryBytes = 0;
+      // internalStream: descompressão em fluxo do JSZip (eventos data/end/error). Só contamos bytes.
+      const exceeded = await new Promise<string | null>((resolve, reject) => {
+        const helper = (entry as unknown as { internalStream(type: "uint8array"): ZipStreamHelper }).internalStream("uint8array");
+        helper
+          .on("data", (data: Uint8Array) => {
+            entryBytes += data.length;
+            total += data.length;
+            if (total > limits.totalBytes) {
+              helper.pause();
+              resolve(`Conteúdo descompactado real excede ${limits.totalBytes} bytes.`);
+            } else if (/\.xml$/i.test(name) && entryBytes > limits.xmlEntryBytes) {
+              helper.pause();
+              resolve(`Entrada XML real excessiva: ${name}.`);
+            }
+          })
+          .on("error", reject)
+          .on("end", () => resolve(null))
+          .resume();
+      });
+      if (exceeded) return { ok: false, reason: exceeded };
+    }
+    return { ok: true, totalBytes: total };
+  } catch {
+    // inclui "uncompressed data size mismatch" (cabeçalho do ZIP não confere com o conteúdo) e pacote corrompido
+    return { ok: false, reason: "Pacote XLSX inconsistente (tamanho declarado não confere com o conteúdo ou arquivo corrompido)." };
+  }
+}
+
 function toCell(cell: ExcelJS.Cell, counters: { formulas: number; missing: number }): SheetCell {
   const raw = cell.value;
   const address = cell.address;
@@ -184,6 +238,22 @@ export async function readWorkbookSafely(input: { buffer: Buffer; fileName: stri
     };
   }
 
+  // O tamanho declarado acima vem do cabeçalho do ZIP e pode ser falsificado: confere o real (em fluxo).
+  const actual = await verifyActualUncompressedSize(input.buffer);
+  if (!actual.ok) {
+    return {
+      safety: {
+        ...empty,
+        macrosDetected: pkg.macrosDetected,
+        externalLinksDetected: pkg.externalLinksDetected,
+        dataConnectionsDetected: pkg.dataConnectionsDetected,
+        notes: [...empty.notes, `Planilha preservada sem leitura automática para evitar estouro de memória. ${actual.reason}`],
+      },
+      sheetIndex: [],
+      grids: [],
+    };
+  }
+
   // ExcelJS.Workbook().xlsx.load() materializa a pasta inteira em memória.
   // Arquivos pequenos em disco podem expandir para vários GB quando têm
   // dimensões/estilos extensos. No worker do GitHub isso já provocou OOM
@@ -202,7 +272,7 @@ export async function readWorkbookSafely(input: { buffer: Buffer; fileName: stri
     // of undefined (reading 'sheets')" (reproduzido isolado; causa interna não investigada). Todo o
     // resto continua em streaming, que usa muito menos memória.
     const workbook: AsyncIterable<unknown> =
-      pkg.estimatedUncompressedBytes <= IN_MEMORY_MAX_UNCOMPRESSED_BYTES
+      actual.totalBytes <= IN_MEMORY_MAX_UNCOMPRESSED_BYTES
         ? await loadWorkbookInMemory(input.buffer)
         : new ExcelJS.stream.xlsx.WorkbookReader(tempPath, {
             entries: "emit",
