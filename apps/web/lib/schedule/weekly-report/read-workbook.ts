@@ -24,9 +24,13 @@ export const MAX_WORKBOOK_BYTES = 50 * 1024 * 1024;
 const MAX_ROWS = 2000;
 const MAX_COLUMNS = 120;
 
-// Abaixo disto a leitura em memória é segura (o estouro anterior vinha de arquivos pequenos que
-// expandem para GB; a inspeção do pacote já limita o descompactado antes de chegar aqui).
-const IN_MEMORY_MAX_UNCOMPRESSED_BYTES = 32 * 1024 * 1024;
+// Só planilhas MUITO pequenas são lidas em memória. Medido (planilhas sintéticas, Node 24): o
+// WorkbookReader em streaming falha de forma determinística em pacotes minúsculos (ex.: 3 abas x 50
+// linhas, ~12 KB), mas funciona de ~0,5 MB descompactado em diante; já a leitura em memória custa
+// ~16x o tamanho descompactado em heap (31 MB -> +508 MB de heap, 2,5 s) contra ~+30 MB de RSS no
+// streaming. Por isso o limite é baixo: cobre o caso minúsculo sem reintroduzir risco de memória
+// (o estouro anterior vinha de arquivos pequenos que expandem para GB; inspectPackage já limita isso).
+const IN_MEMORY_MAX_UNCOMPRESSED_BYTES = 2 * 1024 * 1024;
 
 /** Adapta o Workbook em memória à mesma interface do leitor em streaming (aba assíncrona de linhas). */
 async function loadWorkbookInMemory(buffer: Buffer): Promise<AsyncIterable<unknown>> {
@@ -193,11 +197,10 @@ export async function readWorkbookSafely(input: { buffer: Buffer; fileName: stri
   const sheetIndex: WorkbookSheetIndexEntry[] = [];
 
   try {
-    // Planilhas pequenas (limite abaixo do estimado de descompactação) são lidas em memória:
-    // o WorkbookReader em streaming do exceljs 4.4 perde as entradas seguintes ao deferir uma
-    // aba para arquivo temporário (workbook.xml/sharedStrings chegam depois das abas) e falha
-    // com "Cannot read properties of undefined (reading 'sheets')" no Node 24. Planilhas grandes
-    // continuam em streaming para não reintroduzir o estouro de memória.
+    // Pacotes minúsculos (<= IN_MEMORY_MAX_UNCOMPRESSED_BYTES) são lidos em memória: o
+    // WorkbookReader em streaming do exceljs 4.4 falha neles no Node 24 com "Cannot read properties
+    // of undefined (reading 'sheets')" (reproduzido isolado; causa interna não investigada). Todo o
+    // resto continua em streaming, que usa muito menos memória.
     const workbook: AsyncIterable<unknown> =
       pkg.estimatedUncompressedBytes <= IN_MEMORY_MAX_UNCOMPRESSED_BYTES
         ? await loadWorkbookInMemory(input.buffer)
