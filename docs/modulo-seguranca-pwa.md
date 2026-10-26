@@ -95,6 +95,29 @@ registrados (categoria, descrição, local, data, risco relatado, responsável, 
 evidências); somente leitura (não altera o registro nem a ação e não declara conclusão); a resposta indica
 quando vem de provedor simulado. Testes: `scripts/test-ssma-record-consult.mjs` (provedor simulado, sem rede).
 
+## O que depende de internet × o que funciona sem sinal
+
+Só o que está implementado **e** testado (Chrome com IndexedDB e service worker reais, `npm run test:ssma`).
+**Não** foi validado em iPhone/Safari nem em Android real.
+
+| Função | Sem sinal | Exige internet |
+|---|---|---|
+| Registrar ocorrência/inspeção (campos completos) | Sim — "Salvo no aparelho" | — |
+| Anexar fotos JPG/PNG ao registro | Sim — ficam no aparelho | — |
+| Enviar registro e fotos | — | Sim (automático ao voltar o sinal, ou "Enviar agora"); sem duplicar |
+| Ver estado dos registros do aparelho (Salvo / Aguardando / Sincronizado / Falha) | Sim | — |
+| Lista de registros já enviados da obra e fotos | **Não** (não fica guardada no aparelho) | Sim |
+| Registrar andamento / concluir ação corretiva (com evidência) | **Não** | Sim |
+| Consultar IA (especialista de SSMA) | **Não** | Sim |
+| Entrar, trocar de conta ou de obra | **Não** | Sim |
+| Abrir o app sem sinal | Só se já foi aberto uma vez com internet (casca estática + contexto mínimo da obra no aparelho) | — |
+| Instalar na tela inicial | — | Sim (abrir o link/QR) |
+
+Limitações atuais de fotos: JPG ou PNG, até 15 MB cada, no máximo 20 por registro, **sem compressão**; **HEIC não é aceito**
+(formato padrão do iPhone: configurar a câmera para "Mais compatível" ou converter). O Safari/iOS pode apagar dados de sites
+sem uso por semanas; o app pede armazenamento persistente, mas isso não é garantia. Os textos das telas de instalação e de
+sincronização exibem este mesmo resumo (`components/ssma/ssma-offline-capabilities.tsx`).
+
 ## Restrições herdadas
 
 - Nenhum segredo no frontend; integrações reais só server-side.

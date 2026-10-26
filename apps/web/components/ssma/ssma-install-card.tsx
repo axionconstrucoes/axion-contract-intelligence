@@ -1,4 +1,5 @@
 import QRCode from "qrcode";
+import { SsmaOfflineCapabilities } from "@/components/ssma/ssma-offline-capabilities";
 import { INSTALL_INSTRUCTIONS, resolveSsmaInstallUrl } from "@/lib/ssma/pwa-install";
 
 // Instalação do app de campo por link e QR Code. O QR contém SOMENTE a URL configurada (ver
@@ -33,6 +34,7 @@ export async function SsmaInstallCard() {
         </div>
       </div>
       <p className="text-xs text-slate-500">Os passos podem variar conforme a versão do sistema e do navegador; ainda não foram validados em aparelhos reais.</p>
+      <SsmaOfflineCapabilities />
     </section>
   );
 }

@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle2, CloudOff, CloudUpload, Plus, RefreshCw, Tr
 import { SsmaBottomNav, SsmaHeader, type SsmaTab } from "@/components/ssma/ssma-chrome";
 import { NewRecordForm } from "@/components/ssma/field-records/new-record-form";
 import { RecordDetail } from "@/components/ssma/field-records/record-detail";
+import { SsmaOfflineCapabilities } from "@/components/ssma/ssma-offline-capabilities";
 import type { OfflineContext } from "@/lib/ssma/field-records/idb-store";
 import { isActionOverdue, mapFieldRecordRow, type FieldRecordRow, type FieldRecordView } from "@/lib/ssma/field-records/field-record-view";
 import type { useFieldQueue } from "@/lib/ssma/field-records/use-field-queue";
@@ -260,6 +261,7 @@ function SyncView({
         <CloudUpload className={cn("size-5", syncing && "animate-pulse")} /> {syncing ? "Enviando…" : "Enviar agora / tentar de novo"}
       </button>
       {!online ? <p className="flex items-center gap-2 text-sm font-semibold text-amber-800"><CloudOff className="size-5" /> Sem conexão: os itens seguem salvos no aparelho.</p> : null}
+      <SsmaOfflineCapabilities />
 
       <ul className="space-y-2">
         {items.length === 0 ? <li className="rounded-xl bg-white p-3 text-sm text-slate-600">Nenhum registro neste aparelho.</li> : null}
