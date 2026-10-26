@@ -4,7 +4,7 @@ import { createSupabaseAdminClient } from "@axion/db/admin";
 
 import { getAppBaseUrl } from "../app-base-url";
 import { appendAccEmailSignature } from "./branding/acc-email-signature";
-import { loadAccLogoInlineImage } from "./branding/load-acc-logo-inline-image";
+import { loadAccAlertLogos } from "./branding/load-acc-logo-inline-image";
 import { EmailSendError } from "./email-provider";
 import { getEmailProvider } from "./get-email-provider";
 import {
@@ -154,13 +154,20 @@ export async function createAndSendContractAlertBatch(
         : `${baseUrl}/alertas/lote/${input.projectId}/${batchId}?evento=${encodeURIComponent(item.eventId)}`,
   }));
 
-  const inlineLogo = loadAccLogoInlineImage();
+  // Logo vinho sempre (cabeçalho do lote e caixas MÉDIO/BAIXO); o invertido só
+  // entra quando algum alerta do lote é CRÍTICO/ALTO (fundo escuro).
+  const logos = loadAccAlertLogos({
+    maroon: true,
+    inverted: emailItems.some((item) => item.severity === "CRITICA" || item.severity === "ALTA"),
+  });
+  const inlineLogo = logos.availability.maroon ? logos.images[0] : null;
   const built = buildContractAlertBatchEmail({
     recipientName: recipient.name ?? null,
     projectName: project.name,
     batchUrl,
     items: emailItems,
-    hasInlineLogo: inlineLogo !== null,
+    hasInlineLogo: logos.availability.maroon,
+    hasInlineInvertedLogo: logos.availability.inverted,
   });
   const signed = appendAccEmailSignature(built, inlineLogo !== null, false);
   const provider = getEmailProvider();
@@ -172,7 +179,7 @@ export async function createAndSendContractAlertBatch(
       subject: built.subject,
       text: signed.text,
       html: signed.html,
-      inlineImages: inlineLogo ? [inlineLogo] : undefined,
+      inlineImages: logos.images.length > 0 ? logos.images : undefined,
       correlationId,
     });
   } catch (error) {

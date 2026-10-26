@@ -199,26 +199,33 @@ const baseAlertInput = {
   actionButtons: [{ action: "RESPOND", url: "http://localhost:3000/email-actions/tok-respond" }],
 };
 
+// DEFINIÇÃO FINAL (substitui a anterior de selo arredondado/badges): a CAIXA do alerta
+// é colorida — ver scripts/test-alert-box-templates.mjs para a cobertura completa.
 check("CRÍTICO usa fundo vermelho, texto branco e forte destaque", () => {
   const { html } = buildContractAlertEmail({ ...baseAlertInput, severity: "CRITICA" });
-  assert(html.includes("RISCO CRÍTICO"), "badge deveria mostrar COR + TEXTO (RISCO CRÍTICO)");
-  assert(html.includes("#dc2626"), "fundo vermelho ausente");
-  assert(html.includes("color:#ffffff"), "texto branco ausente no badge crítico");
+  assert(html.includes("RISCO CRÍTICO"), "classificação deveria mostrar COR + TEXTO (RISCO CRÍTICO)");
+  assert(html.toLowerCase().includes("background-color:#dc2626"), "fundo vermelho ausente");
+  assert(/color:#FFFFFF/i.test(html), "texto branco ausente na caixa crítica");
 });
 
-check("BAIXO usa fundo verde, MÉDIO usa fundo AZUL (nunca âmbar/amarelo/laranja), ALTO usa fundo laranja", () => {
+// DEFINIÇÃO FINAL (substitui verde/azul/laranja): BAIXO e MÉDIO = caixa branca, texto preto,
+// borda cinza; ALTO = amarelo escuro com texto BRANCO; CRÍTICO = vermelho com texto branco.
+check("BAIXO e MÉDIO usam caixa branca com texto preto; ALTO usa amarelo escuro com texto branco", () => {
   const low = buildContractAlertEmail({ ...baseAlertInput, severity: "BAIXA" }).html;
   const medium = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" }).html;
   const high = buildContractAlertEmail({ ...baseAlertInput, severity: "ALTA" }).html;
-  assert(low.includes("#16a34a") && low.includes("RISCO BAIXO"), "badge BAIXO incorreto");
-  assert(medium.includes("#2563eb") && medium.includes("RISCO MÉDIO"), "badge MÉDIO incorreto");
-  assert(medium.includes("color:#ffffff"), "texto branco ausente no badge MÉDIO");
-  assert(!/#f59e0b|#eab308|#fbbf24|#f97316/.test(medium), "badge MÉDIO não pode usar âmbar/amarelo/laranja");
-  assert(high.includes("#f97316") && high.includes("RISCO ALTO"), "badge ALTO incorreto — deveria continuar laranja, não afetado pela mudança do MÉDIO");
+  for (const [html, word] of [[low, "BAIXO"], [medium, "MÉDIO"]]) {
+    assert(html.includes(`RISCO ${word}`), `classificação ${word} ausente`);
+    assert(html.toLowerCase().includes("background-color:#ffffff;border:2px solid #9ca3af"), `caixa branca com borda cinza (${word})`);
+    assert(/color:#000000;/i.test(html), `texto preto (${word})`);
+  }
+  assert(!/#16a34a|#2563eb/i.test(low + medium), "sem selos verde/azul antigos");
+  assert(high.includes("RISCO ALTO") && high.toLowerCase().includes("background-color:#a16207"), "caixa ALTO amarelo escuro");
+  assert(/color:#FFFFFF/i.test(high), "texto branco no ALTO");
 });
 
-check("corpo principal do e-mail é sempre preto (#111111 ou #000000 — Parte C.4), nunca parágrafo inteiro colorido", () => {
-  const { html } = buildContractAlertEmail({ ...baseAlertInput, severity: "ALTA" });
+check("corpo principal do e-mail é preto (#111111 ou #000000 — Parte C.4) nas caixas de fundo branco, nunca parágrafo inteiro colorido", () => {
+  const { html } = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" });
   assert(html.includes("background-color:#ffffff"), "fundo deveria ser branco");
   const bodyTextOccurrences = (html.match(/color:#111111/g) ?? []).length + (html.match(/color:#000000/g) ?? []).length;
   assert(bodyTextOccurrences >= 5, "texto principal deveria usar preto (#111111 ou #000000) na maior parte do corpo");
@@ -239,15 +246,17 @@ check("evento relacionado, base contratual e evidências principais aparecem qua
   assert(text.includes("Cláusula 5.2"), "base contratual ausente no texto");
 });
 
-check("responsável e prazo aparecem quando fornecidos (nunca omitidos quando existem)", () => {
+// DEFINIÇÃO FINAL: "Responsável" saiu do corpo (o destinatário já recebe o alerta); o
+// responsável continua nos registros internos/histórico/tabela de providências.
+check("prazo aparece quando fornecido; responsável NÃO aparece no corpo do e-mail", () => {
   const { html, text } = buildContractAlertEmail({
     ...baseAlertInput,
     severity: "ALTA",
     responsibleName: "Carlos Mendes",
     dueDate: "2026-02-01",
   });
-  assert(html.includes("Carlos Mendes"), "responsável deveria aparecer quando fornecido");
-  assert(text.includes("Responsável: Carlos Mendes"));
+  assert(!html.includes("Carlos Mendes") && !text.includes("Carlos Mendes"), "responsável não deve aparecer");
+  assert(!/Respons[aá]vel/.test(html + text), "linha Responsável removida");
   assert(text.includes("Prazo: 2026-02-01"));
 });
 
@@ -409,7 +418,10 @@ check("texto vazio retorna indeterminado, nunca lança exceção", () => {
 
 check("banner institucional dos templates usa o nome atual da marca (AXION CONTROLE DE CONTRATOS, nunca o nome antigo ACOMPANHAMENTO)", () => {
   const alert = buildContractAlertEmail({ ...baseAlertInput, severity: "ALTA" });
-  assert(alert.html.includes("AXION CONTROLE DE CONTRATOS"));
+  // O nome da marca vem da assinatura institucional anexada em todo envio (o cabeçalho agora
+  // é logo + classificação).
+  const signedAlert = appendAccEmailSignature({ text: alert.text, html: alert.html }, true, false);
+  assert(signedAlert.html.includes("AXION CONTROLE DE CONTRATOS"));
   assert(!alert.html.includes("ACOMPANHAMENTO") && !alert.text.includes("Acompanhamento"));
 
   const sla = buildSlaEscalationEmail({

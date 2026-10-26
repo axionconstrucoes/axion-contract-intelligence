@@ -6,7 +6,7 @@ import { createSupabaseServerClient } from "@axion/db/server";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 
 import { appendAccEmailSignature } from "./branding/acc-email-signature";
-import { loadAccLogoInlineImage } from "./branding/load-acc-logo-inline-image";
+import { loadAccAlertLogos } from "./branding/load-acc-logo-inline-image";
 import { EmailSendError } from "./email-provider";
 import { assertNotEmailFixtureData } from "./fixture-safety-guard";
 import { getEmailProvider } from "./get-email-provider";
@@ -26,7 +26,7 @@ export interface SendContractAlertEmailInput {
   // hasInlineLogo NUNCA vem do caller: é decidido aqui mesmo, a partir do
   // resultado real de loadAccLogoInlineImage() logo abaixo — nunca
   // adivinhado/hardcoded por quem monta o alerta (send-alert-actions.ts).
-  alert: Omit<ContractAlertEmailInput, "hasInlineLogo">;
+  alert: Omit<ContractAlertEmailInput, "hasInlineLogo" | "hasInlineInvertedLogo">;
 }
 
 export interface SendContractAlertEmailResult {
@@ -94,9 +94,16 @@ export async function sendContractAlertEmail(
   // decidir se o cabeçalho referencia "cid:" (Parte B) — igual à regra já
   // existente para a assinatura, nunca duas fontes de verdade divergentes
   // sobre "o logo está disponível nesta execução?".
-  const inlineLogo = loadAccLogoInlineImage();
-  const hasInlineLogo = inlineLogo !== null;
-  const { subject, html, text } = buildContractAlertEmail({ ...input.alert, hasInlineLogo });
+  // Só a versão do logo que a caixa deste risco usa: invertido (fundo escuro)
+  // para CRÍTICO/ALTO, vinho (oficial) para MÉDIO/BAIXO.
+  const darkTone = input.alert.severity === "CRITICA" || input.alert.severity === "ALTA";
+  const logos = loadAccAlertLogos({ maroon: !darkTone, inverted: darkTone });
+  const hasInlineLogo = logos.availability.maroon || logos.availability.inverted;
+  const { subject, html, text } = buildContractAlertEmail({
+    ...input.alert,
+    hasInlineLogo: logos.availability.maroon,
+    hasInlineInvertedLogo: logos.availability.inverted,
+  });
   // includeLogoImage=false: o cabeçalho do alerta (buildHeaderHtml) já
   // mostra o logo — a assinatura no rodapé repetiria a mesma imagem se
   // não fosse suprimida aqui (único fluxo de e-mail com logo no
@@ -113,7 +120,7 @@ export async function sendContractAlertEmail(
       subject,
       text: signed.text,
       html: signed.html,
-      inlineImages: inlineLogo ? [inlineLogo] : undefined,
+      inlineImages: logos.images.length > 0 ? logos.images : undefined,
       correlationId,
     });
   } catch (error) {

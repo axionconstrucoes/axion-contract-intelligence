@@ -12,6 +12,9 @@ import { ACC_SENDER_DISPLAY_NAME } from "../sender-identity";
 /** Content-ID referenciado como "cid:" dentro do HTML da assinatura. */
 export const ACC_EMAIL_LOGO_CID = "acc-logo-signature";
 
+/** Content-ID da versão INVERTIDA do logo oficial (caixas de alerta CRÍTICO/ALTO, fundos escuros). */
+export const ACC_EMAIL_LOGO_INVERTED_CID = "acc-logo-inverted";
+
 export function buildAccEmailSignatureText(): string {
   return ACC_SENDER_DISPLAY_NAME;
 }

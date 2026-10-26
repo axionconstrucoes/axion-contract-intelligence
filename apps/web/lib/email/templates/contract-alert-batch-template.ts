@@ -21,7 +21,9 @@
 
 import type { AlertSeverity } from "@axion/types";
 
+import { repeatNoticeText } from "@/lib/alerts/repeat-policy";
 import { ACC_EMAIL_LOGO_CID } from "@/lib/email/branding/acc-email-signature";
+import { ALERT_TONES, buildAlertBoxHtml, buildAlertHeaderHtml, buildCompactButtonHtml, panelStyle } from "@/lib/email/templates/alert-box-style";
 import {
   ACC_COLOR_BODY,
   ACC_COLOR_HEADING,
@@ -34,7 +36,6 @@ import {
 } from "@/lib/email/brand-style";
 import {
   alertRiskLevelLabels,
-  BADGE_STYLES,
   escapeHtml,
   evidenceItemHtml,
   evidenceItemText,
@@ -67,6 +68,8 @@ export interface ContractAlertBatchEmailInput {
   batchUrl: string;
   items: ContractAlertBatchEmailItem[];
   hasInlineLogo: boolean;
+  // Logo INVERTIDO para as caixas CRÍTICO/ALTO — padrão: segue hasInlineLogo.
+  hasInlineInvertedLogo?: boolean;
 }
 
 export interface ContractAlertBatchEmail {
@@ -125,15 +128,17 @@ function buildHeaderHtml(hasInlineLogo: boolean, projectName: string): string {
   </td></tr></table>`;
 }
 
-// As 4 cores/rótulos do layout aprovado. VER EVENTO é o único link REAL
-// (sem token, sempre disponível, nunca conta como resposta). RESOLVIDO/
-// EM ANDAMENTO/ENVIADO P/ aqui são indicadores visuais/navegacionais —
-// todos levam ao MESMO lugar (o bloco deste evento na página do lote),
-// nunca gravam nada por si só: Gmail/Outlook não suportam <select>, e
-// ENVIADO P/ exige escolher um colaborador, o que só é possível numa
-// página real (ver contract-alert-batch-form.tsx). A cor/rótulo de cada
-// botão é só uma prévia do que será escolhido na página — nunca finge
-// que o clique já registrou a ação.
+// As 4 cores/rótulos do layout aprovado (cores e funções preservadas). VER
+// EVENTO é o único link REAL (sem token, sempre disponível, nunca conta como
+// resposta). RESOLVIDO/EM ANDAMENTO/ENVIADO P/ levam à página de ação rápida
+// (um alerta) ou ao bloco do alerta na página do lote — o clique em si NUNCA
+// grava nada: a página mostra a confirmação e só um envio explícito do
+// formulário (POST) registra a ação. Gmail/Outlook não suportam <select>, e
+// ENVIADO P/ exige escolher um colaborador.
+//
+// Os quatro botões têm EXATAMENTE a mesma largura e altura (ver
+// buildCompactButtonHtml/BUTTON_WIDTH_PX em alert-box-style.ts): largura do
+// texto "EM ANDAMENTO" + 12px de cada lado.
 const BATCH_ACTION_BUTTON_STYLES = {
   VER_EVENTO: { background: "#FFD600", color: "#000000", label: "VER EVENTO" },
   RESOLVIDO: { background: "#1B2A4A", color: "#ffffff", label: "RESOLVIDO" },
@@ -141,19 +146,8 @@ const BATCH_ACTION_BUTTON_STYLES = {
   ENVIADO_PARA: { background: "#F97316", color: "#ffffff", label: "ENVIADO P/" },
 } as const;
 
-function buildBatchActionButtonHtml(
-  href: string,
-  style: { background: string; color: string; label: string },
-  title: string,
-  marginTop: string
-): string {
-  return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(title)}" aria-label="${escapeHtml(`${style.label} — ${title}`)}" style="display:block;width:100%;box-sizing:border-box;margin:${marginTop} 0 0 0;padding:8px 10px;background-color:${style.background};color:${style.color};font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;text-decoration:none;border-radius:6px;text-align:center;">${escapeHtml(style.label)}</a>`;
-}
-
 // Bloco de ações de UM alerta — alinhado ao lado do conteúdo do MESMO
-// alerta (requisito 1: "a coluna de ações deve ficar alinhada
-// verticalmente com o respectivo alerta"), nunca uma coluna
-// compartilhada entre alertas.
+// alerta, nunca uma coluna compartilhada entre alertas.
 function buildRespondActionUrl(
   item: ContractAlertBatchEmailItem,
   action: "RESOLVIDO" | "EM_ANDAMENTO" | "ENVIADO_PARA"
@@ -164,73 +158,83 @@ function buildRespondActionUrl(
 }
 
 function buildItemActionsColumnHtml(item: ContractAlertBatchEmailItem): string {
-  const verEvento = buildBatchActionButtonHtml(
+  const tone = ALERT_TONES[item.severity];
+  const verEvento = buildCompactButtonHtml(
     item.eventUrl,
     BATCH_ACTION_BUTTON_STYLES.VER_EVENTO,
     "Abre o evento completo no ACC — somente consulta, não conta como resposta.",
-    "0"
+    true
   );
-  const resolvido = buildBatchActionButtonHtml(
+  const resolvido = buildCompactButtonHtml(
     buildRespondActionUrl(item, "RESOLVIDO"),
     BATCH_ACTION_BUTTON_STYLES.RESOLVIDO,
-    "Registra RESOLVIDO em um clique quando este e-mail contém um único alerta.",
-    "8px"
+    "Abre a confirmação de RESOLVIDO — nada é registrado até você confirmar.",
+    false
   );
-  const emAndamento = buildBatchActionButtonHtml(
+  const emAndamento = buildCompactButtonHtml(
     buildRespondActionUrl(item, "EM_ANDAMENTO"),
     BATCH_ACTION_BUTTON_STYLES.EM_ANDAMENTO,
-    "Registra EM ANDAMENTO em um clique quando este e-mail contém um único alerta.",
-    "8px"
+    "Abre a confirmação de EM ANDAMENTO — nada é registrado até você confirmar.",
+    false
   );
-  const enviadoPara = buildBatchActionButtonHtml(
+  const enviadoPara = buildCompactButtonHtml(
     buildRespondActionUrl(item, "ENVIADO_PARA"),
     BATCH_ACTION_BUTTON_STYLES.ENVIADO_PARA,
-    "Abre uma página rápida com ENVIADO P/ e o dropdown de colaboradores.",
-    "8px"
+    "Abre a confirmação de ENVIADO P/ com a lista de colaboradores — nada é registrado até você confirmar.",
+    false
   );
-  const caption = `<p style="margin:8px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${ACC_COLOR_MUTED};text-align:center;">A resposta a este e-mail só é liberada depois que TODOS os alertas do lote tiverem uma ação.</p>`;
+  const caption = `<p style="margin:8px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${tone.muted};text-align:center;">A resposta a este e-mail só é liberada depois que TODOS os alertas do lote tiverem uma ação.</p>`;
 
   return `${verEvento}${resolvido}${emAndamento}${enviadoPara}${caption}`;
 }
 
-function buildItemHtml(item: ContractAlertBatchEmailItem, index: number): string {
-  const badge = BADGE_STYLES[item.severity];
+function buildItemHtml(
+  item: ContractAlertBatchEmailItem,
+  index: number,
+  logos: { maroon: boolean; inverted: boolean }
+): string {
+  const tone = ALERT_TONES[item.severity];
   const riskLabel = alertRiskLevelLabels[item.severity];
-  const badgeHtml = `<span style="display:inline-block;background-color:${badge.background};color:${badge.color};font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;padding:5px 12px;border-radius:999px;">RISCO ${escapeHtml(riskLabel)}</span>`;
+  const font = `font-family:${ACC_FONT_FAMILY};`;
+  const panel = panelStyle(item.severity);
+  const sectionLabel = (text: string, margin: string) =>
+    `<p style="margin:${margin};${font}font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;color:${tone.text};text-transform:uppercase;letter-spacing:0.02em;">${escapeHtml(text)}</p>`;
 
+  const clauseInner = `${item.clauseLabel ? `<p style="margin:0 0 4px 0;${font}font-size:${ACC_FONT_SIZE_BODY};color:${tone.dark ? ACC_COLOR_BODY : tone.text};font-weight:bold;">${escapeHtml(item.clauseLabel)}</p>` : ""}${item.clauseText ? `<p style="margin:0;padding:8px 12px;border-left:3px solid #9ca3af;${font}font-size:${ACC_FONT_SIZE_AUX};color:${ACC_COLOR_MUTED};font-style:italic;">&ldquo;${escapeHtml(item.clauseText)}&rdquo;</p>` : ""}`;
   const clauseHtml =
     item.clauseLabel || item.clauseText
-      ? `<p style="margin:12px 0 2px 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;color:${ACC_COLOR_HEADING};text-transform:uppercase;letter-spacing:0.02em;">Cláusula impactada</p>
-         ${item.clauseLabel ? `<p style="margin:0 0 4px 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_BODY};color:${ACC_COLOR_BODY};font-weight:bold;">${escapeHtml(item.clauseLabel)}</p>` : ""}
-         ${item.clauseText ? `<p style="margin:0;padding:8px 12px;border-left:3px solid #9ca3af;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${ACC_COLOR_MUTED};font-style:italic;">&ldquo;${escapeHtml(item.clauseText)}&rdquo;</p>` : ""}`
+      ? `${sectionLabel("Cláusula impactada", "12px 0 4px 0")}${tone.dark ? `<div style="${panel}">${clauseInner}</div>` : clauseInner}`
       : "";
 
-  const evidenceHtml =
+  const evidenceListHtml =
     item.evidence.length > 0
       ? `<ul style="margin:4px 0 0 0;padding-left:16px;">${item.evidence.map(evidenceItemHtml).join("")}</ul>`
-      : `<span style="font-family:${ACC_FONT_FAMILY};color:${ACC_COLOR_MUTED};font-size:${ACC_FONT_SIZE_AUX};">Nenhuma evidência vinculada nesta fase.</span>`;
+      : `<span style="${font}color:${tone.dark ? ACC_COLOR_MUTED : tone.muted};font-size:${ACC_FONT_SIZE_AUX};">Nenhuma evidência vinculada nesta fase.</span>`;
+  const evidenceHtml = tone.dark ? `<div style="${panel}">${evidenceListHtml}</div>` : evidenceListHtml;
 
-  return `
-  <tr><td id="evento-${escapeHtml(item.eventId)}" style="padding:${index === 0 ? "0" : "20px"} 24px 20px 24px;${index === 0 ? "" : "border-top:1px solid #e5e7eb;"}">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+  const inner = `
+    ${buildAlertHeaderHtml(item.severity, riskLabel, logos)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:14px;">
       <tr>
-        <td class="acc-batch-content-col" valign="top" width="64%" style="width:64%;padding:0 24px 0 0;word-break:break-word;">
-          <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:6px;"><tr>
-            <td style="vertical-align:middle;padding-right:8px;">${badgeHtml}</td>
-            <td style="vertical-align:middle;"><h2 style="margin:0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_SECTION};font-weight:bold;color:${ACC_COLOR_HEADING};word-break:break-word;">${escapeHtml(item.title)}</h2></td>
-          </tr></table>
-          <p style="margin:0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_BODY};color:${ACC_COLOR_BODY};"><strong>Risco:</strong> ${escapeHtml(item.riskDescription)}</p>
+        <td class="acc-batch-content-col" valign="top" width="64%" style="width:64%;padding:0 24px 0 0;word-break:break-word;color:${tone.text};">
+          <h2 style="margin:0 0 8px 0;${font}font-size:${ACC_FONT_SIZE_SECTION};font-weight:bold;color:${tone.text};word-break:break-word;">${escapeHtml(item.title)}</h2>
+          <p style="margin:0;${font}font-size:${ACC_FONT_SIZE_BODY};color:${tone.text};"><strong>Risco:</strong> ${escapeHtml(item.riskDescription)}</p>
           ${clauseHtml}
-          <p style="margin:14px 0 4px 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;color:${ACC_COLOR_HEADING};text-transform:uppercase;letter-spacing:0.02em;">Evidências</p>
+          ${sectionLabel("Evidências", "14px 0 4px 0")}
           ${evidenceHtml}
+          <p style="margin:12px 0 0 0;${font}font-size:${ACC_FONT_SIZE_BODY};font-weight:bold;color:${tone.text};">${escapeHtml(repeatNoticeText(item.severity))}</p>
         </td>
-        <td class="acc-batch-actions-col" valign="top" width="36%" style="width:36%;padding:0 0 0 4px;border-left:1px solid #e5e7eb;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 0 0 20px;">
+        <td class="acc-batch-actions-col" valign="top" width="36%" style="width:36%;padding:0 0 0 4px;border-left:1px solid ${tone.dark ? "#ffffff" : "#e5e7eb"};">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:0 0 0 12px;">
             ${buildItemActionsColumnHtml(item)}
           </td></tr></table>
         </td>
       </tr>
-    </table>
+    </table>`;
+
+  return `
+  <tr><td id="evento-${escapeHtml(item.eventId)}" style="padding:${index === 0 ? "0" : "0"} 24px 16px 24px;">
+    ${buildAlertBoxHtml(item.severity, inner)}
   </td></tr>`;
 }
 
@@ -244,6 +248,7 @@ function buildItemText(item: ContractAlertBatchEmailItem): string {
     "Evidências:",
     item.evidence.length > 0 ? item.evidence.map(evidenceItemText).join("\n") : "Nenhuma evidência vinculada nesta fase.",
     `Ver evento: ${item.eventUrl}`,
+    repeatNoticeText(item.severity),
     `Responder a este alerta (RESOLVIDO/EM ANDAMENTO/ENVIADO P/): ${item.respondItemUrl}`,
   ].join("\n");
 }
@@ -259,12 +264,14 @@ export function buildContractAlertBatchEmail(input: ContractAlertBatchEmailInput
   const subject = buildContractAlertBatchSubject(input.projectName, input.items);
   const greeting = input.recipientName ? `Olá, ${input.recipientName}.` : "Olá.";
 
-  const itemsHtml = input.items.map((item, index) => buildItemHtml(item, index)).join("");
+  const logos = { maroon: input.hasInlineLogo, inverted: input.hasInlineInvertedLogo ?? input.hasInlineLogo };
+  const itemsHtml = input.items.map((item, index) => buildItemHtml(item, index, logos)).join("");
 
   const html = `
 <style>
   @media only screen and (max-width:640px) {
     .acc-batch-content-col, .acc-batch-actions-col { display:block !important; width:100% !important; }
+    .acc-batch-content-col { padding:0 !important; }
     .acc-batch-actions-col { padding:16px 0 0 0 !important; border-left:none !important; border-top:1px solid #e5e7eb !important; }
   }
 </style>

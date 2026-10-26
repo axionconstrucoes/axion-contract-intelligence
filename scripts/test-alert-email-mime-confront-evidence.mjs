@@ -66,7 +66,7 @@ const { buildMimeMessage, encodeMimeHeaderValue, decodeMimeHeaderValue, sanitize
 const { buildContractAlertSubject, buildContractAlertEmail } = await import(
   "../apps/web/lib/email/templates/contract-alert-template.ts"
 );
-const { ACC_EMAIL_LOGO_CID } = await import("../apps/web/lib/email/branding/acc-email-signature.ts");
+const { ACC_EMAIL_LOGO_CID, ACC_EMAIL_LOGO_INVERTED_CID } = await import("../apps/web/lib/email/branding/acc-email-signature.ts");
 const {
   ACC_FONT_FAMILY,
   ACC_COLOR_HEADING,
@@ -375,27 +375,29 @@ const baseAlertInput = {
   actionButtons: [],
 };
 
-check("hasInlineLogo=true: cabeçalho do e-mail referencia cid: do logo, DEPOIS do badge de RISCO (risco à ESQUERDA, marca/logo à DIREITA — layout atualizado nesta rodada)", () => {
-  const { html } = buildContractAlertEmail(baseAlertInput);
-  const badgeIndex = html.indexOf("RISCO");
-  const logoIndex = html.indexOf(`cid:${ACC_EMAIL_LOGO_CID}`);
+// DEFINIÇÃO FINAL (substitui "risco à esquerda, marca à direita"): LOGO oficial à ESQUERDA e a
+// classificação "RISCO …" na mesma linha. ALTO/CRÍTICO usam o logo INVERTIDO (cid próprio).
+check("hasInlineLogo=true: cabeçalho referencia cid: do logo ANTES da classificação de RISCO (logo à esquerda)", () => {
+  const { html } = buildContractAlertEmail(baseAlertInput); // ALTA => logo invertido
+  const riskIndex = html.indexOf("RISCO ALTO");
+  const logoIndex = html.indexOf(`cid:${ACC_EMAIL_LOGO_INVERTED_CID}`);
   assert(logoIndex !== -1, "cabeçalho deveria referenciar cid: do logo quando hasInlineLogo=true");
-  assert(badgeIndex < logoIndex, "risco deveria aparecer no cabeçalho ANTES do logo (ordem no HTML: risco à esquerda, marca à direita)");
-  assert(html.includes("ACC · AXION CONTROLE DE CONTRATOS"), "texto da marca deveria continuar ao lado do logo");
+  assert(logoIndex < riskIndex, "logo deveria aparecer ANTES da classificação (à esquerda)");
+  const medium = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" }).html;
+  assert(medium.indexOf(`cid:${ACC_EMAIL_LOGO_CID}`) !== -1, "MÉDIO usa o logo vinho oficial");
 });
 
 check("hasInlineLogo=false: cabeçalho NUNCA referencia cid: (nunca uma imagem quebrada)", () => {
   const { html } = buildContractAlertEmail({ ...baseAlertInput, hasInlineLogo: false });
   assert(!html.includes("cid:"), "sem o logo real disponível, o cabeçalho não pode referenciar cid:");
-  assert(html.includes("ACC · AXION CONTROLE DE CONTRATOS"), "texto da marca continua aparecendo sem o logo");
+  assert(html.includes("RISCO ALTO"), "a classificação continua aparecendo sem o logo");
 });
 
 check("send-contract-alert-email.ts: hasInlineLogo é decidido a partir de loadAccLogoInlineImage() ANTES de montar o e-mail, nunca fornecido pelo caller", () => {
   const source = readSource("apps/web/lib/email/send-contract-alert-email.ts");
-  assert(source.includes("Omit<ContractAlertEmailInput, \"hasInlineLogo\">"), "o caller (send-alert-actions.ts) não deveria poder fornecer hasInlineLogo");
-  assert(source.includes("const inlineLogo = loadAccLogoInlineImage();"));
-  assert(source.includes("const hasInlineLogo = inlineLogo !== null;"));
-  assert(/buildContractAlertEmail\(\{\s*\.\.\.input\.alert,\s*hasInlineLogo\s*\}\)/.test(source));
+  assert(source.includes("Omit<ContractAlertEmailInput, \"hasInlineLogo\" | \"hasInlineInvertedLogo\">"), "o caller (send-alert-actions.ts) não deveria poder fornecer hasInlineLogo");
+  assert(source.includes("const logos = loadAccAlertLogos("), "logos carregados do arquivo real (vinho ou invertido, conforme o risco)");
+  assert(/buildContractAlertEmail\(\{\s*\.\.\.input\.alert,\s*hasInlineLogo: logos\.availability\.maroon,\s*hasInlineInvertedLogo: logos\.availability\.inverted,?\s*\}\)/.test(source));
 });
 
 check("logo do cabeçalho usa o MESMO ACC_EMAIL_LOGO_CID da assinatura — Content-ID do MIME corresponde exatamente", () => {
@@ -452,19 +454,22 @@ check("hierarquia de tamanhos LIMITADA a 20/15/14/12px — nenhum outro valor de
   assert(disallowed.length === 0, `tamanhos fora da hierarquia limitada encontrados: ${[...new Set(disallowed)].join(", ")}`);
 });
 
-check("título principal (h1) em bordô #7F1D1D, corpo/valores em preto (#111111)", () => {
+// DEFINIÇÃO FINAL: o título acompanha a cor do texto da caixa (branco nos fundos
+// CRÍTICO/ALTO, preto em MÉDIO/BAIXO); o bordô segue nos painéis internos e na assinatura.
+check("título principal (h1) com a cor de texto da caixa; painéis internos mantêm bordô/preto institucionais", () => {
   assert(ACC_COLOR_HEADING === "#7F1D1D");
   assert(ACC_COLOR_BODY === "#111111");
-  const { html } = buildContractAlertEmail(baseAlertInput);
-  assert(new RegExp(`<h1[^>]*color:${ACC_COLOR_HEADING}`).test(html), "h1 deveria usar a cor bordô institucional");
-  assert(html.includes(`color:${ACC_COLOR_BODY}`), "corpo deveria usar a cor preta institucional");
+  const alta = buildContractAlertEmail(baseAlertInput).html;
+  assert(/<h1[^>]*color:#FFFFFF/i.test(alta), "h1 branco sobre o fundo escuro do ALTO");
+  const media = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" }).html;
+  assert(/<h1[^>]*color:#000000/i.test(media), "h1 preto na caixa branca");
+  assert(media.includes(`color:${ACC_COLOR_BODY}`), "corpo deveria usar a cor preta institucional");
 });
 
-check("títulos de seção (Evidências principais / Ações disponíveis) também em bordô", () => {
-  const { html } = buildContractAlertEmail(baseAlertInput);
-  const sectionStyle = `font-size:${ACC_FONT_SIZE_SECTION};font-weight:bold;color:${ACC_COLOR_HEADING}`;
-  assert(html.includes(`Evidências principais</p>`.replace(">", "")) || html.includes("Evidências principais"));
-  assert(new RegExp(`${sectionStyle}[^>]*>Evidências principais`).test(html) || html.includes(sectionStyle));
+check("títulos de seção (Evidências principais / Ações disponíveis) em negrito 15px, na cor do texto da caixa", () => {
+  const { html } = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" });
+  assert(new RegExp(`font-size:${ACC_FONT_SIZE_SECTION};font-weight:bold;color:#000000[^>]*>Evidências principais`).test(html));
+  assert(new RegExp(`font-size:${ACC_FONT_SIZE_SECTION};font-weight:bold;color:#000000[^>]*>Ações disponíveis`).test(html));
 });
 
 check("max-width ~820px e layout de duas colunas continuam preservados nesta rodada", () => {
