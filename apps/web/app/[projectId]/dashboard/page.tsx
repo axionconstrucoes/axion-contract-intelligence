@@ -193,6 +193,15 @@ function inclusiveDaysBetween(
   return Math.floor((end - start) / 86400000) + 1;
 }
 
+// Dias inteiros desde um instante, calculados a cada renderização da página
+// (rota dinâmica): o contador "dias sem acidente" acompanha o relógio.
+function elapsedDaysSince(timestamp: number): number {
+  return Math.max(
+    0,
+    Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24))
+  );
+}
+
 function isImpraticavel(value: unknown): boolean {
   return (
     typeof value === "string" &&
@@ -634,13 +643,7 @@ export default async function DashboardPage({
 
   const dashboardDaysWithoutAccident =
     latestAccidentTimestamp !== null
-      ? Math.max(
-          0,
-          Math.floor(
-            (Date.now() - latestAccidentTimestamp) /
-              (1000 * 60 * 60 * 24)
-          )
-        )
+      ? elapsedDaysSince(latestAccidentTimestamp)
       : null;
 
   const activeIntegrations =

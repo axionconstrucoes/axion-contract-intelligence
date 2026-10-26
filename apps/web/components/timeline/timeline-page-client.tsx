@@ -68,13 +68,19 @@ export function TimelinePageClient({
   const [selectedEventIds, setSelectedEventIds] =
     useState<Set<string>>(new Set());
 
-  const [archiveHits, setArchiveHits] =
-    useState<TimelineArchiveHit[]>([]);
-
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchProgress, setSearchProgress] = useState(0);
-  const [searchScannedCount, setSearchScannedCount] = useState(0);
-  const [searchError, setSearchError] = useState<string | null>(null);
+  // Resultado da última busca concluída, com a chave dos critérios a que
+  // pertence. Tudo que a UI mostra durante a busca (indicador, progresso,
+  // erro) é derivado da comparação entre essa chave e a dos critérios atuais.
+  const [settledSearch, setSettledSearch] = useState<{
+    key: string;
+    hits: TimelineArchiveHit[];
+    scannedCount: number;
+    error: string | null;
+  } | null>(null);
+  const [progressState, setProgressState] = useState<{
+    key: string;
+    value: number;
+  } | null>(null);
 
   const searchGeneration = useRef(0);
 
@@ -84,6 +90,30 @@ export function TimelinePageClient({
   );
 
   const hasArchiveQuery = criteria.searchText.trim().length > 0;
+
+  const searchKey = JSON.stringify([
+    criteria.searchText.trim(),
+    criteria.dateFrom,
+    criteria.dateTo,
+    criteria.sources,
+    criteria.categories,
+    criteria.participants,
+  ]);
+  const searchSettled = settledSearch?.key === searchKey;
+  const isSearching = hasArchiveQuery && !searchSettled;
+  const archiveHits = hasArchiveQuery ? (settledSearch?.hits ?? []) : [];
+  const searchScannedCount = hasArchiveQuery
+    ? (settledSearch?.scannedCount ?? 0)
+    : 0;
+  const searchError =
+    hasArchiveQuery && searchSettled ? settledSearch.error : null;
+  const searchProgress = !hasArchiveQuery
+    ? 0
+    : searchSettled
+      ? 100
+      : progressState?.key === searchKey
+        ? progressState.value
+        : 5;
 
   const visibleEvents = useMemo(
     () =>
@@ -113,18 +143,7 @@ export function TimelinePageClient({
     searchGeneration.current += 1;
     const generation = searchGeneration.current;
 
-    if (!query) {
-      setArchiveHits([]);
-      setIsSearching(false);
-      setSearchProgress(0);
-      setSearchScannedCount(0);
-      setSearchError(null);
-      return;
-    }
-
-    setIsSearching(true);
-    setSearchProgress(5);
-    setSearchError(null);
+    if (!query) return;
 
     const debounce = window.setTimeout(async () => {
       let progress = 8;
@@ -133,7 +152,7 @@ export function TimelinePageClient({
         progress = Math.min(progress + 7, 90);
 
         if (generation === searchGeneration.current) {
-          setSearchProgress(progress);
+          setProgressState({ key: searchKey, value: progress });
         }
       }, 140);
 
@@ -151,32 +170,35 @@ export function TimelinePageClient({
         if (generation !== searchGeneration.current) return;
 
         if (!result.ok) {
-          setArchiveHits([]);
-          setSearchScannedCount(result.scannedCount);
-          setSearchError(
-            result.error ?? "Falha ao pesquisar o acervo."
-          );
+          setSettledSearch({
+            key: searchKey,
+            hits: [],
+            scannedCount: result.scannedCount,
+            error: result.error ?? "Falha ao pesquisar o acervo.",
+          });
           return;
         }
 
-        setArchiveHits(result.hits);
-        setSearchScannedCount(result.scannedCount);
+        setSettledSearch({
+          key: searchKey,
+          hits: result.hits,
+          scannedCount: result.scannedCount,
+          error: null,
+        });
       } catch (error) {
         if (generation !== searchGeneration.current) return;
 
-        setArchiveHits([]);
-        setSearchError(
-          error instanceof Error
-            ? error.message
-            : "Falha ao pesquisar o acervo."
-        );
+        setSettledSearch({
+          key: searchKey,
+          hits: [],
+          scannedCount: 0,
+          error:
+            error instanceof Error
+              ? error.message
+              : "Falha ao pesquisar o acervo.",
+        });
       } finally {
         window.clearInterval(progressTimer);
-
-        if (generation === searchGeneration.current) {
-          setSearchProgress(100);
-          setIsSearching(false);
-        }
       }
     }, 350);
 
@@ -185,6 +207,7 @@ export function TimelinePageClient({
     };
   }, [
     projectId,
+    searchKey,
     criteria.searchText,
     criteria.dateFrom,
     criteria.dateTo,
