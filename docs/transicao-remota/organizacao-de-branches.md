@@ -5,7 +5,7 @@
 
 ## 1. Situação verificada
 
-- `origin/main` = `ad6a7c3` (10/10/2026). A branch de trabalho `feat/novo-projeto-acc` está **43 commits à frente**
+- `origin/main` = `ad6a7c3` (10/10/2026). A branch de trabalho `feat/novo-projeto-acc` está **52 commits à frente** (contagem na data da última revisão; confirmar com `git log --oneline origin/main..HEAD`)
   e 0 atrás de `origin/main`, e **não existe no remoto** (nenhum `origin/feat/novo-projeto-acc`): hoje esses
   commits existem **somente neste computador**. Fazer o push da branch (com autorização) é o primeiro passo para
   a independência do notebook.
@@ -82,8 +82,8 @@ veio antes dele — servem de pontos de referência/corte, não de branches inde
 - **`cb0079e` e `5868330` misturam assuntos**; `e0750fb` mistura doc de alertas e decisão do PWA.
 - **Dependências entre commits:** os testes de e-mail foram atualizados em commits diferentes (`29aef9f`,
   `b7af61b`, `5dfa99b`, `a7a7a2f`, `5868330`); cherry-pick parcial quebra suítes.
-- **Pendências antigas não commitadas** (18 arquivos modificados e vários não rastreados, incluindo a migration
-  `20261014190000`): não entram em nenhuma das opções acima até serem examinadas (ver `pendencias.md`).
+- **Pendências antigas:** examinadas em `pendencias.md`; 27 foram versionadas por assunto (`e5e3579`, `6b131af`,
+  `e2fd651`, `c4f8a0e`, `a98f64e`, `bdc9ac3`) e 8 permanecem locais de propósito (PDFs de contrato, diagnósticos).
 - **Equivalência do Gmail:** `458c82a` (isolada) e `7f82687` (principal) alteram os mesmos arquivos mas **não têm o
   mesmo patch** (diferença em `package-lock.json`/`package.json`); não publicar as duas.
 - **`main` antiga:** `origin/main` está em 10/10/2026; ao publicar, conferir que não houve commits novos no
