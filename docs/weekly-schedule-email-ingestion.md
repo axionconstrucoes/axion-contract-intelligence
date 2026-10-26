@@ -795,3 +795,19 @@ severity map gravado. Manter a feature desligada até a validação completa.
   Base × baseline oficial, financeiro separado, histograma sem presunção,
   SSMA semanal, roteamento, vínculo ao message_id, XLS legado, original
   disponível, idempotência —, busca, menu, segurança)
+
+## Verificação do leitor de planilhas com arquivo real local (2026-10-26)
+
+Leitura **isolada e somente leitura** (cópia em diretório temporário, sem Supabase, sem pipeline, sem gravar
+nada) de uma planilha semanal real disponível localmente — `(W37) WEG - Indicadores.xlsx`, 515 KB / 3,7 MB
+descompactados, Node 24, `readWorkbookSafely` (caminho em streaming, pois > 2 MB):
+
+- formato XLSX válido; 5 abas (LINHA DE BASE, CURVA S, FINANCEIRO, HISTOGRAMA, SSMA) — as 5 categorias foram
+  identificadas (`MATCHED`);
+- linhas lidas por aba (190 / 0 / 30 / 53 / 25) **idênticas** à contagem direta no XML do pacote;
+- a aba CURVA S não tem células (só gráfico): nenhum dado de Curva S sai dela — comportamento esperado do leitor;
+- 12 links externos reportados e nunca seguidos; 365 fórmulas preservadas como texto, 8 sem valor armazenado
+  marcadas como "não disponível"; sem macros nem conexões de dados; 0,8 s e ~10 MB de heap.
+
+Limite: é **uma** planilha; não prova o bug do streaming do exceljs em planilhas minúsculas (<~16 KB), que só
+foi reproduzido com arquivos sintéticos. A reversão `prep/revert-xlsx-in-memory-read` **não** foi aplicada.
