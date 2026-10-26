@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useState, useTransition } from "react";
 
 import { AlertActionNotice } from "@/components/alerts/alert-action-notice";
 import { SeverityBadge } from "@/components/shared/badges";
@@ -14,7 +14,7 @@ import {
 import { resolveContractAlertBatchAnsweredState } from "@/lib/email-actions/contract-alert-batch-validation";
 import type { ContractAlertBatchViewItem } from "@/lib/email/get-contract-alert-batch";
 
-import { submitContractAlertBatchAction } from "./actions";
+import { saveContractAlertBatchItemAction, submitContractAlertBatchAction } from "./actions";
 import { initialSubmitContractAlertBatchState } from "./actions-state";
 
 // Um bloco por alerta, cada um com sua PRÓPRIA coluna de ação alinhada
@@ -51,6 +51,32 @@ export function ContractAlertBatchForm({
   const [assignees, setAssignees] = useState<Record<string, string>>(() =>
     Object.fromEntries(items.map((item) => [item.eventId, item.assignedUserId ?? ""]))
   );
+
+  // Resposta PARCIAL: cada ação confirmada é salva na hora (sem exigir os demais alertas). `saved`
+  // guarda o que já está gravado no banco por alerta ("AÇÃO|colaborador"); ao voltar ao lote as
+  // ações salvas vêm preenchidas (item.action) e só os pendentes precisam ser tratados.
+  const [saved, setSaved] = useState<Record<string, string>>(() =>
+    Object.fromEntries(items.filter((item) => item.action).map((item) => [item.eventId, `${item.action}|${item.assignedUserId ?? ""}`]))
+  );
+  const [itemErrors, setItemErrors] = useState<Record<string, string | null>>({});
+  const [savingEventId, setSavingEventId] = useState<string | null>(null);
+  const [, startSaving] = useTransition();
+
+  function saveItem(eventId: string) {
+    const action = actions[eventId];
+    if (!action) return;
+    setSavingEventId(eventId);
+    setItemErrors((current) => ({ ...current, [eventId]: null }));
+    startSaving(async () => {
+      const result = await saveContractAlertBatchItemAction(batchId, projectId, eventId, action, assignees[eventId] || null);
+      if (result.ok) {
+        setSaved((current) => ({ ...current, [eventId]: `${action}|${action === "ENVIADO_PARA" ? (assignees[eventId] ?? "") : ""}` }));
+      } else {
+        setItemErrors((current) => ({ ...current, [eventId]: result.error }));
+      }
+      setSavingEventId(null);
+    });
+  }
 
   // Mesma função pura usada pelo endpoint server-side
   // (contract-alert-batch-validation.ts) — a interface nunca inventa uma
@@ -121,6 +147,7 @@ export function ContractAlertBatchForm({
 
               <AlertActionNotice action={actions[item.eventId]} severity={item.severity} />
 
+
               {actions[item.eventId] === "ENVIADO_PARA" ? (
                 <>
                   <label className="text-xs font-medium" htmlFor={`assignee-${item.eventId}`}>
@@ -140,6 +167,28 @@ export function ContractAlertBatchForm({
                   </Select>
                 </>
               ) : null}
+
+              {(() => {
+                const selected = actions[item.eventId];
+                const key = `${selected}|${selected === "ENVIADO_PARA" ? (assignees[item.eventId] ?? "") : ""}`;
+                const alreadySaved = saved[item.eventId] === key;
+                const ready = Boolean(selected) && (selected !== "ENVIADO_PARA" || Boolean(assignees[item.eventId]));
+                return (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={!ready || alreadySaved || savingEventId === item.eventId}
+                      onClick={() => saveItem(item.eventId)}
+                    >
+                      {savingEventId === item.eventId ? "Salvando…" : "Salvar esta ação"}
+                    </Button>
+                    {alreadySaved ? <span className="text-xs font-medium text-emerald-700">Ação salva</span> : null}
+                    {itemErrors[item.eventId] ? <span className="text-xs text-destructive">{itemErrors[item.eventId]}</span> : null}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </section>

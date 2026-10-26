@@ -56,9 +56,11 @@ grant execute on function auth.uid() to anon, authenticated, service_role;
 grant execute on function public.has_project_permission(uuid, text) to authenticated, service_role;
 `;
 
-export async function createLocalDb(migrationFiles = []) {
+export async function createLocalDb(migrationFiles = [], preMigrationSql = "") {
   const db = new PGlite();
   await db.exec(BASE_SCHEMA);
+  // Tabelas-base extras de que a migration sob teste depende (ex.: contract_events, audit_log_entries).
+  if (preMigrationSql) await db.exec(preMigrationSql);
   for (const file of migrationFiles) {
     await db.exec(readFileSync(path.join(migrationsDir, file), "utf8"));
   }
