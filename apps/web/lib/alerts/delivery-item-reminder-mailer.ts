@@ -3,6 +3,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@axion/db/admin";
 
 import { getAppBaseUrl } from "../app-base-url";
+import { buildAiConsultUrl } from "./ai-consult-link";
 import { appendAccEmailSignature } from "../email/branding/acc-email-signature";
 import { loadAccAlertLogos } from "../email/branding/load-acc-logo-inline-image";
 import { getEmailProvider } from "../email/get-email-provider";
@@ -50,7 +51,7 @@ export class DeliveryItemReminderMailer implements ReminderMailer {
     if (item.status === "CONCLUIDO" || item.status === "NAO_APLICAVEL") throw new ReminderError("PROVIDENCIA_ENCERRADA");
 
     const severity = message.followup.severity;
-    const dark = severity === "CRITICA" || severity === "ALTA";
+    const dark = severity === "CRITICA";
     const logos = loadAccAlertLogos({ maroon: !dark, inverted: dark });
     const eventUrl = `${getAppBaseUrl()}/${projectId}/providencias#item-${item.id}`;
     const actionBase = `${getAppBaseUrl()}/alertas/providencia/${projectId}/${item.id}`;
@@ -86,6 +87,7 @@ export class DeliveryItemReminderMailer implements ReminderMailer {
         EM_ANDAMENTO: `${actionBase}?acao=EM_ANDAMENTO`,
         ENVIADO_PARA: `${actionBase}?acao=ENVIADO_PARA`,
       },
+      aiConsultUrl: buildAiConsultUrl({ baseUrl: getAppBaseUrl(), projectId, subject: "providencia", id: item.id }),
       impactedClause: null,
       actionButtons: [],
       hasInlineLogo: logos.availability.maroon,

@@ -4,6 +4,7 @@ import { createSupabaseAdminClient } from "@axion/db/admin";
 
 import { openFollowupsForSentBatch } from "../alerts/followup-service";
 import { getAppBaseUrl } from "../app-base-url";
+import { buildAiConsultUrl } from "../alerts/ai-consult-link";
 import { appendAccEmailSignature } from "./branding/acc-email-signature";
 import { loadAccAlertLogos } from "./branding/load-acc-logo-inline-image";
 import { EmailSendError } from "./email-provider";
@@ -150,6 +151,7 @@ export async function createAndSendContractAlertBatch(
     ...item,
     projectName: item.projectName ?? (project.name as string),
     respondItemUrl: `${batchUrl}#evento-${item.eventId}`,
+    aiConsultUrl: buildAiConsultUrl({ baseUrl, projectId: input.projectId, subject: "evento", id: item.eventId }),
     quickActionUrl:
       input.items.length === 1
         ? `${baseUrl}/alertas/acao/${input.projectId}/${batchId}/${item.eventId}`
@@ -160,7 +162,7 @@ export async function createAndSendContractAlertBatch(
   // entra quando algum alerta do lote é CRÍTICO/ALTO (fundo escuro).
   const logos = loadAccAlertLogos({
     maroon: true,
-    inverted: emailItems.some((item) => item.severity === "CRITICA" || item.severity === "ALTA"),
+    inverted: emailItems.some((item) => item.severity === "CRITICA"),
   });
   const inlineLogo = logos.availability.maroon ? logos.images[0] : null;
   const built = buildContractAlertBatchEmail({

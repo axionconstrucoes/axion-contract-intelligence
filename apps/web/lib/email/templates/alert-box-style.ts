@@ -6,8 +6,8 @@
 // única e coluna branca com os três botões de ação.
 //
 // Decisão de produto (substitui orientações visuais anteriores):
-//   CRÍTICO : fundo vermelho,                 texto branco, logo invertido
-//   ALTO    : fundo amarelo escuro,           texto branco, logo invertido
+//   CRÍTICO : fundo VERMELHO forte,           texto branco, logo invertido
+//   ALTO    : fundo AMARELO forte,            texto preto,  logo vinho
 //   MÉDIO   : fundo branco,                   texto preto,  logo vinho
 //   BAIXO   : fundo branco,                   texto preto,  logo vinho
 //   Borda contínua de 2px: tom mais escuro que o fundo nos coloridos, cinza médio nos brancos.
@@ -40,17 +40,17 @@ export interface AlertTone {
   dark: boolean;
 }
 
-// Amarelo de atenção ESCURO para ALTO — Tailwind yellow-700. Texto branco sobre ele:
-// ver contrastRatio() e o teste (≥ 4,5:1, WCAG AA para texto normal).
-export const ALTO_BACKGROUND = "#A16207";
-export const ALTO_BORDER = "#713F12"; // yellow-900, mais escuro que o fundo
-export const CRITICO_BACKGROUND = "#DC2626";
-export const CRITICO_BORDER = "#991B1B"; // red-800, mais escuro que o fundo
+// Semáforo de trânsito: vermelho forte (texto branco) e amarelo forte (texto preto). Contrastes
+// verificados por contrastRatio() no teste (≥ 4,5:1, WCAG AA para texto normal).
+export const ALTO_BACKGROUND = "#FFC700";
+export const ALTO_BORDER = "#8A6A00"; // amarelo-ouro escuro, mais escuro que o fundo
+export const CRITICO_BACKGROUND = "#CC0000";
+export const CRITICO_BORDER = "#7F0000"; // mais escuro que o fundo
 export const NEUTRAL_BORDER = "#9CA3AF"; // cinza médio (gray-400)
 
 export const ALERT_TONES: Record<AlertSeverity, AlertTone> = {
   CRITICA: { background: CRITICO_BACKGROUND, border: CRITICO_BORDER, text: "#FFFFFF", muted: "#FFFFFF", link: "#FFFFFF", label: "#FFFFFF", logo: "inverted", dark: true },
-  ALTA: { background: ALTO_BACKGROUND, border: ALTO_BORDER, text: "#FFFFFF", muted: "#FFFFFF", link: "#FFFFFF", label: "#FFFFFF", logo: "inverted", dark: true },
+  ALTA: { background: ALTO_BACKGROUND, border: ALTO_BORDER, text: "#000000", muted: "#000000", link: "#000000", label: "#000000", logo: "maroon", dark: false },
   MEDIA: { background: "#FFFFFF", border: NEUTRAL_BORDER, text: "#000000", muted: "#374151", link: "#000000", label: "#000000", logo: "maroon", dark: false },
   BAIXA: { background: "#FFFFFF", border: NEUTRAL_BORDER, text: "#000000", muted: "#374151", link: "#000000", label: "#000000", logo: "maroon", dark: false },
 };
@@ -216,8 +216,18 @@ export function buildThreeActionButtonsHtml(urlFor: (action: ThreeActions) => st
     .join("");
 }
 
+/**
+ * Link "CONSULTAR IA" acima dos três botões. É um LINK para a página de consulta no ACC (login,
+ * autorização e vínculo com a obra são verificados lá); o e-mail nunca abre uma caixa interativa.
+ * Visual distinto dos botões de ação (contorno vinho sobre branco) e mesma largura.
+ */
+export function buildConsultAiHtml(href: string): string {
+  const w = BUTTON_WIDTH_PX;
+  return `<table class="acc-consult-ai" role="presentation" align="center" width="${w}" cellpadding="0" cellspacing="0" style="width:${w}px;margin:0 auto 10px auto;border-collapse:separate;"><tr><td width="${w}" height="${BUTTON_HEIGHT_PX}" align="center" bgcolor="#FFFFFF" style="width:${w}px;height:${BUTTON_HEIGHT_PX}px;background-color:#FFFFFF;border:2px solid #7F1D1D;border-radius:6px;text-align:center;"><a href="${escapeAttr(href)}" target="_blank" rel="noopener noreferrer" title="Abre a consulta a especialistas de IA no ACC — a consulta não altera o alerta." aria-label="CONSULTAR IA — abre no ACC" style="display:block;width:${w - 4}px;line-height:${BUTTON_HEIGHT_PX - 4}px;margin:0;padding:0;color:#7F1D1D;font-family:${ACC_FONT_FAMILY};font-size:${BUTTON_FONT_SIZE_PX}px;font-weight:700;text-decoration:none;text-align:center;white-space:nowrap;overflow:hidden;">&#10022; CONSULTAR IA</a></td></tr></table>`;
+}
+
 /** Coluna BRANCA dos botões (largura = botões + pequena margem lateral), centralizada. */
-export function buildActionsPanelHtml(innerHtml: string): string {
+export function buildActionsPanelHtml(innerHtml: string, consultAiHref?: string | null): string {
   const w = BUTTON_COLUMN_WIDTH_PX;
-  return `<table class="acc-actions-panel" role="presentation" align="center" width="${w}" cellpadding="0" cellspacing="0" bgcolor="#FFFFFF" style="width:${w}px;border-collapse:separate;background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:6px;margin:0 auto;"><tr><td align="center" style="padding:${BUTTON_COLUMN_MARGIN_PX}px;text-align:center;">${innerHtml}</td></tr></table>`;
+  return `<table class="acc-actions-panel" role="presentation" align="center" width="${w}" cellpadding="0" cellspacing="0" bgcolor="#FFFFFF" style="width:${w}px;border-collapse:separate;background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:6px;margin:0 auto;"><tr><td align="center" style="padding:${BUTTON_COLUMN_MARGIN_PX}px;text-align:center;">${consultAiHref ? buildConsultAiHtml(consultAiHref) : ""}${innerHtml}</td></tr></table>`;
 }

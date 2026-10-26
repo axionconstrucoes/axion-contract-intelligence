@@ -64,6 +64,8 @@ export interface ContractAlertBatchEmailItem {
   respondItemUrl: string;
   // Página mínima de ação rápida, sem dashboard/sidebar.
   quickActionUrl?: string;
+  // Link "CONSULTAR IA" (página do ACC; ver lib/alerts/ai-consult-link.ts).
+  aiConsultUrl?: string;
 }
 
 export interface ContractAlertBatchEmailInput {
@@ -150,7 +152,7 @@ function buildItemHtml(
           ${alertRepeatHtml(item.severity)}
         </td>
         <td class="acc-batch-actions-col" valign="top" width="${BUTTON_COLUMN_WIDTH_PX}" style="width:${BUTTON_COLUMN_WIDTH_PX}px;padding:0 0 0 16px;">
-          ${buildActionsPanelHtml(buildThreeActionButtonsHtml((action) => buildRespondActionUrl(item, action)))}
+          ${buildActionsPanelHtml(buildThreeActionButtonsHtml((action) => buildRespondActionUrl(item, action)), item.aiConsultUrl)}
         </td>
       </tr>
     </table>`;
@@ -170,6 +172,7 @@ function buildItemText(item: ContractAlertBatchEmailItem, fallbackProject: strin
     alertClauseText({ label: item.clauseLabel, text: item.clauseText }),
     alertEvidenceText(item.evidence),
     repeatNoticeText(item.severity),
+    ...(item.aiConsultUrl ? [`CONSULTAR IA: ${item.aiConsultUrl}`] : []),
     `RESOLVIDO: ${buildRespondActionUrl(item, "RESOLVIDO")}`,
     `EM ANDAMENTO: ${buildRespondActionUrl(item, "EM_ANDAMENTO")}`,
     `ENVIADO P/: ${buildRespondActionUrl(item, "ENVIADO_PARA")}`,

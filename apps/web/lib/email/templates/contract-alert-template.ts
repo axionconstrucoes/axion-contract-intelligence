@@ -147,6 +147,8 @@ export interface ContractAlertEmailInput {
   // acompanhamento válido (página de confirmação + follow-up). Sem eles, os botões por token
   // existentes (actionButtons) continuam como antes.
   quickActionUrls?: Record<ThreeActions, string> | null;
+  /** Link "CONSULTAR IA" (página do ACC; lib/alerts/ai-consult-link.ts). */
+  aiConsultUrl?: string | null;
   // Cláusula impactada VERIFICADA (número e título). undefined = derivar do confronto aprovado,
   // se houver; null/sem rótulo = "Cláusula: Pendente de confirmação".
   impactedClause?: { label: string | null; text?: string | null } | null;
@@ -295,7 +297,7 @@ export function buildContractAlertEmail(input: ContractAlertEmailInput): Contrac
   // a coluna anterior com os botões por token (preservada).
   let actionsColumnHtml = "";
   if (quick) {
-    actionsColumnHtml = `<td class="acc-actions-col" valign="top" width="${BUTTON_COLUMN_WIDTH_PX}" style="width:${BUTTON_COLUMN_WIDTH_PX}px;padding:0 0 0 16px;">${buildActionsPanelHtml(buildThreeActionButtonsHtml((action) => quick[action]))}</td>`;
+    actionsColumnHtml = `<td class="acc-actions-col" valign="top" width="${BUTTON_COLUMN_WIDTH_PX}" style="width:${BUTTON_COLUMN_WIDTH_PX}px;padding:0 0 0 16px;">${buildActionsPanelHtml(buildThreeActionButtonsHtml((action) => quick[action]), input.aiConsultUrl)}</td>`;
   } else if (input.actionButtons.length > 0) {
     actionsColumnHtml = `<td class="acc-actions-col" valign="top" width="36%" style="width:36%;padding:0 0 0 16px;"><div style="background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:6px;padding:8px;">${renderEmailActionButtonsHtml(input.actionButtons, input.summary, "#4B5563", "14px")}</div></td>`;
   }

@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@axion/db/server";
 
 import { failManualAlertBatch, finalizeManualAlertBatch, registerManualAlertBatch } from "@/lib/alerts/manual-alert-tracking";
 import { getAppBaseUrl } from "@/lib/app-base-url";
+import { buildAiConsultUrl } from "@/lib/alerts/ai-consult-link";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 
 import { appendAccEmailSignature } from "./branding/acc-email-signature";
@@ -106,7 +107,7 @@ export async function sendContractAlertEmail(
   // sobre "o logo está disponível nesta execução?".
   // Só a versão do logo que a caixa deste risco usa: invertido (fundo escuro)
   // para CRÍTICO/ALTO, vinho (oficial) para MÉDIO/BAIXO.
-  const darkTone = input.alert.severity === "CRITICA" || input.alert.severity === "ALTA";
+  const darkTone = input.alert.severity === "CRITICA"; // só o vermelho usa logo invertido
   const logos = loadAccAlertLogos({ maroon: !darkTone, inverted: darkTone });
   const hasInlineLogo = logos.availability.maroon || logos.availability.inverted;
   // Acompanhamento do alerta individual: registra um lote de UM item (mesmas páginas de confirmação
@@ -127,6 +128,7 @@ export async function sendContractAlertEmail(
     hasInlineLogo: logos.availability.maroon,
     hasInlineInvertedLogo: logos.availability.inverted,
     repeatNotice: tracking !== null,
+    aiConsultUrl: buildAiConsultUrl({ baseUrl: getAppBaseUrl(), projectId: input.projectId, subject: "evento", id: input.eventId }),
     quickActionUrls: quickBase
       ? {
           RESOLVIDO: `${quickBase}?acao=RESOLVIDO`,

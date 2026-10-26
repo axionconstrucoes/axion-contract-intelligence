@@ -105,26 +105,31 @@ check("política de repetição: 1/2/4/7 dias (24/48/96/168 h) e textos exatos '
   assert.equal(policy.repeatNoticeText("BAIXA"), "Repete: a cada 7 dias até a conclusão.");
 });
 
-check("cores por risco: CRÍTICO vermelho/branco, ALTO amarelo escuro/branco, MÉDIO e BAIXO branco/preto; logo invertido só nos escuros", () => {
+check("cores por risco (semáforo): CRÍTICO vermelho/branco/logo invertido; ALTO amarelo/preto/logo vinho; MÉDIO e BAIXO branco/preto/logo vinho", () => {
   const t = style.ALERT_TONES;
-  assert.equal(t.CRITICA.background, "#DC2626");
+  assert.equal(t.CRITICA.background, "#CC0000");
   assert.equal(t.CRITICA.text, "#FFFFFF");
-  assert.equal(t.ALTA.background, "#A16207");
-  assert.equal(t.ALTA.text, "#FFFFFF");
+  assert.equal(t.CRITICA.logo, "inverted");
+  assert.equal(t.ALTA.background, "#FFC700");
+  assert.equal(t.ALTA.text, "#000000");
+  assert.equal(t.ALTA.logo, "maroon");
   for (const s of ["MEDIA", "BAIXA"]) {
     assert.equal(t[s].background, "#FFFFFF");
     assert.equal(t[s].text, "#000000");
     assert.equal(t[s].logo, "maroon");
   }
-  for (const s of ["CRITICA", "ALTA"]) assert.equal(t[s].logo, "inverted");
 });
 
-check("contraste do texto branco sobre o amarelo escuro do ALTO e sobre o vermelho do CRÍTICO ≥ 4,5:1 (WCAG AA)", () => {
-  const alto = style.contrastRatio("#FFFFFF", style.ALTO_BACKGROUND);
+check("contraste: branco sobre o vermelho do CRÍTICO e preto sobre o amarelo do ALTO ≥ 4,5:1 (WCAG AA); links e rótulos idem", () => {
   const crit = style.contrastRatio("#FFFFFF", style.CRITICO_BACKGROUND);
-  console.log(`     contraste ALTO (#FFFFFF sobre ${style.ALTO_BACKGROUND}) = ${alto.toFixed(2)}:1 ; CRÍTICO (sobre ${style.CRITICO_BACKGROUND}) = ${crit.toFixed(2)}:1`);
-  assert.ok(alto >= 4.5, `contraste ALTO ${alto}`);
+  const alto = style.contrastRatio("#000000", style.ALTO_BACKGROUND);
+  console.log(`     contraste CRÍTICO (#FFFFFF sobre ${style.CRITICO_BACKGROUND}) = ${crit.toFixed(2)}:1 ; ALTO (#000000 sobre ${style.ALTO_BACKGROUND}) = ${alto.toFixed(2)}:1`);
   assert.ok(crit >= 4.5, `contraste CRÍTICO ${crit}`);
+  assert.ok(alto >= 4.5, `contraste ALTO ${alto}`);
+  for (const s of SEVERITIES) {
+    const tone = style.ALERT_TONES[s];
+    for (const c of [tone.text, tone.muted, tone.link, tone.label]) assert.ok(style.contrastRatio(c, tone.background) >= 4.5, `${s} ${c}`);
+  }
 });
 
 check("bordas: contínua de 2px, mais escura que o fundo nos coloridos e cinza médio nos brancos; cantos arredondados", () => {
@@ -284,7 +289,7 @@ check("'Repete: …' só no individual quando repeatNotice=true; sempre em cada 
 check("lote: cada alerta tem a PRÓPRIA caixa e cor (quatro caixas; o lote não é pintado pelo mais grave)", () => {
   const parts = boxes(batch.html);
   assert.equal(parts.length, 4);
-  ["#DC2626", "#A16207", "#FFFFFF", "#FFFFFF"].forEach((c, i) => assert.ok(parts[i].startsWith(c), `caixa ${i}`));
+  ["#CC0000", "#FFC700", "#FFFFFF", "#FFFFFF"].forEach((c, i) => assert.ok(parts[i].startsWith(c), `caixa ${i}`));
   assert.ok(batch.html.includes("background-color:#ffffff;border:1px solid #e5e7eb;border-radius:8px"));
 });
 
@@ -358,5 +363,21 @@ check("e-mail individual não expõe destinatários de outras pessoas", () => {
 });
 
 console.log("");
+check("CONSULTAR IA: link para a página do ACC ACIMA dos três botões, só texto/link (sem formulário), no individual e no lote", () => {
+  const link = `${BASE}/alertas/consulta-ia/p1/evento/e1`;
+  const withLink = individual("MEDIA", { quickActionUrls: QUICK, aiConsultUrl: link });
+  assert.ok(withLink.html.includes(`href="${link}"`));
+  assert.ok(withLink.html.indexOf("CONSULTAR IA") < withLink.html.indexOf(">RESOLVIDO<"), "acima dos botões");
+  assert.ok(!/<form|<input|<textarea|<select/i.test(withLink.html), "sem controle interativo no e-mail");
+  assert.ok(!individual("MEDIA", { quickActionUrls: QUICK }).html.includes("CONSULTAR IA"), "sem URL, sem link");
+  const b = buildContractAlertBatchEmail({ recipientName: null, projectName: "O", batchUrl: `${BASE}/l`, hasInlineLogo: true,
+    items: batchItems.map((it) => ({ ...it, aiConsultUrl: `${BASE}/alertas/consulta-ia/p/evento/${it.eventId}` })) });
+  assert.equal((b.html.match(/CONSULTAR IA<\/a>/g) ?? []).length, 4, "um link por alerta");
+  for (const it of batchItems) assert.ok(b.html.includes(`/alertas/consulta-ia/p/evento/${it.eventId}`));
+  assert.ok(b.text.includes("CONSULTAR IA:"));
+  // continua exatamente três botões de ação iguais
+  assert.equal((b.html.match(/class="acc-compact-btn"/g) ?? []).length, 12);
+});
+
 console.log(`RESULTADO: ${passed} passaram, ${failed} falharam`);
 if (failed > 0) process.exit(1);
