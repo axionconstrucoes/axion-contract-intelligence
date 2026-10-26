@@ -440,7 +440,8 @@ await check("25. Múltiplos W37 preservados (ordenados por sent_at, versões nun
 // ==================================================================
 await check("26. Todos os anexos aparecem (lista por message_id; nenhum filtro por tipo)", () => {
   const data = readSource("apps/web/lib/email/registry/email-document-registry-data.ts");
-  assert(data.includes('.from("email_attachments").select("*").eq("email_id", emailId)'), "todos os anexos do e-mail");
+  // A consulta ganhou .order("original_file_name") (aa57cb3): continua sem nenhum filtro por tipo.
+  assert(/\.from\("email_attachments"\)\s*\.select\("\*"\)\s*\.eq\("email_id", emailId\)\s*(\.order\("original_file_name"\))?\s*[,;)]/.test(data), "todos os anexos do e-mail (sem filtro por tipo)");
   const page = readSource("apps/web/app/[projectId]/documentos/emails/[emailId]/page.tsx");
   assert(page.includes("Anexos ({attachments.length})") && page.includes("attachments.map((attachment)"));
   assert(!/attachments\.filter\(.*(mpp|pdf)/i.test(page), "página não filtra anexos por tipo");
@@ -916,7 +917,8 @@ await check("55. Expert Jurídico presente; rotas/páginas/ajuda preservadas", (
 await check("56. Sem grupo vazio: sidebar usa uma única lista NAV_ITEMS (desktop/mobile/recolhido) sem grupos/separadores", () => {
   const sidebar = readSource("apps/web/components/layout/app-sidebar.tsx");
   assert(sidebar.includes("NAV_ITEMS") && !/Separator|navGroups|NAV_GROUPS/.test(sidebar));
-  assert(NAV_ITEMS.length === 14 && new Set(NAV_ITEMS.map((item) => item.href)).size === 14, "13 itens + Financeiro (restrito por acesso financeiro)");
+  // 15 entradas hoje: inclui Timeline/EVENTOS (7738098), Providências (7dfa56e), Financeiro e Start-up (restritos por acesso). Sem grupos nem duplicatas.
+  assert(NAV_ITEMS.length === 15 && new Set(NAV_ITEMS.map((item) => item.href)).size === 15, "15 entradas únicas (Financeiro e Start-up restritos por acesso)");
 });
 
 // ==================================================================

@@ -24,6 +24,29 @@ export const MAX_WORKBOOK_BYTES = 50 * 1024 * 1024;
 const MAX_ROWS = 2000;
 const MAX_COLUMNS = 120;
 
+// Abaixo disto a leitura em memória é segura (o estouro anterior vinha de arquivos pequenos que
+// expandem para GB; a inspeção do pacote já limita o descompactado antes de chegar aqui).
+const IN_MEMORY_MAX_UNCOMPRESSED_BYTES = 32 * 1024 * 1024;
+
+/** Adapta o Workbook em memória à mesma interface do leitor em streaming (aba assíncrona de linhas). */
+async function loadWorkbookInMemory(buffer: Buffer): Promise<AsyncIterable<unknown>> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+  return (async function* () {
+    for (const worksheet of workbook.worksheets) {
+      const rows: ExcelJS.Row[] = [];
+      worksheet.eachRow({ includeEmpty: false }, (row) => rows.push(row));
+      yield {
+        name: worksheet.name,
+        state: worksheet.state,
+        async *[Symbol.asyncIterator]() {
+          for (const row of rows) yield row;
+        },
+      };
+    }
+  })();
+}
+
 const XLSX_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.ms-excel.sheet.macroenabled.12",
@@ -170,18 +193,27 @@ export async function readWorkbookSafely(input: { buffer: Buffer; fileName: stri
   const sheetIndex: WorkbookSheetIndexEntry[] = [];
 
   try {
-    const workbook = new ExcelJS.stream.xlsx.WorkbookReader(tempPath, {
-      entries: "emit",
-      sharedStrings: "cache",
-      hyperlinks: "ignore",
-      // Estilos podem explodir memória em planilhas formatadas até centenas
-      // de milhares de linhas; a análise do ACC usa valores, não estilo.
-      styles: "ignore",
-      worksheets: "emit",
-    });
+    // Planilhas pequenas (limite abaixo do estimado de descompactação) são lidas em memória:
+    // o WorkbookReader em streaming do exceljs 4.4 perde as entradas seguintes ao deferir uma
+    // aba para arquivo temporário (workbook.xml/sharedStrings chegam depois das abas) e falha
+    // com "Cannot read properties of undefined (reading 'sheets')" no Node 24. Planilhas grandes
+    // continuam em streaming para não reintroduzir o estouro de memória.
+    const workbook: AsyncIterable<unknown> =
+      pkg.estimatedUncompressedBytes <= IN_MEMORY_MAX_UNCOMPRESSED_BYTES
+        ? await loadWorkbookInMemory(input.buffer)
+        : new ExcelJS.stream.xlsx.WorkbookReader(tempPath, {
+            entries: "emit",
+            sharedStrings: "cache",
+            hyperlinks: "ignore",
+            // Estilos podem explodir memória em planilhas formatadas até centenas
+            // de milhares de linhas; a análise do ACC usa valores, não estilo.
+            styles: "ignore",
+            worksheets: "emit",
+          });
 
     let position = 0;
-    for await (const sheet of workbook) {
+    for await (const sheetItem of workbook) {
+      const sheet = sheetItem as AsyncIterable<ExcelJS.Row>;
       const rows: SheetCell[][] = [];
       let observedRows = 0;
       let observedColumns = 0;
