@@ -8,12 +8,12 @@ export type SsmaTab = "home" | "registros" | "sync" | "perfil";
 
 export function SsmaHeader({ title, onBack }: { title: string; onBack?: () => void }) {
   return (
-    <header className="relative flex min-h-24 items-center bg-[#7f1d1d] px-4 text-white shadow-sm">
+    <header className="flex min-h-24 items-center gap-2 bg-[#7f1d1d] px-2 text-white shadow-sm sm:px-4">
       {onBack ? (
         <button
           type="button"
           onClick={onBack}
-          className="absolute left-2 top-1/2 z-10 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-black/15"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-black/15"
           aria-label="Voltar"
         >
           <ArrowLeft className="size-6" />
@@ -25,9 +25,9 @@ export function SsmaHeader({ title, onBack }: { title: string; onBack?: () => vo
         width={1254}
         height={1254}
         priority
-        className={cn("absolute top-1/2 size-16 -translate-y-1/2 object-cover", onBack ? "left-14" : "left-4")}
+        className={cn("size-16 shrink-0 object-cover", !onBack && "ml-2")}
       />
-      <h1 className="mx-auto max-w-[58%] text-center text-lg font-black uppercase leading-tight sm:text-xl">{title}</h1>
+      <h1 className="min-w-0 flex-1 break-words text-center text-lg font-black uppercase leading-tight sm:text-xl">{title}</h1>
     </header>
   );
 }

@@ -158,7 +158,7 @@ export function RecordDetail({
                 </p>
                 {item.note ? <p className="whitespace-pre-wrap text-slate-700">{item.note}</p> : null}
                 {item.evidence_photo_id ? (
-                  <a href={`/api/ssma/records/photos/${item.evidence_photo_id}`} target="_blank" rel="noreferrer" className="text-xs font-bold text-[#7f1d1d] underline">
+                  <a href={`/api/ssma/records/photos/${item.evidence_photo_id}`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-xs font-bold text-[#7f1d1d] underline">
                     Ver foto de evidência
                   </a>
                 ) : null}

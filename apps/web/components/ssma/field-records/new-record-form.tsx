@@ -233,8 +233,8 @@ export function NewRecordForm({
             {photos.map((photo) => (
               <div key={photo.id} className="relative aspect-square overflow-hidden rounded-lg border border-slate-300 bg-slate-200">
                 <Image src={photo.previewUrl} alt={`Pré-visualização de ${photo.file.name}`} fill unoptimized className="object-cover" />
-                <button type="button" onClick={() => removePhoto(photo.id)} className="absolute right-1 top-1 flex size-8 items-center justify-center rounded-full bg-red-700 text-white" aria-label={`Remover ${photo.file.name}`}>
-                  <X className="size-4" />
+                <button type="button" onClick={() => removePhoto(photo.id)} className="absolute right-0 top-0 flex size-11 items-center justify-center text-white" aria-label={`Remover ${photo.file.name}`}>
+                  <span className="flex size-7 items-center justify-center rounded-full bg-red-700"><X className="size-4" /></span>
                 </button>
               </div>
             ))}

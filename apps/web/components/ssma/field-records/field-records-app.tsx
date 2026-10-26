@@ -154,7 +154,7 @@ export function FieldRecordsApp({
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-black uppercase text-slate-600">Registros da obra</h2>
               {!offlineShell ? (
-                <button type="button" onClick={() => { setLoadingServer(true); void loadServer(); }} className="flex items-center gap-1 text-xs font-bold text-[#7f1d1d]" disabled={loadingServer || !online}>
+                <button type="button" onClick={() => { setLoadingServer(true); void loadServer(); }} className="flex min-h-11 items-center gap-1 px-2 text-xs font-bold text-[#7f1d1d]" disabled={loadingServer || !online}>
                   <RefreshCw className={cn("size-4", loadingServer && "animate-spin")} /> Atualizar
                 </button>
               ) : null}
@@ -276,7 +276,7 @@ function SyncView({
               <p role="alert" className="mt-1 flex items-start gap-1 text-xs font-bold text-red-700"><AlertTriangle className="mt-0.5 size-4 shrink-0" /> {item.lastError}</p>
             ) : null}
             {item.status !== "SYNCED" ? (
-              <button type="button" onClick={() => onDiscard(item.clientId)} className="mt-2 flex items-center gap-1 text-xs font-bold text-slate-600 underline">
+              <button type="button" onClick={() => onDiscard(item.clientId)} className="mt-1 flex min-h-11 items-center gap-1 text-xs font-bold text-slate-600 underline">
                 <Trash2 className="size-4" /> Descartar este registro do aparelho
               </button>
             ) : null}
@@ -294,7 +294,7 @@ function SyncView({
               <button type="button" onClick={() => setConfirmPurge(false)} className="min-h-11 flex-1 rounded-lg border-2 border-slate-300 bg-white px-3 text-sm font-black uppercase text-slate-700">Manter</button>
             </div>
           ) : (
-            <button type="button" onClick={() => setConfirmPurge(true)} className="text-xs font-bold text-red-700 underline">Remover os registros de outras contas deste aparelho…</button>
+            <button type="button" onClick={() => setConfirmPurge(true)} className="flex min-h-11 items-center text-left text-xs font-bold text-red-700 underline">Remover os registros de outras contas deste aparelho…</button>
           )}
         </section>
       ) : null}

@@ -13,8 +13,8 @@ export async function SsmaInstallCard() {
       <h2 className="font-black uppercase text-slate-900">Instalar no celular</h2>
       {install.ok ? (
         <div className="flex flex-wrap items-start gap-4">
-          <div role="img" aria-label="QR Code com o endereço do app de campo" className="size-48 shrink-0 rounded-lg border border-slate-300 bg-white p-1" dangerouslySetInnerHTML={{ __html: svg ?? "" }} />
-          <div className="min-w-0 flex-1 space-y-1 text-sm text-slate-700">
+          <div role="img" aria-label="QR Code com o endereço do app de campo" className="size-48 shrink-0 rounded-lg border border-slate-300 bg-white p-1 [&>svg]:size-full" dangerouslySetInnerHTML={{ __html: svg ?? "" }} />
+          <div className="min-w-[14rem] flex-1 space-y-1 text-sm text-slate-700">
             <p className="font-bold text-slate-900">Endereço</p>
             <p className="break-all font-mono text-xs">{install.url}</p>
             <p className="text-xs text-slate-500">O QR Code leva somente este endereço. Quem o abrir precisa entrar com a própria conta e só vê as obras de que participa.</p>
