@@ -2,6 +2,7 @@
 
 import { useActionState, useMemo, useState } from "react";
 
+import { AlertActionNotice } from "@/components/alerts/alert-action-notice";
 import { SeverityBadge } from "@/components/shared/badges";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -117,6 +118,8 @@ export function ContractAlertBatchForm({
                   </option>
                 ))}
               </Select>
+
+              <AlertActionNotice action={actions[item.eventId]} severity={item.severity} />
 
               {actions[item.eventId] === "ENVIADO_PARA" ? (
                 <>

@@ -43,6 +43,10 @@ export function inProgressConfirmationNotice(severity: AlertSeverity): string {
   return `Este alerta será repetido ${repeatIntervalPhrase(severity)} até a conclusão.`;
 }
 
+export function resolvedConfirmationNotice(): string {
+  return "Ao confirmar, este alerta será encerrado e os lembretes futuros serão interrompidos.";
+}
+
 export function forwardConfirmationNotice(severity: AlertSeverity): string {
   return `O destinatário receberá este alerta ${repeatIntervalPhrase(severity)} até a conclusão.`;
 }

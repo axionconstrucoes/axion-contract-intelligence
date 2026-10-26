@@ -307,18 +307,23 @@ check("cabeçalho usa o texto e cores do layout final aprovado", () => {
   assert(email.html.includes('width="29"'));
 });
 
-check("badge de risco fica na mesma linha do título (requisito 2)", () => {
+// DEFINIÇÃO FINAL (substitui "badge na mesma linha do título"): a classificação fica no CABEÇALHO,
+// na mesma linha do logo oficial; o título do evento vem ABAIXO desse cabeçalho.
+check("classificação de risco no cabeçalho (mesma linha do logo) e título do evento abaixo", () => {
   const block = email.html.slice(email.html.indexOf('id="evento-evt-1"'), email.html.indexOf('id="evento-evt-2"'));
   const badgeIndex = block.indexOf("RISCO CRÍTICO");
   const titleIndex = block.indexOf("Solicitação de Aditivo de Prazo");
   assert(badgeIndex !== -1 && titleIndex !== -1);
-  // Ambos dentro da mesma <table><tr> (nenhum </tr> entre os dois).
-  const between = block.slice(badgeIndex, titleIndex);
-  assert(!between.includes("</tr>"));
+  assert(badgeIndex < titleIndex, "título abaixo do cabeçalho");
+  const header = block.slice(block.indexOf("<img"), badgeIndex);
+  assert(!header.includes("</tr>"), "logo e classificação na mesma linha de tabela");
+  assert(!block.includes("border-radius:999px"), "sem selo arredondado");
 });
 
 check("CRÍTICO usa fundo vermelho e fonte branca/negrito", () => {
-  assert(email.html.includes("background-color:#dc2626;color:#ffffff;font-family:Arial, Helvetica, sans-serif;font-size:12px;font-weight:bold;padding:5px 12px;border-radius:999px;\">RISCO CRÍTICO"));
+  assert(email.html.toLowerCase().includes("background-color:#dc2626;border:2px solid #991b1b"));
+  assert(/color:#FFFFFF;">RISCO CRÍTICO/.test(email.html));
+  assert(/font-weight:bold;letter-spacing:0\.05em;color:#FFFFFF;">RISCO CRÍTICO/.test(email.html));
 });
 
 check('descrição do risco usa o rótulo explícito "Risco: "', () => {
@@ -327,10 +332,11 @@ check('descrição do risco usa o rótulo explícito "Risco: "', () => {
 });
 
 check("os 4 botões de ação usam exatamente as cores do layout aprovado", () => {
-  assert(email.html.includes('background-color:#FFD600;color:#000000;') && email.html.includes(">VER EVENTO<"));
-  assert(email.html.includes('background-color:#1B2A4A;color:#ffffff;') && email.html.includes(">RESOLVIDO<"));
-  assert(email.html.includes('background-color:#15803D;color:#ffffff;') && email.html.includes(">EM ANDAMENTO<"));
-  assert(email.html.includes('background-color:#F97316;color:#ffffff;') && email.html.includes(">ENVIADO P/<"));
+  // Botões compactos: cor de fundo na célula (bgcolor/background-color) e cor do texto no <a>.
+  assert(email.html.includes('bgcolor="#FFD600"') && email.html.includes("color:#000000;font-family") && email.html.includes(">VER EVENTO<"));
+  assert(email.html.includes('bgcolor="#1B2A4A"') && email.html.includes(">RESOLVIDO<"));
+  assert(email.html.includes('bgcolor="#15803D"') && email.html.includes(">EM ANDAMENTO<"));
+  assert(email.html.includes('bgcolor="#F97316"') && email.html.includes(">ENVIADO P/<"));
   // Cada evento tem seu próprio conjunto de 4 botões (2 eventos = 2 de cada).
   assert.equal((email.html.match(/>VER EVENTO</g) ?? []).length, 2);
   assert.equal((email.html.match(/>RESOLVIDO</g) ?? []).length, 2);
@@ -445,16 +451,18 @@ check("lote com vários alertas usa página compacta única e mantém resposta a
   assert(form.includes('"CONFIRMAR TUDO"'));
 });
 
-check("página rápida mantém ENVIADO P/ interativo e registra ações simples em um clique", () => {
+// DEFINIÇÃO FINAL (substitui "ações simples em um clique"): abrir o link NUNCA registra nada;
+// RESOLVIDO / EM ANDAMENTO / ENVIADO P/ exigem confirmação explícita (botão CONFIRMAR).
+check("página rápida exige CONFIRMAR para qualquer ação (sem envio automático ao abrir o link)", () => {
   assert(compactPage.includes("Resposta rápida ao alerta"));
   assert(compactPage.includes("CompactContractAlertActionForm"));
   assert(compactForm.includes('initialAction === "ENVIADO_PARA"'));
   assert(compactForm.includes("Selecione um colaborador"));
   assert(compactForm.includes("CONFIRMAR"));
-  assert(compactForm.includes('initialAction === "RESOLVIDO" || initialAction === "EM_ANDAMENTO"'));
-  assert(compactForm.includes("requestSubmit()"));
-  assert(compactForm.includes("window.close()"));
-  assert(compactForm.includes("Registrando ação no ACC"));
+  assert(!compactForm.includes("requestSubmit"));
+  assert(!compactForm.includes("window.close"));
+  assert(!compactForm.includes("useEffect"));
+  assert(compactForm.includes("AlertActionNotice"));
   assert(compactActions.includes("respondToContractAlertBatch"));
   assert(compactActions.includes("batch.items.length !== 1"));
 });

@@ -1,7 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState } from "react";
 
+import type { AlertSeverity } from "@axion/types";
+
+import { AlertActionNotice } from "@/components/alerts/alert-action-notice";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import type { ContractAlertBatchItemAction } from "@/lib/email-actions/contract-alert-batch-types";
@@ -16,12 +19,14 @@ export function CompactContractAlertActionForm({
   batchId,
   eventId,
   initialAction,
+  severity,
   members,
 }: {
   projectId: string;
   batchId: string;
   eventId: string;
   initialAction: ContractAlertBatchItemAction;
+  severity: AlertSeverity;
   members: Array<{ userId: string; name: string }>;
 }) {
   const boundAction = submitCompactContractAlertAction.bind(null, projectId, batchId, eventId);
@@ -29,21 +34,8 @@ export function CompactContractAlertActionForm({
     boundAction,
     initialCompactContractAlertActionState
   );
-  const formRef = useRef<HTMLFormElement>(null);
-  const autoSubmittedRef = useRef(false);
-  const isOneClickAction = initialAction === "RESOLVIDO" || initialAction === "EM_ANDAMENTO";
-
-  useEffect(() => {
-    if (!isOneClickAction || autoSubmittedRef.current || state.success || state.error) return;
-    autoSubmittedRef.current = true;
-    formRef.current?.requestSubmit();
-  }, [isOneClickAction, state.error, state.success]);
-
-  useEffect(() => {
-    if (!isOneClickAction || !state.success) return;
-    const timer = window.setTimeout(() => window.close(), 900);
-    return () => window.clearTimeout(timer);
-  }, [isOneClickAction, state.success]);
+  // IMPORTANTE: abrir este link (GET) NUNCA registra nada. Toda ação — inclusive RESOLVIDO e EM
+  // ANDAMENTO — só é efetivada por um envio explícito do formulário (botão CONFIRMAR).
 
   if (state.success) {
     return (
@@ -54,8 +46,10 @@ export function CompactContractAlertActionForm({
   }
 
   return (
-    <form ref={formRef} action={formAction} className="flex flex-col gap-2.5">
+    <form action={formAction} className="flex flex-col gap-2.5">
       <input type="hidden" name="action" value={initialAction} />
+
+      <AlertActionNotice action={initialAction} severity={severity} />
 
       {initialAction === "ENVIADO_PARA" ? (
         <div className="grid gap-1.5 md:grid-cols-[110px_minmax(0,1fr)] md:items-center">
@@ -79,15 +73,9 @@ export function CompactContractAlertActionForm({
         <p className="text-sm text-destructive">{state.error}</p>
       ) : null}
 
-      {isOneClickAction ? (
-        <div className="rounded-md border bg-muted/50 p-3 text-sm text-muted-foreground">
-          {pending ? "Registrando ação no ACC…" : state.error ? "Não foi possível registrar automaticamente." : "Registrando ação no ACC…"}
-        </div>
-      ) : (
-        <Button type="submit" disabled={pending} className="md:self-end md:px-10">
-          {pending ? "Confirmando…" : "CONFIRMAR"}
-        </Button>
-      )}
+      <Button type="submit" disabled={pending} className="md:self-end md:px-10">
+        {pending ? "Confirmando…" : "CONFIRMAR"}
+      </Button>
     </form>
   );
 }

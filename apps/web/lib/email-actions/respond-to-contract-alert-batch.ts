@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSupabaseServerClient } from "@axion/db/server";
 
+import { applyBatchResponsesToFollowups } from "../alerts/followup-service";
 import {
   decideContractAlertBatchRespondOutcome,
   type ContractAlertBatchRespondOutcome,
@@ -101,6 +102,22 @@ export async function respondToContractAlertBatch(
     // clique concorrente já respondeu o lote entre a leitura acima e
     // agora), o erro dela vira 409, nunca é escondido/ignorado.
     return { ok: false, status: 409, error: rpcError.message || "Falha ao registrar as respostas." };
+  }
+
+  // Espelha a resposta no acompanhamento recorrente (RESOLVIDO interrompe os lembretes; EM ANDAMENTO
+  // não adia nada; ENVIADO P/ troca o responsável). A resposta do lote já está gravada e é a
+  // fonte da verdade — uma falha aqui não a desfaz.
+  try {
+    await applyBatchResponsesToFollowups(supabase, {
+      projectId: batch.project_id as string,
+      responses: input.responses.map((response) => ({
+        eventId: response.eventId,
+        action: response.action,
+        assignedUserId: response.assignedUserId ?? null,
+      })),
+    });
+  } catch {
+    // Complementar: não propaga.
   }
 
   return outcome;

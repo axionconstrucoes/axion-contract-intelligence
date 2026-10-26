@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@axion/db/admin";
 
+import { openFollowupsForSentBatch } from "../alerts/followup-service";
 import { getAppBaseUrl } from "../app-base-url";
 import { appendAccEmailSignature } from "./branding/acc-email-signature";
 import { loadAccAlertLogos } from "./branding/load-acc-logo-inline-image";
@@ -230,6 +231,32 @@ export async function createAndSendContractAlertBatch(
     entity_id: batchId,
     detail: `Lote de alertas de contrato enviado com ${input.items.length} evento(s). CorrelationId=${correlationId}.`,
   });
+
+  // Acompanhamento recorrente ("Repete: …"): aberto só depois do aceite do provedor e do SENT
+  // persistido; idempotente (um acompanhamento aberto por alerta). Uma falha aqui NUNCA desfaz
+  // nem reenvia o lote — fica registrada na auditoria para reprocessamento.
+  try {
+    const opened = await openFollowupsForSentBatch(admin, {
+      projectId: input.projectId,
+      recipientUserId: input.recipientUserId,
+      items: input.items.map((item) => ({ eventId: item.eventId, severity: item.severity })),
+      sentAt: sent.sentAt,
+    });
+    if (opened.failed > 0) {
+      await admin.from("audit_log_entries").insert({
+        project_id: input.projectId,
+        actor_type: "SYSTEM",
+        actor_user_id: null,
+        actor_label: null,
+        action: "ALERT_FOLLOWUP_OPEN_FAILED",
+        entity_type: "CONTRACT_ALERT_BATCH",
+        entity_id: batchId,
+        detail: `${opened.failed} acompanhamento(s) recorrente(s) não puderam ser abertos para o lote; ${opened.opened} abertos.`,
+      });
+    }
+  } catch {
+    // Acompanhamento é complementar: não propaga.
+  }
 
   return {
     batchId,
