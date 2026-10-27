@@ -1,8 +1,12 @@
 # Plano de transição remota e de publicação
 
-> **Estado: preparado, NADA publicado.** Não houve push, PR, merge, deploy, migration em produção nem alteração
-> de credenciais ou agendamentos remotos. **O ACC ainda NÃO pode ser declarado independente do notebook:** isso só
-> vale depois de o fluxo completo ser verificado em ambiente remoto e acessado de outro computador.
+> **Estado em 27/10/2026: PUBLICADO.** A `main` está em `44571fe` (merge do PR #121), as 8 migrations foram
+> aplicadas em produção (`aplicacao-migrations-producao.md`) e o deploy de produção `dpl_4NhapF12…` está READY em
+> `acc.axion.com.br`. O texto abaixo é o plano original, mantido como registro; os passos 1 a 6 foram executados.
+> **Ainda NÃO declarado independente do notebook:** falta acessar e operar o sistema a partir de outro computador,
+> confirmar o modo piloto de e-mail em produção e os testes reais (Gmail/Outlook/iPhone/Android).
+> Pendências conhecidas: o workflow `Gmail Inbound Sync` falha em todas as execuções desde 25/10 (anterior a esta
+> publicação; causa não investigada) e o ambiente Preview da Vercel ainda usa o Supabase de produção.
 >
 > Documentos relacionados (mesma pasta): `inventario.md`, `pendencias.md`, `dependencias-locais.md`,
 > `variaveis.md`, `guia-configuracao-e-recuperacao.md`, `estado-das-frentes.md`, `organizacao-de-branches.md`,
