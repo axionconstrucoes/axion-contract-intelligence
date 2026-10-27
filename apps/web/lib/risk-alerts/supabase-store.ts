@@ -24,7 +24,7 @@ import type { ActiveForward, AlertCaseSnapshot } from "./alert-state-machine";
 import { hashReplyToken, type InboundHeaders } from "./replies/reply-pipeline";
 import type { PersistedOutboxEntry, RiskAlertStore } from "./store";
 import type { ExpertId, IngestionAlertSeverityMap, LinkedSlaActionState, RecipientProfile, RiskCaseRecord } from "./types";
-import { MAX_SEND_ATTEMPTS } from "./types";
+import { CLAIM_LEASE_MS, MAX_SEND_ATTEMPTS } from "./types";
 import { buildCorrelationIndex, type CorrelationCaseRow, type CorrelationConversationRow, type CorrelationMessageRow } from "./replies/build-correlation-index";
 
 type Client = SupabaseClient;
@@ -487,6 +487,7 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
         .from("risk_alert_outbox")
         .update({
           status: "SENT",
+          claimed_at: null,
           sent_at: result.sentAt,
           recipient_email: result.recipientEmail,
           provider: result.provider,
@@ -500,21 +501,24 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
       fail("Falha ao marcar envio", error);
     },
 
-    // Reivindicação ATÔMICA da linha antes de enviar (proteção contra ciclos simultâneos):
-    // um único UPDATE condicional (status PENDING e attempt_count igual ao lido). Em Postgres
-    // (READ COMMITTED) o concorrente que esperava o lock reavalia o WHERE e atualiza 0 linhas —
-    // só UM ciclo vence e envia. A tentativa é contada aqui (attempt_count + 1).
-    async claimOutbox(id) {
+    // Reivindicação (lease) ATÔMICA antes de enviar: um único UPDATE condicional por status PENDING, contador
+    // igual ao lido e SEM lease vigente (claimed_at nulo ou expirado). Em Postgres (READ COMMITTED) o concorrente
+    // que esperava o lock reavalia o WHERE e atualiza 0 linhas — só UM ciclo vence e envia, inclusive quando o
+    // segundo ciclo começa depois que o primeiro já reivindicou e ainda não terminou o envio. Exige a coluna
+    // claimed_at (migration 20261029100000): sem ela a reivindicação falha e NADA é enviado (falha fechada).
+    async claimOutbox(id, nowIso) {
       const { data: row } = await client.from("risk_alert_outbox").select("status,attempt_count").eq("id", id).maybeSingle();
       if (!row || row.status !== "PENDING") return false;
       const attempts = Number(row.attempt_count ?? 0);
       if (attempts >= MAX_SEND_ATTEMPTS) return false;
+      const leaseCutoff = new Date(new Date(nowIso).getTime() - CLAIM_LEASE_MS).toISOString();
       const { data: claimed, error } = await client
         .from("risk_alert_outbox")
-        .update({ attempt_count: attempts + 1 })
+        .update({ attempt_count: attempts + 1, claimed_at: nowIso })
         .eq("id", id)
         .eq("status", "PENDING")
         .eq("attempt_count", attempts)
+        .or(`claimed_at.is.null,claimed_at.lt.${leaseCutoff}`)
         .select("id");
       if (error) return false;
       return (claimed ?? []).length === 1;
@@ -526,13 +530,13 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
       const attempts = Number(data?.attempt_count ?? 0) + (options.attemptAlreadyClaimed ? 0 : 1);
       const { error } = await client
         .from("risk_alert_outbox")
-        .update({ status: attempts >= MAX_SEND_ATTEMPTS ? "FAILED" : "PENDING", attempt_count: attempts, last_error: sanitizedError })
+        .update({ status: attempts >= MAX_SEND_ATTEMPTS ? "FAILED" : "PENDING", attempt_count: attempts, last_error: sanitizedError, claimed_at: null })
         .eq("id", id);
       fail("Falha ao registrar erro de envio", error);
     },
 
     async markSkipped(id, reason) {
-      const { error } = await client.from("risk_alert_outbox").update({ status: "SKIPPED", last_error: reason }).eq("id", id);
+      const { error } = await client.from("risk_alert_outbox").update({ status: "SKIPPED", last_error: reason, claimed_at: null }).eq("id", id);
       fail("Falha ao marcar outbox como ignorada", error);
     },
 

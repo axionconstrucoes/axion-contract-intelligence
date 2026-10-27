@@ -379,7 +379,7 @@ async function issueActionLinks(ctx: SendContext, caseId: string, recipientUserI
 async function deliver(ctx: SendContext, outboxId: string, caseId: string | null, recipientUserId: string, recipientEmail: string, built: BuiltEmail, notificationType: string, escalationLevel: string | null, idempotencyKey: string): Promise<"SENT" | "FAILED" | "SKIPPED"> {
   // Ciclos simultâneos (instâncias/execuções sobrepostas): só quem reivindicar a linha envia.
   // Quem perde NÃO envia nem altera a linha (o vencedor é o dono dela).
-  if (!(await ctx.store.claimOutbox(outboxId))) return "SKIPPED";
+  if (!(await ctx.store.claimOutbox(outboxId, ctx.nowIso))) return "SKIPPED";
   // Override de ENTREGA do piloto: só o To muda (nunca CC/BCC); o destinatário
   // lógico (recipientUserId/recipientEmail) permanece na outbox e na auditoria.
   const delivery = resolveDeliveryAddress({

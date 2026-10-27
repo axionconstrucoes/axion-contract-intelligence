@@ -42,6 +42,8 @@ export const DIGEST_WEEKDAY = 3; // quarta-feira (0 = domingo)
 export const DIGEST_HOUR_LOCAL = 7; // 07:00 no timezone do projeto
 export const DEFAULT_PROJECT_TIMEZONE = "America/Sao_Paulo";
 export const MAX_SEND_ATTEMPTS = 3;
+/** Validade do lease de envio da outbox (risk_alert_outbox.claimed_at): maior que o tempo máximo de um ciclo (300 s). */
+export const CLAIM_LEASE_MS = 10 * 60 * 1000;
 
 /** Caso de risco normalizado a partir de uma fonte do módulo semanal. */
 export interface RiskCaseInput {

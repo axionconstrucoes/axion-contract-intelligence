@@ -211,7 +211,7 @@ function makeWorld({ override = CRM, level1 = U.RESP, allowlist = [U.RESP, U.GES
     legacyNoClaim,
   };
   const store = createInMemoryRiskAlertStore(world);
-  const rec = { calls: [], attempts: 0 };
+  const rec = { calls: [], attempts: 0, gate: null, waiting: 0 };
   const failure = { on: failSends, only: null }; // falha simulada (transitória): ligue/desligue entre os ciclos
   let lastGuarded = null;
   class RecordingFakeProvider extends FakeEmailProvider {
@@ -222,6 +222,11 @@ function makeWorld({ override = CRM, level1 = U.RESP, allowlist = [U.RESP, U.GES
       const raw = { ...input };
       rec.attempts += 1;
       await new Promise((resolve) => setImmediate(resolve)); // latência de rede simulada (permite intercalar ciclos)
+      if (rec.gate) {
+        rec.waiting += 1;
+        await rec.gate; // o teste segura o envio para provar o lease com um ciclo "no meio do envio"
+        rec.waiting -= 1;
+      }
       lastGuarded = null;
       const result = await super.send(input);
       rec.calls.push({ raw, guarded: lastGuarded, result });
@@ -692,6 +697,34 @@ await check("G3 escalonamento por prazo e linhas PENDENTES de ação humana tamb
   assert(new Set(keys).size === keys.length);
   assert(w.store.state.outbox.every((o) => o.status !== "SENT" || o.attemptCount === 1), "linha enviada mais de uma vez");
 });
+await check("G5 LEASE: um 2º ciclo que começa DEPOIS que o 1º já reivindicou (e ainda não terminou o envio) NÃO envia a mesma notificação", async () => {
+  const w = makeWorld();
+  let release;
+  w.rec.gate = new Promise((resolve) => (release = resolve));
+  const a = w.run(T0);
+  for (let i = 0; i < 200 && w.rec.waiting < 1; i += 1) await new Promise((resolve) => setImmediate(resolve)); // A já reivindicou a linha 1 e está "enviando"
+  assert(w.rec.waiting >= 1, "ciclo A deveria estar no meio do envio");
+  const b = w.run(plusMin(T0, 1)); // B começa depois da reivindicação de A
+  for (let i = 0; i < 400 && w.rec.waiting < 2; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  release();
+  await Promise.all([a, b]);
+  const sent = w.store.state.outbox.filter((o) => o.status === "SENT");
+  assert(w.rec.calls.length === 3 && sent.length === 3, `envios: ${w.rec.calls.length}, linhas SENT: ${sent.length}`);
+  assert(w.store.state.outbox.every((o) => o.attemptCount === 1 && o.claimedAt === null), "cada linha: 1 tentativa e lease liberado");
+  assert(new Set(w.rec.calls.map((c) => c.result.providerMessageId)).size === 3);
+});
+await check("G5b LEASE (comportamento anterior): sem lease, o mesmo cenário ENVIA EM DUPLICIDADE — prova de que o teste detecta a brecha", async () => {
+  const w = makeWorld({ legacyNoClaim: true });
+  let release;
+  w.rec.gate = new Promise((resolve) => (release = resolve));
+  const a = w.run(T0);
+  for (let i = 0; i < 200 && w.rec.waiting < 1; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  const b = w.run(plusMin(T0, 1));
+  for (let i = 0; i < 400 && w.rec.waiting < 2; i += 1) await new Promise((resolve) => setImmediate(resolve));
+  release();
+  await Promise.all([a, b]);
+  assert(w.rec.calls.length > 3, `envios: ${w.rec.calls.length}`);
+});
 await check("G4 falhas persistentes: no máximo 3 tentativas por linha (a reivindicação conta a tentativa uma vez) e depois FAILED — inclusive o consolidado", async () => {
   const w = makeWorld({ failSends: true });
   for (const minutes of [0, 1, 2, 3, 4, 5]) await w.run(plusMin(T0, minutes));
@@ -867,7 +900,8 @@ function fakeSupabase(tables) {
       let op = "select";
       let patch = null;
       const filters = [];
-      const match = () => rows.filter((r) => filters.every(([k, v]) => r[k] === v));
+      const predicates = [];
+      const match = () => rows.filter((r) => filters.every(([k, v]) => r[k] === v) && predicates.every((fn) => fn(r)));
       const exec = () => {
         if (op === "update") {
           const m = match();
@@ -889,6 +923,18 @@ function fakeSupabase(tables) {
           filters.push([k, v]);
           return api;
         },
+        or(expr) {
+          // "col.is.null,col.lt.<valor>" (formato supabase-js)
+          const alts = expr.split(",").map((part) => {
+            const [c, o, ...rest] = part.split(".");
+            const v = rest.join(".");
+            if (o === "is" && v === "null") return (r) => r[c] === null || r[c] === undefined;
+            if (o === "lt") return (r) => r[c] !== null && r[c] !== undefined && r[c] < v;
+            throw new Error(`or() não suportado: ${part}`);
+          });
+          predicates.push((r) => alts.some((fn) => fn(r)));
+          return api;
+        },
         async maybeSingle() {
           const snapshot = match()[0] ? { ...match()[0] } : null; // o banco devolve o estado do MOMENTO da leitura
           await new Promise((resolve) => setImmediate(resolve)); // latência de rede: permite a corrida entre ciclos
@@ -902,27 +948,41 @@ function fakeSupabase(tables) {
     },
   };
 }
-await check("H1 claimOutbox REAL: dois ciclos disputando a mesma linha → exatamente um vence; terceira tentativa depois do envio falha", async () => {
-  const tables = { risk_alert_outbox: [{ id: "o1", status: "PENDING", attempt_count: 0 }] };
+await check("H1 claimOutbox REAL: três ciclos disputando a mesma linha → exatamente um vence; linha já enviada não pode ser reivindicada", async () => {
+  const tables = { risk_alert_outbox: [{ id: "o1", status: "PENDING", attempt_count: 0, claimed_at: null }] };
   const store = createSupabaseRiskAlertStore(fakeSupabase(tables));
-  const results = await Promise.all([store.claimOutbox("o1"), store.claimOutbox("o1"), store.claimOutbox("o1")]);
-  assert(results.filter(Boolean).length === 1, `vencedores: ${results.filter(Boolean).length} :: ${JSON.stringify(results)} :: ${JSON.stringify(tables.risk_alert_outbox)}`);
-  assert(tables.risk_alert_outbox[0].attempt_count === 1);
+  const results = await Promise.all([store.claimOutbox("o1", T0), store.claimOutbox("o1", T0), store.claimOutbox("o1", T0)]);
+  assert(results.filter(Boolean).length === 1, `vencedores: ${results.filter(Boolean).length}`);
+  assert(tables.risk_alert_outbox[0].attempt_count === 1 && tables.risk_alert_outbox[0].claimed_at === T0);
   tables.risk_alert_outbox[0].status = "SENT";
-  assert((await store.claimOutbox("o1")) === false, "linha SENT não pode ser reivindicada");
+  assert((await store.claimOutbox("o1", T0)) === false, "linha SENT não pode ser reivindicada");
+});
+await check("H1b claimOutbox REAL [LEASE]: reivindicação SEQUENCIAL (B depois de A, antes de A terminar) é recusada; após falha ou após o lease expirar é concedida", async () => {
+  const tables = { risk_alert_outbox: [{ id: "o1", status: "PENDING", attempt_count: 0, claimed_at: null }] };
+  const store = createSupabaseRiskAlertStore(fakeSupabase(tables));
+  assert((await store.claimOutbox("o1", T0)) === true, "A reivindica");
+  assert((await store.claimOutbox("o1", plusMin(T0, 1))) === false, "B chega depois, dentro do lease: recusado");
+  assert((await store.claimOutbox("o1", plusMin(T0, 9))) === false, "ainda dentro do lease de 10 min");
+  assert(tables.risk_alert_outbox[0].attempt_count === 1, "recusas não contam tentativa");
+  assert((await store.claimOutbox("o1", plusMin(T0, 11))) === true, "lease expirado (ciclo anterior morreu): reivindicável");
+  assert(tables.risk_alert_outbox[0].attempt_count === 2);
+  await store.markFailed("o1", "erro", { attemptAlreadyClaimed: true });
+  assert(tables.risk_alert_outbox[0].claimed_at === null && tables.risk_alert_outbox[0].status === "PENDING", "falha libera o lease");
+  assert((await store.claimOutbox("o1", plusMin(T0, 12))) === true, "retentativa logo após a falha");
+  await store.markSent("o1", { recipientEmail: CRM, provider: "FAKE", providerMessageId: "p", emailId: null, sentAt: T0, messageIdHeader: "<m>", conversationId: null });
+  assert(tables.risk_alert_outbox[0].claimed_at === null && tables.risk_alert_outbox[0].status === "SENT");
 });
 await check("H2 claimOutbox/markFailed REAIS: contam 3 tentativas no total e viram FAILED na terceira (sem contar em dobro)", async () => {
-  const tables = { risk_alert_outbox: [{ id: "o2", status: "PENDING", attempt_count: 0 }] };
+  const tables = { risk_alert_outbox: [{ id: "o2", status: "PENDING", attempt_count: 0, claimed_at: null }] };
   const store = createSupabaseRiskAlertStore(fakeSupabase(tables));
   for (let i = 1; i <= MAX_SEND_ATTEMPTS; i += 1) {
-    assert(await store.claimOutbox("o2"), `tentativa ${i} deveria ser reivindicada`);
+    assert(await store.claimOutbox("o2", plusMin(T0, i * 20)), `tentativa ${i} deveria ser reivindicada`);
     await store.markFailed("o2", "erro simulado", { attemptAlreadyClaimed: true });
     assert(tables.risk_alert_outbox[0].attempt_count === i);
   }
   assert(tables.risk_alert_outbox[0].status === "FAILED");
-  assert((await store.claimOutbox("o2")) === false);
-  // caminho sem reivindicação (falha antes do envio): continua contando +1
-  const t2 = { risk_alert_outbox: [{ id: "o3", status: "PENDING", attempt_count: 0 }] };
+  assert((await store.claimOutbox("o2", plusMin(T0, 200))) === false);
+  const t2 = { risk_alert_outbox: [{ id: "o3", status: "PENDING", attempt_count: 0, claimed_at: null }] };
   await createSupabaseRiskAlertStore(fakeSupabase(t2)).markFailed("o3", "sem e-mail");
   assert(t2.risk_alert_outbox[0].attempt_count === 1 && t2.risk_alert_outbox[0].status === "PENDING");
 });
@@ -942,15 +1002,20 @@ await check("H3 loadCorrelationIndex REAL [#1]: resposta RECEBIDA pendente fora 
   assert(index.seenMessageIds.has("<out-1@x>") && index.seenMessageIds.has("<in-tratada@x>") && index.seenMessageIds.has("<in-ignorada@x>"));
   assert(index.byMessageId.get("<in-pendente@x>") === "c1" && index.byReplyTokenHash.get("h1") === "c1" && index.byReplyTokenHash.get("h2") === "c1" && index.byVisibleCode.get("ABCD1234") === "c1");
 });
-await check("H4 a regra do UPDATE condicional em SQL real (PGlite): o 1º vence (1 linha) e o 2º/3º atualizam 0 linhas", async () => {
+await check("H4 a regra do UPDATE condicional (lease) em SQL real (PGlite): 1º vence; concorrentes, mesmo tardios, recusados; livre após falha ou expiração", async () => {
   const { PGlite } = await import("@electric-sql/pglite");
   const db = new PGlite();
-  await db.exec("create table o (id text primary key, status text not null, attempt_count int not null); insert into o values ('x','PENDING',0);");
-  const claim = (observed) => db.query("update o set attempt_count = $1 where id = 'x' and status = 'PENDING' and attempt_count = $2 returning id", [observed + 1, observed]);
-  const r1 = await claim(0);
-  const r2 = await claim(0);
-  const r3 = await claim(0);
+  await db.exec("create table o (id text primary key, status text not null, attempt_count int not null, claimed_at timestamptz); insert into o values ('x','PENDING',0,null);");
+  const claim = (observed, now, leaseMs = 600000) =>
+    db.query("update o set attempt_count = $1, claimed_at = $3::timestamptz where id = 'x' and status = 'PENDING' and attempt_count = $2 and (claimed_at is null or claimed_at < ($3::timestamptz - ($4 || ' milliseconds')::interval)) returning id", [observed + 1, observed, now, String(leaseMs)]);
+  const r1 = await claim(0, T0);
+  const r2 = await claim(0, T0); // concorrente que leu o mesmo contador
+  const r3 = await claim(1, plusMin(T0, 1)); // chegou depois, leu o contador já incrementado
   assert(r1.rows.length === 1 && r2.rows.length === 0 && r3.rows.length === 0, `${r1.rows.length}/${r2.rows.length}/${r3.rows.length}`);
+  const r4 = await claim(1, plusMin(T0, 11)); // lease expirado
+  assert(r4.rows.length === 1);
+  await db.query("update o set claimed_at = null where id = 'x'"); // falha/sucesso liberam o lease
+  assert((await claim(2, plusMin(T0, 12))).rows.length === 1);
   await db.close();
 });
 
