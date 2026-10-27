@@ -36,6 +36,8 @@ const nextConfig: NextConfig = {
       "public/branding/acc-logo.png",
       // Versão invertida (derivada do oficial) usada nas caixas de alerta CRÍTICO/ALTO.
       "public/branding/acc-logo-invertido.png",
+      // Tutorial (PDF/PPTX) lido em runtime por /{obra}/ajuda/tutorial/{formato}; fica fora de public/.
+      "content/tutorial/**",
       // Fontes padrão (base-14) do pdfjs-dist, usadas pela extração de
       // texto de minutas em PDF que não embutem a fonte. O caminho é
       // montado em runtime a partir de process.cwd() (ver

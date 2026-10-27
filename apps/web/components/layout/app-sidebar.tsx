@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   AlertTriangle,
   Bot,
+  BookOpen,
   BookText,
   ClipboardCheck,
   FileStack,
@@ -33,6 +34,7 @@ import { cn } from "@/lib/utils";
 const ICONS_BY_NAME: Record<string, LucideIcon> = {
   AlertTriangle,
   Bot,
+  BookOpen,
   BookText,
   ClipboardCheck,
   FileStack,
