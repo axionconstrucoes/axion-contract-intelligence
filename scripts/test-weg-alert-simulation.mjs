@@ -1,4 +1,4 @@
-// FASE A / A.1 — simulação local dos alertas do projeto FICTÍCIO "WEG" (sem rede, sem banco real).
+// FASE A / A.1 / A.2 — simulação local dos alertas do projeto FICTÍCIO "WEG" (sem rede, sem banco real).
 //
 // Executa o ciclo REAL de alertas de risco (runRiskAlertCycle), o processador REAL de
 // respostas (processAlertReplies), a máquina de estados REAL (applyAlertAction), o guard
@@ -9,6 +9,7 @@
 //   - prazos REDUZIDOS só nas regras do fixture (a matriz DEFAULT do produto não é alterada);
 //   - armadilha de rede: qualquer fetch/socket falha e é contado (esperado: 0).
 //
+// A.2: comprova a retentativa segura do CONSOLIDADO semanal (antes descartado com RISK_CASE_REQUIRED).
 // A.1: comprova as CORREÇÕES (IGNORED_LOOP, TOP_LEVEL_REACHED) e a proteção contra ciclos simultâneos.
 //
 // Limites (declarados): não valida SQL/RLS/RPC (ver npm run test:sql) nem o layout em
@@ -66,6 +67,7 @@ const { applyPilotOutboundGuard } = await import("../apps/web/lib/email/pilot-ou
 const { createInMemoryRiskAlertStore } = await import("./lib/weg-alert-sim/in-memory-risk-alert-store.mjs");
 const { createSupabaseRiskAlertStore } = await import("../apps/web/lib/risk-alerts/supabase-store");
 const { MAX_SEND_ATTEMPTS } = await import("../apps/web/lib/risk-alerts/types");
+const { rebuildDigestContent } = await import("../apps/web/lib/risk-alerts/rebuild-digest-content");
 
 // ---------------------------------------------------------------- mini-framework
 let passed = 0;
@@ -210,10 +212,11 @@ function makeWorld({ override = CRM, level1 = U.RESP, allowlist = [U.RESP, U.GES
   };
   const store = createInMemoryRiskAlertStore(world);
   const rec = { calls: [], attempts: 0 };
+  const failure = { on: failSends, only: null }; // falha simulada (transitória): ligue/desligue entre os ciclos
   let lastGuarded = null;
   class RecordingFakeProvider extends FakeEmailProvider {
     constructor() {
-      super({ onGuardedInput: (g) => (lastGuarded = g), shouldFail: () => failSends });
+      super({ onGuardedInput: (g) => (lastGuarded = g), shouldFail: (input) => failure.on && (!failure.only || failure.only(input)) });
     }
     async send(input) {
       const raw = { ...input };
@@ -236,7 +239,7 @@ function makeWorld({ override = CRM, level1 = U.RESP, allowlist = [U.RESP, U.GES
     store.state.outbox.filter((o) => o.riskLevel === level && (!type || o.notificationType === type) && (!escalationLevel || o.escalationLevel === escalationLevel));
   const callFor = (row) => rec.calls.find((c) => c.result.providerMessageId === row.providerMessageId);
   const policy = (riskLevel) => resolveMatrixPolicy({ rules: world.matrixRules, responsibles: world.areaResponsibles, settings: null, area: AREA, riskLevel });
-  return { world, store, rec, provider, run, caseOf, outboxOf, callFor, policy };
+  return { world, store, rec, failure, provider, run, caseOf, outboxOf, callFor, policy };
 }
 
 // ================================================================ A. Segurança da simulação
@@ -689,18 +692,170 @@ await check("G3 escalonamento por prazo e linhas PENDENTES de ação humana tamb
   assert(new Set(keys).size === keys.length);
   assert(w.store.state.outbox.every((o) => o.status !== "SENT" || o.attemptCount === 1), "linha enviada mais de uma vez");
 });
-await check("G4 falhas: no máximo 3 tentativas por linha (reivindicação conta a tentativa sem contar duas vezes) e depois FAILED", async () => {
+await check("G4 falhas persistentes: no máximo 3 tentativas por linha (a reivindicação conta a tentativa uma vez) e depois FAILED — inclusive o consolidado", async () => {
   const w = makeWorld({ failSends: true });
   for (const minutes of [0, 1, 2, 3, 4, 5]) await w.run(plusMin(T0, minutes));
-  const rows = w.store.state.outbox.filter((o) => o.notificationType === "IMMEDIATE");
-  assert(rows.length === 2 && rows.every((o) => o.status === "FAILED"), `imediatos: ${JSON.stringify(rows.map((o) => [o.status, o.attemptCount]))}`);
-  assert(rows.every((o) => o.attemptCount === MAX_SEND_ATTEMPTS), `tentativas: ${rows.map((o) => o.attemptCount)}`);
-  assert(w.rec.attempts === 2 * MAX_SEND_ATTEMPTS + 1, `chamadas ao provider: ${w.rec.attempts}`);
-  const digest = w.store.state.outbox.find((o) => o.notificationType === "DIGEST");
-  // OBSERVAÇÃO #3 (comportamento ANTERIOR, não alterado): um consolidado que falha no 1º envio NÃO é reenviado — o reenvio
-  // passa por sendPendingRow, que descarta linhas sem caso de risco (RISK_CASE_REQUIRED).
-  assert(digest.status === "SKIPPED" && digest.attemptCount === 1 && /RISK_CASE_REQUIRED/.test(digest.lastError), `consolidado: ${digest.status}/${digest.attemptCount}`);
-  assert(w.rec.calls.length === 0, "nenhum envio bem-sucedido era esperado");
+  assert(w.store.state.outbox.length === 3 && w.store.state.outbox.every((o) => o.status === "FAILED"), JSON.stringify(w.store.state.outbox.map((o) => [o.notificationType, o.status, o.attemptCount])));
+  assert(w.store.state.outbox.every((o) => o.attemptCount === MAX_SEND_ATTEMPTS), `tentativas: ${w.store.state.outbox.map((o) => o.attemptCount)}`);
+  assert(w.rec.attempts === 3 * MAX_SEND_ATTEMPTS, `chamadas ao provider: ${w.rec.attempts}`);
+  assert(w.rec.calls.length === 0 && w.store.state.outbox.every((o) => /falha simulada/i.test(o.lastError)), "histórico do erro preservado");
+});
+
+// ================================================================ I. Consolidado semanal: retentativa segura
+console.log("== I. Consolidado (DIGEST): falha transitória → retentativa → sucesso, sem duplicidade");
+const isDigest = (input) => /CONSOLIDADO SEMANAL/.test(input.subject);
+const digestRow = (w) => w.store.state.outbox.find((o) => o.notificationType === "DIGEST");
+const digestCalls = (w) => w.rec.calls.filter((c) => /CONSOLIDADO SEMANAL/.test(c.raw.subject));
+
+// controle: consolidado enviado de primeira (conteúdo de referência)
+const wCtl = makeWorld();
+await wCtl.run(T0);
+const ctlDigest = digestCalls(wCtl)[0];
+
+await check("I1 falha transitória no 1º envio: a linha continua PENDENTE (tentativa 1, erro preservado) e os alertas individuais saem normalmente", async () => {
+  const w = makeWorld();
+  w.failure.on = true;
+  w.failure.only = isDigest;
+  await w.run(T0);
+  const d = digestRow(w);
+  assert(d.status === "PENDING" && d.attemptCount === 1 && /falha simulada/i.test(d.lastError), `${d.status}/${d.attemptCount}`);
+  assert(w.outboxOf("HIGH", "IMMEDIATE")[0].status === "SENT" && w.outboxOf("CRITICAL", "IMMEDIATE")[0].status === "SENT");
+  assert(d.payloadSummary.digestItems.length === 2 && d.payloadSummary.digestItems.every((i) => i.caseKey && i.state && "responsibleUserId" in i), "metadados estruturados persistidos");
+  assert(!JSON.stringify(d.payloadSummary).includes("desvio de cronograma"), "sem texto livre persistido no payload");
+});
+await check("I2 retentativa com sucesso: MESMA linha e MESMO destinatário/conteúdo; histórico de tentativas preservado; sem linha nova", async () => {
+  const w = makeWorld();
+  w.failure.on = true;
+  w.failure.only = isDigest;
+  await w.run(T0);
+  const before = digestRow(w);
+  w.failure.on = false;
+  const r = await w.run(plusMin(T0, 60));
+  const d = digestRow(w);
+  assert(d.id === before.id && d.status === "SENT" && d.attemptCount === 2, `${d.status}/${d.attemptCount}`);
+  assert(d.recipientUserId === U.RESP && d.deliveredTo === CRM && d.provider === "FAKE" && d.idempotencyKey === before.idempotencyKey);
+  assert(w.store.state.outbox.length === 3, "nenhuma linha nova");
+  assert(r.projects[0].sent === 1 && digestCalls(w).length === 1);
+  const sent = digestCalls(w)[0];
+  assert(sent.guarded.to === CRM && sent.guarded.subject === ctlDigest.guarded.subject, "mesmo assunto do consolidado original");
+  for (const marker of ["Risco BAIXO", "Risco MÉDIO", "1 risco(s) MÉDIO(S), 1 risco(s) BAIXO(S)"]) {
+    assert(sent.raw.html.includes(marker) && ctlDigest.raw.html.includes(marker), `item/resumo ausente: ${marker}`);
+  }
+  assert(w.store.state.audit.some((a) => a.action === "RISK_ALERT_DIGEST_RETRY_SENT" && a.detail.includes(U.RESP) && !/reconstru/i.test(a.detail)));
+  assert([...w.store.state.cases.values()].filter((c) => c.riskLevel === "LOW" || c.riskLevel === "MEDIUM").every((c) => c.lastDigestWindow === "2026-11-04"), "janela do consolidado marcada nos casos");
+});
+await check("I3 IDEMPOTÊNCIA: após o sucesso, ciclos seguintes (inclusive simultâneos) não reenviam o consolidado", async () => {
+  const w = makeWorld();
+  w.failure.on = true;
+  w.failure.only = isDigest;
+  await w.run(T0);
+  w.failure.on = false;
+  await w.run(plusMin(T0, 60));
+  const before = w.rec.calls.length;
+  await Promise.all([w.run(plusMin(T0, 120)), w.run(plusMin(T0, 120)), w.run(plusMin(T0, 180))]);
+  // (os ciclos de +120/+180 min disparam escalonamentos legítimos; o consolidado, não)
+  assert(digestCalls(w).length === 1 && w.store.state.outbox.filter((o) => o.notificationType === "DIGEST").length === 1);
+  assert(digestRow(w).attemptCount === 2 && digestRow(w).status === "SENT");
+  const escalations = w.store.state.outbox.filter((o) => o.notificationType === "ESCALATION");
+  assert(w.rec.calls.length === before + escalations.length, "só escalonamentos novos foram enviados");
+  assert(new Set(w.store.state.outbox.map((o) => o.idempotencyKey)).size === w.store.state.outbox.length);
+});
+await check("I4 CONCORRÊNCIA na retentativa: dois/três ciclos simultâneos reenviam o consolidado exatamente UMA vez", async () => {
+  const w = makeWorld();
+  w.failure.on = true;
+  w.failure.only = isDigest;
+  await w.run(T0);
+  w.failure.on = false;
+  const results = await Promise.all([w.run(plusMin(T0, 60)), w.run(plusMin(T0, 60)), w.run(plusMin(T0, 60))]);
+  assert(digestCalls(w).length === 1, `envios do consolidado: ${digestCalls(w).length}`);
+  assert(results.reduce((n, r) => n + r.projects[0].sent, 0) === 1);
+  assert(digestRow(w).status === "SENT" && digestRow(w).attemptCount === 2);
+});
+await check("I5 falha PERSISTENTE: 3 tentativas no total, depois FAILED com histórico; os individuais não são afetados nem reenviados", async () => {
+  const w = makeWorld();
+  w.failure.on = true;
+  w.failure.only = isDigest;
+  for (const minutes of [0, 60, 120, 180, 240]) await w.run(plusMin(T0, minutes));
+  const d = digestRow(w);
+  assert(d.status === "FAILED" && d.attemptCount === MAX_SEND_ATTEMPTS && /falha simulada/i.test(d.lastError), `${d.status}/${d.attemptCount}`);
+  assert(w.rec.attempts - w.rec.calls.length === MAX_SEND_ATTEMPTS, "exatamente 3 tentativas de consolidado");
+  assert(w.rec.calls.length >= 2 && w.outboxOf("HIGH", "IMMEDIATE")[0].attemptCount === 1 && w.outboxOf("CRITICAL", "IMMEDIATE")[0].attemptCount === 1);
+});
+await check("I6 SEPARAÇÃO: falha de um alerta individual segue o caminho do caso (retentativa só dele) sem tocar no consolidado", async () => {
+  const w = makeWorld();
+  w.failure.on = true;
+  w.failure.only = (input) => /CR[ÍI]TICO/i.test(input.subject) && !isDigest(input);
+  await w.run(T0);
+  const crit = w.outboxOf("CRITICAL", "IMMEDIATE")[0];
+  assert(crit.status === "PENDING" && crit.attemptCount === 1 && digestRow(w).status === "SENT");
+  w.failure.on = false;
+  await w.run(plusMin(T0, 60));
+  assert(crit.status === "SENT" && crit.attemptCount === 2 && digestCalls(w).length === 1 && digestRow(w).attemptCount === 1);
+  assert(w.rec.calls.length === 3);
+});
+await check("I7 JANELA EXPIRADA: consolidado antigo não é reenviado (DIGEST_WINDOW_EXPIRED); o consolidado da nova janela segue normalmente, sem duplicar o antigo", async () => {
+  const w = makeWorld();
+  w.failure.on = true;
+  w.failure.only = isDigest;
+  await w.run(T0);
+  w.failure.on = false;
+  const nextWeek = plusMin(T0, 7 * 24 * 60); // quarta seguinte (nova janela)
+  await w.run(nextWeek);
+  const rows = w.store.state.outbox.filter((o) => o.notificationType === "DIGEST");
+  const old = rows.find((o) => o.digestWindow === "2026-11-04");
+  const fresh = rows.find((o) => o.digestWindow === "2026-11-11");
+  assert(old.status === "SKIPPED" && /DIGEST_WINDOW_EXPIRED/.test(old.lastError), `${old.status}`);
+  assert(fresh && fresh.status === "SENT" && digestCalls(w).length === 1, "apenas o consolidado da nova janela é enviado");
+});
+await check("I8 PRONTIDÃO: com bloqueio do piloto a retentativa NÃO envia nem consome tentativa; ao normalizar, envia uma vez", async () => {
+  const w = makeWorld();
+  w.failure.on = true;
+  w.failure.only = isDigest;
+  await w.run(T0);
+  w.failure.on = false;
+  const allow = w.world.config.pilotRecipientAllowlistUserIds;
+  w.world.config.pilotRecipientAllowlistUserIds = [];
+  await w.run(plusMin(T0, 60));
+  assert(digestRow(w).status === "PENDING" && digestRow(w).attemptCount === 1 && digestCalls(w).length === 0);
+  w.world.config.pilotRecipientAllowlistUserIds = allow;
+  await w.run(plusMin(T0, 120));
+  assert(digestRow(w).status === "SENT" && digestRow(w).attemptCount === 2 && digestCalls(w).length === 1);
+});
+await check("I9 destinatário que deixa de ser elegível: consolidado não é enviado a terceiros (SKIPPED), nunca redirecionado a outra pessoa", async () => {
+  const w = makeWorld();
+  w.failure.on = true;
+  w.failure.only = isDigest;
+  await w.run(T0);
+  w.failure.on = false;
+  w.world.config.pilotRecipientAllowlistUserIds = [U.GESTOR, U.DIR];
+  w.world.config.pilotRecipientAllowlistUserIds.push("aaaaaaaa-0000-4000-8000-0000000000ff"); // allowlist ≠ vazia (sem bloqueio de prontidão)
+  await w.run(plusMin(T0, 60));
+  const d = digestRow(w);
+  assert(d.status === "SKIPPED" && /PILOT_RECIPIENT_SUPPRESSED/.test(d.lastError) && digestCalls(w).length === 0 && d.recipientUserId === U.RESP);
+});
+await check("I10 linha LEGADA (sem digestItems): reconstruída a partir das chaves de caso e sinalizada na auditoria", async () => {
+  const w = makeWorld();
+  w.failure.on = true;
+  w.failure.only = isDigest;
+  await w.run(T0);
+  w.failure.on = false;
+  delete digestRow(w).payloadSummary.digestItems;
+  await w.run(plusMin(T0, 60));
+  assert(digestRow(w).status === "SENT" && digestCalls(w).length === 1);
+  assert(w.store.state.audit.some((a) => a.action === "RISK_ALERT_DIGEST_RETRY_SENT" && /reconstru/i.test(a.detail)));
+});
+await check("I11 rebuildDigestContent: itens removidos são omitidos e auditados; sem nenhum item disponível → null (DIGEST_EMPTY, sem envio)", () => {
+  const w = makeWorld();
+  const base = { window: "2026-11-04", recipients: w.world.recipients };
+  const record = (id, level) => ({ id, sourceType: "SCHEDULE_COMPARISON", sourceId: id, area: AREA, riskLevel: level, status: "OPEN", title: `t-${id}`, summary: "s", reference: "r", originPath: "o", slaActionId: null });
+  const payload = { digestItems: [
+    { caseKey: "SCHEDULE_COMPARISON:a", riskLevel: "MEDIUM", state: "NEW", deadlineAt: null, responsibleUserId: U.RESP },
+    { caseKey: "SCHEDULE_COMPARISON:gone", riskLevel: "LOW", state: "OPEN", deadlineAt: null, responsibleUserId: null },
+  ] };
+  const r = rebuildDigestContent({ ...base, payloadSummary: payload, cases: [record("a", "MEDIUM")] });
+  assert(r && r.content.mediumItems.length === 1 && r.droppedKeys.join() === "SCHEDULE_COMPARISON:gone" && r.content.mediumItems[0].responsibleName === NAME[U.RESP]);
+  assert(rebuildDigestContent({ ...base, payloadSummary: payload, cases: [] }) === null);
+  assert(rebuildDigestContent({ ...base, payloadSummary: {}, cases: [record("a", "MEDIUM")] }) === null);
 });
 
 // ================================================================ H. Código REAL do store (cliente Supabase simulado)

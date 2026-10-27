@@ -186,6 +186,8 @@ export interface DigestItem {
   responsibleName: string | null;
   originPath: string;
   slaActionId: string | null;
+  /** Responsável (Nível 1) do item — usado para reconstruir o consolidado em retentativas. */
+  responsibleUserId?: string | null;
   state: "NEW" | "CHANGED" | "OPEN" | "CLOSED";
 }
 

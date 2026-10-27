@@ -26,6 +26,7 @@ import type { SlaArea, SlaAreaResponsibles, SlaEscalationLevel, SlaRiskLevel } f
 
 import { caseKeyOf } from "./collect-risk-cases";
 import { resolveDigestWindow } from "./digest-window";
+import { compareDigestItems, toStoredDigestItems } from "./rebuild-digest-content";
 import type {
   DigestItem,
   LinkedSlaActionState,
@@ -373,6 +374,7 @@ export function planRiskAlerts(input: PlanRiskAlertsInput): RiskAlertPlan {
             summary: caseInput.summary,
             deadlineAt: deadlines.assumeDueAt,
             responsibleName: input.recipients.get(policy.level1UserId ?? "")?.name ?? null,
+            responsibleUserId: policy.level1UserId,
             originPath: caseInput.originPath,
             slaActionId: existing?.slaActionId ?? null,
             state,
@@ -391,10 +393,7 @@ export function planRiskAlerts(input: PlanRiskAlertsInput): RiskAlertPlan {
         byRecipient.set(userId, [...(byRecipient.get(userId) ?? []), candidate.item]);
       }
     }
-    const order = (a: DigestItem, b: DigestItem) =>
-      (a.riskLevel === "MEDIUM" ? 0 : 1) - (b.riskLevel === "MEDIUM" ? 0 : 1) ||
-      (a.deadlineAt ?? "9999").localeCompare(b.deadlineAt ?? "9999") ||
-      a.title.localeCompare(b.title, "pt-BR");
+    const order = compareDigestItems;
     for (const [userId, items] of byRecipient) {
       const open = items.filter((i) => i.state !== "CLOSED").sort(order);
       const mediumItems = open.filter((i) => i.riskLevel === "MEDIUM");
@@ -413,7 +412,7 @@ export function planRiskAlerts(input: PlanRiskAlertsInput): RiskAlertPlan {
         scheduledFor: input.now,
         digestWindow: window.key,
         matrixRuleSnapshot: { timeZone, weekday: "WEDNESDAY", hourLocal: 7 },
-        payloadSummary: { window: window.key, medium: mediumItems.length, low: lowItems.length, closed: closedItems.length, caseKeys: items.map((i) => i.caseKey) },
+        payloadSummary: { window: window.key, medium: mediumItems.length, low: lowItems.length, closed: closedItems.length, caseKeys: items.map((i) => i.caseKey), digestItems: toStoredDigestItems(items) },
         content: { kind: "DIGEST", window: window.key, mediumItems, lowItems, closedItems },
       });
     }

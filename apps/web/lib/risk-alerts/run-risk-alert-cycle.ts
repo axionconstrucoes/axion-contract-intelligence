@@ -35,6 +35,7 @@ import { actionLinkExpiry, buildActionLink, EMAIL_ACTION_TYPES, generateActionTo
 import { applyForwardTimeout, applyScheduledTopLevel } from "./alert-state-machine";
 import { buildAlertFollowUpEmail, buildImmediateRiskAlertEmail, buildRiskDigestEmail, formatDateTimeBR, type BuiltEmail } from "./build-risk-alert-emails";
 import { evaluatePilotReadiness, blockerToSuppressionReason, isSeverityMapComplete } from "./pilot-readiness";
+import { rebuildDigestContent } from "./rebuild-digest-content";
 import { evaluateRecipient, planRiskAlerts } from "./plan-risk-alerts";
 import { resolveDeliveryAddress } from "@/lib/email/pilot-delivery-override";
 
@@ -318,7 +319,7 @@ export async function runRiskAlertCycle(options: RunRiskAlertCycleOptions = {}):
     }
 
     // ---- envio: entradas planejadas neste ciclo ----
-    const ctx: SendContext = { store, provider, projectId, projectName: snapshot.projectName, baseUrl, timeZone, nowIso, inlineLogo, caseIds, snapshot, policyFor, deliveredKeys: new Set() };
+    const ctx: SendContext = { store, provider, projectId, projectName: snapshot.projectName, baseUrl, timeZone, nowIso, inlineLogo, caseIds, snapshot, policyFor, deliveredKeys: new Set(), readinessBlockers: readiness.blockers };
     const sentKeys = new Set<string>();
     for (const item of persisted) {
       if (item.entry.recipient.status !== "PENDING") continue;
@@ -358,6 +359,8 @@ interface SendContext {
   policyFor: (area: SlaArea, riskLevel: SlaRiskLevel) => MatrixPolicy;
   /** Deduplicação por evento × endereço efetivo (override do piloto): nunca dois e-mails iguais no mesmo ciclo. */
   deliveredKeys: Set<string>;
+  /** Bloqueios de prontidão do ciclo — retentativas de consolidado respeitam o mesmo critério do planejador. */
+  readinessBlockers: string[];
 }
 
 /** Links das 5 ações (token curto/expirável, só hash persistido). */
@@ -483,12 +486,68 @@ async function sendPlanned(outboxId: string, caseId: string | null, entry: Plann
 }
 
 /** Entradas de outras origens (MANUAL, WEB_ACTION, EMAIL_REPLY, Expert, retry): conteúdo reconstruído do caso. */
+/** Janela do consolidado (YYYY-MM-DD, quarta-feira) além da qual uma retentativa já não faz sentido. */
+const DIGEST_RETRY_MAX_AGE_DAYS = 6;
+
+/**
+ * Retentativa de um CONSOLIDADO semanal PENDENTE (o 1º envio falhou). Separado dos alertas
+ * individuais: o consolidado não tem caso de risco; seu conteúdo é reconstruído dos metadados
+ * persistidos (rebuild-digest-content.ts) e o destinatário é sempre o ORIGINAL da linha.
+ * A mesma chave de idempotência/linha é usada — nunca cria uma segunda linha.
+ */
+async function sendPendingDigest(row: PendingOutboxRow, ctx: SendContext): Promise<"SENT" | "FAILED" | "SKIPPED"> {
+  const config = ctx.snapshot.config!;
+  const window = typeof row.payloadSummary.window === "string" ? row.payloadSummary.window : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(window)) {
+    await ctx.store.markSkipped(row.id, "DIGEST_WINDOW_UNKNOWN: consolidado sem janela identificável — não reenviado.");
+    return "SKIPPED";
+  }
+  const ageDays = (new Date(ctx.nowIso).getTime() - new Date(`${window}T00:00:00.000Z`).getTime()) / 86_400_000;
+  if (ageDays > DIGEST_RETRY_MAX_AGE_DAYS) {
+    await ctx.store.markSkipped(row.id, `DIGEST_WINDOW_EXPIRED: janela ${window} encerrada — consolidado não reenviado.`);
+    return "SKIPPED";
+  }
+  // Prontidão (mesmo critério do planejador): com bloqueio a linha PERMANECE pendente (sem consumir tentativa) e é reavaliada no próximo ciclo.
+  if (ctx.readinessBlockers.length > 0) return "SKIPPED";
+  const recipient = evaluateRecipient(row.recipientUserId, config, ctx.snapshot.recipients);
+  if (recipient.status === "SUPPRESSED") {
+    await ctx.store.markSkipped(row.id, `Destinatário não elegível no envio (${recipient.suppressionReason}).`);
+    return "SKIPPED";
+  }
+  if (!recipient.email) {
+    await ctx.store.markFailed(row.id, "Destinatário sem e-mail.");
+    return "FAILED";
+  }
+  const rebuilt = rebuildDigestContent({ window, payloadSummary: row.payloadSummary, cases: ctx.snapshot.existingCases, recipients: ctx.snapshot.recipients });
+  if (!rebuilt) {
+    await ctx.store.markSkipped(row.id, "DIGEST_EMPTY: nenhum item do consolidado permanece disponível — não reenviado.");
+    return "SKIPPED";
+  }
+  const built = buildRiskDigestEmail({ content: rebuilt.content, projectId: ctx.projectId, projectName: ctx.projectName, recipientName: recipient.name, baseUrl: ctx.baseUrl, timeZone: ctx.timeZone, generatedAt: ctx.nowIso });
+  const outcome = await deliver(ctx, row.id, null, row.recipientUserId, recipient.email, built, row.notificationType, null, row.idempotencyKey);
+  if (outcome === "SENT") {
+    const caseKeys = ((row.payloadSummary.caseKeys as string[] | undefined) ?? []);
+    const idByKey = new Map(ctx.snapshot.existingCases.map((c) => [`${c.sourceType}:${c.sourceId}`, c.id]));
+    await ctx.store.markDigestWindow(caseKeys.map((key) => idByKey.get(key)).filter((id): id is string => Boolean(id)), window);
+    await ctx.store.audit(ctx.projectId, [
+      {
+        action: "RISK_ALERT_DIGEST_RETRY_SENT",
+        entityType: "RISK_ALERT_DIGEST",
+        entityId: row.idempotencyKey,
+        detail: `Consolidado da janela ${window} reenviado ao usuário ${row.recipientUserId} após falha anterior (tentativa ${row.attemptCount + 1}).${rebuilt.reconstructedFromKeys ? " Conteúdo reconstruído a partir das chaves de caso (itens originais não estavam persistidos)." : ""}${rebuilt.droppedKeys.length ? ` ${rebuilt.droppedKeys.length} item(ns) não encontrado(s) omitido(s).` : ""}`,
+      },
+    ]);
+  }
+  return outcome;
+}
+
 async function sendPendingRow(row: PendingOutboxRow, ctx: SendContext): Promise<"SENT" | "FAILED" | "SKIPPED"> {
   const config = ctx.snapshot.config;
   if (!config) {
     await ctx.store.markSkipped(row.id, "Projeto sem configuração.");
     return "SKIPPED";
   }
+  if (row.notificationType === "DIGEST") return sendPendingDigest(row, ctx);
   const record = row.caseId ? await ctx.store.loadCaseRecord(row.caseId) : null;
   if (!record) {
     // Delimitação da outbox: sem risk_alert_case nada é enviado por aqui
