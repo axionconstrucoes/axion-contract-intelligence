@@ -35,6 +35,20 @@ check("mapeia linha do banco (nomes, fotos de registro × evidência, ação)", 
   assert.equal(v.clientCreatedAt, "2026-10-27T10:05:00Z");
   assert.equal(v.receivedAt, "2026-10-27T18:00:00Z");
 });
+// O PostgREST devolve a relação embutida como OBJETO (e não array) quando a chave estrangeira é única
+// (ssma_corrective_actions.record_id é unique). Defeito de produção: a ação nunca aparecia na lista nem no detalhe.
+check("ação corretiva embutida como OBJETO (formato real do PostgREST) é reconhecida", () => {
+  const action = { id: "a9", status: "EM_ANDAMENTO", due_date: "2026-11-05", concluded_at: null, responsible_user_id: "u2" };
+  const v = mapFieldRecordRow(row({ ssma_corrective_actions: action }), names);
+  assert.equal(v.action?.id, "a9");
+  assert.equal(v.action?.status, "EM_ANDAMENTO");
+  assert.equal(v.action?.dueDate, "2026-11-05");
+  assert.equal(summarizeFieldRecords([v], "2026-10-27").openActions, 1);
+});
+check("ação corretiva ausente (null/undefined) continua sem ação", () => {
+  assert.equal(mapFieldRecordRow(row({ ssma_corrective_actions: null }), names).action, null);
+  assert.equal(mapFieldRecordRow(row({ ssma_corrective_actions: undefined }), names).action, null);
+});
 check("registro sem ação e usuário desconhecido", () => {
   const v = mapFieldRecordRow(row({ ssma_corrective_actions: [], responsible_user_id: null, reported_by_user_id: "zz" }), names);
   assert.equal(v.action, null);

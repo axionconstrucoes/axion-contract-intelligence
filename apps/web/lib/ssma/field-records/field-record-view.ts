@@ -3,6 +3,14 @@
 
 import type { ActionStatus, FieldRecordKind, FieldRecordRisk } from "./types";
 
+interface CorrectiveActionRow {
+  id: string;
+  status: ActionStatus;
+  due_date: string;
+  concluded_at: string | null;
+  responsible_user_id: string;
+}
+
 export interface FieldRecordRow {
   id: string;
   kind: FieldRecordKind;
@@ -16,13 +24,9 @@ export interface FieldRecordRow {
   responsible_user_id: string | null;
   due_date: string | null;
   reported_by_user_id: string;
-  ssma_corrective_actions?: Array<{
-    id: string;
-    status: ActionStatus;
-    due_date: string;
-    concluded_at: string | null;
-    responsible_user_id: string;
-  }> | null;
+  // O PostgREST devolve a relação embutida como OBJETO quando a chave estrangeira é única
+  // (ssma_corrective_actions.record_id é unique) e como array nos demais casos: aceitar os dois.
+  ssma_corrective_actions?: CorrectiveActionRow | CorrectiveActionRow[] | null;
   ssma_field_record_photos?: Array<{ id: string; purpose: "REGISTRO" | "EVIDENCIA_ACAO" }> | null;
 }
 
@@ -48,7 +52,8 @@ export interface FieldRecordView {
 }
 
 export function mapFieldRecordRow(row: FieldRecordRow, names: ReadonlyMap<string, string>): FieldRecordView {
-  const action = row.ssma_corrective_actions?.[0] ?? null;
+  const embedded = row.ssma_corrective_actions;
+  const action = (Array.isArray(embedded) ? embedded[0] : embedded) ?? null;
   const photos = row.ssma_field_record_photos ?? [];
   return {
     id: row.id,
