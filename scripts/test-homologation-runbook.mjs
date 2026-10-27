@@ -112,8 +112,8 @@ await check("W2 --no-bootstrap mantém só as migrations; recusa diretório dent
   }
   assert(threw, "deveria recusar dentro de supabase/");
 });
-await check("W3 o repositório tem as 117 migrations esperadas, sem versão duplicada", () => {
-  assert(repoMigrations.length === 117, `migrations: ${repoMigrations.length}`);
+await check("W3 o repositório tem pelo menos as 117 migrations originais, sem versão duplicada", () => {
+  assert(repoMigrations.length >= 117, `migrations: ${repoMigrations.length}`);
   const versions = repoMigrations.map((f) => f.split("_")[0]);
   assert(new Set(versions).size === versions.length);
 });
@@ -158,7 +158,7 @@ await check("D1 o roteiro cobre as etapas e os 12 testes de isolamento (T1–T12
   for (const k of ["staging-guard", "prepare-workdir", "apply-migrations", "verify-staging.sql", "ACC_PROD_PROJECT_REF", "--include-all", "Reversão"]) assert(doc.includes(k), `ausente: ${k}`);
 });
 await check("D2 nenhum arquivo do roteiro contém project ref, URL ou senha reais", () => {
-  const files = ["scripts/homologation/staging-guard.mjs", "scripts/homologation/prepare-workdir.mjs", "scripts/homologation/apply-migrations.mjs", "scripts/sql/homologation/verify-staging.sql", "docs/transicao-remota/fase-b-roteiro-homologacao.md"];
+  const files = ["scripts/homologation/staging-guard.mjs", "scripts/homologation/prepare-workdir.mjs", "scripts/homologation/apply-migrations.mjs", "scripts/sql/homologation/verify-staging.sql", "docs/transicao-remota/fase-b-roteiro-homologacao.md", "scripts/sql/homologation/seed-weg-staging.sql"];
   for (const f of files) {
     const text = readFileSync(path.join(repo, f), "utf8");
     assert(!/db\.[a-z0-9]{15,30}\.supabase\.co/.test(text), `${f}: host real`);
