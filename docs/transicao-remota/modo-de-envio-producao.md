@@ -1,8 +1,8 @@
 # Modo de envio de e-mail em produção — como confirmar (sem enviar nada)
 
-> Estado em 27/10/2026: **não confirmado**. A leitura descriptografada de `ACC_OUTBOUND_MODE` pela ferramenta da Vercel
-> foi negada, e nenhum meio público ou de log revela o valor. Não se deve enviar e-mail para descobrir. Este documento
-> diz onde olhar.
+> Estado em 27/10/2026: **modo piloto confirmado pela tela** de um evento em produção (aviso "Modo piloto ativo" e envio manual redirecionado à caixa de teste), por usuário administrador. A variável em si segue sem leitura direta (a ferramenta da Vercel não a descriptografa); a confirmação vem do efeito. Todo envio (manual, lote, lembrete, resumo semanal, SLA, SSMA, ciclo de risco, alerta de saúde) passa por `getEmailProvider()`, e `GmailEmailProvider.send` aplica `applyPilotOutboundGuard` antes de qualquer chamada de rede; nenhum script envia e-mail por fora.
+>
+> Histórico: a leitura direta da variável foi negada pela ferramenta da Vercel e nenhum log revela o valor; por isso não se deve enviar e-mail para descobrir. As seções abaixo dizem onde olhar.
 
 ## Regra do código (`apps/web/lib/email/pilot-outbound-guard.ts`)
 
