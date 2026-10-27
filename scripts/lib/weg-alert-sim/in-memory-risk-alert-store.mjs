@@ -10,6 +10,7 @@ import { createHash } from "node:crypto";
 const { buildCorrelationIndex } = await import("../../../apps/web/lib/risk-alerts/replies/build-correlation-index");
 
 const MAX_SEND_ATTEMPTS = 3;
+const LEASE_MS = 10 * 60 * 1000; // = CLAIM_LEASE_MS de apps/web/lib/risk-alerts/types.ts
 
 export function createInMemoryRiskAlertStore(world) {
   let counter = 0;
@@ -223,6 +224,7 @@ export function createInMemoryRiskAlertStore(world) {
       const row = state.outbox.find((o) => o.id === id);
       Object.assign(row, {
         status: "SENT",
+        claimedAt: null,
         sentAt: result.sentAt,
         deliveredTo: result.recipientEmail,
         provider: result.provider,
@@ -231,28 +233,33 @@ export function createInMemoryRiskAlertStore(world) {
         lastError: null,
       });
     },
-    // Modelo do UPDATE condicional do store real: lê, cede o turno (latência de rede) e só grava se
-    // status e attempt_count continuarem iguais ao lido (compare-and-swap). world.legacyNoClaim=true
+    // Modelo do UPDATE condicional do store real (lease): lê, cede o turno (latência de rede) e só grava se
+    // status/contador continuarem iguais ao lido E não houver lease vigente (claimedAt). world.legacyNoClaim=true
     // reproduz o comportamento ANTERIOR (sem reivindicação) para demonstrar a duplicidade.
-    async claimOutbox(id) {
+    async claimOutbox(id, nowIso) {
       if (world.legacyNoClaim) return true;
       const row = state.outbox.find((o) => o.id === id);
       if (!row || row.status !== "PENDING" || row.attemptCount >= MAX_SEND_ATTEMPTS) return false;
       const observed = row.attemptCount;
       await new Promise((resolve) => setImmediate(resolve));
+      const cutoff = new Date(new Date(nowIso).getTime() - LEASE_MS).toISOString();
       if (row.status !== "PENDING" || row.attemptCount !== observed) return false;
+      if (row.claimedAt && row.claimedAt >= cutoff) return false;
       row.attemptCount = observed + 1;
+      row.claimedAt = nowIso;
       return true;
     },
     async markFailed(id, message, options = {}) {
       const row = state.outbox.find((o) => o.id === id);
       if (!options.attemptAlreadyClaimed) row.attemptCount += 1;
       row.status = row.attemptCount >= MAX_SEND_ATTEMPTS ? "FAILED" : "PENDING";
+      row.claimedAt = null;
       row.lastError = message;
     },
     async markSkipped(id, reason) {
       const row = state.outbox.find((o) => o.id === id);
       row.status = "SKIPPED";
+      row.claimedAt = null;
       row.lastError = reason;
     },
     async markDigestWindow(caseIds, window) {
