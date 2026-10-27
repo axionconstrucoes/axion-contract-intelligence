@@ -245,6 +245,13 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
       "Gerencia os usuários autorizados, suas áreas, funções e permissões. Participar de um e-mail ou comunicação não concede acesso ao ACC.",
   },
   {
+    id: "ajuda-tutorial",
+    title: "Ajuda e tutorial",
+    shortDescription: "Apresentação e guia de uso do ACC (PDF e PowerPoint).",
+    description:
+      "Reúne a apresentação da suíte e o tutorial permanente, com imagens das telas e dos e-mails de alerta (dados fictícios). O PDF é para consulta e o PowerPoint é editável.",
+  },
+  {
     id: "auditoria",
     title: "Auditoria",
     shortDescription: "Histórico rastreável das ações realizadas no ACC.",
