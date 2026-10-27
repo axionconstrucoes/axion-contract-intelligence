@@ -1,8 +1,16 @@
 # Plano de transição remota e de publicação
 
-> **Estado: preparado, NADA publicado.** Não houve push, PR, merge, deploy, migration em produção nem alteração
-> de credenciais ou agendamentos remotos. **O ACC ainda NÃO pode ser declarado independente do notebook:** isso só
-> vale depois de o fluxo completo ser verificado em ambiente remoto e acessado de outro computador.
+> **Estado em 27/10/2026: PUBLICADO.** A `main` está em `7dc8d8d` (PR #121 → `44571fe`; PR #122, correção do SSMA
+> → `ee9679a`; PR #123, área "Ajuda e tutorial" → `7dc8d8d`). As 8 migrations foram aplicadas em produção
+> (`aplicacao-migrations-producao.md`) e `acc.axion.com.br` está servido pelos deploys de produção da `main`.
+> **Modo piloto de e-mail confirmado em produção** (27/10/2026, pela tela de um evento: "Modo piloto ativo" e envio
+> manual redirecionado à caixa de teste), e confirmado por leitura do código que todo envio automático e lembrete
+> passa pela mesma guarda (`modo-de-envio-producao.md`).
+> **Gmail Inbound Sync** voltou a passar na primeira execução agendada com o código novo (27/10, 05:52 UTC): 33 de 34
+> mensagens processadas e 1 ignorada por 404 (aviso, não falha); ver `diagnostico-gmail-inbound-sync.md`.
+> **Ainda NÃO declarado independente do notebook:** falta acessar e operar o sistema a partir de outro computador
+> (`verificacao-outro-computador.md`) e os testes reais (Gmail/Outlook/iPhone/Android). O ambiente Preview da Vercel
+> ainda usa o Supabase de produção.
 >
 > Documentos relacionados (mesma pasta): `inventario.md`, `pendencias.md`, `dependencias-locais.md`,
 > `variaveis.md`, `guia-configuracao-e-recuperacao.md`, `estado-das-frentes.md`, `organizacao-de-branches.md`,
