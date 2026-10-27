@@ -66,7 +66,7 @@ const { CLIENT_SOURCE_CONFRONTATION_VERSION, CLIENT_SOURCE_CONFRONTATION_INSTRUC
 );
 
 check("versão do Expert foi incrementada (v1 -> v2 -> v3 -> v4) junto com a mudança de prompt", () => {
-  assert(LEGAL_CONSULTANT_VERSION === "v4", `esperado v4, obtido ${LEGAL_CONSULTANT_VERSION}`);
+  assert(LEGAL_CONSULTANT_VERSION === "v5", `esperado v5, obtido ${LEGAL_CONSULTANT_VERSION}`);
   assert(LEGAL_CONSULTANT_INSTRUCTIONS.includes(LEGAL_CONSULTANT_VERSION), "as instruções deveriam referenciar a versão atual");
 });
 

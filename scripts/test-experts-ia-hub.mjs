@@ -60,11 +60,12 @@ check("os 5 Experts oficiais estão disponíveis em ALL_OFFICIAL_EXPERT_DEFINITI
   );
 });
 
-check("commercial-director e esg-director são os únicos com status IMPLEMENTED (Ativo) — os outros 3 são PLANNED (Em implantação)", () => {
+// Os 5 Experts oficiais estão IMPLEMENTED (commits 34d6186/6f7d98e/755b96f); nenhum fica PLANNED.
+check("os 5 Experts oficiais têm status IMPLEMENTED (Ativo); nenhum PLANNED", () => {
   const implemented = ALL_OFFICIAL_EXPERT_DEFINITIONS.filter((e) => e.status === "IMPLEMENTED").map((e) => e.expertId).sort();
-  const planned = ALL_OFFICIAL_EXPERT_DEFINITIONS.filter((e) => e.status === "PLANNED").map((e) => e.expertId).sort();
-  assert(JSON.stringify(implemented) === JSON.stringify(["commercial-director", "esg-director"]));
-  assert(JSON.stringify(planned) === JSON.stringify(["ceo", "legal-consultant", "planning-director"].sort()));
+  const planned = ALL_OFFICIAL_EXPERT_DEFINITIONS.filter((e) => e.status === "PLANNED").map((e) => e.expertId);
+  assert(JSON.stringify(implemented) === JSON.stringify(["ceo", "commercial-director", "esg-director", "legal-consultant", "planning-director"]));
+  assert(planned.length === 0);
 });
 
 check("cada ExpertDefinition tem nome e missão não vazios (dados exibidos no card vêm sempre daqui, nunca duplicados na página)", () => {
@@ -86,15 +87,18 @@ check("página experts-ia só oferece link de acesso (\"Abrir Expert\") para com
   assert(source.includes('"commercial-director": (projectId) => `/${projectId}/dashboard`'));
   assert(source.includes('"esg-director": (projectId) => `/${projectId}/esg`'));
   assert(!source.includes('"ceo":'), "CEO IA não deveria ter link de acesso — ainda não é operacional");
-  assert(!source.includes('"legal-consultant":'), "Consultor Jurídico IA não deveria ter link de acesso");
+  assert(source.includes('"legal-consultant": (projectId) => `/${projectId}/juridico`'), "Consultor Jurídico IA tem link para a página Jurídico");
   assert(source.includes('"planning-director":'), "Diretor de Engenharia IA deveria ter link de acesso dedicado");
   assert(source.includes("/experts-ia/diretor-engenharia"), "link dedicado do Diretor de Engenharia IA ausente");
 });
 
 check("página experts-ia nunca conecta um novo LLM nem chama providers (não importa nada de lib/ai/providers/)", () => {
   const source = readSource("apps/web/app/[projectId]/experts-ia/page.tsx");
-  assert(!source.includes("lib/ai/providers"), "hub é só navegação/apresentação — nunca deveria importar providers");
-  assert(!source.includes("resolveAiProviderForExpert"), "hub não deveria resolver nenhum provider diretamente");
+  // O hub só exibe o NOME do provedor configurado (resolveAiProviderNameForExpert não instancia nada).
+  const providerImports = Array.from(source.matchAll(/from "(@\/lib\/ai\/providers\/[^"]+)"/g)).map((m) => m[1]);
+  assert(providerImports.every((i) => i === "@/lib/ai/providers/resolve-provider-for-expert"), "hub só pode importar o resolvedor de NOME");
+  assert(!source.includes("resolveAiProviderForExpert"), "hub não deveria instanciar nenhum provider");
+  assert(!source.includes("instantiate"), "hub não instancia providers");
   assert(!source.includes("Anthropic"), "hub não deveria referenciar Anthropic diretamente");
 });
 
@@ -108,7 +112,7 @@ check('barra lateral: "Análise Contratual" e "Análise de Cláusulas" saíram d
 });
 
 check('barra lateral: nova entrada "Experts IA" aponta para experts-ia', () => {
-  const source = readSource("apps/web/components/layout/app-sidebar.tsx");
+  const source = readSource("apps/web/lib/ui/nav-items.ts"); // a lista de itens saiu de app-sidebar.tsx
   assert(source.includes('href: "experts-ia", label: "Experts IA"'));
 });
 

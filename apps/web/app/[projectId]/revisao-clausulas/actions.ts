@@ -12,6 +12,8 @@ import {
   createSupabaseServerClient,
 } from "@axion/db/server";
 
+import { isSafeInternalPath } from "@/lib/safe-redirect";
+
 function getRequiredString(
   formData: FormData,
   key: string
@@ -180,7 +182,15 @@ export async function reviewClauseCandidateAction(
     `/${projectId}/auditoria`
   );
 
+  // Volta para a mesma lista (filtros, página e item) — só aceita
+  // caminho interno da própria revisão de cláusulas deste projeto.
+  const listPath = `/${projectId}/revisao-clausulas`;
+  const returnTo = String(formData.get("returnTo") ?? "");
+
   redirect(
-    `/${projectId}/revisao-clausulas`
+    isSafeInternalPath(returnTo) &&
+      (returnTo === listPath || returnTo.startsWith(`${listPath}?`))
+      ? returnTo
+      : listPath
   );
 }

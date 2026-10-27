@@ -27,6 +27,12 @@ const LIVE_QUESTION =
 
 const isLive = process.argv.includes("--live");
 
+// Chamada REAL (paga): exige habilitação explícita, além da flag --live. Ver scripts/test-live-ai.mjs.
+if (isLive && process.env.ACC_ALLOW_LIVE_AI_TESTS !== "1") {
+  console.log("LIVE TEST NÃO EXECUTADO — defina ACC_ALLOW_LIVE_AI_TESTS=1 para autorizar chamadas reais. Nenhuma chamada foi feita.");
+  process.exit(0);
+}
+
 console.log("");
 console.log("======================================");
 console.log("ANTHROPIC + DIRETOR COMERCIAL IA — HARNESS");

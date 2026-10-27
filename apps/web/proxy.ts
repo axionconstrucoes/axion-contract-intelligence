@@ -92,6 +92,6 @@ export const config = {
     // @axion.com.br sozinha — deixar o proxy rodar aqui faria um segundo
     // cliente Supabase (getClaims()) tocar o mesmo jar de cookies da
     // requisição antes do handler consumir o code_verifier do PKCE.
-    "/((?!_next/static|_next/image|favicon.ico|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|sw[.]js$|manifest[.]webmanifest$|auth/callback|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

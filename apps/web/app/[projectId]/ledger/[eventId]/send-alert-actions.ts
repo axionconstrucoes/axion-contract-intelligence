@@ -2,12 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 
+import { buildEvidenceItem, formatClauseLabel, summarizeClauseText } from "@/lib/alerts/alert-source-links";
 import { getAppBaseUrl } from "@/lib/app-base-url";
 import { issueEmailAlertActionButtons } from "@/lib/email-actions/issue-tokens";
 import { buildConfrontationBlock, type ContractConfrontationBlock } from "@/lib/email/build-confrontation-block";
 import { EmailSendError } from "@/lib/email/email-provider";
 import { toEvidenceEmailDirection } from "@/lib/email/evidence-email-direction";
 import { NotAuthorizedError, sendContractAlertEmail } from "@/lib/email/send-contract-alert-email";
+import { describeAlertSendOutcome } from "@/lib/email/send-outcome";
 import type { ContractAlertEvidenceItem } from "@/lib/email/templates/contract-alert-template";
 import { getEmail, getEvent, getProject, getProjectMembers, getUser } from "@/lib/data";
 import {
@@ -187,7 +189,19 @@ export async function sendContractAlertEmailAction(
         }
       }
 
-      return { kind: "OTHER", url, sourceTypeLabel: sourceTypeShortLabels[e.sourceType], label: e.label };
+      // Link para a origem: documento (na página, quando o localizador a informa) ou o cartão da
+      // evidência no evento; sem identificador verificável: "Pendente de confirmação".
+      return buildEvidenceItem({
+        baseUrl,
+        projectId,
+        eventId,
+        evidenceId: e.id,
+        documentVersionId: e.documentVersionId ?? null,
+        emailId: e.emailId ?? null,
+        locator: e.locator ?? null,
+        label: e.label,
+        sourceTypeLabel: sourceTypeShortLabels[e.sourceType],
+      });
     })
   );
 
@@ -203,8 +217,9 @@ export async function sendContractAlertEmailAction(
     intendedRecipientEmail: recipientEmail,
   }).catch(() => []);
 
+  let sendResult;
   try {
-    await sendContractAlertEmail({
+    sendResult = await sendContractAlertEmail({
       projectId,
       eventId,
       recipientEmail,
@@ -217,6 +232,13 @@ export async function sendContractAlertEmailAction(
         relatedEventTitle: event.title,
         contractualBasis,
         confrontationBlocks,
+        // Cláusula impactada VERIFICADA (confronto aprovado); sem ela: "Pendente de confirmação".
+        impactedClause: relevantApprovedCandidates[0]
+          ? {
+              label: formatClauseLabel(relevantApprovedCandidates[0].clauseNumber, relevantApprovedCandidates[0].clauseTitle),
+              text: summarizeClauseText(relevantApprovedCandidates[0].clauseText),
+            }
+          : null,
         keyEvidence,
         potentialImpact: findingTypeLabels[event.aiAssessment.findingType],
         recommendedAction: null,
@@ -234,5 +256,12 @@ export async function sendContractAlertEmailAction(
   }
 
   revalidatePath(`/${projectId}/ledger/${eventId}`);
-  return { error: null, success: `Alerta enviado para ${recipientEmail}.` };
+  // Mensagem baseada no resultado REAL do servidor: em piloto o destino efetivo é a caixa de
+  // teste e o colaborador escolhido não recebe; aceite do provedor nunca é "entrega confirmada".
+  const outcome = describeAlertSendOutcome({
+    mode: sendResult.outboundMode,
+    intendedRecipientEmail: sendResult.intendedRecipientEmail,
+    effectiveRecipientEmail: sendResult.effectiveRecipientEmail,
+  });
+  return { error: null, success: outcome.message };
 }

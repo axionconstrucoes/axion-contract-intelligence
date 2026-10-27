@@ -9,6 +9,7 @@
 
 import { useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { createSupabaseBrowserClient } from "@axion/db/browser";
 import { formatDateTime, formatFileSize } from "@/lib/labels";
@@ -160,6 +161,7 @@ export function ContractAttachmentsPanel({
   const { attachments, loaded, loading, listError, uploadItems, fetchAttachments, addFiles, deleteAttachment } =
     useContractAttachments(projectId, documentId, documentVersionId);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const count = loaded ? attachments.length : initialCount;
@@ -173,8 +175,9 @@ export function ContractAttachmentsPanel({
   async function handleFilesSelected(event: React.ChangeEvent<HTMLInputElement>) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
-    await addFiles(files);
+    await addFiles(files, description.trim() ? description.trim().slice(0, 500) : null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    setDescription("");
   }
 
   async function handleDelete(fileId: string) {
@@ -185,14 +188,20 @@ export function ContractAttachmentsPanel({
 
   return (
     <details className="rounded-md border p-2" onToggle={handleToggle}>
-      <summary className="cursor-pointer text-sm font-medium">Arquivos anexos da versão ({count})</summary>
+      <summary className="cursor-pointer text-sm font-medium">Partes e anexos do contrato ({count})</summary>
 
       <div className="mt-1.5 flex flex-col gap-1.5">
         {loading && !loaded ? <p className="text-xs text-muted-foreground">Carregando anexos…</p> : null}
         {listError ? <p className="text-xs text-destructive">{listError}</p> : null}
 
+        <p className="text-xs text-muted-foreground">
+          Use para a continuação deste mesmo contrato (ex.: Parte 2 de 2) e para os anexos contratuais desta versão.
+          Na análise do contrato, os arquivos entram depois do arquivo principal, na ordem de envio, com a numeração
+          de páginas continuada. Aditivos devem ser cadastrados como documento próprio.
+        </p>
+
         {loaded && attachments.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Nenhum anexo cadastrado.</p>
+          <p className="text-xs text-muted-foreground">Nenhuma parte ou anexo cadastrado.</p>
         ) : null}
 
         {attachments.map((attachment) => (
@@ -204,7 +213,17 @@ export function ContractAttachmentsPanel({
         {canAdd ? (
           <div className="flex flex-col gap-1 pt-1">
             <label className="flex flex-col gap-1 text-xs font-medium">
-              Adicionar arquivo(s) anexo(s)
+              Identificação (opcional)
+              <Input
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                maxLength={500}
+                placeholder="Ex.: Parte 2 de 2 — páginas 158–314"
+                className="h-8 text-xs"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-medium">
+              Adicionar parte(s) ou anexo(s) do contrato
               <input
                 ref={fileInputRef}
                 type="file"

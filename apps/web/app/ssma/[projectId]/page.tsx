@@ -48,8 +48,17 @@ export default async function SsmaAppPage({ params }: { params: Promise<{ projec
     ? `${currentMember.user.name} — ${currentMember.user.title}`
     : currentMember.user.name;
 
+  const label = projectLabel(project);
+  const canManage = ["ADMINISTRADOR", "GERENTE", "GESTOR"].includes(currentMember.permission);
+  // Quem pode ser responsável por uma ação corretiva: membros ativos que não são somente leitura.
+  const assignable = members
+    .filter((member) => member.status === "ACTIVE" && member.permission !== "LEITURA")
+    .map((member) => ({ userId: member.userId, name: member.user.name }));
+
   return (
     <SsmaFieldApp
+      userId={authData.user.id}
+      project={{ id: projectId, label, canManage, members: assignable }}
       projectId={projectId}
       projectLabel={projectLabel(project)}
       technicianLabel={technicianLabel}

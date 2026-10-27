@@ -14,7 +14,7 @@ const DECIDED_LIFECYCLE_STATUSES = ["DISMISSED_AT_STARTUP", "RESOLVED_BEFORE_GO_
 export async function getProjectStartupConfig(supabase: SupabaseClient, projectId: string): Promise<ProjectStartupConfig> {
   const { data, error } = await supabase
     .from("projects")
-    .select("id,project_start_date,acc_operational_start_date,startup_completed_at,startup_completed_by_user_id,historical_review_through")
+    .select("id,project_start_date,baseline_end_date,acc_operational_start_date,startup_completed_at,startup_completed_by_user_id,historical_review_through")
     .eq("id", projectId)
     .single();
 
@@ -23,6 +23,7 @@ export async function getProjectStartupConfig(supabase: SupabaseClient, projectI
   return {
     projectId: data.id,
     projectStartDate: data.project_start_date,
+    baselineEndDate: data.baseline_end_date,
     accOperationalStartDate: data.acc_operational_start_date,
     startupCompletedAt: data.startup_completed_at,
     startupCompletedByUserId: data.startup_completed_by_user_id,

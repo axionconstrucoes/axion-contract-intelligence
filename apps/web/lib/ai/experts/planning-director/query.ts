@@ -72,6 +72,12 @@ export interface PlanningDirectorQueryResult {
  */
 export interface PlanningDirectorQueryOptions {
   includeContractualDocuments?: boolean;
+  /**
+   * Texto que o guard de avaliação formal de prazo deve inspecionar. Quem compõe a pergunta
+   * (ex.: caixa CONSULTAR IA, que anexa foco e contexto) informa aqui a pergunta ORIGINAL do
+   * usuário, para o texto de apoio nunca acionar o bloqueio sozinho.
+   */
+  guardQuestion?: string;
 }
 
 export async function answerPlanningDirectorQuery(
@@ -98,7 +104,7 @@ export async function answerPlanningDirectorQuery(
   // mas ainda não possui extração estruturada; por isso, mesmo quando
   // localizado, não chamamos o modelo para inventar atividades/vínculos.
   const isFormalScheduleAssessment =
-    isFormalScheduleAssessmentQuestion(question);
+    isFormalScheduleAssessmentQuestion(options.guardQuestion ?? question);
 
   let scheduleContext = null;
 

@@ -156,6 +156,7 @@ export const LEGAL_CONSULTANT_DEFINITION: ExpertDefinition = {
   confidenceRules: [
     { description: "Toda citação legal deve referenciar uma LegalSource oficial versionada (apps/web/lib/ai/legal/types.ts) — nunca memória do modelo." },
     { description: "Toda afirmação classificada como BASE_CONTRATUAL deve citar a cláusula/documento de origem." },
+    { description: "Todo rascunhoSugerido é sempre status: \"DRAFT_PENDING_REVIEW\" — validado por validateExpertQueryResponse." },
   ],
   requiresHumanReview: true,
 };

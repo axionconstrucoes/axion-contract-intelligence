@@ -1,23 +1,18 @@
 // Puro, sem I/O — deliberadamente sem "server-only" para ser testável
-// tanto pelo bundler do Next.js quanto por um script Node standalone
-// (mesmo padrão de contract-alert-template.ts).
+// tanto pelo bundler do Next.js quanto por um script Node standalone.
 //
-// E-mail de LOTE: um único e-mail pode reunir vários eventos/alertas
-// (requisito 1 do prompt "MÚLTIPLOS ALERTAS E BLOQUEIO DE REPLY"). Cada
-// alerta é um bloco INDEPENDENTE (título/evento, descrição do risco,
-// grau de risco, cláusula, evidências) com sua própria coluna de ações
-// alinhada verticalmente ao lado — nunca uma única coluna de ações
-// genérica para todos os alertas.
+// E-mail de LOTE de alertas de contrato: UMA mensagem reúne vários alertas do mesmo
+// destinatário — inclusive de OBRAS DIFERENTES: cada caixa mostra a obra do PRÓPRIO alerta no
+// cabeçalho ("RISCO [NÍVEL] | [OBRA]") e o lote nunca é pintado pelo risco mais grave.
 //
-// A coluna de ações de cada alerta, AQUI NO E-MAIL, é só um convite
-// visual/navegacional para abrir aquele evento específico ou ir direto
-// para o bloco correspondente na página de resposta do lote — nunca um
-// <select>/<form>/JavaScript dentro do e-mail (Gmail/Outlook não
-// suportam, e a ação "ENVIADO P/" exige escolher um colaborador, o que
-// só é possível numa página real). Quem de fato registra
-// RESOLVIDO/EM ANDAMENTO/ENVIADO P/ é a página do lote
-// (apps/web/app/[projectId]/ledger/lote-alertas/[batchId]) — ver
-// contract-alert-batch-form.tsx — nunca o e-mail em si.
+// Os três botões (RESOLVIDO / EM ANDAMENTO / ENVIADO P/) são LINKS para a página de confirmação
+// — nunca um <select>/<form>/JavaScript dentro do e-mail (Gmail/Outlook não suportam, e ENVIADO P/
+// exige escolher um colaborador). Abrir o link NUNCA grava nada: quem registra é a confirmação
+// explícita na página. VER EVENTO deixou de existir: o TÍTULO do alerta é o link para o evento.
+//
+// Resposta parcial: cada ação confirmada na página é salva na hora; o botão final RESPONDER AO ACC
+// só é liberado quando TODOS os alertas tiverem uma ação. O alerta sem resposta (e os em andamento
+// ou encaminhados) voltam em novo e-mail conforme o risco (acompanhamento recorrente).
 
 import type { AlertSeverity } from "@axion/types";
 
@@ -29,44 +24,61 @@ import {
   ACC_FONT_FAMILY,
   ACC_FONT_SIZE_AUX,
   ACC_FONT_SIZE_BODY,
-  ACC_FONT_SIZE_SECTION,
   ACC_FONT_SIZE_TITLE,
 } from "@/lib/email/brand-style";
 import {
-  alertRiskLevelLabels,
-  BADGE_STYLES,
-  escapeHtml,
-  evidenceItemHtml,
-  evidenceItemText,
-  type ContractAlertEvidenceItem,
-} from "./contract-alert-template";
+  ALERT_TONES,
+  BUTTON_COLUMN_WIDTH_PX,
+  HEADER_GAP_PX,
+  ALERT_MOBILE_CSS,
+  buildActionsPanelHtml,
+  buildAlertBoxHtml,
+  buildAlertHeaderHtml,
+  buildThreeActionButtonsHtml,
+  type ThreeActions,
+} from "@/lib/email/templates/alert-box-style";
+import {
+  alertClauseHtml,
+  alertClauseText,
+  alertDescriptionHtml,
+  alertEvidenceHtml,
+  alertEvidenceText,
+  alertRepeatHtml,
+  alertTitleHtml,
+} from "@/lib/email/templates/alert-body-parts";
+import { repeatNoticeText } from "@/lib/alerts/repeat-policy";
+import { alertRiskLevelLabels, escapeHtml, type ContractAlertEvidenceItem } from "./contract-alert-template";
 
 export interface ContractAlertBatchEmailItem {
   eventId: string;
   title: string; // "título/evento"
   severity: AlertSeverity; // "grau de risco"
   riskDescription: string; // "descrição do risco"
-  clauseLabel: string | null; // "cláusula" — ex.: "Cláusula 8.2 – Prazos e Cronograma"
+  /** Obra DESTE alerta (um lote pode reunir obras diferentes). Padrão: input.projectName. */
+  projectName?: string;
+  clauseLabel: string | null; // ex.: "Cláusula 8.2 – Prazos e Cronograma" (verificada); null = pendente
   clauseText: string | null; // texto da cláusula, quando disponível
-  evidence: ContractAlertEvidenceItem[]; // "evidências"
-  // Link neutro (sem token) direto para este evento no ACC — mesmo
-  // espírito de eventUrl em contract-alert-template.ts.
+  evidence: ContractAlertEvidenceItem[]; // links para a origem; sem referência = "Pendente de confirmação"
+  // Link neutro (sem token) direto para este evento no ACC — vira o link do TÍTULO.
   eventUrl: string;
   // Link para o bloco DESTE evento dentro da página do lote.
   respondItemUrl: string;
   // Página mínima de ação rápida, sem dashboard/sidebar.
   quickActionUrl?: string;
+  // Link "CONSULTAR IA" (página do ACC; ver lib/alerts/ai-consult-link.ts).
+  aiConsultUrl?: string;
 }
 
 export interface ContractAlertBatchEmailInput {
   recipientName: string | null;
-  projectName: string; // "obra"
-  // Link único para a página do lote (usado no CTA principal do
-  // rodapé) — a mesma página que respondItemUrl de cada item aponta,
-  // só sem âncora.
+  /** Obra padrão dos itens que não informam a sua. */
+  projectName: string;
+  // Link único para a página do lote (CTA principal do rodapé).
   batchUrl: string;
   items: ContractAlertBatchEmailItem[];
   hasInlineLogo: boolean;
+  // Logo INVERTIDO para as caixas CRÍTICO/ALTO — padrão: segue hasInlineLogo.
+  hasInlineInvertedLogo?: boolean;
 }
 
 export interface ContractAlertBatchEmail {
@@ -74,13 +86,6 @@ export interface ContractAlertBatchEmail {
   html: string;
   text: string;
 }
-
-const alertRiskSubjectMarkers: Record<AlertSeverity, string> = {
-  BAIXA: "🟢",
-  MEDIA: "🔵",
-  ALTA: "🟡",
-  CRITICA: "🔴",
-};
 
 const SEVERITY_ORDER: Record<AlertSeverity, number> = { CRITICA: 0, ALTA: 1, MEDIA: 2, BAIXA: 3 };
 
@@ -91,195 +96,122 @@ function highestSeverity(items: readonly ContractAlertBatchEmailItem[]): AlertSe
   );
 }
 
-// Assunto reflete a quantidade de alertas e o maior grau de risco entre
-// eles (requisito 7: "o mesmo e-mail pode conter CRÍTICO/ALTO/MÉDIO/
-// BAIXO... cada evento mantém seu próprio label e cor") — nunca finge
-// que o lote inteiro tem um único grau de risco quando não tem.
+function projectOf(item: ContractAlertBatchEmailItem, fallback: string): string {
+  return item.projectName?.trim() || fallback;
+}
+
+// Obras distintas entre os alertas do lote (nome informado pelo item ou a obra padrão).
+export function distinctProjectNames(projectName: string, items: readonly ContractAlertBatchEmailItem[]): string[] {
+  return Array.from(new Set(items.map((item) => projectOf(item, projectName))));
+}
+
+// Assunto (decisão de produto): um e-mail por OBRA e destinatário.
+//   com risco crítico  -> "[RISCO CRÍTICO] OBRA | N alertas | ACC"
+//   senão, com alto    -> "[RISCO ALTO] OBRA | N alertas | ACC"
+//   só médio/baixo     -> "OBRA | N alertas | ACC" (sem mencionar o risco)
+// Um lote NUNCA mistura obras: a montagem falha em vez de produzir um assunto enganoso.
 export function buildContractAlertBatchSubject(projectName: string, items: readonly ContractAlertBatchEmailItem[]): string {
+  const projects = distinctProjectNames(projectName, items);
+  if (projects.length !== 1) {
+    throw new Error("Um e-mail de alertas não pode misturar obras: gere um e-mail por obra e destinatário.");
+  }
   const worst = highestSeverity(items);
   const count = items.length;
-  const plural = count === 1 ? "alerta" : "alertas";
-  return `${alertRiskSubjectMarkers[worst]} [ACC] ${count} ${plural} de contrato — OBRA ${projectName.toUpperCase()}`;
+  const countLabel = `${count} ${count === 1 ? "alerta" : "alertas"}`;
+  const prefix = worst === "CRITICA" ? "[RISCO CRÍTICO] " : worst === "ALTA" ? "[RISCO ALTO] " : "";
+  return `${prefix}${projects[0]} | ${countLabel} | ACC`;
 }
 
-// Logo do e-mail de LOTE ~25% MENOR que o logo do e-mail de alerta
-// único (38px, EMAIL_LOGO_ATTR_SIZE_PX de contract-alert-template.ts):
-// 38 * 0.75 = 28.5px — arredondado para 29px. Cabeçalho deliberadamente
-// mais compacto que o de um único alerta, porque aqui ele antecede N
-// blocos de alerta, não só um.
-const EMAIL_LOGO_PREVIOUS_SIZE_PX = 38;
-const EMAIL_LOGO_REDUCTION_FACTOR = 0.75;
-const EMAIL_LOGO_SIZE_PX = Math.round(EMAIL_LOGO_PREVIOUS_SIZE_PX * EMAIL_LOGO_REDUCTION_FACTOR);
-
-// Cabeçalho compacto: logo + "ACC - Acompanhamento de Contratos" (texto
-// do layout aprovado) na mesma linha, nome do projeto em vermelho/negrito
-// na linha abaixo — mesmo texto/cores validados no mockup do piloto.
-function buildHeaderHtml(hasInlineLogo: boolean, projectName: string): string {
+// Cabeçalho do e-mail (fora das caixas): logo oficial + "ACC - Acompanhamento de Contratos".
+// A obra aparece no cabeçalho de CADA caixa, não aqui.
+function buildOuterHeaderHtml(hasInlineLogo: boolean): string {
   const logoCell = hasInlineLogo
-    ? `<td style="vertical-align:middle;padding-right:8px;"><img src="cid:${ACC_EMAIL_LOGO_CID}" alt="ACC" width="${EMAIL_LOGO_SIZE_PX}" height="${EMAIL_LOGO_SIZE_PX}" style="display:block;border:0;width:${EMAIL_LOGO_SIZE_PX}px;height:${EMAIL_LOGO_SIZE_PX}px;" /></td>`
+    ? `<td style="vertical-align:middle;padding-right:8px;"><img src="cid:${ACC_EMAIL_LOGO_CID}" alt="ACC" width="29" height="29" style="display:block;border:0;width:29px;height:29px;" /></td>`
     : "";
-
-  return `<table role="presentation" cellpadding="0" cellspacing="0"><tr>${logoCell}<td style="vertical-align:middle;">
-    <p style="margin:0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;color:${ACC_COLOR_BODY};">ACC - Acompanhamento de Contratos</p>
-    <p style="margin:2px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_TITLE};font-weight:bold;color:${ACC_COLOR_HEADING};">${escapeHtml(projectName)}</p>
-  </td></tr></table>`;
+  return `<table role="presentation" cellpadding="0" cellspacing="0"><tr>${logoCell}<td style="vertical-align:middle;"><p style="margin:0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_TITLE};font-weight:bold;color:${ACC_COLOR_HEADING};">ACC - Acompanhamento de Contratos</p></td></tr></table>`;
 }
 
-// As 4 cores/rótulos do layout aprovado. VER EVENTO é o único link REAL
-// (sem token, sempre disponível, nunca conta como resposta). RESOLVIDO/
-// EM ANDAMENTO/ENVIADO P/ aqui são indicadores visuais/navegacionais —
-// todos levam ao MESMO lugar (o bloco deste evento na página do lote),
-// nunca gravam nada por si só: Gmail/Outlook não suportam <select>, e
-// ENVIADO P/ exige escolher um colaborador, o que só é possível numa
-// página real (ver contract-alert-batch-form.tsx). A cor/rótulo de cada
-// botão é só uma prévia do que será escolhido na página — nunca finge
-// que o clique já registrou a ação.
-const BATCH_ACTION_BUTTON_STYLES = {
-  VER_EVENTO: { background: "#FFD600", color: "#000000", label: "VER EVENTO" },
-  RESOLVIDO: { background: "#1B2A4A", color: "#ffffff", label: "RESOLVIDO" },
-  EM_ANDAMENTO: { background: "#15803D", color: "#ffffff", label: "EM ANDAMENTO" },
-  ENVIADO_PARA: { background: "#F97316", color: "#ffffff", label: "ENVIADO P/" },
-} as const;
-
-function buildBatchActionButtonHtml(
-  href: string,
-  style: { background: string; color: string; label: string },
-  title: string,
-  marginTop: string
-): string {
-  return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer" title="${escapeHtml(title)}" aria-label="${escapeHtml(`${style.label} — ${title}`)}" style="display:block;width:100%;box-sizing:border-box;margin:${marginTop} 0 0 0;padding:8px 10px;background-color:${style.background};color:${style.color};font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;text-decoration:none;border-radius:6px;text-align:center;">${escapeHtml(style.label)}</a>`;
-}
-
-// Bloco de ações de UM alerta — alinhado ao lado do conteúdo do MESMO
-// alerta (requisito 1: "a coluna de ações deve ficar alinhada
-// verticalmente com o respectivo alerta"), nunca uma coluna
-// compartilhada entre alertas.
-function buildRespondActionUrl(
-  item: ContractAlertBatchEmailItem,
-  action: "RESOLVIDO" | "EM_ANDAMENTO" | "ENVIADO_PARA"
-): string {
+function buildRespondActionUrl(item: ContractAlertBatchEmailItem, action: ThreeActions): string {
   const url = new URL(item.quickActionUrl ?? item.respondItemUrl);
   url.searchParams.set("acao", action);
   return url.toString();
 }
 
-function buildItemActionsColumnHtml(item: ContractAlertBatchEmailItem): string {
-  const verEvento = buildBatchActionButtonHtml(
-    item.eventUrl,
-    BATCH_ACTION_BUTTON_STYLES.VER_EVENTO,
-    "Abre o evento completo no ACC — somente consulta, não conta como resposta.",
-    "0"
-  );
-  const resolvido = buildBatchActionButtonHtml(
-    buildRespondActionUrl(item, "RESOLVIDO"),
-    BATCH_ACTION_BUTTON_STYLES.RESOLVIDO,
-    "Registra RESOLVIDO em um clique quando este e-mail contém um único alerta.",
-    "8px"
-  );
-  const emAndamento = buildBatchActionButtonHtml(
-    buildRespondActionUrl(item, "EM_ANDAMENTO"),
-    BATCH_ACTION_BUTTON_STYLES.EM_ANDAMENTO,
-    "Registra EM ANDAMENTO em um clique quando este e-mail contém um único alerta.",
-    "8px"
-  );
-  const enviadoPara = buildBatchActionButtonHtml(
-    buildRespondActionUrl(item, "ENVIADO_PARA"),
-    BATCH_ACTION_BUTTON_STYLES.ENVIADO_PARA,
-    "Abre uma página rápida com ENVIADO P/ e o dropdown de colaboradores.",
-    "8px"
-  );
-  const caption = `<p style="margin:8px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${ACC_COLOR_MUTED};text-align:center;">A resposta a este e-mail só é liberada depois que TODOS os alertas do lote tiverem uma ação.</p>`;
-
-  return `${verEvento}${resolvido}${emAndamento}${enviadoPara}${caption}`;
-}
-
-function buildItemHtml(item: ContractAlertBatchEmailItem, index: number): string {
-  const badge = BADGE_STYLES[item.severity];
+function buildItemHtml(
+  item: ContractAlertBatchEmailItem,
+  fallbackProject: string,
+  logos: { maroon: boolean; inverted: boolean }
+): string {
+  const tone = ALERT_TONES[item.severity];
   const riskLabel = alertRiskLevelLabels[item.severity];
-  const badgeHtml = `<span style="display:inline-block;background-color:${badge.background};color:${badge.color};font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;padding:5px 12px;border-radius:999px;">RISCO ${escapeHtml(riskLabel)}</span>`;
 
-  const clauseHtml =
-    item.clauseLabel || item.clauseText
-      ? `<p style="margin:12px 0 2px 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;color:${ACC_COLOR_HEADING};text-transform:uppercase;letter-spacing:0.02em;">Cláusula impactada</p>
-         ${item.clauseLabel ? `<p style="margin:0 0 4px 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_BODY};color:${ACC_COLOR_BODY};font-weight:bold;">${escapeHtml(item.clauseLabel)}</p>` : ""}
-         ${item.clauseText ? `<p style="margin:0;padding:8px 12px;border-left:3px solid #9ca3af;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${ACC_COLOR_MUTED};font-style:italic;">&ldquo;${escapeHtml(item.clauseText)}&rdquo;</p>` : ""}`
-      : "";
-
-  const evidenceHtml =
-    item.evidence.length > 0
-      ? `<ul style="margin:4px 0 0 0;padding-left:16px;">${item.evidence.map(evidenceItemHtml).join("")}</ul>`
-      : `<span style="font-family:${ACC_FONT_FAMILY};color:${ACC_COLOR_MUTED};font-size:${ACC_FONT_SIZE_AUX};">Nenhuma evidência vinculada nesta fase.</span>`;
-
-  return `
-  <tr><td id="evento-${escapeHtml(item.eventId)}" style="padding:${index === 0 ? "0" : "20px"} 24px 20px 24px;${index === 0 ? "" : "border-top:1px solid #e5e7eb;"}">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+  const inner = `
+    ${buildAlertHeaderHtml(item.severity, riskLabel, projectOf(item, fallbackProject), logos)}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:${HEADER_GAP_PX}px;">
       <tr>
-        <td class="acc-batch-content-col" valign="top" width="64%" style="width:64%;padding:0 24px 0 0;word-break:break-word;">
-          <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:6px;"><tr>
-            <td style="vertical-align:middle;padding-right:8px;">${badgeHtml}</td>
-            <td style="vertical-align:middle;"><h2 style="margin:0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_SECTION};font-weight:bold;color:${ACC_COLOR_HEADING};word-break:break-word;">${escapeHtml(item.title)}</h2></td>
-          </tr></table>
-          <p style="margin:0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_BODY};color:${ACC_COLOR_BODY};"><strong>Risco:</strong> ${escapeHtml(item.riskDescription)}</p>
-          ${clauseHtml}
-          <p style="margin:14px 0 4px 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};font-weight:bold;color:${ACC_COLOR_HEADING};text-transform:uppercase;letter-spacing:0.02em;">Evidências</p>
-          ${evidenceHtml}
+        <td class="acc-batch-content-col" valign="top" style="padding:0;word-break:break-word;color:${tone.text};">
+          ${alertTitleHtml(item.title, item.eventUrl, item.severity)}
+          ${alertDescriptionHtml(item.riskDescription, item.severity)}
+          ${alertClauseHtml({ label: item.clauseLabel, text: item.clauseText }, item.severity)}
+          ${alertEvidenceHtml(item.evidence, item.severity)}
+          ${alertRepeatHtml(item.severity)}
         </td>
-        <td class="acc-batch-actions-col" valign="top" width="36%" style="width:36%;padding:0 0 0 4px;border-left:1px solid #e5e7eb;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:0 0 0 20px;">
-            ${buildItemActionsColumnHtml(item)}
-          </td></tr></table>
+        <td class="acc-batch-actions-col" valign="top" width="${BUTTON_COLUMN_WIDTH_PX}" style="width:${BUTTON_COLUMN_WIDTH_PX}px;padding:0 0 0 16px;">
+          ${buildActionsPanelHtml(buildThreeActionButtonsHtml((action) => buildRespondActionUrl(item, action)), item.aiConsultUrl)}
         </td>
       </tr>
-    </table>
+    </table>`;
+
+  return `
+  <tr><td id="evento-${escapeHtml(item.eventId)}" style="padding:0 24px 16px 24px;">
+    ${buildAlertBoxHtml(item.severity, inner)}
   </td></tr>`;
 }
 
-function buildItemText(item: ContractAlertBatchEmailItem): string {
+function buildItemText(item: ContractAlertBatchEmailItem, fallbackProject: string): string {
   const riskLabel = alertRiskLevelLabels[item.severity];
   return [
-    `— ${item.title} (RISCO ${riskLabel}) —`,
-    `Risco: ${item.riskDescription}`,
-    ...(item.clauseLabel ? [`Cláusula impactada: ${item.clauseLabel}`] : []),
-    ...(item.clauseText ? [`"${item.clauseText}"`] : []),
-    "Evidências:",
-    item.evidence.length > 0 ? item.evidence.map(evidenceItemText).join("\n") : "Nenhuma evidência vinculada nesta fase.",
-    `Ver evento: ${item.eventUrl}`,
-    `Responder a este alerta (RESOLVIDO/EM ANDAMENTO/ENVIADO P/): ${item.respondItemUrl}`,
+    `— RISCO ${riskLabel} | ${projectOf(item, fallbackProject)} —`,
+    `${item.title} — ${item.eventUrl}`,
+    item.riskDescription,
+    alertClauseText({ label: item.clauseLabel, text: item.clauseText }),
+    alertEvidenceText(item.evidence),
+    repeatNoticeText(item.severity),
+    ...(item.aiConsultUrl ? [`CONSULTAR IA: ${item.aiConsultUrl}`] : []),
+    `RESOLVIDO: ${buildRespondActionUrl(item, "RESOLVIDO")}`,
+    `EM ANDAMENTO: ${buildRespondActionUrl(item, "EM_ANDAMENTO")}`,
+    `ENVIADO P/: ${buildRespondActionUrl(item, "ENVIADO_PARA")}`,
   ].join("\n");
 }
 
-// Constrói {subject, html, text} do e-mail de LOTE de alertas de
-// contrato. Layout: mesma identidade visual institucional do alerta
-// individual (contract-alert-template.ts) — cabeçalho com marca/logo,
-// duas colunas por alerta (conteúdo ~64% / ações ~36%), tabelas +
-// estilos inline (Gmail/Outlook). Cada alerta é um bloco INDEPENDENTE,
-// separado por uma borda superior, nunca uma coluna de ações
-// compartilhada entre alertas.
+// Constrói {subject, html, text} do e-mail de LOTE. Mesma identidade das caixas do alerta
+// individual; cada alerta é um bloco INDEPENDENTE (obra, risco, cor e botões próprios).
 export function buildContractAlertBatchEmail(input: ContractAlertBatchEmailInput): ContractAlertBatchEmail {
   const subject = buildContractAlertBatchSubject(input.projectName, input.items);
   const greeting = input.recipientName ? `Olá, ${input.recipientName}.` : "Olá.";
+  const logos = { maroon: input.hasInlineLogo, inverted: input.hasInlineInvertedLogo ?? input.hasInlineLogo };
 
-  const itemsHtml = input.items.map((item, index) => buildItemHtml(item, index)).join("");
+  const itemsHtml = input.items.map((item) => buildItemHtml(item, input.projectName, logos)).join("");
 
   const html = `
 <style>
   @media only screen and (max-width:640px) {
     .acc-batch-content-col, .acc-batch-actions-col { display:block !important; width:100% !important; }
-    .acc-batch-actions-col { padding:16px 0 0 0 !important; border-left:none !important; border-top:1px solid #e5e7eb !important; }
+    .acc-batch-actions-col { padding:16px 0 0 0 !important; }${ALERT_MOBILE_CSS}
   }
 </style>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f3f4f6;padding:24px 0;">
   <tr>
     <td align="center">
       <table role="presentation" width="820" cellpadding="0" cellspacing="0" style="width:100%;max-width:820px;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:8px;">
-        <tr><td style="padding:20px 24px 0 24px;">
+        <tr><td style="padding:20px 24px 16px 24px;">
           <p style="margin:0 0 12px 0;font-family:${ACC_FONT_FAMILY};color:${ACC_COLOR_BODY};font-size:${ACC_FONT_SIZE_BODY};">${escapeHtml(greeting)}</p>
-          ${buildHeaderHtml(input.hasInlineLogo, input.projectName)}
+          ${buildOuterHeaderHtml(input.hasInlineLogo)}
         </td></tr>
         ${itemsHtml}
-        <tr><td style="padding:20px 24px;border-top:1px solid #e5e7eb;text-align:center;">
-          <a href="${escapeHtml(input.batchUrl)}" style="display:inline-block;padding:12px 28px;background-color:${ACC_COLOR_HEADING};color:#ffffff;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_BODY};font-weight:bold;text-decoration:none;border-radius:6px;">RESPONDER AO ACC</a>
-          <p style="margin:10px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${ACC_COLOR_MUTED};">Este botão só libera o envio depois que TODOS os alertas acima tiverem uma ação definida na página do ACC.</p>
+        <tr><td style="padding:8px 24px 20px 24px;border-top:1px solid #e5e7eb;text-align:center;">
+          <a href="${escapeHtml(input.batchUrl)}" style="display:inline-block;margin-top:12px;padding:12px 28px;background-color:${ACC_COLOR_HEADING};color:#ffffff;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_BODY};font-weight:bold;text-decoration:none;border-radius:6px;">RESPONDER AO ACC</a>
+          <p style="margin:10px 0 0 0;font-family:${ACC_FONT_FAMILY};font-size:${ACC_FONT_SIZE_AUX};color:${ACC_COLOR_MUTED};">Cada ação confirmada é salva na hora. Este botão só libera o envio da resposta final depois que TODOS os alertas acima tiverem uma ação; os pendentes voltam a ser lembrados conforme o risco.</p>
         </td></tr>
         <tr><td style="padding:16px 24px;border-top:1px solid #e5e7eb;">
           <p style="margin:0;font-family:${ACC_FONT_FAMILY};color:${ACC_COLOR_MUTED};font-size:${ACC_FONT_SIZE_AUX};">
@@ -293,12 +225,11 @@ export function buildContractAlertBatchEmail(input: ContractAlertBatchEmailInput
 
   const text = [
     "ACC - Acompanhamento de Contratos",
-    input.projectName,
     "",
     greeting,
-    `Este e-mail reúne ${input.items.length} ${input.items.length === 1 ? "alerta" : "alertas"} de contrato — cada um precisa de uma ação própria antes que a resposta ao ACC possa ser enviada.`,
+    `Este e-mail reúne ${input.items.length} ${input.items.length === 1 ? "alerta" : "alertas"} de contrato — cada um precisa de uma ação própria antes que a resposta final ao ACC possa ser enviada. Cada ação confirmada é salva na hora.`,
     "",
-    ...input.items.flatMap((item) => [buildItemText(item), ""]),
+    ...input.items.flatMap((item) => [buildItemText(item, input.projectName), ""]),
     `RESPONDER AO ACC (só libera depois que todos os alertas acima tiverem uma ação): ${input.batchUrl}`,
     "",
     "Este alerta é uma sugestão de análise automatizada e exige revisão humana — não é uma decisão contratual ou jurídica definitiva.",

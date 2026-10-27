@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { getProjects } from "@/lib/data";
 import { formatDate } from "@/lib/labels";
-import { Scale } from "lucide-react";
+import { Pencil, Plus, Scale } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 
 export const metadata: Metadata = { title: "Projetos" };
 
@@ -47,6 +48,8 @@ export default async function ProjetosPage() {
     return name.replace(/^\[DEV\]\s*/i, "");
   }
 
+  const canCreateProject = adminProjectIds.size > 0;
+
   return (
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden p-6">
       <InstitutionalBackground />
@@ -72,13 +75,29 @@ export default async function ProjetosPage() {
             </div>
           </div>
 
-          <LogoutButton />
+          <div className="flex items-center gap-2">
+            {canCreateProject ? (
+              <Link href="/projetos/novo" className={buttonVariants({ className: "gap-2" })}>
+                <Plus aria-hidden="true" />
+                NOVO PROJETO
+              </Link>
+            ) : null}
+            <LogoutButton />
+          </div>
         </div>
 
-        <div className="grid gap-5">
-          <div className="flex flex-col gap-4">
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(250px,0.42fr)]">
+          <div className="flex min-w-0 flex-col gap-4">
+            {contractedProjects.length === 0 ? (
+              <Card className="border-dashed bg-white/70">
+                <CardContent className="p-6 text-sm text-slate-600">
+                  Nenhum projeto disponível para sua conta.
+                </CardContent>
+              </Card>
+            ) : null}
             {contractedProjects.map((project) => (
-              <Link key={project.id} href={`/${project.id}/dashboard`}>
+              <div key={project.id} className="relative">
+              <Link href={`/${project.id}/dashboard`}>
                 <Card className="border-[#041D36] bg-[#062B4F] text-white shadow-md transition-all hover:bg-[#083761] hover:shadow-lg">
                   <CardHeader className="flex-row items-center justify-between gap-4 space-y-0">
                     <div>
@@ -96,7 +115,8 @@ export default async function ProjetosPage() {
                     </Badge>
                   </CardHeader>
 
-                  <CardContent className="pt-0 text-sm text-white/80">
+                  <CardContent className={`pt-0 text-sm text-white/80${adminProjectIds.has(project.id) ? " pr-44" : ""}`}>
+                    No. sistema UNO: {project.code} ·{" "}
                     {project.contractNumber && (
                       <>Contrato {project.contractNumber} · </>
                     )}
@@ -105,14 +125,30 @@ export default async function ProjetosPage() {
                   </CardContent>
                 </Card>
               </Link>
+              {/* Fora do <Link> do card: âncoras aninhadas são HTML inválido. */}
+              {adminProjectIds.has(project.id) ? (
+                <Link
+                  href={`/projetos/${project.id}/editar?origem=selecao`}
+                  className={buttonVariants({
+                    variant: "outline",
+                    size: "sm",
+                    className: "absolute bottom-4 right-4 gap-1.5 border-white/40 bg-white/10 text-white hover:bg-white/20 hover:text-white",
+                  })}
+                >
+                  <Pencil aria-hidden="true" />
+                  Editar projeto
+                </Link>
+              ) : null}
+              </div>
             ))}
           </div>
 
           <Link
             href="/juridico"
             title="Criar ou abrir uma análise de minuta antes da contratação da obra."
+            className="block"
           >
-            <Card className="mx-auto w-[96%] border-[#0756A8] bg-[#1267C4] text-white shadow-md transition-all hover:bg-[#0E5AAD] hover:shadow-lg">
+            <Card className="h-full border-[#0756A8] bg-[#1267C4] text-white shadow-md transition-all hover:bg-[#0E5AAD] hover:shadow-lg">
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-3 text-xl font-semibold text-white">
                   <Scale className="size-6" />

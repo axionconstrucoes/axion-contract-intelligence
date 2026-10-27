@@ -2,9 +2,11 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@axion/db/admin";
 
+import { openFollowupsForSentBatch } from "../alerts/followup-service";
 import { getAppBaseUrl } from "../app-base-url";
+import { buildAiConsultUrl } from "../alerts/ai-consult-link";
 import { appendAccEmailSignature } from "./branding/acc-email-signature";
-import { loadAccLogoInlineImage } from "./branding/load-acc-logo-inline-image";
+import { loadAccAlertLogos } from "./branding/load-acc-logo-inline-image";
 import { EmailSendError } from "./email-provider";
 import { getEmailProvider } from "./get-email-provider";
 import {
@@ -147,20 +149,29 @@ export async function createAndSendContractAlertBatch(
   const batchUrl = `${baseUrl}/${input.projectId}/ledger/lote-alertas/${batchId}`;
   const emailItems: ContractAlertBatchEmailItem[] = input.items.map((item) => ({
     ...item,
+    projectName: item.projectName ?? (project.name as string),
     respondItemUrl: `${batchUrl}#evento-${item.eventId}`,
+    aiConsultUrl: buildAiConsultUrl({ baseUrl, projectId: input.projectId, subject: "evento", id: item.eventId }),
     quickActionUrl:
       input.items.length === 1
         ? `${baseUrl}/alertas/acao/${input.projectId}/${batchId}/${item.eventId}`
         : `${baseUrl}/alertas/lote/${input.projectId}/${batchId}?evento=${encodeURIComponent(item.eventId)}`,
   }));
 
-  const inlineLogo = loadAccLogoInlineImage();
+  // Logo vinho sempre (cabeçalho do lote e caixas MÉDIO/BAIXO); o invertido só
+  // entra quando algum alerta do lote é CRÍTICO/ALTO (fundo escuro).
+  const logos = loadAccAlertLogos({
+    maroon: true,
+    inverted: emailItems.some((item) => item.severity === "CRITICA"),
+  });
+  const inlineLogo = logos.availability.maroon ? logos.images[0] : null;
   const built = buildContractAlertBatchEmail({
     recipientName: recipient.name ?? null,
     projectName: project.name,
     batchUrl,
     items: emailItems,
-    hasInlineLogo: inlineLogo !== null,
+    hasInlineLogo: logos.availability.maroon,
+    hasInlineInvertedLogo: logos.availability.inverted,
   });
   const signed = appendAccEmailSignature(built, inlineLogo !== null, false);
   const provider = getEmailProvider();
@@ -172,7 +183,7 @@ export async function createAndSendContractAlertBatch(
       subject: built.subject,
       text: signed.text,
       html: signed.html,
-      inlineImages: inlineLogo ? [inlineLogo] : undefined,
+      inlineImages: logos.images.length > 0 ? logos.images : undefined,
       correlationId,
     });
   } catch (error) {
@@ -223,6 +234,32 @@ export async function createAndSendContractAlertBatch(
     entity_id: batchId,
     detail: `Lote de alertas de contrato enviado com ${input.items.length} evento(s). CorrelationId=${correlationId}.`,
   });
+
+  // Acompanhamento recorrente ("Repete: …"): aberto só depois do aceite do provedor e do SENT
+  // persistido; idempotente (um acompanhamento aberto por alerta). Uma falha aqui NUNCA desfaz
+  // nem reenvia o lote — fica registrada na auditoria para reprocessamento.
+  try {
+    const opened = await openFollowupsForSentBatch(admin, {
+      projectId: input.projectId,
+      recipientUserId: input.recipientUserId,
+      items: input.items.map((item) => ({ eventId: item.eventId, severity: item.severity })),
+      sentAt: sent.sentAt,
+    });
+    if (opened.failed > 0) {
+      await admin.from("audit_log_entries").insert({
+        project_id: input.projectId,
+        actor_type: "SYSTEM",
+        actor_user_id: null,
+        actor_label: null,
+        action: "ALERT_FOLLOWUP_OPEN_FAILED",
+        entity_type: "CONTRACT_ALERT_BATCH",
+        entity_id: batchId,
+        detail: `${opened.failed} acompanhamento(s) recorrente(s) não puderam ser abertos para o lote; ${opened.opened} abertos.`,
+      });
+    }
+  } catch {
+    // Acompanhamento é complementar: não propaga.
+  }
 
   return {
     batchId,

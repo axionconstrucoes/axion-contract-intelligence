@@ -14,6 +14,14 @@ import { join } from "node:path";
 import {
   extractDocument,
 } from "./document-extractors.mjs";
+import {
+  analyzePdfPagesWithOcr,
+  formatPageRanges,
+  OCR_ENGINE,
+  OCR_ENGINE_VERSION,
+  OCR_LANGUAGE,
+  PENDING_STATUSES,
+} from "./lib/pdf-ocr.mjs";
 
 register("./ts-module-resolver.mjs", import.meta.url);
 
@@ -21,8 +29,20 @@ const { detectSourceLanguage } = await import(
   "../apps/web/lib/documents/detect-source-language"
 );
 
+// --reprocess: reprocessa uma versão JÁ PROCESSED (ex.: depois de
+// habilitar OCR). Cria uma NOVA extração; as anteriores ficam
+// preservadas como histórico (consumidores usam sempre a mais recente).
+const reprocess =
+  process.argv.includes("--reprocess");
+
 const documentVersionId =
-  process.argv[2];
+  process.argv.slice(2).find((arg) => !arg.startsWith("--"));
+
+// Só vira true depois de confirmado que a versão estava PROCESSED —
+// uma falha no reprocessamento devolve a versão a PROCESSED (a extração
+// anterior continua válida), nunca a deixa FAILED.
+let reprocessArmed = false;
+let previousExtractionIds = [];
 
 if (!documentVersionId) {
   console.error("");
@@ -30,7 +50,7 @@ if (!documentVersionId) {
     "Uso:"
   );
   console.error(
-    "node --env-file=apps/web/.env.local scripts/process-document-version.mjs <document-version-id>"
+    "node --env-file=apps/web/.env.local scripts/process-document-version.mjs <document-version-id> [--reprocess]"
   );
   console.error("");
 
@@ -133,10 +153,11 @@ async function failProcessing(
 
   await supabase
     .from("document_versions")
-    .update({
-      processing_status: "FAILED",
-      processing_error: message,
-    })
+    .update(
+      reprocessArmed
+        ? { processing_status: "PROCESSED", processing_error: null }
+        : { processing_status: "FAILED", processing_error: message }
+    )
     .eq(
       "id",
       documentVersionId
@@ -144,7 +165,9 @@ async function failProcessing(
 
   await writeAudit({
     action:
-      "DOCUMENT_PROCESSING_FAILED",
+      reprocessArmed
+        ? "DOCUMENT_REPROCESSING_FAILED"
+        : "DOCUMENT_PROCESSING_FAILED",
     entityId:
       documentVersionId,
     detail:
@@ -199,7 +222,26 @@ try {
     );
   }
 
-  if (
+  if (reprocess) {
+    if (version.processing_status !== "PROCESSED") {
+      throw new Error(
+        `Reprocessamento exige versao PROCESSED (atual: ${version.processing_status}).`
+      );
+    }
+
+    const { data: previousExtractions, error: previousError } = await supabase
+      .from("document_extractions")
+      .select("id")
+      .eq("document_version_id", documentVersionId)
+      .eq("status", "PROCESSED");
+
+    if (previousError) {
+      throw previousError;
+    }
+
+    previousExtractionIds = (previousExtractions ?? []).map((row) => row.id);
+    reprocessArmed = true;
+  } else if (
     version.processing_status ===
     "PROCESSED"
   ) {
@@ -944,14 +986,261 @@ try {
         version.original_file_name,
     });
 
+  const isPdfSource = (source) =>
+    source.mimeType === "application/pdf" ||
+    String(source.fileName ?? "").toLowerCase().endsWith(".pdf");
+
+  // PDF digitalizado pode não ter texto nativo — o OCR (5c) decide.
   if (
-    !result.text ||
-    result.text.trim().length === 0
+    (!result.text ||
+      result.text.trim().length === 0) &&
+    !isPdfSource({ mimeType: version.mime_type, fileName: version.original_file_name })
   ) {
     throw new Error(
       "O extrator nao encontrou texto utilizavel no documento."
     );
   }
+
+  // Arquivos-fonte da extração, na ordem do texto final (principal e,
+  // depois, partes/anexos da mesma versão) — base do OCR (5c).
+  const sourceFiles = legacyXlsResult
+    ? []
+    : [
+        {
+          fileId: null,
+          fileName: version.original_file_name,
+          mimeType: version.mime_type,
+          buffer,
+          pageOffset: 0,
+          pageCount: result.pageCount,
+          segments: result.segments,
+        },
+      ];
+
+
+  // ==========================================================
+  // 5b. PARTES / ANEXOS CONTRATUAIS DA MESMA VERSAO
+  //
+  // Contrato enviado em varios arquivos (ex.: "Parte 1 de 2" como
+  // PRINCIPAL + "Parte 2 de 2" como ANEXO_CONTRATUAL da MESMA versao,
+  // document_version_files): a analise contratual (detect-clause-
+  // candidates.mjs le a ultima extracao da versao, por segment_index)
+  // precisa ver o instrumento inteiro. Os arquivos complementares
+  // entram NA MESMA extracao, depois do principal, em ordem de envio,
+  // com paginas continuando a numeracao (Parte 2 comeca na pagina
+  // seguinte a ultima da Parte 1). O locator preserva arquivo e pagina
+  // original — rastreabilidade ate a fonte (CLAUDE.md #11).
+  // ==========================================================
+
+  const CONTRACTUAL_KINDS = new Set(["CONTRATO_BASE", "ADITIVO"]);
+  const contractualFileIds = [];
+  let combinedPageCount = result.pageCount;
+  let combinedSegments = result.segments;
+  let combinedExtractor = result.extractor;
+
+  if (!legacyXlsResult && CONTRACTUAL_KINDS.has(document.kind)) {
+    const { data: supplementalFiles, error: supplementalError } = await supabase
+      .from("document_version_files")
+      .select("id,original_file_name,mime_type,storage_bucket,storage_path,uploaded_at")
+      .eq("document_version_id", documentVersionId)
+      .eq("file_role", "ANEXO_CONTRATUAL")
+      .order("uploaded_at", { ascending: true })
+      .order("id", { ascending: true });
+
+    if (supplementalError) {
+      throw supplementalError;
+    }
+
+    let pageOffset = result.pageCount ?? 0;
+    const extractors = new Set([result.extractor]);
+    let partSegments = [];
+
+    for (const file of supplementalFiles ?? []) {
+      const { data: partBlob, error: partDownloadError } = await supabase.storage
+        .from(file.storage_bucket)
+        .download(file.storage_path);
+
+      if (partDownloadError || !partBlob) {
+        throw new Error(
+          `Falha no download do arquivo complementar ${file.original_file_name}: ${partDownloadError?.message ?? "arquivo vazio"}`
+        );
+      }
+
+      const partBuffer = Buffer.from(await partBlob.arrayBuffer());
+      let partResult;
+      try {
+        partResult = await extractDocument({
+          buffer: partBuffer,
+          mimeType: file.mime_type,
+          fileName: file.original_file_name,
+        });
+      } catch (partError) {
+        // Formato sem extrator de texto (ex.: imagem): o arquivo segue
+        // no pacote documental, so nao entra no texto da analise.
+        console.warn(`Arquivo complementar sem texto extraivel: ${file.original_file_name} (${partError instanceof Error ? partError.message : partError})`);
+        continue;
+      }
+
+      const offset = pageOffset;
+      const partIsPdf = isPdfSource({ mimeType: file.mime_type, fileName: file.original_file_name });
+
+      if (!partIsPdf && (!partResult.text || partResult.text.trim().length === 0)) {
+        console.warn(`Arquivo complementar sem texto utilizavel: ${file.original_file_name}`);
+        continue;
+      }
+
+      sourceFiles.push({
+        fileId: file.id,
+        fileName: file.original_file_name,
+        mimeType: file.mime_type,
+        buffer: partBuffer,
+        pageOffset: offset,
+        pageCount: partResult.pageCount,
+        segments: partResult.segments,
+      });
+      partSegments = partSegments.concat(
+        partResult.segments.map((segment) => ({
+          ...segment,
+          pageNumber: segment.pageNumber == null ? null : segment.pageNumber + offset,
+          locator:
+            segment.pageNumber == null
+              ? `${file.original_file_name} · ${segment.locator}`
+              : `${file.original_file_name} · ${segment.locator} (pagina ${segment.pageNumber + offset} do contrato)`,
+        }))
+      );
+
+      if (partResult.pageCount != null) {
+        pageOffset += partResult.pageCount;
+        combinedPageCount = (combinedPageCount ?? 0) + partResult.pageCount;
+      }
+      extractors.add(partResult.extractor);
+      contractualFileIds.push(file.id);
+      console.log(`Arquivo complementar incluido: ${file.original_file_name} (${partResult.pageCount ?? "?"} paginas, a partir da pagina ${offset + 1})`);
+    }
+
+    // Sem arquivo complementar com texto, a extracao fica identica a
+    // anterior (mesmos locators) — nenhuma mudanca para documentos de
+    // arquivo unico.
+    if (contractualFileIds.length > 0) {
+      combinedSegments = result.segments
+        .map((segment) => ({
+          ...segment,
+          locator: `${version.original_file_name} · ${segment.locator}`,
+        }))
+        .concat(partSegments);
+      combinedExtractor = [...extractors].join("+");
+    }
+  }
+
+
+  // ==========================================================
+  // 5c. OCR LOCAL DAS PÁGINAS SEM TEXTO ÚTIL (scripts/lib/pdf-ocr.mjs)
+  //
+  // Todas as páginas de todos os PDFs da versão são inventariadas; as
+  // que não têm texto útil (carimbos/rodapés repetidos desconsiderados)
+  // são renderizadas — inclusive conteúdo vetorial — e lidas por OCR em
+  // português. Cada trecho guarda arquivo de origem, página local e
+  // página global. O texto nativo nunca é substituído: o OCR só
+  // acrescenta o que não existe nele. Páginas não lidas geram um
+  // marcador explícito no texto e tornam a cobertura PARCIAL.
+  // ==========================================================
+
+  let ocrSummary = null;
+  let ocrPagesByKey = new Map();
+  const pdfSources = sourceFiles.filter(isPdfSource);
+
+  if (pdfSources.length > 0) {
+    const analysis = await analyzePdfPagesWithOcr(
+      pdfSources.map(({ fileId, fileName, buffer: fileBuffer, pageOffset }) => ({
+        fileId,
+        fileName,
+        buffer: fileBuffer,
+        pageOffset,
+      })),
+      { log: (message) => console.log(message) }
+    );
+    ocrSummary = analysis.summary;
+    ocrPagesByKey = new Map(analysis.pages.map((page) => [page.globalPage, page]));
+
+    combinedSegments = [];
+    for (const source of sourceFiles) {
+      if (!isPdfSource(source)) {
+        combinedSegments.push(
+          ...source.segments.map((segment) => ({
+            ...segment,
+            locator: `${source.fileName} · ${segment.locator}`,
+          }))
+        );
+        continue;
+      }
+
+      const nativeByPage = new Map();
+      for (const segment of source.segments) {
+        const list = nativeByPage.get(segment.pageNumber) ?? [];
+        list.push(segment);
+        nativeByPage.set(segment.pageNumber, list);
+      }
+
+      const pageTotal = source.pageCount ?? Math.max(0, ...nativeByPage.keys());
+      for (let localPage = 1; localPage <= pageTotal; localPage += 1) {
+        const globalPage = source.pageOffset + localPage;
+        const info = ocrPagesByKey.get(globalPage);
+        const base = `${source.fileName} · pág. local ${localPage} · pág. global ${globalPage}`;
+        const review = info?.visualReview?.length
+          ? ` · REVISAO_VISUAL: ${info.visualReview.join(",")}`
+          : "";
+
+        for (const segment of nativeByPage.get(localPage) ?? []) {
+          const part = String(segment.locator ?? "").match(/, parte \d+$/)?.[0] ?? "";
+          combinedSegments.push({
+            ...segment,
+            pageNumber: globalPage,
+            locator: `${base} · TEXTO_NATIVO${part}${review}`,
+          });
+        }
+
+        if (info?.ocr?.addedText) {
+          combinedSegments.push({
+            text: info.ocr.addedText,
+            pageNumber: globalPage,
+            locator: `${base} · OCR ${OCR_LANGUAGE} (confianca ${info.ocr.confidence}%)${review}`,
+          });
+        }
+
+        if (info && PENDING_STATUSES.has(info.status)) {
+          combinedSegments.push({
+            text:
+              `[ACC — CONTEUDO NAO LIDO INTEGRALMENTE: pagina global ${globalPage} ` +
+              `(arquivo ${source.fileName}, pagina local ${localPage}). Motivo: ${info.status}` +
+              (info.ocr?.error ? ` (${info.ocr.error})` : "") +
+              `. Consulte a pagina original.]`,
+            pageNumber: globalPage,
+            locator: `${base} · PENDENTE: ${info.status}${review}`,
+          });
+        }
+      }
+    }
+
+    if (ocrSummary.ocrPages.length > 0 || ocrSummary.pendingPages.length > 0) {
+      combinedExtractor = `${combinedExtractor}+${OCR_ENGINE}`;
+    }
+
+    console.log(
+      `Cobertura: ${ocrSummary.totalPages} paginas; OCR ${ocrSummary.ocrPages.length}; ` +
+      `pendentes ${ocrSummary.pendingPages.length}; revisao visual ${ocrSummary.visualReviewPages.length}.`
+    );
+  }
+
+  const coverageError =
+    ocrSummary && !ocrSummary.complete
+      ? `COBERTURA PARCIAL: ${ocrSummary.pendingPages.length} pagina(s) sem leitura integral ` +
+        `(${formatPageRanges(ocrSummary.pendingPages.map((page) => page.globalPage))}). ` +
+        `Nao tratar como leitura integral do documento.`
+      : null;
+
+  const needsHumanReview =
+    Boolean(ocrSummary) &&
+    (!ocrSummary.complete || ocrSummary.visualReviewPages.length > 0);
 
 
   // ==========================================================
@@ -959,9 +1248,15 @@ try {
   // ==========================================================
 
   const canonicalText =
-    result.segments
+    combinedSegments
       .map((segment) => segment.text)
       .join("\n\n");
+
+  if (canonicalText.trim().length === 0) {
+    throw new Error(
+      "O extrator nao encontrou texto utilizavel no documento (nem por OCR)."
+    );
+  }
 
   const detectedLanguage =
     detectSourceLanguage(canonicalText);
@@ -969,7 +1264,7 @@ try {
   let characterCursor = 0;
 
   const segments =
-    result.segments.map(
+    combinedSegments.map(
       (
         segment,
         index
@@ -1054,19 +1349,23 @@ try {
     .from("document_extractions")
     .update({
       extractor:
-        result.extractor,
+        combinedExtractor,
       extractor_version:
-        result.extractorVersion,
+        ocrSummary && combinedExtractor.includes(OCR_ENGINE)
+          ? `${result.extractorVersion}+ocr-${OCR_LANGUAGE}-${OCR_ENGINE_VERSION}`
+          : result.extractorVersion,
       status:
         "PROCESSED",
       text_content:
         canonicalText,
       page_count:
-        result.pageCount,
+        combinedPageCount,
       character_count:
         canonicalText.length,
+      // Sem coluna própria de cobertura no schema atual: a cobertura
+      // parcial fica registrada aqui, no marcador do texto e na auditoria.
       error_message:
-        null,
+        coverageError,
       completed_at:
         completedAt,
     })
@@ -1090,6 +1389,7 @@ try {
         null,
       source_language:
         detectedLanguage.code,
+      ...(needsHumanReview ? { requires_human_review: true } : {}),
     })
     .eq(
       "id",
@@ -1098,6 +1398,17 @@ try {
 
   if (completeVersionError) {
     throw completeVersionError;
+  }
+
+  if (contractualFileIds.length > 0) {
+    const { error: partsStatusError } = await supabase
+      .from("document_version_files")
+      .update({ processing_status: "PROCESSED", processing_error: null })
+      .in("id", contractualFileIds);
+
+    if (partsStatusError) {
+      throw partsStatusError;
+    }
   }
 
 
@@ -1111,9 +1422,31 @@ try {
     entityId:
       documentVersionId,
     detail:
-      `Documento "${document.title}" processado por ${result.extractor}. ` +
-      `${canonicalText.length} caracteres, ${segments.length} segmentos.`,
+      `Documento "${document.title}" processado por ${combinedExtractor}. ` +
+      `${canonicalText.length} caracteres, ${segments.length} segmentos` +
+      (contractualFileIds.length > 0
+        ? `, incluindo ${contractualFileIds.length} arquivo(s) complementar(es) da mesma versao (${contractualFileIds.join(", ")}); ${combinedPageCount ?? "?"} paginas no total.`
+        : ".") +
+      (ocrSummary
+        ? ` Cobertura (${ocrSummary.engine}): ${ocrSummary.totalPages} paginas; ` +
+          `texto nativo ${ocrSummary.nativePages}; OCR ${ocrSummary.ocrPages.length} (${formatPageRanges(ocrSummary.ocrPages) || "nenhuma"}); ` +
+          `sem conteudo adicional ${ocrSummary.noAdditionalContentPages.length}; em branco ${ocrSummary.blankPages.length}; ` +
+          `PENDENTES ${ocrSummary.pendingPages.length} (${formatPageRanges(ocrSummary.pendingPages.map((page) => page.globalPage)) || "nenhuma"}); ` +
+          `revisao visual ${ocrSummary.visualReviewPages.length} (${formatPageRanges(ocrSummary.visualReviewPages.map((page) => page.globalPage)) || "nenhuma"}). ` +
+          (ocrSummary.complete ? "Leitura integral." : "Leitura PARCIAL — nao tratar como integral.")
+        : ""),
   });
+
+  if (reprocessArmed) {
+    await writeAudit({
+      action: "DOCUMENT_REPROCESSED",
+      entityId: documentVersionId,
+      detail:
+        `Versao reprocessada (nova extracao ${extractionId}). ` +
+        `Extracoes anteriores preservadas como historico: ${previousExtractionIds.join(", ") || "nenhuma"}. ` +
+        `Consumidores usam a extracao PROCESSED mais recente.`,
+    });
+  }
 
 
   // ==========================================================
@@ -1159,8 +1492,13 @@ try {
 
   console.log(
     "Pages:",
-    result.pageCount ?? "N/A"
+    combinedPageCount ?? "N/A"
   );
+
+  if (ocrSummary) {
+    console.log("Coverage:", ocrSummary.complete ? "INTEGRAL" : "PARCIAL");
+    if (coverageError) console.log(coverageError);
+  }
 
 } catch (error) {
   await failProcessing(

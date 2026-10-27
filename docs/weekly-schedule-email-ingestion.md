@@ -795,3 +795,42 @@ severity map gravado. Manter a feature desligada até a validação completa.
   Base × baseline oficial, financeiro separado, histograma sem presunção,
   SSMA semanal, roteamento, vínculo ao message_id, XLS legado, original
   disponível, idempotência —, busca, menu, segurança)
+
+## Verificação do leitor de planilhas com arquivo real local (2026-10-26)
+
+Leitura **isolada e somente leitura** (cópia em diretório temporário, sem Supabase, sem pipeline, sem gravar
+nada) de uma planilha semanal real disponível localmente — `(W37) WEG - Indicadores.xlsx`, 515 KB / 3,7 MB
+descompactados, Node 24, `readWorkbookSafely` (caminho em streaming, pois > 2 MB):
+
+- formato XLSX válido; 5 abas (LINHA DE BASE, CURVA S, FINANCEIRO, HISTOGRAMA, SSMA) — as 5 categorias foram
+  identificadas (`MATCHED`);
+- linhas lidas por aba (190 / 0 / 30 / 53 / 25) **idênticas** à contagem direta no XML do pacote;
+- a aba CURVA S não tem células (só gráfico): nenhum dado de Curva S sai dela — comportamento esperado do leitor;
+- 12 links externos reportados e nunca seguidos; 365 fórmulas preservadas como texto, 8 sem valor armazenado
+  marcadas como "não disponível"; sem macros nem conexões de dados; 0,8 s e ~10 MB de heap.
+
+Limite: é **uma** planilha; não prova o bug do streaming do exceljs em planilhas minúsculas (<~16 KB), que só
+foi reproduzido com arquivos sintéticos. A reversão `prep/revert-xlsx-in-memory-read` **não** foi aplicada.
+
+### Busca adicional por planilhas pequenas e guarda contra pacote falsificado (2026-10-26)
+
+- **Planilhas pequenas reais:** foram listados (só nomes e tamanhos) todos os `.xlsx/.xlsm` de Downloads,
+  Documentos, Desktop e `C:\VIBE`. Os únicos com <100 KB são planilhas de outros assuntos (indicadores comerciais,
+  quantitativos, checklists, listas de grupos, modelos de outro projeto): **nenhuma é relatório semanal de
+  planejamento**, então nenhuma foi aberta (dados comerciais). A única planilha semanal real é a W37 (acima).
+  Limitação mantida: o caminho em memória (<=2 MB descompactados) nunca foi exercitado com uma planilha semanal
+  real; só com fixtures sintéticas e com as dos testes de registro documental.
+- **Limite atual de leitura em memória:** 2 MB descompactados (`IN_MEMORY_MAX_UNCOMPRESSED_BYTES`). Custo medido:
+  ~16x o tamanho descompactado em heap (31 MB -> +508 MB, 2,5 s); acima disso a leitura é em streaming.
+- **Risco achado e corrigido (pacote com cabeçalho falsificado):** o tamanho descompactado que decide o caminho e o
+  teto de 256 MB vinha do cabeçalho do ZIP, que quem enviou o arquivo controla. Um pacote sintético de ~0,9 MB no
+  disco com ~900 MB reais e cabeçalho declarando ~1 KB acumulava **~900 MB de heap** (3 s) antes de falhar com
+  "uncompressed data size mismatch"; com o teto de 50 MB de arquivo, o mesmo truque chegaria a dezenas de GB (OOM).
+  Agora `verifyActualUncompressedSize` descompacta cada entrada em fluxo, só contando bytes, antes de qualquer
+  leitura: aborta ao passar de 256 MB no total ou 128 MB numa entrada XML e trata qualquer divergência entre o
+  declarado e o real (ou ZIP corrompido) como pacote inconsistente -> planilha preservada sem leitura automática
+  (revisão humana), nos dois caminhos. O pacote falsificado acima passou a ser recusado em ~0,3 s e sem crescimento
+  de heap. Arquivos legítimos não mudam: a W37 continua com as mesmas contagens (190/0/30/53/25 linhas, 365
+  fórmulas, 12 links externos) e a conferência custou ~45 ms. Cobertura: `scripts/test-weekly-workbook-reader.mjs`
+  (10 casos, incluindo o pacote falsificado, limites honestos e planilhas normais). Continua valendo que um pacote
+  honesto de até 256 MB descompactados é lido em streaming, e a conferência o descompacta uma vez a mais (~1-2 s).

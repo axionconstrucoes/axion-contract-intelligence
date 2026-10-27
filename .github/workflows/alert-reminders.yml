@@ -1,0 +1,44 @@
+name: Alert Reminders
+
+# Lembretes recorrentes de alertas ("Repete: a cada N dia(s) até a conclusão").
+# O GitHub Actions NÃO garante pontualidade: execuções agendadas atrasam e podem ser
+# puladas em horários de pico (nas execuções do Gmail Inbound Sync, agendado a cada 15 min,
+# o intervalo real observado foi de ~2 a 5 horas). Por isso o motor trabalha com a grade do
+# primeiro envio e envia UM lembrete por alerta quando a execução chega — nunca acumula.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: alert-reminders
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Run alert reminders
+        env:
+          ACC_APP_BASE_URL: ${{ vars.ACC_APP_BASE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ACC_APP_BASE_URL:-}" ]; then
+            echo "::error::ACC_APP_BASE_URL ausente."
+            exit 1
+          fi
+
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "::error::CRON_SECRET ausente."
+            exit 1
+          fi
+
+          curl --fail-with-body \
+            --silent \
+            --show-error \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${ACC_APP_BASE_URL%/}/api/cron/alert-reminders"

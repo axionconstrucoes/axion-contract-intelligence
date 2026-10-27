@@ -11,12 +11,14 @@ import { EmailAlertActionHistoryPanel } from "@/components/email-actions/email-a
 import { EventNotesSection } from "@/components/ledger/event-notes-section";
 import { EvidenceViewer } from "@/components/ledger/evidence-viewer";
 import { RunMultiExpertCurationButton } from "@/components/ledger/run-multi-expert-curation-button";
+import { EventRiskPreSendNotice, EventRiskReviewSection } from "@/components/risk/risk-review-section";
 import { SendContractAlertForm } from "@/components/ledger/send-contract-alert-form";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProjectPermission } from "@/lib/contract-review";
 import { getEvent, getProjectMembers, getUser } from "@/lib/data";
 import { getEventClauseConfrontationCandidates } from "@/lib/event-clause-confrontation-review";
+import { getPilotSendNotice } from "@/lib/email/pilot-notice";
 import { alertRiskLevelLabels } from "@/lib/email/templates/contract-alert-template";
 import { confrontationAnchorId } from "@/lib/ledger/confrontation-anchor";
 import { validateConfrontationJustification } from "@/lib/ledger/confrontation-justification-validation";
@@ -137,16 +139,20 @@ export default async function EventDetailPage({
             {canReview && (
               <>
                 <AssessScheduleDelayButton projectId={projectId} eventId={event.id} />
+                <EventRiskPreSendNotice projectId={projectId} eventId={event.id} />
                 <SendContractAlertForm
                   projectId={projectId}
                   eventId={event.id}
                   eligibleRecipients={eligibleAlertRecipients}
+                  pilotNotice={getPilotSendNotice()}
                 />
               </>
             )}
           </CardContent>
         </Card>
       )}
+
+      {event.aiAssessment && <EventRiskReviewSection projectId={projectId} eventId={event.id} />}
 
       <div>
         <h2 className="mb-2 text-sm font-semibold">Evidência original</h2>

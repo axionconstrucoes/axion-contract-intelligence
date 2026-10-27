@@ -1,9 +1,18 @@
+import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
+import { buttonVariants } from "@/components/ui/button";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { getProjects } from "@/lib/data";
 import { ProjectSwitcher } from "./project-switcher";
 
-export async function TopBar({ projectId }: { projectId: string }) {
+export async function TopBar({
+  projectId,
+  canEditProject = false,
+}: {
+  projectId: string;
+  canEditProject?: boolean;
+}) {
   const projects = await getProjects();
   const currentProject = projects.find((p) => p.id === projectId);
 
@@ -55,6 +64,17 @@ export async function TopBar({ projectId }: { projectId: string }) {
           {currentProject?.code && <span className="shrink-0 text-xs text-muted-foreground">{currentProject.code}</span>}
           {currentProject?.contractNumber && (
             <span className="shrink-0 text-xs text-muted-foreground">Contrato {currentProject.contractNumber}</span>
+          )}
+          {canEditProject && (
+            <Link
+              href={`/projetos/${projectId}/editar?origem=projeto`}
+              title="Editar projeto"
+              aria-label="Editar projeto"
+              className={buttonVariants({ variant: "outline", size: "sm", className: "shrink-0 gap-1.5" })}
+            >
+              <Pencil aria-hidden="true" />
+              <span className="sm:hidden xl:inline">Editar projeto</span>
+            </Link>
           )}
         </div>
 

@@ -5,6 +5,8 @@
 // bump de COMMERCIAL_DIRECTOR_VERSION, para rastreabilidade em auditoria
 // futura (ver docs/ai/experts.md).
 
+import { RISK_CRITERIA_INSTRUCTIONS } from "../../risk-criteria";
+
 export const COMMERCIAL_DIRECTOR_EXPERT_ID = "commercial-director" as const;
 
 export const COMMERCIAL_DIRECTOR_NAME = "Diretor Comercial IA";
@@ -13,7 +15,7 @@ export const COMMERCIAL_DIRECTOR_NAME = "Diretor Comercial IA";
 // prompt para a camada de guardrails determinísticos
 // (apps/web/lib/ai/grounding/, ver
 // docs/ai/grounding-and-citation-guardrails.md).
-export const COMMERCIAL_DIRECTOR_VERSION = "v3";
+export const COMMERCIAL_DIRECTOR_VERSION = "v4";
 
 export const COMMERCIAL_DIRECTOR_INSTRUCTIONS = `
 # ${COMMERCIAL_DIRECTOR_NAME} (${COMMERCIAL_DIRECTOR_EXPERT_ID} ${COMMERCIAL_DIRECTOR_VERSION})
@@ -143,4 +145,5 @@ Responda exclusivamente no formato estruturado definido por
 CommercialDirectorAssessment (ver
 apps/web/lib/ai/experts/commercial-director/types.ts) — nunca texto livre
 como única resposta.
+${RISK_CRITERIA_INSTRUCTIONS}
 `.trim();

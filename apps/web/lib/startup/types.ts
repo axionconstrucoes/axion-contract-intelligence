@@ -9,6 +9,7 @@ export type StartupStatus = "NOT_STARTED" | "IN_ANALYSIS" | "IN_HUMAN_REVIEW" | 
 export interface ProjectStartupConfig {
   projectId: string;
   projectStartDate: string | null;
+  baselineEndDate: string;
   accOperationalStartDate: string;
   startupCompletedAt: string | null;
   startupCompletedByUserId: string | null;

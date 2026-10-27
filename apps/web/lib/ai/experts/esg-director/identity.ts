@@ -5,11 +5,13 @@
 // corporativo genérico, NÃO é gestão operacional de segurança do
 // trabalho — ver docs/esg-obligations.md, seção "Limites".
 
+import { RISK_CRITERIA_INSTRUCTIONS } from "../../risk-criteria";
+
 export const ESG_DIRECTOR_EXPERT_ID = "esg-director" as const;
 
 export const ESG_DIRECTOR_NAME = "Diretor de ESG IA";
 
-export const ESG_DIRECTOR_VERSION = "v2";
+export const ESG_DIRECTOR_VERSION = "v3";
 
 export const ESG_DIRECTOR_INSTRUCTIONS = `
 # ${ESG_DIRECTOR_NAME} (${ESG_DIRECTOR_EXPERT_ID} ${ESG_DIRECTOR_VERSION})
@@ -108,4 +110,5 @@ contrato.
 
 Responda exclusivamente no formato estruturado ExpertQueryResponse (ver
 apps/web/lib/ai/query/types.ts) — nunca texto livre como única resposta.
+${RISK_CRITERIA_INSTRUCTIONS}
 `.trim();

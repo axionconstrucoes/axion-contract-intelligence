@@ -129,7 +129,7 @@ check("logo AXION nunca é exibido em lugar nenhum: nenhum <img>/<svg> referenci
 
 check("sidebar: ícone ACC sempre visível e centralizado (expandida e recolhida) — fora de qualquer bloco condicional de collapsed", () => {
   const source = readSource("apps/web/components/layout/app-sidebar.tsx");
-  const headerBlockMatch = source.match(/<div className="flex h-14 items-center justify-center border-b[\s\S]*?<\/div>/);
+  const headerBlockMatch = source.match(/<div className="flex h-\d+ items-center justify-center border-b[\s\S]*?<\/div>/);
   assert(headerBlockMatch, "bloco de cabeçalho da sidebar (logo centralizado) não encontrado");
   const headerBlock = headerBlockMatch[0];
   // Logo ACC oficial (PNG) — logo ACC aparece SOMENTE aqui, na sidebar.
@@ -184,7 +184,7 @@ const ALL_15_PAGES = [
   // puro para Documentos (aba "Serviços Adicionais" descontinuada) —
   // não renderiza mais PageHeader nem título próprio.
   "apps/web/app/[projectId]/auditoria/page.tsx",
-  "apps/web/app/[projectId]/dashboard/page.tsx",
+  // dashboard/page.tsx removido: o painel executivo (commit e995e97) tem cabeçalho "hero" próprio (<h1> no painel).
   "apps/web/app/[projectId]/documentos/page.tsx",
   "apps/web/app/[projectId]/esg/page.tsx",
   "apps/web/app/[projectId]/experts-ia/page.tsx",
@@ -362,9 +362,9 @@ check("cabeçalho responsivo: PageHeader nunca força largura fixa/overflow hori
   assert(!/whitespace-nowrap/.test(pageHeaderSource), "título não deveria forçar nowrap (permitir quebra em telas estreitas)");
 });
 
-check("sidebar: logo/ícone tem tamanho fixo pequeno (size-7) — nunca deforma ao encolher a sidebar", () => {
+check("sidebar: logo/ícone tem altura fixa (h-12, ampliado em 95c96f6) e largura automática — nunca deforma ao encolher a sidebar", () => {
   const source = readSource("apps/web/components/layout/app-sidebar.tsx");
-  assert(/className="size-7 shrink-0/.test(source), "ícone deveria ter tamanho fixo e shrink-0 (nunca deformar)");
+  assert(/src="\/branding\/acc-logo\.png" alt="ACC" className="h-\d+ w-auto shrink-0/.test(source), "ícone deveria ter altura fixa, largura automática (proporção preservada) e shrink-0 (nunca deformar)");
 });
 
 console.log("");

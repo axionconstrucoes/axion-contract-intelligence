@@ -83,6 +83,7 @@ export default async function CompactContractAlertActionPage({
                   batchId={batchId}
                   eventId={eventId}
                   initialAction={action}
+                  severity={item.severity}
                   members={activeMembers}
                 />
               ) : (

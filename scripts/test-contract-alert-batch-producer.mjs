@@ -47,10 +47,15 @@ check("evento duplicado por múltiplas ações SLA entra uma única vez e preser
   assert(producer.includes('current.risk_level === "LOW" && action.risk_level === "MEDIUM"'));
 });
 
-check("produtor carrega evento, avaliação IA e evidências reais", () => {
+check("produtor carrega evento, avaliação IA e evidências/cláusula/obra REAIS (links verificáveis, nada inventado)", () => {
   assert(producer.includes('.from("contract_events")'));
   assert(producer.includes('.from("event_ai_assessments")'));
-  assert(producer.includes('.from("event_evidence")'));
+  // Evidências, cláusula aprovada e obra de cada evento vêm de um único carregador compartilhado.
+  assert(producer.includes("loadEventAlertContexts(admin, eligibleEventIds"));
+  const loader = readFileSync("apps/web/lib/alerts/load-event-alert-context.ts", "utf8");
+  assert(loader.includes('.from("event_evidence")') && loader.includes('.from("event_cross_references")') && loader.includes('.from("clauses")'));
+  assert(loader.includes("buildEvidenceItem(") && loader.includes("formatClauseLabel("));
+  assert(producer.includes("projectName: context?.projectName"), "cada alerta leva a obra do próprio evento");
 });
 
 check("risco operacional da SLA tem fallback determinístico para severidade do lote", () => {

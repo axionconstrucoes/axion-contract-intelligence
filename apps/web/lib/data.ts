@@ -25,6 +25,7 @@ import { mapClauseRow, type ClauseRow, type ClauseVersionParent } from "./clause
 import { mapContractChangeRow, type ContractChangeRow } from "./contract-change-mapper";
 import { resolveNonTrashedDocumentIds, withActiveDocumentFilter } from "./documents/active-document-filter";
 import { sortClausesNaturally } from "./documents/sort-clauses-naturally";
+import { applyReviewedSeverity } from "./risk-classification/reviewed-severity";
 import {
   mapNotificationEmailDeliveryRow,
   mapNotificationRecipientRow,
@@ -260,7 +261,7 @@ export async function getEvents(projectId: string) {
     crossReferencesByEventId.set(crossReference.event_id, list);
   }
 
-  return rows.map((row) =>
+  const mappedEvents = rows.map((row) =>
     mapContractEventRow(
       row,
       categoriesByEventId.get(row.id) ?? [],
@@ -269,6 +270,8 @@ export async function getEvents(projectId: string) {
       crossReferencesByEventId.get(row.id) ?? []
     )
   );
+  // Grau efetivo: revisão humana mais recente sobre a classificação da IA (que não é sobrescrita).
+  return applyReviewedSeverity(supabase, mappedEvents);
 }
 
 export async function getEvent(eventId: string) {
@@ -313,13 +316,16 @@ export async function getEvent(eventId: string) {
     throw new Error(`Falha ao carregar referências cruzadas do evento: ${crossReferencesResult.error.message}`);
   }
 
-  return mapContractEventRow(
-    row,
-    categoriesResult.data as EventCategoryRow[],
-    evidenceResult.data as EventEvidenceRow[],
-    aiAssessmentsResult.data as EventAiAssessmentRow[],
-    crossReferencesResult.data as EventCrossReferenceRow[]
-  );
+  const [mappedEvent] = await applyReviewedSeverity(supabase, [
+    mapContractEventRow(
+      row,
+      categoriesResult.data as EventCategoryRow[],
+      evidenceResult.data as EventEvidenceRow[],
+      aiAssessmentsResult.data as EventAiAssessmentRow[],
+      crossReferencesResult.data as EventCrossReferenceRow[]
+    ),
+  ]);
+  return mappedEvent;
 }
 
 // Ainda não existe tabela real de Alert no banco — retorna vazio em vez de

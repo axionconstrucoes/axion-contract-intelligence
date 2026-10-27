@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { isValidContractAlertBatchAction } from "@/lib/email-actions/contract-alert-batch-validation";
 import { respondToContractAlertBatch } from "@/lib/email-actions/respond-to-contract-alert-batch";
+import { saveContractAlertBatchItem } from "@/lib/email-actions/save-contract-alert-batch-item";
 import type { ContractAlertBatchResponsePayload } from "@/lib/email-actions/contract-alert-batch-types";
 
 import type { SubmitContractAlertBatchState } from "./actions-state";
@@ -53,4 +54,19 @@ export async function submitContractAlertBatchAction(
   revalidatePath(`/${projectId}/ledger`);
   revalidatePath(`/${projectId}/ledger/lote-alertas/${batchId}`);
   return { success: true, error: null, pendingItems: [] };
+}
+
+// Salva NA HORA a ação de UM alerta (resposta parcial): não exige que os demais estejam
+// respondidos e nunca libera a resposta final — essa continua só em submitContractAlertBatchAction.
+export async function saveContractAlertBatchItemAction(
+  batchId: string,
+  projectId: string,
+  eventId: string,
+  action: string,
+  assignedUserId: string | null
+): Promise<{ ok: boolean; error: string | null; answered: number; total: number }> {
+  const outcome = await saveContractAlertBatchItem({ batchId, eventId, action, assignedUserId });
+  if (!outcome.ok) return { ok: false, error: outcome.error, answered: 0, total: 0 };
+  revalidatePath(`/${projectId}/ledger/lote-alertas/${batchId}`);
+  return { ok: true, error: null, answered: outcome.answered, total: outcome.total };
 }

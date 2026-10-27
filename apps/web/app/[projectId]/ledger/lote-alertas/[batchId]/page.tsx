@@ -76,7 +76,7 @@ export default async function ContractAlertBatchPage({
       ) : (
         <>
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
-            Defina RESOLVIDO, EM ANDAMENTO ou ENVIADO P/ para cada alerta. "VER EVENTO" é só consulta e não conta como resposta.
+            Defina RESOLVIDO, EM ANDAMENTO ou ENVIADO P/ para cada alerta. &quot;VER EVENTO&quot; é só consulta e não conta como resposta.
             A resposta ao ACC só é liberada quando todos os alertas abaixo tiverem uma ação definida.
           </div>
           <ContractAlertBatchForm

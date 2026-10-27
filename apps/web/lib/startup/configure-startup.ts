@@ -10,12 +10,19 @@ import type { ProjectStartupConfig } from "./types";
 export interface ConfigureStartupInput {
   projectId: string;
   projectStartDate: string;
+  baselineEndDate: string;
   /** Opcional — quando ausente, mantém o valor já configurado (nunca reseta silenciosamente para o default). */
   accOperationalStartDate?: string;
 }
 
 export async function configureProjectStartup(supabase: SupabaseClient, input: ConfigureStartupInput): Promise<ProjectStartupConfig> {
-  const updates: Record<string, unknown> = { project_start_date: input.projectStartDate };
+  if (input.baselineEndDate < input.projectStartDate) {
+    throw new Error("A data de término deve ser igual ou posterior à data de início da obra.");
+  }
+  const updates: Record<string, unknown> = {
+    project_start_date: input.projectStartDate,
+    baseline_end_date: input.baselineEndDate,
+  };
   if (input.accOperationalStartDate) updates.acc_operational_start_date = input.accOperationalStartDate;
 
   const { error } = await supabase.from("projects").update(updates).eq("id", input.projectId);

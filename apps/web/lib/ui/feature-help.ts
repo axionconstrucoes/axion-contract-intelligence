@@ -231,6 +231,13 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
       "Mostra a consolidação mais recente já gerada e persistida pelo Expert CEO. Quando não houver nenhuma, exibe que ainda não há consolidação executiva disponível — nunca gera uma nova ao abrir a tela.",
   },
   {
+    id: "providencias",
+    title: "Providências",
+    shortDescription: "Tabela de providências e pendências para a entrega da obra.",
+    description:
+      "Controla as providências de início e de entrega da obra (CNO, as-built, databook, AVCB, concessionárias etc.) com responsável, prazo, situação e evidência. Os alertas recorrentes usam estes mesmos registros.",
+  },
+  {
     id: "usuarios",
     title: "Usuários",
     shortDescription: "Controle de acesso e permissões do projeto.",
@@ -269,7 +276,7 @@ const DEFINITIONS: FeatureHelpDefinition[] = [
   },
   {
     id: "expert-planning-director",
-    title: "Diretor de Engenharia IA",
+    title: "Diretor de Planejamento IA",
     shortDescription: "Analisa atrasos, antecipações e impactos de prazo.",
     description: "Analisa atrasos, antecipações e impactos de prazo com consequência comercial, econômica ou contratual.",
     humanReview: "A IA analisa e recomenda. Decisões vinculantes permanecem humanas.",

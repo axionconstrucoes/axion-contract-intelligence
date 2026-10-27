@@ -249,6 +249,11 @@ export interface AiAssessment {
   summary: string;
   confidence: number; // 0-1
   requiresHumanReview: true;
+  /**
+   * Quando uma pessoa autorizada revisou o grau, `severity` já é o grau EFETIVO (revisado) e
+   * aqui fica o grau original da IA — que nunca é sobrescrito no banco.
+   */
+  originalSeverity?: AlertSeverity;
 }
 
 export type EventStatus = "NOVO" | "EM_ANALISE" | "CONFRONTADO" | "RESOLVIDO";

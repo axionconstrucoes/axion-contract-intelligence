@@ -11,12 +11,13 @@
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
-const OUT_DIR = "C:\\Users\\User\\axion-acc-previews";
+const OUT_DIR = process.env.ACC_PREVIEW_OUT_DIR ?? path.join(os.tmpdir(), "axion-acc-previews");
 
 let passed = 0;
 let failed = 0;
@@ -67,17 +68,17 @@ check("alert-email.eml: header From correto, exatamente 1 endereço, nunca aninh
 check("alert-email.eml: mecanismo cid: real preservado (Content-ID único, imagem anexada uma única vez)", () => {
   const contentIdLines = eml.split("\r\n").filter((line) => line.startsWith("Content-ID: "));
   assert(contentIdLines.length === 1, `esperado exatamente 1 Content-ID no .eml, encontrado ${contentIdLines.length}`);
-  assert(contentIdLines[0] === "Content-ID: <acc-logo-signature>", `Content-ID inesperado: ${contentIdLines[0]}`);
+  assert(/^Content-ID: <acc-logo-(signature|inverted)>$/.test(contentIdLines[0]), `Content-ID inesperado: ${contentIdLines[0]}`);
 });
 
 check("alert-email-body.html (corpo exato como seria enviado): logo aparece 1 única vez (cabeçalho), rodapé só texto/disclaimer", () => {
   const imgCount = (bodyHtml.match(/<img\b/g) ?? []).length;
   assert(imgCount === 1, `esperada exatamente 1 <img> no corpo do e-mail (só o cabeçalho), encontrado ${imgCount}`);
-  assert(bodyHtml.includes("cid:acc-logo-signature"), "a única <img> deveria referenciar cid:acc-logo-signature (mecanismo real, nunca alterado no corpo enviado)");
+  assert(/cid:acc-logo-(signature|inverted)/.test(bodyHtml), "a única <img> deveria referenciar o cid do logo (vinho ou invertido conforme o risco; mecanismo real, nunca alterado no corpo enviado)");
 });
 
 check("alert-email.html (prévia de navegador): SEM nenhuma referência cid: (nunca resolve fora de um cliente de e-mail — apareceria como ícone de imagem quebrada)", () => {
-  assert(!browserHtml.includes("cid:acc-logo-signature"), "prévia de navegador não deveria conter cid: — precisa estar substituído por data: URI");
+  assert(!/cid:acc-logo/.test(browserHtml), "prévia de navegador não deveria conter cid: — precisa estar substituído por data: URI");
 });
 
 check("alert-email.html (prévia de navegador): logo visível via data:image/png;base64, exatamente 1 ocorrência (sem duplicar no rodapé)", () => {

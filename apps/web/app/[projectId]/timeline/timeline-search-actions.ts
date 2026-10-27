@@ -1,6 +1,7 @@
 "use server";
 
 import { createSupabaseServerClient } from "@axion/db/server";
+import { normalizeExtractedText } from "@/lib/documents/extraction/repair-font-encoding";
 
 export interface TimelineArchiveHit {
   id: string;
@@ -290,7 +291,7 @@ export async function searchTimelineArchive(
       ? await supabase
           .from("document_extractions")
           .select(
-            "id,document_version_id,status,text_content,completed_at,created_at"
+            "id,document_version_id,status,text_content,error_message,completed_at,created_at"
           )
           .in("document_version_id", versionIds)
       : { data: [], error: null };
@@ -462,7 +463,20 @@ export async function searchTimelineArchive(
   // TEXTO INTEGRAL EXTRAÍDO DOS DOCUMENTOS
   // ----------------------------------------------------------
 
+  // Uma versão pode ter várias extrações (reprocessamento — ex.: OCR):
+  // as anteriores ficam como histórico. A busca usa só a PROCESSED mais
+  // recente de cada versão, para nunca devolver o mesmo trecho duas vezes.
+  const latestExtractionByVersion = new Map<string, NonNullable<typeof extractionResult.data>[number]>();
   for (const extraction of extractionResult.data ?? []) {
+    if (extraction.status !== "PROCESSED") continue;
+    const current = latestExtractionByVersion.get(extraction.document_version_id);
+    const stamp = extraction.completed_at ?? extraction.created_at;
+    if (!current || stamp > (current.completed_at ?? current.created_at)) {
+      latestExtractionByVersion.set(extraction.document_version_id, extraction);
+    }
+  }
+
+  for (const extraction of latestExtractionByVersion.values()) {
     const version = versionById.get(
       extraction.document_version_id
     );
@@ -486,7 +500,15 @@ export async function searchTimelineArchive(
 
     if (!inPeriod(date, input.dateFrom, input.dateTo)) continue;
 
-    if (!matchesTerms(extraction.text_content, terms)) continue;
+    // Busca na camada normalizada (codificação de fonte corrigida, ex.:
+    // "execuÁ„o" → "execução"); o texto armazenado não é alterado.
+    const searchableText = normalizeExtractedText(extraction.text_content ?? "").text;
+
+    if (!matchesTerms(searchableText, terms)) continue;
+
+    // Extração com cobertura parcial: o resultado nunca é apresentado
+    // como busca no documento inteiro.
+    const partialCoverage = String(extraction.error_message ?? "").startsWith("COBERTURA PARCIAL");
 
     hits.push({
       id: `extraction:${extraction.id}`,
@@ -494,8 +516,10 @@ export async function searchTimelineArchive(
       sourceType,
       date,
       title: document.title,
-      detail: snippet(extraction.text_content, terms),
-      matchedIn: "Conteúdo extraído do documento",
+      detail: snippet(searchableText, terms),
+      matchedIn: partialCoverage
+        ? "Conteúdo extraído do documento (leitura parcial — há páginas não lidas)"
+        : "Conteúdo extraído do documento",
       href: `/${input.projectId}/documentos/versoes/${version.id}`,
     });
   }

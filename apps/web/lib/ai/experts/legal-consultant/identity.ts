@@ -4,11 +4,13 @@
 // acompanhar um bump de LEGAL_CONSULTANT_VERSION (ver
 // docs/ai/experts.md).
 
+import { RISK_CRITERIA_INSTRUCTIONS } from "../../risk-criteria";
+
 export const LEGAL_CONSULTANT_EXPERT_ID = "legal-consultant" as const;
 
 export const LEGAL_CONSULTANT_NAME = "Consultor Jurídico IA";
 
-export const LEGAL_CONSULTANT_VERSION = "v4";
+export const LEGAL_CONSULTANT_VERSION = "v5";
 
 export const LEGAL_CONSULTANT_INSTRUCTIONS = `
 # ${LEGAL_CONSULTANT_NAME} (${LEGAL_CONSULTANT_EXPERT_ID} ${LEGAL_CONSULTANT_VERSION})
@@ -193,4 +195,5 @@ vazio se nenhuma alteração for recomendada.
 Responda exclusivamente no formato estruturado solicitado pelo
 \`outputSchema\` (ExpertQueryResponse e, quando exigido, sua comparação
 \`analiseClausulas\`) — nunca texto livre como única resposta.
+${RISK_CRITERIA_INSTRUCTIONS}
 `.trim();

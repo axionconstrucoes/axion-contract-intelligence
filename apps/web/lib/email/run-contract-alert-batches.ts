@@ -1,7 +1,11 @@
 import "server-only";
 
+import { projectRecipientKey } from "../alerts/batch-grouping";
+
 import { createSupabaseAdminClient } from "@axion/db/admin";
 
+import { loadEventAlertContexts } from "../alerts/load-event-alert-context";
+import { loadReviewedEventSeverities } from "../risk-classification/reviewed-severity";
 import { getAppBaseUrl } from "../app-base-url";
 import { createAndSendContractAlertBatch, type ContractAlertBatchSourceItem } from "./create-and-send-contract-alert-batch";
 
@@ -28,12 +32,6 @@ type AssessmentRow = {
   summary: string;
 };
 
-type EvidenceRow = {
-  event_id: string;
-  source_type: string;
-  label: string;
-};
-
 type ExistingBatchItemRow = {
   event_id: string;
   batch_id: string;
@@ -54,9 +52,7 @@ const SLA_TO_ALERT_SEVERITY = {
   MEDIUM: "MEDIA",
 } as const;
 
-function groupKey(projectId: string, responsibleUserId: string): string {
-  return `${projectId}:${responsibleUserId}`;
-}
+const groupKey = projectRecipientKey; // um e-mail por OBRA e destinatário (lib/alerts/batch-grouping.ts)
 
 export interface ContractAlertBatchRunResult {
   groupsFound: number;
@@ -134,7 +130,7 @@ export async function runContractAlertBatches(): Promise<ContractAlertBatchRunRe
   const dedupedActions = Array.from(actionByEventId.values());
   const eligibleEventIds = dedupedActions.map((action) => action.related_event_id);
 
-  const [{ data: events, error: eventsError }, { data: assessments, error: assessmentsError }, { data: evidence, error: evidenceError }] =
+  const [{ data: events, error: eventsError }, { data: assessments, error: assessmentsError }] =
     eligibleEventIds.length > 0
       ? await Promise.all([
           admin
@@ -145,27 +141,21 @@ export async function runContractAlertBatches(): Promise<ContractAlertBatchRunRe
             .from("event_ai_assessments")
             .select("event_id,severity,summary")
             .in("event_id", eligibleEventIds),
-          admin
-            .from("event_evidence")
-            .select("event_id,source_type,label")
-            .in("event_id", eligibleEventIds),
         ])
       : [
-          { data: [], error: null },
           { data: [], error: null },
           { data: [], error: null },
         ];
 
   if (eventsError) throw new Error(`Falha ao carregar eventos dos lotes: ${eventsError.message}`);
   if (assessmentsError) throw new Error(`Falha ao carregar avaliações de risco dos eventos: ${assessmentsError.message}`);
-  if (evidenceError) throw new Error(`Falha ao carregar evidências dos eventos: ${evidenceError.message}`);
 
   const eventById = new Map(((events ?? []) as EventRow[]).map((row) => [row.id, row]));
   const assessmentByEventId = new Map(((assessments ?? []) as AssessmentRow[]).map((row) => [row.event_id, row]));
-  const evidenceByEventId = new Map<string, EvidenceRow[]>();
-  for (const row of (evidence ?? []) as EvidenceRow[]) {
-    evidenceByEventId.set(row.event_id, [...(evidenceByEventId.get(row.event_id) ?? []), row]);
-  }
+  // Obra, cláusula (só vínculo aprovado) e evidências com link para a origem — por evento.
+  const contextByEventId = await loadEventAlertContexts(admin, eligibleEventIds, getAppBaseUrl());
+  // Grau revisado por pessoa autorizada (se houver) prevalece sobre a classificação original.
+  const reviewedSeverityByEventId = await loadReviewedEventSeverities(admin, eligibleEventIds);
 
   const projectIds = Array.from(new Set(dedupedActions.map((action) => action.project_id)));
   const { data: configRows, error: configError } = projectIds.length
@@ -213,23 +203,23 @@ export async function runContractAlertBatches(): Promise<ContractAlertBatchRunRe
         if (!event) return null;
 
         const assessment = assessmentByEventId.get(event.id);
-        const severity = assessment?.severity ?? SLA_TO_ALERT_SEVERITY[action.risk_level];
+        const severity = reviewedSeverityByEventId.get(event.id) ?? assessment?.severity ?? SLA_TO_ALERT_SEVERITY[action.risk_level];
         const riskDescription =
           assessment?.summary?.trim() ||
           action.description?.trim() ||
           event.description?.trim() ||
           "Evento contratual com ação SLA aberta.";
 
+        const context = contextByEventId.get(event.id);
         return {
           eventId: event.id,
           title: event.title,
           severity,
           riskDescription,
-          clauseLabel: null,
-          clauseText: null,
-          evidence: (evidenceByEventId.get(event.id) ?? []).map(
-            (row) => `${row.source_type}: ${row.label}`
-          ),
+          projectName: context?.projectName,
+          clauseLabel: context?.clause?.label ?? null,
+          clauseText: context?.clause?.text ?? null,
+          evidence: context?.evidence ?? [],
           eventUrl: `${baseUrl}/${event.project_id}/ledger/${event.id}`,
         } satisfies ContractAlertBatchSourceItem;
       })

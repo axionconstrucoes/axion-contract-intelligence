@@ -210,34 +210,37 @@ check('nenhum fallback "anthropic → fake" por erro: resolveAiProviderNameForEx
   }
 });
 
+// Os cinco Experts oficiais estão autorizados no AnthropicAiProvider (ANTHROPIC_ALLOWED_EXPERT_IDS).
+// A versão antiga deste teste esperava que o CEO fosse rejeitado e, por isso, chamava answerQuery() com
+// o provider REAL e uma chave de mentira — o que dispara uma requisição HTTPS de verdade a
+// api.anthropic.com (HTTP 401). Agora usa um client FALSO injetado: nenhuma rede.
 await checkAsync(
-  'CEO/Consultor Jurídico/Diretor de Planejamento continuam não operacionais: mesmo que a variável exista e resolva "anthropic", o AnthropicAiProvider ainda rejeita esses Experts',
+  "resolução 'anthropic' por Expert só CONSTRÓI o provider (sem rede); o uso real é exercitado com client falso injetado",
   async () => {
     clearEnv();
     setDummyAnthropicCreds();
     process.env.AXION_AI_PROVIDER_CEO = "anthropic";
     try {
       const provider = resolveAiProviderForExpert("ceo");
-      assert(provider.id === "anthropic", "a resolução em si pode construir o provider — a proteção real é no uso");
-
-      await assertRejects(
-        provider.answerQuery({
-          expertId: "ceo",
-          expertName: "CEO IA",
-          expertVersion: "v1",
-          instructions: "x",
-          scope: "PROJECT",
-          question: "x",
-          eventContext: null,
-          projectContext: null,
-          outputSchema: EXPERT_QUERY_RESPONSE_JSON_SCHEMA,
-        }),
-        "commercial-director",
-        "CEO IA deveria continuar bloqueado pelo AnthropicAiProvider mesmo com a variável específica configurada"
-      );
+      assert(provider.id === "anthropic", "a resolução em si constrói o provider anthropic (sem chamar nada)");
     } finally {
       clearEnv();
     }
+    const { createAnthropicAiProvider } = await import("../apps/web/lib/ai/providers/anthropic-provider");
+    let calls = 0;
+    const provider = createAnthropicAiProvider({
+      config: { apiKey: "sk-test-fake-key-not-real", model: "claude-test-model", maxTokens: 1024, timeoutMs: 2000 },
+      client: { messages: { create: async () => { calls += 1; throw Object.assign(new Error("client falso: sem rede"), { status: 500 }); } } },
+    });
+    await assertRejects(
+      provider.answerQuery({
+        expertId: "ceo", expertName: "CEO IA", expertVersion: "v1", instructions: "x", scope: "PROJECT",
+        question: "x", eventContext: null, projectContext: null, outputSchema: EXPERT_QUERY_RESPONSE_JSON_SCHEMA,
+      }),
+      "Erro do servidor Anthropic (HTTP 500)",
+      "o erro do client falso deve ser propagado pelo provider"
+    );
+    assert(calls >= 1, "o client FALSO (e não a rede) recebeu a chamada");
   }
 );
 

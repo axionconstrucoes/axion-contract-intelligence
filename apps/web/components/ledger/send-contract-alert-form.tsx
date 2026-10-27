@@ -21,10 +21,14 @@ export function SendContractAlertForm({
   projectId,
   eventId,
   eligibleRecipients,
+  pilotNotice = null,
 }: {
   projectId: string;
   eventId: string;
   eligibleRecipients: EligibleAlertRecipient[];
+  // Aviso de MODO PILOTO (decidido no servidor pela mesma fonte do envio): em piloto o e-mail
+  // é redirecionado para a caixa de teste e o colaborador selecionado não o recebe.
+  pilotNotice?: string | null;
 }) {
   const [state, formAction, pending] = useActionState(
     sendContractAlertEmailAction,
@@ -40,9 +44,21 @@ export function SendContractAlertForm({
       <input type="hidden" name="projectId" value={projectId} />
       <input type="hidden" name="eventId" value={eventId} />
 
-      <p className="text-xs font-medium text-muted-foreground">
-        Enviar este achado como alerta por e-mail (padrão institucional ACC)
-      </p>
+      {/* Logo oficial ACC (vinho), mesmo arquivo usado em sidebar/páginas de
+          ação por e-mail — altura fixa, largura automática: preserva
+          proporção e transparência. */}
+      <div className="flex items-center gap-2">
+        <img src="/branding/acc-logo.png" alt="ACC" className="h-7 w-auto shrink-0" />
+        <p className="text-xs font-medium text-muted-foreground">
+          Enviar este achado como alerta por e-mail (padrão institucional ACC)
+        </p>
+      </div>
+
+      {pilotNotice ? (
+        <p role="status" className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+          {pilotNotice}
+        </p>
+      ) : null}
 
       {hasEligibleRecipients ? (
         <div className="flex flex-wrap gap-2">
@@ -77,7 +93,18 @@ export function SendContractAlertForm({
       )}
 
       {state.error ? <p className="text-xs text-destructive">{state.error}</p> : null}
-      {state.success ? <p className="text-xs text-emerald-600">{state.success}</p> : null}
+      {state.success ? (
+        <p
+          role="status"
+          className={
+            state.success.startsWith("MODO PILOTO")
+              ? "text-xs font-medium text-amber-800"
+              : "text-xs text-emerald-700"
+          }
+        >
+          {state.success}
+        </p>
+      ) : null}
     </form>
   );
 }

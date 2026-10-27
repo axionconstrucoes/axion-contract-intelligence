@@ -1,4 +1,6 @@
 import { ClientResponsesSection } from "@/components/documents/client-responses-section";
+import { CoverageNotice } from "@/components/documents/coverage-notice";
+import type { VersionCoverageSummary } from "@/lib/documents/extraction/version-coverage-summary";
 import { ContractAttachmentsPanel } from "@/components/documents/contract-attachments/contract-attachments-panel";
 import { isContractAttachmentEligibleKind } from "@/lib/documents/contract-attachments/is-contract-attachment-eligible-kind";
 import { DocumentDownloadButton } from "@/components/documents/document-download-button";
@@ -82,6 +84,9 @@ export function DocumentCard({
   canAddContractAttachment = false,
   canDeleteContractAttachment = false,
   emailOptions = [],
+  // Cobertura de leitura da extração mais recente por versão (OCR) —
+  // ver getVersionCoverageSummaries. Ausente = sem aviso.
+  coverageByVersion,
 }: {
   document: ManagedDocument;
   projectId: string;
@@ -92,6 +97,7 @@ export function DocumentCard({
   canAddContractAttachment?: boolean;
   canDeleteContractAttachment?: boolean;
   emailOptions?: ProjectEmailOption[];
+  coverageByVersion?: Map<string, VersionCoverageSummary>;
 }) {
   const current = document.versions[0];
   const nextVersionIndex = (current?.versionIndex ?? 0) + 1;
@@ -127,8 +133,12 @@ export function DocumentCard({
                   <div className="flex flex-wrap items-center gap-2">
                     <strong>Versão {version.versionLabel}</strong>
 
-                    <Badge variant="outline">
+                    <Badge
+                      variant="outline"
+                      className={coverageByVersion?.get(version.id)?.partial ? "border-red-300 text-red-800" : undefined}
+                    >
                       {PROCESSING_LABELS[version.processingStatus] ?? version.processingStatus}
+                      {coverageByVersion?.get(version.id)?.partial ? " · leitura parcial" : ""}
                     </Badge>
 
                     {version.sourceLanguage ? (
@@ -140,7 +150,11 @@ export function DocumentCard({
                     {version.requiresHumanReview ? <Badge variant="secondary">Revisão humana necessária</Badge> : null}
                   </div>
 
-                  {version.requiresHumanReview ? (
+                  {coverageByVersion?.get(version.id) ? (
+                    <CoverageNotice summary={coverageByVersion.get(version.id)!} projectId={projectId} context="documento" />
+                  ) : null}
+
+                  {version.requiresHumanReview && !coverageByVersion?.get(version.id) ? (
                     <span className="text-xs text-muted-foreground">
                       Extração de participantes, decisões, responsáveis, prazos e pendências ainda não está
                       implementada nesta etapa.

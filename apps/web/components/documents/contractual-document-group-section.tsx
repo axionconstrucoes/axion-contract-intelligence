@@ -3,6 +3,7 @@ import { DocumentCard } from "@/components/documents/document-card";
 import type { LinkableDocumentCandidate } from "@/components/documents/link-existing-document-to-parent-control";
 import { LinkExistingDocumentToParentControl } from "@/components/documents/link-existing-document-to-parent-control";
 import type { ManagedDocument } from "@/lib/document-management";
+import type { VersionCoverageSummary } from "@/lib/documents/extraction/version-coverage-summary";
 import type { ProjectEmailOption } from "@/components/documents/link-client-response-control";
 import type { ContractualDocumentGroup } from "@/lib/documents/group-contractual-documents";
 import { deriveContractualGroupTitles } from "@/lib/documents/group-contractual-documents";
@@ -28,6 +29,7 @@ export function ContractualDocumentGroupSection({
   canLinkContractualAttachment,
   linkableDocuments,
   contractAttachmentCounts,
+  coverageByVersion,
   canAddContractAttachment = false,
   canDeleteContractAttachment = false,
   emailOptions = [],
@@ -51,6 +53,7 @@ export function ContractualDocumentGroupSection({
   // são um vínculo documento-a-documento diferente, sem relação com
   // este painel.
   contractAttachmentCounts?: Map<string, number>;
+  coverageByVersion?: Map<string, VersionCoverageSummary>;
   canAddContractAttachment?: boolean;
   canDeleteContractAttachment?: boolean;
   emailOptions?: ProjectEmailOption[];
@@ -72,6 +75,7 @@ export function ContractualDocumentGroupSection({
               canUpload={canUpload}
               canTrash={canLinkContractualAttachment}
               contractAttachmentCounts={contractAttachmentCounts}
+              coverageByVersion={coverageByVersion}
               canAddContractAttachment={canAddContractAttachment}
               canDeleteContractAttachment={canDeleteContractAttachment}
               emailOptions={emailOptions}

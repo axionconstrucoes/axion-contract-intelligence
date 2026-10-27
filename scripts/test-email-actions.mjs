@@ -35,7 +35,8 @@ register("./ts-module-resolver.mjs", import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
 function readSource(relativePath) {
-  return readFileSync(path.join(repoRoot, relativePath), "utf8");
+  // Normaliza CRLF -> LF (Windows/core.autocrlf): as verificações multilinha usam LF.
+  return readFileSync(path.join(repoRoot, relativePath), "utf8").replaceAll(String.fromCharCode(13, 10), String.fromCharCode(10));
 }
 
 let passed = 0;
@@ -385,7 +386,8 @@ check("proxy.ts: preserva o destino original em ?next= ao redirecionar para /log
 
 check("auth/callback/route.ts: lê e revalida 'next' com sanitizeInternalRedirect antes de redirecionar (nunca confia cegamente)", () => {
   assert(callbackSource2.includes('from "@/lib/safe-redirect"'));
-  assert(callbackSource2.includes("sanitizeInternalRedirect(url.searchParams.get(\"next\")"));
+  // O "next" pode vir da query ou do cookie de volta do OAuth; sempre passa por sanitizeInternalRedirect.
+  assert(/sanitizeInternalRedirect\(\s*nextFromQuery \?\? nextFromCookie,\s*"\/projetos"\s*\)/.test(callbackSource2), "next (query/cookie) sempre sanitizado, com /projetos como padrão seguro");
   assert(!callbackSource2.includes('new URL("/projetos", url.origin)'), "o destino final não deveria mais ser um literal fixo — precisa vir de nextDestination");
 });
 
@@ -486,12 +488,13 @@ await checkAsync("resolveEffectiveRecipient: em piloto, Reynaldo (ADMINISTRADOR)
   const { resolveEffectiveRecipient } = await import(
     "../apps/web/lib/email/pilot-outbound-guard.ts"
   );
+  // Piloto atual: toda mensagem vai para a caixa institucional do CRM (ACC_EXPECTED_PILOT_RECIPIENT).
   const resolved = resolveEffectiveRecipient("colaborador-qualquer@axion.com.br", {
     outboundMode: "pilot",
-    pilotRecipient: "reynaldo@axion.com.br",
+    pilotRecipient: "crm@axion.com.br",
   });
   assert(resolved.mode === "PILOT");
-  assert(resolved.effectiveRecipientEmail === "reynaldo@axion.com.br");
+  assert(resolved.effectiveRecipientEmail === "crm@axion.com.br");
   assert(resolved.intendedRecipientEmail === "colaborador-qualquer@axion.com.br", "o pretendido original nunca deveria ser perdido/sobrescrito");
 });
 
@@ -533,12 +536,13 @@ const slaEscalationSource = readSource("apps/web/lib/email/templates/sla-escalat
 
 check("contract-alert-template.ts: usa renderEmailActionButtonsHtml/Text — nunca monta o botão de ação inline", () => {
   assert(contractAlertSource.includes('from "@/lib/email-actions/render-buttons"'));
-  assert(contractAlertSource.includes("renderEmailActionButtonsHtml(input.actionButtons)"));
+  // A chamada recebe também a causa do alerta (hover) e a cor da legenda; o botão nunca é montado inline.
+  assert(/renderEmailActionButtonsHtml\(\s*input\.actionButtons,/.test(contractAlertSource));
 });
 
 check("sla-escalation-template.ts: usa a MESMA função central — nunca duplica o HTML do botão", () => {
   assert(slaEscalationSource.includes('from "@/lib/email-actions/render-buttons"'));
-  assert(slaEscalationSource.includes("renderEmailActionButtonsHtml(input.actionButtons)"));
+  assert(/renderEmailActionButtonsHtml\(\s*input\.actionButtons,/.test(slaEscalationSource));
 });
 
 check("action-requests/actions.ts (solicitação de ação): usa a mesma infraestrutura central (issueEmailAlertActionButtons)", () => {
@@ -625,7 +629,7 @@ check("faixa SISTEMA EM TESTE não foi alterada — layout raiz continua igual, 
 
 check("pilot-outbound-guard.ts: estendido (nova resolveEffectiveRecipient), nunca importa de email-actions — dependência de mão única", () => {
   const pilotGuardSource = readSource("apps/web/lib/email/pilot-outbound-guard.ts");
-  assert(pilotGuardSource.includes('"reynaldo@axion.com.br"'));
+  assert(pilotGuardSource.includes('"crm@axion.com.br"'), "caixa institucional do piloto");
   assert(pilotGuardSource.includes("PILOT_SUBJECT_PREFIX"));
   assert(!pilotGuardSource.includes('from "@/lib/email-actions') && !pilotGuardSource.includes("EmailAlertAction"),
     "o guard nunca deveria importar da feature de e-mail acionável — é o contrário: email-actions importa do guard"

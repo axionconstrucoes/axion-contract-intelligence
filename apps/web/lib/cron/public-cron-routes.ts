@@ -14,6 +14,7 @@ export const PUBLIC_CRON_ROUTES: ReadonlySet<string> = new Set([
   "/api/cron/system-health",
   "/api/cron/risk-alerts",
   "/api/cron/contract-alert-batches",
+  "/api/cron/alert-reminders",
 ]);
 
 /** true somente para um caminho exatamente igual a uma rota técnica listada (sem normalização de barras/case). */

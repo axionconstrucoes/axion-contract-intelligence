@@ -66,7 +66,12 @@ check("2. /api/cron/system-health é rota técnica pública no proxy", () => {
 });
 check("3. /api/cron/risk-alerts é rota técnica pública no proxy", () => {
   assert(isPublicCronRoute("/api/cron/risk-alerts") === true);
-  assert(PUBLIC_CRON_ROUTES.size === 3, "exatamente as três rotas");
+  // Allowlist EXATA (cresceu desde a versão de 3 rotas: contract-alert-batches e alert-reminders).
+  assert(
+    JSON.stringify([...PUBLIC_CRON_ROUTES].sort()) ===
+      JSON.stringify(["/api/cron/alert-reminders", "/api/cron/contract-alert-batches", "/api/cron/risk-alerts", "/api/cron/system-health", "/api/cron/weekly-alert-digest"]),
+    "somente as rotas técnicas conhecidas"
+  );
 });
 check("4. /api/cron/risk-alerts/x não é pública (nem variações de barra/case/query)", () => {
   for (const p of ["/api/cron/risk-alerts/x", "/api/cron/risk-alerts/", "/API/cron/risk-alerts", "/api/cron/risk-alerts?secret=x", "/api/cron/risk-alertsx", "/x/api/cron/risk-alerts"]) {

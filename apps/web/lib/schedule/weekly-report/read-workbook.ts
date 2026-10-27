@@ -24,6 +24,33 @@ export const MAX_WORKBOOK_BYTES = 50 * 1024 * 1024;
 const MAX_ROWS = 2000;
 const MAX_COLUMNS = 120;
 
+// Só planilhas MUITO pequenas são lidas em memória. Medido (planilhas sintéticas, Node 24): o
+// WorkbookReader em streaming falha de forma determinística em pacotes minúsculos (ex.: 3 abas x 50
+// linhas, ~12 KB), mas funciona de ~0,5 MB descompactado em diante; já a leitura em memória custa
+// ~16x o tamanho descompactado em heap (31 MB -> +508 MB de heap, 2,5 s) contra ~+30 MB de RSS no
+// streaming. Por isso o limite é baixo: cobre o caso minúsculo sem reintroduzir risco de memória
+// (o estouro anterior vinha de arquivos pequenos que expandem para GB; inspectPackage já limita isso).
+const IN_MEMORY_MAX_UNCOMPRESSED_BYTES = 2 * 1024 * 1024;
+
+/** Adapta o Workbook em memória à mesma interface do leitor em streaming (aba assíncrona de linhas). */
+async function loadWorkbookInMemory(buffer: Buffer): Promise<AsyncIterable<unknown>> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+  return (async function* () {
+    for (const worksheet of workbook.worksheets) {
+      const rows: ExcelJS.Row[] = [];
+      worksheet.eachRow({ includeEmpty: false }, (row) => rows.push(row));
+      yield {
+        name: worksheet.name,
+        state: worksheet.state,
+        async *[Symbol.asyncIterator]() {
+          for (const row of rows) yield row;
+        },
+      };
+    }
+  })();
+}
+
 const XLSX_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.ms-excel.sheet.macroenabled.12",
@@ -83,6 +110,60 @@ async function inspectPackage(buffer: Buffer): Promise<PackageInspection> {
     estimatedUncompressedBytes,
     oversizedXmlEntry,
   };
+}
+
+/**
+ * Confere o tamanho descompactado REAL (não o declarado no cabeçalho do ZIP, que é controlado por quem
+ * enviou o arquivo). Descompacta cada entrada em fluxo, só contando bytes: aborta ao passar dos limites e
+ * trata qualquer divergência entre o tamanho declarado e o real como pacote inconsistente. Medido com um
+ * pacote sintético de ~0,9 MB no disco e ~900 MB reais, com cabeçalho declarando ~1 KB: sem esta conferência
+ * o caminho em memória acumulava ~900 MB de heap antes de falhar ("uncompressed data size mismatch").
+ * Arquivos legítimos nunca divergem; o resultado de leitura deles não muda.
+ */
+interface ZipStreamHelper {
+  on(event: "data", listener: (data: Uint8Array) => void): ZipStreamHelper;
+  on(event: "error", listener: (error: Error) => void): ZipStreamHelper;
+  on(event: "end", listener: () => void): ZipStreamHelper;
+  pause(): ZipStreamHelper;
+  resume(): ZipStreamHelper;
+}
+
+export async function verifyActualUncompressedSize(
+  buffer: Buffer,
+  limits: { totalBytes: number; xmlEntryBytes: number } = { totalBytes: MAX_XLSX_UNCOMPRESSED_BYTES, xmlEntryBytes: MAX_XLSX_XML_ENTRY_BYTES }
+): Promise<{ ok: true; totalBytes: number } | { ok: false; reason: string }> {
+  try {
+    const zip = await JSZip.loadAsync(buffer);
+    let total = 0;
+    for (const [name, entry] of Object.entries(zip.files)) {
+      if (entry.dir) continue;
+      let entryBytes = 0;
+      // internalStream: descompressão em fluxo do JSZip (eventos data/end/error). Só contamos bytes.
+      const exceeded = await new Promise<string | null>((resolve, reject) => {
+        const helper = (entry as unknown as { internalStream(type: "uint8array"): ZipStreamHelper }).internalStream("uint8array");
+        helper
+          .on("data", (data: Uint8Array) => {
+            entryBytes += data.length;
+            total += data.length;
+            if (total > limits.totalBytes) {
+              helper.pause();
+              resolve(`Conteúdo descompactado real excede ${limits.totalBytes} bytes.`);
+            } else if (/\.xml$/i.test(name) && entryBytes > limits.xmlEntryBytes) {
+              helper.pause();
+              resolve(`Entrada XML real excessiva: ${name}.`);
+            }
+          })
+          .on("error", reject)
+          .on("end", () => resolve(null))
+          .resume();
+      });
+      if (exceeded) return { ok: false, reason: exceeded };
+    }
+    return { ok: true, totalBytes: total };
+  } catch {
+    // inclui "uncompressed data size mismatch" (cabeçalho do ZIP não confere com o conteúdo) e pacote corrompido
+    return { ok: false, reason: "Pacote XLSX inconsistente (tamanho declarado não confere com o conteúdo ou arquivo corrompido)." };
+  }
 }
 
 function toCell(cell: ExcelJS.Cell, counters: { formulas: number; missing: number }): SheetCell {
@@ -157,6 +238,22 @@ export async function readWorkbookSafely(input: { buffer: Buffer; fileName: stri
     };
   }
 
+  // O tamanho declarado acima vem do cabeçalho do ZIP e pode ser falsificado: confere o real (em fluxo).
+  const actual = await verifyActualUncompressedSize(input.buffer);
+  if (!actual.ok) {
+    return {
+      safety: {
+        ...empty,
+        macrosDetected: pkg.macrosDetected,
+        externalLinksDetected: pkg.externalLinksDetected,
+        dataConnectionsDetected: pkg.dataConnectionsDetected,
+        notes: [...empty.notes, `Planilha preservada sem leitura automática para evitar estouro de memória. ${actual.reason}`],
+      },
+      sheetIndex: [],
+      grids: [],
+    };
+  }
+
   // ExcelJS.Workbook().xlsx.load() materializa a pasta inteira em memória.
   // Arquivos pequenos em disco podem expandir para vários GB quando têm
   // dimensões/estilos extensos. No worker do GitHub isso já provocou OOM
@@ -170,18 +267,26 @@ export async function readWorkbookSafely(input: { buffer: Buffer; fileName: stri
   const sheetIndex: WorkbookSheetIndexEntry[] = [];
 
   try {
-    const workbook = new ExcelJS.stream.xlsx.WorkbookReader(tempPath, {
-      entries: "emit",
-      sharedStrings: "cache",
-      hyperlinks: "ignore",
-      // Estilos podem explodir memória em planilhas formatadas até centenas
-      // de milhares de linhas; a análise do ACC usa valores, não estilo.
-      styles: "ignore",
-      worksheets: "emit",
-    });
+    // Pacotes minúsculos (<= IN_MEMORY_MAX_UNCOMPRESSED_BYTES) são lidos em memória: o
+    // WorkbookReader em streaming do exceljs 4.4 falha neles no Node 24 com "Cannot read properties
+    // of undefined (reading 'sheets')" (reproduzido isolado; causa interna não investigada). Todo o
+    // resto continua em streaming, que usa muito menos memória.
+    const workbook: AsyncIterable<unknown> =
+      actual.totalBytes <= IN_MEMORY_MAX_UNCOMPRESSED_BYTES
+        ? await loadWorkbookInMemory(input.buffer)
+        : new ExcelJS.stream.xlsx.WorkbookReader(tempPath, {
+            entries: "emit",
+            sharedStrings: "cache",
+            hyperlinks: "ignore",
+            // Estilos podem explodir memória em planilhas formatadas até centenas
+            // de milhares de linhas; a análise do ACC usa valores, não estilo.
+            styles: "ignore",
+            worksheets: "emit",
+          });
 
     let position = 0;
-    for await (const sheet of workbook) {
+    for await (const sheetItem of workbook) {
+      const sheet = sheetItem as AsyncIterable<ExcelJS.Row>;
       const rows: SheetCell[][] = [];
       let observedRows = 0;
       let observedColumns = 0;

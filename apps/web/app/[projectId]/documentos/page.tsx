@@ -29,6 +29,7 @@ import { createSupabaseServerClient } from "@axion/db/server";
 import { loadExtractedScheduleContext } from "@/lib/ai/experts/planning-director/schedule-context";
 import { getClauses } from "@/lib/data";
 import { getContractAttachmentCounts, getManagedDocuments, getTrashedDocuments } from "@/lib/document-management";
+import { getVersionCoverageSummaries } from "@/lib/documents/extraction/version-coverage-summary";
 import { isContractAttachmentEligibleKind } from "@/lib/documents/contract-attachments/is-contract-attachment-eligible-kind";
 import {
   groupDocumentsByContractualStructure,
@@ -168,6 +169,13 @@ export default async function DocumentosPage({
       .filter((document) => isContractAttachmentEligibleKind(document.kind))
       .map((document) => document.versions[0]?.id)
       .filter((id): id is string => Boolean(id))
+  );
+
+  // Cobertura de leitura (OCR) por versão — aviso de leitura parcial e
+  // revisão visual nos cards; nunca "Processado" puro quando há páginas
+  // não lidas.
+  const coverageByVersion = await getVersionCoverageSummaries(
+    documents.flatMap((document) => document.versions.map((version) => version.id))
   );
 
   // GRUPOS CONTRATUAIS: Contrato-base | Anexos, Aditivo 01 | Anexos,
@@ -317,6 +325,7 @@ export default async function DocumentosPage({
                   canAddContractAttachment={canAddContractAttachment}
                   canDeleteContractAttachment={canDeleteContractAttachment}
                   emailOptions={projectEmails}
+                  coverageByVersion={coverageByVersion}
                 />
               ))}
 
@@ -340,6 +349,7 @@ export default async function DocumentosPage({
                       canAddContractAttachment={canAddContractAttachment}
                       canDeleteContractAttachment={canDeleteContractAttachment}
                       emailOptions={projectEmails}
+                      coverageByVersion={coverageByVersion}
                     />
                   ))}
                 </div>

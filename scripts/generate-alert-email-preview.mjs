@@ -24,6 +24,7 @@
 //   node scripts/generate-alert-email-preview.mjs
 
 import { mkdirSync, writeFileSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { register } from "node:module";
@@ -35,15 +36,16 @@ const repoRoot = path.resolve(here, "..");
 
 const { buildContractAlertEmail } = await import("../apps/web/lib/email/templates/contract-alert-template.ts");
 const { buildConfrontationBlock } = await import("../apps/web/lib/email/build-confrontation-block.ts");
-const { appendAccEmailSignature, ACC_EMAIL_LOGO_CID } = await import("../apps/web/lib/email/branding/acc-email-signature.ts");
-const { loadAccLogoInlineImage } = await import("../apps/web/lib/email/branding/load-acc-logo-inline-image.ts");
+const { appendAccEmailSignature } = await import("../apps/web/lib/email/branding/acc-email-signature.ts");
+const { loadAccAlertLogos } = await import("../apps/web/lib/email/branding/load-acc-logo-inline-image.ts");
 const { buildMimeMessage } = await import("../apps/web/lib/email/mime-message.ts");
 const { EMAIL_FIXTURE_PROJECT_NAME_MARKER } = await import("../apps/web/lib/email/fixture-safety-guard.ts");
 const { deriveScheduleDelaySeverity } = await import(
   "../apps/web/lib/ai/experts/planning-director/derive-schedule-delay-severity.ts"
 );
 
-const OUT_DIR = "C:\\Users\\User\\axion-acc-previews";
+// Sem caminho absoluto de usuário: padrão = pasta temporária do sistema; ACC_PREVIEW_OUT_DIR troca.
+const OUT_DIR = process.env.ACC_PREVIEW_OUT_DIR ?? path.join(os.tmpdir(), "axion-acc-previews");
 mkdirSync(OUT_DIR, { recursive: true });
 
 // Nomes/identificadores 100% fictícios — nunca um contrato real ("DUX
@@ -107,7 +109,11 @@ const actionButtons = [
   { action: "RESPOND", url: "https://acc.axion.com.br/email-actions/preview-token-respond" },
 ];
 
-const inlineLogo = loadAccLogoInlineImage(path.join(repoRoot, "apps", "web"));
+// Espelha send-contract-alert-email.ts: só o logo que a caixa do risco usa (invertido para
+// CRÍTICO/ALTO, vinho oficial para MÉDIO/BAIXO).
+const darkTone = fixtureSeverity === "CRITICA" || fixtureSeverity === "ALTA";
+const logos = loadAccAlertLogos({ maroon: !darkTone, inverted: darkTone }, path.join(repoRoot, "apps", "web"));
+const inlineLogo = logos.images[0] ?? null;
 
 const built = buildContractAlertEmail({
   recipientName: FIXTURE_PERSON_NAME,
@@ -141,7 +147,8 @@ const built = buildContractAlertEmail({
   dueDate: "2026-09-02",
   eventUrl: "https://acc.axion.com.br/fixture-preview-nao-enviar/ledger/evt-4821",
   actionButtons,
-  hasInlineLogo: Boolean(inlineLogo),
+  hasInlineLogo: logos.availability.maroon,
+  hasInlineInvertedLogo: logos.availability.inverted,
 });
 
 // [TESTE] no assunto — aplicado SÓ aqui na prévia (nunca dentro de
@@ -194,7 +201,7 @@ writeFileSync(htmlBodyPath, withSignature.html ?? previewHtml, "utf8");
 const htmlPath = path.join(OUT_DIR, "alert-email.html");
 const bodyForBrowser = inlineLogo
   ? (withSignature.html ?? previewHtml).replace(
-      `src="cid:${ACC_EMAIL_LOGO_CID}"`,
+      `src="cid:${inlineLogo.cid}"`,
       `src="data:${inlineLogo.mimeType};base64,${inlineLogo.contentBase64}"`
     )
   : (withSignature.html ?? previewHtml);

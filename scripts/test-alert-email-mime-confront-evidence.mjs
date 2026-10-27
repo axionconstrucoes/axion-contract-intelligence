@@ -32,7 +32,8 @@ register("./ts-module-resolver.mjs", import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
 function readSource(relativePath) {
-  return readFileSync(path.join(repoRoot, relativePath), "utf8");
+  // Normaliza CRLF -> LF (Windows/core.autocrlf): as verificações multilinha usam LF.
+  return readFileSync(path.join(repoRoot, relativePath), "utf8").replaceAll(String.fromCharCode(13, 10), String.fromCharCode(10));
 }
 
 let passed = 0;
@@ -66,7 +67,7 @@ const { buildMimeMessage, encodeMimeHeaderValue, decodeMimeHeaderValue, sanitize
 const { buildContractAlertSubject, buildContractAlertEmail } = await import(
   "../apps/web/lib/email/templates/contract-alert-template.ts"
 );
-const { ACC_EMAIL_LOGO_CID } = await import("../apps/web/lib/email/branding/acc-email-signature.ts");
+const { ACC_EMAIL_LOGO_CID, ACC_EMAIL_LOGO_INVERTED_CID } = await import("../apps/web/lib/email/branding/acc-email-signature.ts");
 const {
   ACC_FONT_FAMILY,
   ACC_COLOR_HEADING,
@@ -375,27 +376,31 @@ const baseAlertInput = {
   actionButtons: [],
 };
 
-check("hasInlineLogo=true: cabeçalho do e-mail referencia cid: do logo, DEPOIS do badge de RISCO (risco à ESQUERDA, marca/logo à DIREITA — layout atualizado nesta rodada)", () => {
-  const { html } = buildContractAlertEmail(baseAlertInput);
-  const badgeIndex = html.indexOf("RISCO");
-  const logoIndex = html.indexOf(`cid:${ACC_EMAIL_LOGO_CID}`);
+// DEFINIÇÃO FINAL (substitui "risco à esquerda, marca à direita"): LOGO oficial à ESQUERDA e a
+// classificação "RISCO …" na mesma linha. ALTO/CRÍTICO usam o logo INVERTIDO (cid próprio).
+check("hasInlineLogo=true: cabeçalho referencia cid: do logo ANTES da classificação de RISCO (logo à esquerda)", () => {
+  const { html } = buildContractAlertEmail({ ...baseAlertInput, severity: "CRITICA" }); // CRÍTICO => logo invertido
+  const riskIndex = html.indexOf("RISCO CRÍTICO");
+  const logoIndex = html.indexOf(`cid:${ACC_EMAIL_LOGO_INVERTED_CID}`);
   assert(logoIndex !== -1, "cabeçalho deveria referenciar cid: do logo quando hasInlineLogo=true");
-  assert(badgeIndex < logoIndex, "risco deveria aparecer no cabeçalho ANTES do logo (ordem no HTML: risco à esquerda, marca à direita)");
-  assert(html.includes("ACC · AXION CONTROLE DE CONTRATOS"), "texto da marca deveria continuar ao lado do logo");
+  assert(logoIndex < riskIndex, "logo deveria aparecer ANTES da classificação (à esquerda)");
+  const medium = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" }).html;
+  assert(medium.indexOf(`cid:${ACC_EMAIL_LOGO_CID}`) !== -1, "MÉDIO usa o logo vinho oficial");
+  const alto = buildContractAlertEmail(baseAlertInput).html;
+  assert(alto.indexOf(`cid:${ACC_EMAIL_LOGO_CID}`) !== -1 && !alto.includes(`cid:${ACC_EMAIL_LOGO_INVERTED_CID}`), "ALTO (amarelo) usa o logo vinho oficial");
 });
 
 check("hasInlineLogo=false: cabeçalho NUNCA referencia cid: (nunca uma imagem quebrada)", () => {
   const { html } = buildContractAlertEmail({ ...baseAlertInput, hasInlineLogo: false });
   assert(!html.includes("cid:"), "sem o logo real disponível, o cabeçalho não pode referenciar cid:");
-  assert(html.includes("ACC · AXION CONTROLE DE CONTRATOS"), "texto da marca continua aparecendo sem o logo");
+  assert(html.includes("RISCO ALTO"), "a classificação continua aparecendo sem o logo");
 });
 
 check("send-contract-alert-email.ts: hasInlineLogo é decidido a partir de loadAccLogoInlineImage() ANTES de montar o e-mail, nunca fornecido pelo caller", () => {
   const source = readSource("apps/web/lib/email/send-contract-alert-email.ts");
-  assert(source.includes("Omit<ContractAlertEmailInput, \"hasInlineLogo\">"), "o caller (send-alert-actions.ts) não deveria poder fornecer hasInlineLogo");
-  assert(source.includes("const inlineLogo = loadAccLogoInlineImage();"));
-  assert(source.includes("const hasInlineLogo = inlineLogo !== null;"));
-  assert(/buildContractAlertEmail\(\{\s*\.\.\.input\.alert,\s*hasInlineLogo\s*\}\)/.test(source));
+  assert(/Omit<\s*ContractAlertEmailInput,\s*"hasInlineLogo" \| "hasInlineInvertedLogo" \| "quickActionUrls" \| "repeatNotice"\s*>/.test(source), "o caller (send-alert-actions.ts) não deveria poder fornecer hasInlineLogo nem os links de ação/repetição (decididos no servidor)");
+  assert(source.includes("const logos = loadAccAlertLogos("), "logos carregados do arquivo real (vinho ou invertido, conforme o risco)");
+  assert(/buildContractAlertEmail\(\{\s*\.\.\.input\.alert,\s*hasInlineLogo: logos\.availability\.maroon,\s*hasInlineInvertedLogo: logos\.availability\.inverted,/.test(source));
 });
 
 check("logo do cabeçalho usa o MESMO ACC_EMAIL_LOGO_CID da assinatura — Content-ID do MIME corresponde exatamente", () => {
@@ -427,10 +432,12 @@ check("família tipográfica é SEMPRE Arial/Helvetica/sans-serif no template (n
   const { html } = buildContractAlertEmail(baseAlertInput);
   assert(ACC_FONT_FAMILY === "Arial, Helvetica, sans-serif");
   assert(html.includes(`font-family:${ACC_FONT_FAMILY}`));
+  // Sem exceções: nenhuma família além da institucional (o título usa Arial em negrito, nunca Arial Black).
   assert(!/font-family:(?!Arial, Helvetica, sans-serif)[^;"]+;/.test(html), "nenhuma outra font-family deveria aparecer no HTML");
+  assert(!/Arial Black|font-weight:\s*(800|900)/.test(html), "nenhum peso black/900");
 });
 
-check("hierarquia de tamanhos LIMITADA a 20/15/14/12px — nenhum outro valor de font-size solto no template", () => {
+check("hierarquia de tamanhos LIMITADA a 20/16/15/14/12px (16px só no cabeçalho de risco e no título do alerta) — nenhum outro valor de font-size solto no template", () => {
   assert(ACC_FONT_SIZE_TITLE === "20px");
   assert(ACC_FONT_SIZE_SECTION === "15px");
   assert(ACC_FONT_SIZE_BODY === "14px");
@@ -445,32 +452,40 @@ check("hierarquia de tamanhos LIMITADA a 20/15/14/12px — nenhum outro valor de
     actionButtons: [{ action: "RESPOND", url: "https://app.axion.com.br/email-actions/tok" }],
   });
 
-  const allowed = new Set(["20px", "15px", "14px", "12px"]);
+  const allowed = new Set(["20px", "16px", "15px", "14px", "12px"]);
   const found = Array.from(html.matchAll(/font-size:(\d+px)/g)).map((m) => m[1]);
   assert(found.length > 5, "esperado um número razoável de declarações font-size no HTML completo");
   const disallowed = found.filter((size) => !allowed.has(size));
   assert(disallowed.length === 0, `tamanhos fora da hierarquia limitada encontrados: ${[...new Set(disallowed)].join(", ")}`);
 });
 
-check("título principal (h1) em bordô #7F1D1D, corpo/valores em preto (#111111)", () => {
+// DEFINIÇÃO FINAL: o título acompanha a cor do texto da caixa (branco nos fundos
+// CRÍTICO/ALTO, preto em MÉDIO/BAIXO); o bordô segue nos painéis internos e na assinatura.
+check("título principal (h1) com a cor de texto da caixa; painéis internos mantêm bordô/preto institucionais", () => {
   assert(ACC_COLOR_HEADING === "#7F1D1D");
   assert(ACC_COLOR_BODY === "#111111");
-  const { html } = buildContractAlertEmail(baseAlertInput);
-  assert(new RegExp(`<h1[^>]*color:${ACC_COLOR_HEADING}`).test(html), "h1 deveria usar a cor bordô institucional");
-  assert(html.includes(`color:${ACC_COLOR_BODY}`), "corpo deveria usar a cor preta institucional");
+  const alta = buildContractAlertEmail(baseAlertInput).html;
+  assert(/<a [^>]*font-weight:700;color:#000000;[^>]*>Possível atraso na entrega da estrutura<\/a>/.test(alta), "título (link do evento, peso black) preto sobre o amarelo do ALTO");
+  const media = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA" }).html;
+  assert(/<a [^>]*font-weight:700;color:#000000;[^>]*>Possível atraso na entrega da estrutura<\/a>/.test(media), "título preto na caixa branca");
+  assert(media.includes(`color:${ACC_COLOR_BODY}`), "corpo deveria usar a cor preta institucional");
 });
 
-check("títulos de seção (Evidências principais / Ações disponíveis) também em bordô", () => {
-  const { html } = buildContractAlertEmail(baseAlertInput);
-  const sectionStyle = `font-size:${ACC_FONT_SIZE_SECTION};font-weight:bold;color:${ACC_COLOR_HEADING}`;
-  assert(html.includes(`Evidências principais</p>`.replace(">", "")) || html.includes("Evidências principais"));
-  assert(new RegExp(`${sectionStyle}[^>]*>Evidências principais`).test(html) || html.includes(sectionStyle));
+// DEFINIÇÃO FINAL: UM único tamanho (14px) em todo o alerta; só o peso diferencia.
+check("alerta usa corpo padrão de 14px (16px só no cabeçalho de risco e no título); evidência e cláusula em negrito, descrição em regular", () => {
+  const { html } = buildContractAlertEmail({ ...baseAlertInput, severity: "MEDIA", keyEvidence: [], impactedClause: { label: "Cláusula 8.2 – Prazos", text: null } });
+  const box = html.slice(html.indexOf("border:2px solid"), html.indexOf('<td style="padding:16px 24px;border-top'));
+  const sizes = new Set(Array.from(box.matchAll(/font-size:(\d+px)/g)).map((m) => m[1]));
+  assert(JSON.stringify([...sizes].sort()) === JSON.stringify(["14px", "16px"]), `tamanhos no alerta: ${[...sizes].join(", ")}`);
+  assert(/font-weight:700;color:#000000;[^"]*">Cláusula 8\.2 – Prazos</.test(html));
+  assert(/font-weight:400;color:#000000;[^"]*">O cliente notificou atraso de 20 dias\.</.test(html));
 });
 
-check("max-width ~820px e layout de duas colunas continuam preservados nesta rodada", () => {
-  const { html } = buildContractAlertEmail(baseAlertInput);
+check("max-width ~820px e layout de duas colunas (conteúdo + coluna branca dos botões) continuam preservados", () => {
+  const { html } = buildContractAlertEmail({ ...baseAlertInput, actionButtons: [{ action: "ACKNOWLEDGE", url: "https://app.axion.com.br/email-actions/tok-ack" }] });
   assert(html.includes("max-width:820px"));
   assert(html.includes('class="acc-content-col"') && html.includes('class="acc-actions-col"'));
+  assert(html.indexOf('class="acc-content-col"') < html.indexOf('class="acc-actions-col"'), "conteúdo à esquerda, ações à direita");
 });
 
 check("mobile: media query de empilhamento continua presente, sem depender de flex/grid/JavaScript", () => {
@@ -486,7 +501,8 @@ check("hover visual nos botões (progressivo, nunca a única explicação): :hov
     actionButtons: [{ action: "ACKNOWLEDGE", url: "https://app.axion.com.br/email-actions/tok-ack" }],
   });
   assert(/\.acc-action-btn:hover\s*\{[^}]*background-color/.test(html), "deveria existir uma regra :hover para os botões de ação");
-  assert(/\.acc-open-event-btn:hover\s*\{[^}]*background-color/.test(html), "deveria existir uma regra :hover para o botão Abrir evento no ACC");
+  // O botão "Abrir evento no ACC" foi substituído pelo TÍTULO como link do evento (sublinhado).
+  assert(!html.includes("acc-open-event-btn"), "botão Abrir evento removido: o título é o link");
   assert(/title="[^"]+"/.test(html), "title sempre presente (fallback sem hover)");
   assert(/aria-label="[^"]+"/.test(html), "aria-label sempre presente");
 });
@@ -707,12 +723,11 @@ check("evidência RECEBIDA: HTML mostra RECEBIDA + De/Para/Data/Assunto + link A
       },
     ],
   });
-  assert(html.includes("RECEBIDA"));
+  // DEFINIÇÃO FINAL: a evidência é um LINK em negrito para a origem (direção, assunto e data no texto
+  // do link) + linha regular com De/Para; sem botão "Abrir evidência no ACC" separado.
+  assert(html.includes("RECEBIDA — Notificação de atraso (20/08/2026)"));
   assert(html.includes("De: cliente@weg.com.br"));
   assert(html.includes("Para: acc@axion.com.br"));
-  assert(html.includes("Data: 20/08/2026"));
-  assert(html.includes("Assunto: Notificação de atraso"));
-  assert(html.includes("Abrir evidência no ACC"));
   assert(html.includes('href="https://app.axion.com.br/proj-1/ledger/evt-1#evidencia-ev-1"'));
   assert(text.includes("RECEBIDA") && text.includes("cliente@weg.com.br"));
 });
@@ -794,7 +809,7 @@ check("send-alert-actions.ts: usa emails.direction (via getEmail) para classific
 
 check("lib/data.ts: getEmail/getEmails agora selecionam direction (emails.direction) — fonte estruturada, nunca recalculada", () => {
   const source = readSource("apps/web/lib/data.ts");
-  assert(/EMAIL_COLUMNS = ["'].*direction["'];/.test(source), "EMAIL_COLUMNS deveria incluir direction");
+  assert(/EMAIL_COLUMNS = ["'][^"']*direction[^"']*["'];/.test(source), "EMAIL_COLUMNS deveria incluir direction");
   assert(source.includes("direction: row.direction,"));
 });
 
@@ -833,12 +848,10 @@ check("remetente/destinatário/assunto/url de evidência são escapados (proteç
 
 check("guard de piloto, tokens de uso único, permissões e auditoria continuam intocados por esta rodada", () => {
   const pilotGuardSource = readSource("apps/web/lib/email/pilot-outbound-guard.ts");
-  assert(pilotGuardSource.includes('ACC_EXPECTED_PILOT_RECIPIENT = "reynaldo@axion.com.br"'), "Reynaldo continua como destinatário de contingência do piloto");
-  for (const email of [
-    "ricardo.silva@axion.com.br",
-    "carlos.evandro@axion.com.br",
-    "rosana.mendes@axion.com.br",
-  ]) assert(pilotGuardSource.includes(`"${email}"`), `${email} deve constar na allowlist do período de testes`);
+  // Piloto atual (commit "redirect all pilot email to crm@axion.com.br"): TODO envio manual vai para a caixa
+  // institucional do CRM; a allowlist é só essa caixa (os antigos testadores individuais saíram).
+  assert(pilotGuardSource.includes('ACC_EXPECTED_PILOT_RECIPIENT = "crm@axion.com.br"'), "caixa institucional do piloto");
+  assert(/ACC_PILOT_ALLOWED_RECIPIENTS = \[\s*ACC_EXPECTED_PILOT_RECIPIENT,\s*\] as const;/.test(pilotGuardSource), "allowlist = só a caixa institucional");
   const sendEmailSource = readSource("apps/web/lib/email/send-contract-alert-email.ts");
   assert(sendEmailSource.includes("CONTRACT_ALERT_EMAIL_SENT"));
   assert(sendEmailSource.includes('permission !== "ADMINISTRADOR"'));
