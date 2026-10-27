@@ -110,7 +110,13 @@ export interface RiskAlertStore {
   listPendingRows(projectId: string): Promise<PendingOutboxRow[]>;
   loadCaseRecord(caseId: string): Promise<RiskCaseRecord | null>;
   markSent(id: string, result: { recipientEmail: string; provider: string; providerMessageId: string; emailId: string | null; sentAt: string; messageIdHeader: string; conversationId: string | null }): Promise<void>;
-  markFailed(id: string, sanitizedError: string): Promise<void>;
+  /**
+   * Reivindica a linha da outbox ANTES de enviar (compare-and-swap em status PENDING + attempt_count,
+   * contando a tentativa). Devolve false quando outro ciclo já a reivindicou/enviou — nesse caso NÃO enviar.
+   */
+  claimOutbox(id: string): Promise<boolean>;
+  /** attemptAlreadyClaimed: a tentativa já foi contada por claimOutbox (não contar de novo). */
+  markFailed(id: string, sanitizedError: string, options?: { attemptAlreadyClaimed?: boolean }): Promise<void>;
   markSkipped(id: string, reason: string): Promise<void>;
   markDigestWindow(caseIds: string[], window: string): Promise<void>;
   recordEmail(projectId: string, input: { from: string; to: string; subject: string; sentAt: string; snippet: string }): Promise<string | null>;

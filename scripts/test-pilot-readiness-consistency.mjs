@@ -159,12 +159,16 @@ await check("7. TOP_LEVEL_REACHED não envia e-mail adicional (caminho imediato 
   const p = plan({ now: "2026-09-21T16:30:00.000Z", existingCases: [existingRecord({ currentLevel: "DIRETORIA" })], linkedActions: new Map([["act-1", linkedAction({ currentEscalationLevel: "DIRETORIA", status: "ESCALATED" })]]) });
   assert(p.outbox.filter((e) => e.notificationType !== "IMMEDIATE").length === 0);
   const cycle = readSource("apps/web/lib/risk-alerts/run-risk-alert-cycle.ts");
-  assert(cycle.includes("applyScheduledTopLevel({ now: nowIso, snapshot: loaded.snapshot, reasons: item.reasons })") && cycle.includes("projectResult.topLevelReached += 1;"));
+  assert(cycle.includes("applyScheduledTopLevel({ now: nowIso, snapshot: loaded.snapshot, reasons: item.reasons, deadlineEscalatedToTop: true })") && cycle.includes("projectResult.topLevelReached += 1;"));
 });
 await check("8. Reexecução é idempotente: limite já registrado não repete; caso resolvido não registra; chave única compartilhada", () => {
   assert(applyScheduledTopLevel({ now: "2026-09-21T16:30:00.000Z", snapshot: snapshot({ currentLevel: "DIRETORIA", topLevelReachedAt: "2026-09-21T16:05:00.000Z" }), reasons: [] }) === null);
   assert(applyScheduledTopLevel({ now: "2026-09-21T16:30:00.000Z", snapshot: snapshot({ currentLevel: "DIRETORIA", state: "RESOLVED" }), reasons: [] }) === null);
   assert(applyScheduledTopLevel({ now: "2026-09-21T16:30:00.000Z", snapshot: snapshot({ currentLevel: "ESCALAO_1" }), reasons: [] }) === null, "só quando já está na Diretoria");
+  // Correção #2: o prazo da Diretoria vencido (constatado pelo planejador sobre a ação SLA) leva o caso ao topo e registra o limite.
+  const forced = applyScheduledTopLevel({ now: "2026-09-21T16:30:00.000Z", snapshot: snapshot({ currentLevel: "RESPONSAVEL" }), reasons: ["x"], deadlineEscalatedToTop: true });
+  assert(forced && forced.events[0].actionType === "TOP_LEVEL_REACHED" && forced.caseUpdate.currentLevel === "DIRETORIA" && forced.caseUpdate.topLevelReached === true && forced.outbox.length === 0);
+  assert(applyScheduledTopLevel({ now: "2026-09-21T16:30:00.000Z", snapshot: snapshot({ currentLevel: "RESPONSAVEL", topLevelReachedAt: "2026-09-21T16:05:00.000Z" }), reasons: [], deadlineEscalatedToTop: true }) === null, "já registrado não repete");
   const p = plan({ now: "2026-09-21T16:30:00.000Z", existingCases: [existingRecord({ currentLevel: "DIRETORIA", topLevelReachedAt: "2026-09-21T16:05:00.000Z" })], linkedActions: new Map([["act-1", linkedAction({ currentEscalationLevel: "DIRETORIA", status: "ESCALATED" })]]) });
   assert(p.topLevelReached.length === 0, "planejador não repete");
   const immediate = act("OTHER", { text: "x" }, { snap: { currentLevel: "DIRETORIA" } }).events.find((e) => e.actionType === "TOP_LEVEL_REACHED");

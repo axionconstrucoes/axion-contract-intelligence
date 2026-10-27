@@ -254,7 +254,7 @@ export async function runRiskAlertCycle(options: RunRiskAlertCycleOptions = {}):
       if (!caseId) continue;
       const loaded = await store.loadCaseSnapshotForAction(caseId);
       if (!loaded) continue;
-      const transition = applyScheduledTopLevel({ now: nowIso, snapshot: loaded.snapshot, reasons: item.reasons });
+      const transition = applyScheduledTopLevel({ now: nowIso, snapshot: loaded.snapshot, reasons: item.reasons, deadlineEscalatedToTop: true });
       if (!transition) continue;
       try {
         await store.applyTransition(caseId, transition, null);
@@ -374,6 +374,9 @@ async function issueActionLinks(ctx: SendContext, caseId: string, recipientUserI
 }
 
 async function deliver(ctx: SendContext, outboxId: string, caseId: string | null, recipientUserId: string, recipientEmail: string, built: BuiltEmail, notificationType: string, escalationLevel: string | null, idempotencyKey: string): Promise<"SENT" | "FAILED" | "SKIPPED"> {
+  // Ciclos simultâneos (instâncias/execuções sobrepostas): só quem reivindicar a linha envia.
+  // Quem perde NÃO envia nem altera a linha (o vencedor é o dono dela).
+  if (!(await ctx.store.claimOutbox(outboxId))) return "SKIPPED";
   // Override de ENTREGA do piloto: só o To muda (nunca CC/BCC); o destinatário
   // lógico (recipientUserId/recipientEmail) permanece na outbox e na auditoria.
   const delivery = resolveDeliveryAddress({
@@ -439,7 +442,7 @@ async function deliver(ctx: SendContext, outboxId: string, caseId: string | null
     return "SENT";
   } catch (error) {
     const message = error instanceof EmailSendError ? error.message : sanitizeError(error);
-    await ctx.store.markFailed(outboxId, sanitizeError(message));
+    await ctx.store.markFailed(outboxId, sanitizeError(message), { attemptAlreadyClaimed: true });
     await ctx.store.audit(ctx.projectId, [{ action: "RISK_ALERT_EMAIL_FAILED", entityType: "RISK_ALERT_OUTBOX", entityId: outboxId, detail: `Falha de envio (${idempotencyKey}): ${sanitizeError(message)}` }]);
     return "FAILED";
   }
