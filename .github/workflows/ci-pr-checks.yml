@@ -1,0 +1,103 @@
+name: CI PR Checks
+
+# Verificações de Pull Request SEM efeitos externos.
+# - Gatilho: pull_request (e execução manual). Nunca schedule.
+# - Nenhum segredo e nenhuma variável do repositório são referenciados: o job roda sem
+#   credenciais de Supabase, Gmail, Anthropic, Vercel ou ElevenLabs. Em PRs de forks o GitHub
+#   já não fornece segredos; aqui também não há nenhum para fornecer.
+# - Provedores de e-mail/IA: fake/bloqueados pelos próprios testes (--import block-live-ai).
+# - Banco: PGlite em memória (descartável); as 119+ migrations são reaplicadas do zero em test:sql.
+# - Permissões mínimas (somente leitura do conteúdo).
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+  NEXT_TELEMETRY_DISABLED: "1"
+  AXION_EMAIL_PROVIDER: fake
+
+jobs:
+  guards:
+    name: Guards (sem segredos, sem envio real)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Nenhum workflow de PR referencia segredos
+        run: |
+          if grep -nE '\$\{\{\s*(secrets|vars)\.' .github/workflows/ci-pr-checks.yml | grep -v '^\s*#' ; then
+            echo "::error::ci-pr-checks.yml não pode referenciar secrets/vars"; exit 1
+          fi
+      - name: Nenhum arquivo .env versionado e script de envio real ausente
+        run: |
+          bad=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '\.env\.example$' || true)
+          if [ -n "$bad" ]; then echo "::error::arquivos .env versionados: $bad"; exit 1; fi
+          if git ls-files | grep -q 'scripts/tmp-send-real-batch.mjs'; then
+            echo "::error::script de envio real não pode ser versionado"; exit 1
+          fi
+      - name: Sequência de migrations sem duplicidade de versão
+        run: |
+          dups=$(ls supabase/migrations | sed -E 's/_.*//' | sort | uniq -d)
+          if [ -n "$dups" ]; then echo "::error::versões de migration duplicadas: $dups"; exit 1; fi
+          echo "migrations: $(ls supabase/migrations | wc -l)"
+
+  checks:
+    name: Typecheck, lint e testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit -p apps/web
+      - name: Lint
+        run: npm run lint
+      - name: Testes unitários (web)
+        run: npm test
+      - name: Testes de scripts
+        run: npm run test:scripts
+      - name: Testes de e-mail (provider fake)
+        run: npm run test:email
+      - name: Testes SQL (PGlite, replay completo das migrations)
+        run: npm run test:sql
+      - name: Testes SSMA
+        run: npm run test:ssma
+      - name: Simulação WEG e suíte de alertas
+        run: |
+          npm run test:alert-sim
+          npm run test:alerts
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Build (sem variáveis de produção)
+        run: npm run build
