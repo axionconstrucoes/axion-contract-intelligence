@@ -47,6 +47,15 @@ jobs:
           if git ls-files | grep -q 'scripts/tmp-send-real-batch.mjs'; then
             echo "::error::script de envio real não pode ser versionado"; exit 1
           fi
+      - name: Nenhum padrão de segredo de alta especificidade no código versionado
+        run: |
+          PAT='-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----|sk-ant-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|GOCSPX-[A-Za-z0-9_-]{20,}|sb_secret_[A-Za-z0-9_-]{20,}|sbp_[a-f0-9]{40}|xox[abpr]-[A-Za-z0-9-]{10,}|postgres(ql)?://[^:[:space:]]+:[^@[:space:]]{6,}@[^[:space:]]+'
+          hits=$(git grep -nIE -e "$PAT" -- . ':!package-lock.json' ':!.github/workflows/ci-pr-checks.yml' | grep -viE 'FALSO|FALSE|FAKE|fict|exemplo|example|@(127\.0\.0\.1|localhost)' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::possível segredo versionado (mostrando só arquivo:linha)"
+            echo "$hits" | cut -d: -f1,2
+            exit 1
+          fi
       - name: Sequência de migrations sem duplicidade de versão
         run: |
           dups=$(ls supabase/migrations | sed -E 's/_.*//' | sort | uniq -d)
