@@ -92,8 +92,33 @@ jobs:
         run: env -u GITHUB_ACTIONS npm run test:email
       - name: Testes SQL (PGlite, replay completo das migrations)
         run: npm run test:sql
-      - name: Testes SSMA
-        run: npm run test:ssma
+      # Dois testes do SSMA (test-ssma-offline-browser: IndexedDB real, offline e reconexão; test-ssma-service-worker:
+      # cache/Service Worker) exigem um Chrome real. Eles procuram o Chrome em um caminho padrão do Windows e, quando não o
+      # encontram, imprimem "PULADO" e saem com código 0 (comportamento pensado para máquinas de desenvolvimento). Aqui o
+      # Chrome é OBRIGATÓRIO: o passo falha se o Chrome não existir, se alguma verificação for pulada ou se o total cair.
+      - name: Testes SSMA (Chrome real obrigatório)
+        run: |
+          set -o pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "::error::Chrome não encontrado no runner: os testes SSMA de navegador não podem ser executados"
+            exit 1
+          fi
+          export CHROME_PATH="$(readlink -f "$CHROME")"
+          echo "Chrome: $CHROME_PATH"
+          "$CHROME_PATH" --version
+          npm run test:ssma 2>&1 | tee "$RUNNER_TEMP/ssma.log"
+          if grep -q '^PULADO' "$RUNNER_TEMP/ssma.log"; then
+            echo "::error::teste SSMA pulado (PULADO) — aprovação silenciosa não é aceita no CI"
+            grep '^PULADO' "$RUNNER_TEMP/ssma.log"
+            exit 1
+          fi
+          ok=$(grep -c '^OK ' "$RUNNER_TEMP/ssma.log" || true)
+          echo "SSMA: $ok verificações OK (referência com Chrome real: 69)"
+          if [ "$ok" -lt 69 ]; then
+            echo "::error::SSMA executou $ok verificações; o mínimo esperado com Chrome real é 69"
+            exit 1
+          fi
       - name: Simulação WEG e suíte de alertas
         run: |
           npm run test:alert-sim
