@@ -1,0 +1,169 @@
+name: CI PR Checks
+
+# Verificações de Pull Request SEM efeitos externos.
+# - Gatilho: pull_request (e execução manual). Nunca schedule.
+# - Nenhum segredo e nenhuma variável do repositório são referenciados: o job roda sem
+#   credenciais de Supabase, Gmail, Anthropic, Vercel ou ElevenLabs. Em PRs de forks o GitHub
+#   já não fornece segredos; aqui também não há nenhum para fornecer.
+# - Provedores de e-mail/IA: fake/bloqueados pelos próprios testes (--import block-live-ai).
+# - Banco: PGlite em memória (descartável); as migrations são reaplicadas do zero em test:sql.
+# - Permissões mínimas (somente leitura do conteúdo).
+# - Nada é aprovado por ausência: scripts obrigatórios ausentes, Chrome ausente e testes pulados REPROVAM.
+#   Única exceção explícita e visível: test:alert-sim e test:alerts (ver passo próprio) enquanto não existirem.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+  NEXT_TELEMETRY_DISABLED: "1"
+  AXION_EMAIL_PROVIDER: fake
+
+jobs:
+  guards:
+    name: Guards (sem segredos, sem envio real)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Nenhum workflow de PR referencia segredos
+        run: |
+          if grep -nE '\$\{\{\s*(secrets|vars)\.' .github/workflows/ci-pr-checks.yml | grep -v '^\s*#' ; then
+            echo "::error::ci-pr-checks.yml não pode referenciar secrets/vars"; exit 1
+          fi
+      - name: Nenhum arquivo .env versionado e script de envio real ausente
+        run: |
+          bad=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '\.env\.example$' || true)
+          if [ -n "$bad" ]; then echo "::error::arquivos .env versionados: $bad"; exit 1; fi
+          if git ls-files | grep -q 'scripts/tmp-send-real-batch.mjs'; then
+            echo "::error::script de envio real não pode ser versionado"; exit 1
+          fi
+      - name: Nenhum padrão de segredo de alta especificidade no código versionado
+        run: |
+          PAT='-----BEGIN (RSA |EC |OPENSSH |DSA |PGP )?PRIVATE KEY-----|sk-ant-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}|GOCSPX-[A-Za-z0-9_-]{20,}|sb_secret_[A-Za-z0-9_-]{20,}|sbp_[a-f0-9]{40}|xox[abpr]-[A-Za-z0-9-]{10,}|postgres(ql)?://[^:[:space:]]+:[^@[:space:]]{6,}@[^[:space:]]+'
+          hits=$(git grep -nIE -e "$PAT" -- . ':!package-lock.json' ':!.github/workflows/ci-pr-checks.yml' | grep -viE 'FALSO|FALSE|FAKE|fict|exemplo|example|@(127\.0\.0\.1|localhost)' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::possível segredo versionado (mostrando só arquivo:linha)"
+            echo "$hits" | cut -d: -f1,2
+            exit 1
+          fi
+      - name: Scripts obrigatórios existem (nada é aprovado por ausência)
+        run: |
+          missing=0
+          for s in lint build test test:scripts test:email test:sql test:ssma; do
+            if ! node -e "process.exit(require('./package.json').scripts?.['$s'] ? 0 : 1)"; then
+              echo "::error::script obrigatório ausente no package.json: $s"
+              missing=1
+            fi
+          done
+          exit $missing
+      - name: Sequência de migrations sem duplicidade de versão
+        run: |
+          dups=$(ls supabase/migrations | sed -E 's/_.*//' | sort | uniq -d)
+          if [ -n "$dups" ]; then echo "::error::versões de migration duplicadas: $dups"; exit 1; fi
+          echo "migrations: $(ls supabase/migrations | wc -l)"
+
+  checks:
+    name: Typecheck, lint e testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      # Três testes do repositório afirmam, por higiene, que NÃO rodam dentro de um workflow (!process.env.GITHUB_ACTIONS):
+      #   test-cron-routes-proxy-auth #16 (em test:email) e test-pilot-risk-alert-audit W6 / test-pilot-readiness-consistency (em test:alerts).
+      # O GitHub sempre define GITHUB_ACTIONS=true. Só os passos que contêm esses testes rodam sem essa variável (env -u); as demais
+      # verificações dessas asserções (CRON_SECRET, ACC_RISK_ALERTS_CRON_SECRET ausentes; ACC_WEEKLY_REPORTS_ENABLED != true) continuam
+      # valendo, e este workflow não fornece segredo algum. Nenhum código de produto lê GITHUB_ACTIONS.
+      - name: Typecheck
+        run: npx tsc --noEmit -p apps/web
+      - name: Lint
+        run: npm run lint
+      - name: Testes unitários (web)
+        run: npm test
+      - name: Testes de scripts
+        run: npm run test:scripts
+      - name: Testes de e-mail (provider fake)
+        run: env -u GITHUB_ACTIONS npm run test:email
+      - name: Testes SQL (PGlite, replay completo das migrations)
+        run: npm run test:sql
+      # Dois testes do SSMA (test-ssma-offline-browser: IndexedDB real, offline e reconexão; test-ssma-service-worker:
+      # cache/Service Worker) exigem um Chrome real. Eles procuram o Chrome em um caminho padrão do Windows e, quando não o
+      # encontram, imprimem "PULADO" e saem com código 0 (comportamento pensado para máquinas de desenvolvimento). Aqui o
+      # Chrome é OBRIGATÓRIO: o passo falha se o Chrome não existir, se alguma verificação for pulada ou se o total cair.
+      - name: Testes SSMA (Chrome real obrigatório)
+        run: |
+          set -o pipefail
+          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "::error::Chrome não encontrado no runner: os testes SSMA de navegador não podem ser executados"
+            exit 1
+          fi
+          export CHROME_PATH="$(readlink -f "$CHROME")"
+          echo "Chrome: $CHROME_PATH"
+          "$CHROME_PATH" --version
+          npm run test:ssma 2>&1 | tee "$RUNNER_TEMP/ssma.log"
+          if grep -q '^PULADO' "$RUNNER_TEMP/ssma.log"; then
+            echo "::error::teste SSMA pulado (PULADO) — aprovação silenciosa não é aceita no CI"
+            grep '^PULADO' "$RUNNER_TEMP/ssma.log"
+            exit 1
+          fi
+          ok=$(grep -c '^OK ' "$RUNNER_TEMP/ssma.log" || true)
+          echo "SSMA: $ok verificações OK (referência com Chrome real: 69)"
+          if [ "$ok" -lt 69 ]; then
+            echo "::error::SSMA executou $ok verificações; o mínimo esperado com Chrome real é 69"
+            exit 1
+          fi
+      # test:alert-sim e test:alerts vêm do PR #125 e não existem na main atual. ÚNICA exceção permitida: quando o script NÃO existe
+      # no package.json, o passo emite um aviso visível (annotation + resumo da execução) e segue; quando existe, roda e qualquer falha
+      # reprova. Depois que o #125 entrar na main, os dois passam a rodar sem nenhuma alteração neste arquivo.
+      - name: Simulação WEG e suíte de alertas (opcional somente enquanto o script não existir)
+        run: |
+          run_optional() {
+            script="$1"; shift
+            if node -e "process.exit(require('./package.json').scripts?.['$script'] ? 0 : 1)"; then
+              echo "::group::npm run $script"
+              "$@" npm run "$script"
+              echo "::endgroup::"
+              echo "- npm run $script: EXECUTADO" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            else
+              echo "::warning title=Verificação NÃO executada::npm run $script não existe neste commit (esperado apenas até o PR #125 entrar na main)"
+              echo "- npm run $script: NAO EXECUTADO (script ausente neste commit)" >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            fi
+          }
+          run_optional test:alert-sim env
+          run_optional test:alerts env -u GITHUB_ACTIONS
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Build (sem variáveis de produção)
+        run: npm run build
