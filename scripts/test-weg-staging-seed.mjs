@@ -81,10 +81,10 @@ const SEED_SQL = readFileSync(path.join(repo, "scripts", "sql", "homologation", 
 const platform = /const PLATFORM = `([\s\S]*?)`;/.exec(readFileSync(path.join(here, "test-migrations-full-replay.mjs"), "utf8"))[1];
 const migrationsDir = path.join(repo, "supabase", "migrations");
 
-async function newMigratedDb() {
+async function newMigratedDb(include = () => true) {
   const db = new PGlite();
   await db.exec(platform);
-  for (const f of readdirSync(migrationsDir).filter((x) => x.endsWith(".sql")).sort()) {
+  for (const f of readdirSync(migrationsDir).filter((x) => x.endsWith(".sql") && include(x)).sort()) {
     await db.exec(readFileSync(path.join(migrationsDir, f), "utf8").replace(/^﻿/, "").replace(/create extension if not exists pgcrypto[^;]*;/gi, ""));
   }
   return db;
@@ -425,6 +425,49 @@ await check("E2 [CORREÇÃO do digest] retentativa FORA da janela (quinta): cont
   const html = digestCalls(h)[0].raw.html;
   assert(/2 risco\(s\) M/.test(html) && /1 risco\(s\) BAIXO/.test(`${html}`), "itens do consolidado original");
   assert((await count(db, "audit_log_entries", "action = 'RISK_ALERT_DIGEST_RETRY_SENT'")) === 1);
+  await db.close();
+});
+
+console.log("== G. Ordem de implantação e compatibilidade das migrations 20261029* (lease e auditoria do worker)");
+const NEW_MIGRATIONS = readdirSync(migrationsDir).filter((f) => f.startsWith("20261029")).sort();
+const runMigration = (db, f) => db.exec(readFileSync(path.join(migrationsDir, f), "utf8"));
+await check("G1 existem exatamente as 2 migrations novas, aditivas e idempotentes (add column if not exists / create or replace)", () => {
+  assert(NEW_MIGRATIONS.length === 2 && /risk_alert_outbox_send_claim/.test(NEW_MIGRATIONS[0]) && /sla_action_audit_service_role_actor/.test(NEW_MIGRATIONS[1]), NEW_MIGRATIONS.join());
+  const sqlAll = NEW_MIGRATIONS.map((f) => readFileSync(path.join(migrationsDir, f), "utf8")).join("\n");
+  assert(/add column if not exists claimed_at/i.test(sqlAll) && /create or replace function public\.audit_sla_action_updated/i.test(sqlAll));
+  assert(!/\b(drop\s+(table|column|function|trigger)|alter\s+column|truncate|delete\s+from|update\s+public\.)/i.test(sqlAll.replace(/--.*$/gm, "")), "sem DDL/DML destrutivo");
+});
+await check("G2 CÓDIGO ANTES DA MIGRATION: falha fechada — nada é enviado, nenhuma linha é alterada; depois da migration (sobre os dados existentes) os envios saem UMA vez; reaplicar é no-op", async () => {
+  const db = await newMigratedDb((f) => !NEW_MIGRATIONS.includes(f)); // banco no estado ANTERIOR às migrations novas
+  await addAuthUsers(db, Object.values(U));
+  await db.exec(SEED_SQL);
+  const h = harness(db);
+  assert((await q(db, "select count(*)::int c from information_schema.columns where table_name = 'risk_alert_outbox' and column_name = 'claimed_at'"))[0].c === 0);
+  await h.run(T0);
+  await h.run(plusMin(T0, 1));
+  assert(h.rec.calls.length === 0, `envios sem a coluna: ${h.rec.calls.length}`);
+  let rows = await outbox(db);
+  assert(rows.length === 3 && rows.every((r) => r.status === "PENDING" && r.attempt_count === 0 && !r.sent_at), "linhas intactas e pendentes");
+  for (const f of NEW_MIGRATIONS) await runMigration(db, f); // aplicação sobre dados existentes
+  rows = await outbox(db);
+  assert(rows.length === 3 && rows.every((r) => r.claimed_at === null && r.status === "PENDING"), "migration preserva as linhas existentes");
+  await Promise.all([h.run(plusMin(T0, 5)), h.run(plusMin(T0, 5))]);
+  rows = await outbox(db);
+  assert(h.rec.calls.length === 3 && rows.every((r) => r.status === "SENT" && r.attempt_count === 1 && r.claimed_at === null && r.recipient_email === CRM), JSON.stringify(rows.map((r) => [r.status, r.attempt_count])));
+  for (const f of NEW_MIGRATIONS) await runMigration(db, f); // idempotência da migration
+  await h.run(plusMin(T0, 6));
+  assert(h.rec.calls.length === 3 && (await count(db, "risk_alert_outbox")) === 3, "reaplicar e rodar de novo não duplica nada");
+  await db.close();
+});
+await check("G3 a migration da auditoria só substitui a função (mesmo nome e assinatura) e não altera os gatilhos de sla_actions", async () => {
+  const db = await newMigratedDb((f) => !NEW_MIGRATIONS.includes(f));
+  const before = (await q(db, "select pg_get_functiondef('public.audit_sla_action_updated()'::regprocedure) d"))[0].d;
+  const triggers = async () => (await q(db, "select tgname from pg_trigger where tgrelid = 'public.sla_actions'::regclass and not tgisinternal order by 1")).map((r) => r.tgname).join();
+  const t0 = await triggers();
+  for (const f of NEW_MIGRATIONS) await runMigration(db, f);
+  const after = (await q(db, "select pg_get_functiondef('public.audit_sla_action_updated()'::regprocedure) d"))[0].d;
+  assert(before !== after && /v_started_actor/.test(after) && !/v_started_actor/.test(before));
+  assert((await triggers()) === t0, "os gatilhos de sla_actions não mudam");
   await db.close();
 });
 
