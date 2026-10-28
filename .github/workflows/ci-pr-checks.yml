@@ -75,26 +75,28 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
-      # Alguns testes do repositório afirmam que NÃO estão rodando dentro de um workflow (higiene: provam que não
-      # disparam nem dependem de GitHub Actions; ex.: test-cron-routes-proxy-auth #16, test-pilot-risk-alert-audit W6).
-      # O GitHub sempre define GITHUB_ACTIONS=true; removemos só essa variável do processo de teste (sem segredos).
+      # Três testes do repositório afirmam, por higiene, que NÃO rodam dentro de um workflow (!process.env.GITHUB_ACTIONS):
+      #   test-cron-routes-proxy-auth #16 (em test:email) e test-pilot-risk-alert-audit W6 / test-pilot-readiness-consistency (em test:alerts).
+      # O GitHub sempre define GITHUB_ACTIONS=true. Só esses dois passos rodam sem essa variável (env -u); as demais verificações
+      # dessas asserções (CRON_SECRET, ACC_RISK_ALERTS_CRON_SECRET ausentes; ACC_WEEKLY_REPORTS_ENABLED != true) continuam valendo,
+      # e este workflow não fornece segredo algum. Nenhum código de produto lê GITHUB_ACTIONS.
       - name: Typecheck
         run: npx tsc --noEmit -p apps/web
       - name: Lint
         run: npm run lint
       - name: Testes unitários (web)
-        run: env -u GITHUB_ACTIONS npm test
+        run: npm test
       - name: Testes de scripts
-        run: env -u GITHUB_ACTIONS npm run test:scripts
+        run: npm run test:scripts
       - name: Testes de e-mail (provider fake)
         run: env -u GITHUB_ACTIONS npm run test:email
       - name: Testes SQL (PGlite, replay completo das migrations)
-        run: env -u GITHUB_ACTIONS npm run test:sql
+        run: npm run test:sql
       - name: Testes SSMA
-        run: env -u GITHUB_ACTIONS npm run test:ssma
+        run: npm run test:ssma
       - name: Simulação WEG e suíte de alertas
         run: |
-          env -u GITHUB_ACTIONS npm run test:alert-sim
+          npm run test:alert-sim
           env -u GITHUB_ACTIONS npm run test:alerts
 
   build:
