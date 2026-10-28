@@ -24,7 +24,8 @@ import type { ActiveForward, AlertCaseSnapshot } from "./alert-state-machine";
 import { hashReplyToken, type InboundHeaders } from "./replies/reply-pipeline";
 import type { PersistedOutboxEntry, RiskAlertStore } from "./store";
 import type { ExpertId, IngestionAlertSeverityMap, LinkedSlaActionState, RecipientProfile, RiskCaseRecord } from "./types";
-import { MAX_SEND_ATTEMPTS } from "./types";
+import { CLAIM_LEASE_MS, MAX_SEND_ATTEMPTS } from "./types";
+import { buildCorrelationIndex, type CorrelationCaseRow, type CorrelationConversationRow, type CorrelationMessageRow } from "./replies/build-correlation-index";
 
 type Client = SupabaseClient;
 type Row = Record<string, unknown>;
@@ -486,6 +487,7 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
         .from("risk_alert_outbox")
         .update({
           status: "SENT",
+          claimed_at: null,
           sent_at: result.sentAt,
           recipient_email: result.recipientEmail,
           provider: result.provider,
@@ -499,18 +501,42 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
       fail("Falha ao marcar envio", error);
     },
 
-    async markFailed(id, sanitizedError) {
+    // Reivindicação (lease) ATÔMICA antes de enviar: um único UPDATE condicional por status PENDING, contador
+    // igual ao lido e SEM lease vigente (claimed_at nulo ou expirado). Em Postgres (READ COMMITTED) o concorrente
+    // que esperava o lock reavalia o WHERE e atualiza 0 linhas — só UM ciclo vence e envia, inclusive quando o
+    // segundo ciclo começa depois que o primeiro já reivindicou e ainda não terminou o envio. Exige a coluna
+    // claimed_at (migration 20261029100000): sem ela a reivindicação falha e NADA é enviado (falha fechada).
+    async claimOutbox(id, nowIso) {
+      const { data: row } = await client.from("risk_alert_outbox").select("status,attempt_count").eq("id", id).maybeSingle();
+      if (!row || row.status !== "PENDING") return false;
+      const attempts = Number(row.attempt_count ?? 0);
+      if (attempts >= MAX_SEND_ATTEMPTS) return false;
+      const leaseCutoff = new Date(new Date(nowIso).getTime() - CLAIM_LEASE_MS).toISOString();
+      const { data: claimed, error } = await client
+        .from("risk_alert_outbox")
+        .update({ attempt_count: attempts + 1, claimed_at: nowIso })
+        .eq("id", id)
+        .eq("status", "PENDING")
+        .eq("attempt_count", attempts)
+        .or(`claimed_at.is.null,claimed_at.lt.${leaseCutoff}`)
+        .select("id");
+      if (error) return false;
+      return (claimed ?? []).length === 1;
+    },
+
+    async markFailed(id, sanitizedError, options = {}) {
       const { data } = await client.from("risk_alert_outbox").select("attempt_count").eq("id", id).maybeSingle();
-      const attempts = Number(data?.attempt_count ?? 0) + 1;
+      // Com a linha já reivindicada (claimOutbox) a tentativa JÁ foi contada: não conta duas vezes.
+      const attempts = Number(data?.attempt_count ?? 0) + (options.attemptAlreadyClaimed ? 0 : 1);
       const { error } = await client
         .from("risk_alert_outbox")
-        .update({ status: attempts >= MAX_SEND_ATTEMPTS ? "FAILED" : "PENDING", attempt_count: attempts, last_error: sanitizedError })
+        .update({ status: attempts >= MAX_SEND_ATTEMPTS ? "FAILED" : "PENDING", attempt_count: attempts, last_error: sanitizedError, claimed_at: null })
         .eq("id", id);
       fail("Falha ao registrar erro de envio", error);
     },
 
     async markSkipped(id, reason) {
-      const { error } = await client.from("risk_alert_outbox").update({ status: "SKIPPED", last_error: reason }).eq("id", id);
+      const { error } = await client.from("risk_alert_outbox").update({ status: "SKIPPED", last_error: reason, claimed_at: null }).eq("id", id);
       fail("Falha ao marcar outbox como ignorada", error);
     },
 
@@ -597,21 +623,16 @@ export function createSupabaseRiskAlertStore(client: Client): RiskAlertStore {
 
     async loadCorrelationIndex(projectId) {
       const [{ data: messages }, { data: conversations }, { data: cases }] = await Promise.all([
-        client.from("alert_email_messages").select("case_id,message_id_header,reply_token_hash,direction,provider_message_id").eq("project_id", projectId),
+        client.from("alert_email_messages").select("case_id,message_id_header,reply_token_hash,direction,status").eq("project_id", projectId),
         client.from("alert_email_conversations").select("case_id,reply_token_hash").eq("project_id", projectId),
         client.from("risk_alert_cases").select("id,visible_code").eq("project_id", projectId),
       ]);
-      const byMessageId = new Map<string, string>();
-      const byReplyTokenHash = new Map<string, string>();
-      const seenMessageIds = new Set<string>();
-      for (const row of messages ?? []) {
-        if (row.message_id_header && row.case_id) byMessageId.set(row.message_id_header as string, row.case_id as string);
-        if (row.message_id_header) seenMessageIds.add(row.message_id_header as string);
-        if (row.reply_token_hash && row.case_id) byReplyTokenHash.set(row.reply_token_hash as string, row.case_id as string);
-      }
-      for (const row of conversations ?? []) if (row.reply_token_hash) byReplyTokenHash.set(row.reply_token_hash as string, row.case_id as string);
-      const byVisibleCode = new Map((cases ?? []).map((row) => [row.visible_code as string, row.id as string]));
-      return { byMessageId, byReplyTokenHash, byVisibleCode, seenMessageIds };
+      // Anti-loop: só mensagens enviadas ou já tratadas entram em seenMessageIds (ver build-correlation-index.ts).
+      return buildCorrelationIndex(
+        (messages ?? []) as unknown as CorrelationMessageRow[],
+        (conversations ?? []) as unknown as CorrelationConversationRow[],
+        (cases ?? []) as unknown as CorrelationCaseRow[]
+      );
     },
 
     async listInboundToProcess(projectId) {

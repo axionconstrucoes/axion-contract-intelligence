@@ -63,7 +63,7 @@ const U_L3 = "aaaaaaaa-0000-4000-8000-000000000003";
 const U_THIRD = "aaaaaaaa-0000-4000-8000-000000000009";
 const NOW = "2026-09-22T15:00:00.000Z";
 const MAILBOX = "acc@axion.com.br"; // caixa inbound oficial FICTÍCIA de teste
-const PILOT_ENV = { outboundMode: "pilot", pilotRecipient: "reynaldo@axion.com.br", alertReplyMailbox: MAILBOX, now: new Date(NOW), onReplyToRemoved: () => {} };
+const PILOT_ENV = { outboundMode: "pilot", pilotRecipient: "crm@axion.com.br", alertReplyMailbox: MAILBOX, now: new Date(NOW), onReplyToRemoved: () => {} };
 const context = { kind: "RISK_ALERT_CONVERSATION", outboxId: OUTBOX_ID, conversationId: CONV_ID };
 const baseInput = { to: "reynaldo@axion.com.br", subject: "Alerta", text: "corpo", correlationId: "corr-1" };
 const token = pipeline.generateReplyToken();
@@ -103,9 +103,9 @@ console.log("");
 await check("R1. Reply-To ACC válido é PRESERVADO em modo piloto (contexto de conversa + caixa configurada); destinatário continua decidido pelo guard", () => {
   const guarded = guard.applyPilotOutboundGuard({ ...baseInput, replyTo: validReplyTo, replyToContext: context }, PILOT_ENV);
   assert(guarded.replyTo === validReplyTo, `esperado Reply-To preservado, obtido ${guarded.replyTo}`);
-  assert(guarded.to === "reynaldo@axion.com.br" && guarded.subject.startsWith("[TESTE CONTROLADO] "));
+  assert(guarded.to === "crm@axion.com.br" && guarded.subject.startsWith("[TESTE CONTROLADO] "));
   const redirected = guard.applyPilotOutboundGuard({ ...baseInput, to: "terceiro@axion.com.br", replyTo: validReplyTo, replyToContext: context }, PILOT_ENV);
-  assert(redirected.to === "reynaldo@axion.com.br" && redirected.replyTo === validReplyTo, "fora da allowlist do guard: destinatário redirecionado, Reply-To (da caixa ACC) mantido");
+  assert(redirected.to === "crm@axion.com.br" && redirected.replyTo === validReplyTo, "fora da allowlist do guard: destinatário redirecionado, Reply-To (da caixa ACC) mantido");
   assert(validReplyTo === `acc+alerta-${token}@axion.com.br`, "formato <caixa-acc>+alerta-<token>@<domínio>");
 });
 await check("R2. Reply-To de domínio externo é removido (com e sem contexto) e o motivo registrado sem endereço/token", () => {
@@ -161,7 +161,7 @@ await check("R7. Resposta chega à caixa monitorada: Reply-To enviado pelo provi
   let guarded = null;
   const provider = new FakeEmailProvider({ onGuardedInput: (i) => (guarded = i) });
   process.env.ACC_OUTBOUND_MODE = "pilot";
-  process.env.ACC_PILOT_RECIPIENT = "reynaldo@axion.com.br";
+  process.env.ACC_PILOT_RECIPIENT = "crm@axion.com.br";
   process.env.GOOGLE_GMAIL_INBOUND_MAILBOX = MAILBOX;
   try {
     const result = await provider.send({ ...baseInput, replyTo: validReplyTo, replyToContext: context });

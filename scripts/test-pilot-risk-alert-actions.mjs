@@ -482,7 +482,7 @@ await check("50. Feature desligada não processa (planejador, cron 204, script e
 });
 await check("51. Provider fake não envia: sem rede; guard aplicado; dry-run sem escrita; headers de thread saem no MIME", async () => {
   process.env.ACC_OUTBOUND_MODE = "pilot";
-  process.env.ACC_PILOT_RECIPIENT = "reynaldo@axion.com.br";
+  process.env.ACC_PILOT_RECIPIENT = "crm@axion.com.br";
   const provider = new FakeEmailProvider();
   const sent = await provider.send({ to: "piloto.a@axion.com.br", subject: "s", text: "t", correlationId: "c1", inReplyTo: "<root@acc>", references: ["<root@acc>"] });
   assert(sent.provider === "FAKE");
@@ -528,19 +528,19 @@ await check("54. Defaults não confirmados impedem envio: regras explícitas par
   const policyDefault = resolveMatrixPolicy({ rules: [], responsibles: responsibles(), settings, area: "PLANEJAMENTO", riskLevel: "HIGH" });
   assert(policyDefault.usingDefaultRule === true, "usingDefaultRule só informa (simulação)");
 });
-await check("55. Ricardo Martins permitido pelo guard quando configurado por ambiente (não redirecionado); sem configuração, comportamento inalterado", () => {
-  const env = { outboundMode: "pilot", pilotRecipient: "reynaldo@axion.com.br", now: new Date("2026-09-20T12:00:00Z") };
+await check("55. Regra vigente (PR #111): destino exclusivo = crm@; ACC_PILOT_ADDITIONAL_RECIPIENTS é analisada mas NÃO amplia a lista do guard", () => {
+  const env = { outboundMode: "pilot", pilotRecipient: "crm@axion.com.br", now: new Date("2026-09-20T12:00:00Z") };
   const without = resolveEffectiveRecipient("participante.adicional@axion.com.br", env);
-  assert(without.effectiveRecipientEmail === "reynaldo@axion.com.br", "sem configuração => redirecionado (estado atual)");
+  assert(without.effectiveRecipientEmail === "crm@axion.com.br", "sem configuração => redirecionado");
   const withEnv = resolveEffectiveRecipient("participante.adicional@axion.com.br", { ...env, additionalRecipients: "participante.adicional@axion.com.br" });
-  assert(withEnv.effectiveRecipientEmail === "participante.adicional@axion.com.br", "configurado => não redirecionado");
-  assert(ACC_PILOT_ALLOWED_RECIPIENTS.length === 4, "lista fixa preservada (outros pilotos intactos)");
-  assert(parsePilotAdditionalRecipients("participante.adicional@axion.com.br, invalido, alguem@gmail.com").join() === "participante.adicional@axion.com.br", "só corporativo válido");
-  assert(resolvePilotAllowedRecipients({ additionalRecipients: undefined }).length === 5, "4 participantes fixos + 1 caixa institucional do ACC (override de entrega)");
+  assert(withEnv.effectiveRecipientEmail === "crm@axion.com.br", "mesmo configurado, continua redirecionado ao CRM (exclusivo)");
+  assert(ACC_PILOT_ALLOWED_RECIPIENTS.length === 1 && ACC_PILOT_ALLOWED_RECIPIENTS[0] === "crm@axion.com.br", "lista fixa = somente a caixa CRM");
+  assert(parsePilotAdditionalRecipients("participante.adicional@axion.com.br, invalido, alguem@gmail.com").join() === "participante.adicional@axion.com.br", "a análise do valor segue só aceitando corporativo válido");
+  assert(resolvePilotAllowedRecipients({ additionalRecipients: "participante.adicional@axion.com.br" }).join() === "crm@axion.com.br", "a variável não entra na allowlist efetiva");
   const guarded = applyPilotOutboundGuard({ to: "participante.adicional@axion.com.br", subject: "s", text: "t", correlationId: "c" }, { ...env, additionalRecipients: "participante.adicional@axion.com.br" });
-  assert(guarded.to === "participante.adicional@axion.com.br" && guarded.subject.startsWith("[TESTE CONTROLADO] "));
+  assert(guarded.to === "crm@axion.com.br" && guarded.subject.startsWith("[TESTE CONTROLADO] "));
   const guardSource = readSource("apps/web/lib/email/pilot-outbound-guard.ts");
-  assert(!/ricardo\.martins/.test(guardSource), "e-mail dele não é espalhado em arquivos");
+  assert(!/ricardo.martins/.test(guardSource), "e-mail dele não é espalhado em arquivos");
   assert(readSource("apps/web/.env.example").includes("ACC_PILOT_ADDITIONAL_RECIPIENTS"));
 });
 await check("56. Outros destinatários globais (Ricardo Silva, Carlos, Rosana) não recebem alerta deste projeto: fora da allowlist por user_id => suprimidos", () => {
@@ -550,8 +550,8 @@ await check("56. Outros destinatários globais (Ricardo Silva, Carlos, Rosana) n
   const plan = planRiskAlerts({ now: NOW, projectId: PROJECT, projectName: "x", featureEnabled: true, providerConfigured: true, dryRun: false, config: config(), cases: [{ sourceType: "SCHEDULE_COMPARISON", sourceId: "c1", area: "PLANEJAMENTO", riskLevel: "HIGH", title: "t", summary: "s", impact: "", recommendation: null, fingerprint: "f", originPath: "x", closed: false, reference: "r" }], existingCases: [], linkedActions: new Map(), policyFor: (a, r) => policyFor(r, responsibles({ responsibleDirectUserId: globalUser })), recipients: rec, existingIdempotencyKeys: new Set(), previousDigestSentAt: null });
   const entry = plan.outbox.find((e) => e.notificationType === "IMMEDIATE");
   assert(entry.recipient.userId === globalUser && entry.recipient.status === "SUPPRESSED" && entry.recipient.suppressionReason === "PILOT_RECIPIENT_SUPPRESSED");
-  // Mesmo permitido pelo guard global, o provider nunca é chamado para SUPPRESSED.
-  assert(resolveEffectiveRecipient("ricardo.silva@axion.com.br", { outboundMode: "pilot", pilotRecipient: "reynaldo@axion.com.br", now: new Date("2026-09-20T12:00:00Z") }).effectiveRecipientEmail === "ricardo.silva@axion.com.br");
+  // Mesmo que a allowlist por usuário falhasse, o guard global redirecionaria ao CRM; o provider nunca é chamado para SUPPRESSED.
+  assert(resolveEffectiveRecipient("ricardo.silva@axion.com.br", { outboundMode: "pilot", pilotRecipient: "crm@axion.com.br", now: new Date("2026-09-20T12:00:00Z") }).effectiveRecipientEmail === "crm@axion.com.br", "regra vigente: o guard global só admite o CRM; Ricardo Silva seria redirecionado (e já é suprimido antes, pela allowlist por user_id)");
   const cycle = readSource("apps/web/lib/risk-alerts/run-risk-alert-cycle.ts");
   assert(cycle.includes('if (item.entry.recipient.status !== "PENDING") continue;'));
   const email = buildImmediateRiskAlertEmail({ content: entry.content, projectId: PROJECT, projectName: "Obra", recipientName: null, baseUrl: "https://acc.example", timeZone: TZ, generatedAt: NOW, actionButtons: [], actionLinks: { RESOLVED: "https://acc.example/x" }, visibleCode: "ABCD1234" });

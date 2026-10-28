@@ -410,7 +410,7 @@ await check("28. Projeto desabilitado não envia (config ausente, enabled=false 
 });
 await check("29. Provider fake não envia externamente (sem rede; ids determinísticos; guard do piloto aplicado); dry-run não grava", async () => {
   process.env.ACC_OUTBOUND_MODE = "pilot";
-  process.env.ACC_PILOT_RECIPIENT = "reynaldo@axion.com.br";
+  process.env.ACC_PILOT_RECIPIENT = "crm@axion.com.br";
   const provider = new FakeEmailProvider();
   const result = await provider.send({ to: "piloto.a@axion.com.br", subject: "x", text: "y", correlationId: "corr-1" });
   assert(result.provider === "FAKE" && result.providerMessageId.startsWith("fake-message-"));

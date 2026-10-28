@@ -47,6 +47,8 @@ export async function processAlertReplies(store: RiskAlertStore, projectId: stri
       result.ignored += 1;
       continue;
     }
+    // Aceita UMA vez: a duplicata (mesmo Message-ID) pendente neste lote vira IGNORED_LOOP.
+    if (message.headers.messageId) index.seenMessageIds.add(message.headers.messageId);
     const parsed = parseReplyBody(message.bodyOriginal);
     const correlation = correlateReply(message.headers, `${message.headers.subject ?? ""}\n${parsed.clean}`, index);
     if (!correlation.caseId) {

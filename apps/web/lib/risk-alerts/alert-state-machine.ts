@@ -443,10 +443,15 @@ export function applyAlertAction(input: ApplyAlertActionInput): ApplyAlertAction
  * null quando não há nada a registrar (não está na Diretoria, já registrado
  * ou já resolvido) — reexecuções são idempotentes.
  */
-export function applyScheduledTopLevel(input: { now: string; snapshot: AlertCaseSnapshot; reasons: string[] }): AlertTransition | null {
+export function applyScheduledTopLevel(input: { now: string; snapshot: AlertCaseSnapshot; reasons: string[]; deadlineEscalatedToTop?: boolean }): AlertTransition | null {
   const { snapshot } = input;
   if (snapshot.topLevelReachedAt || TERMINAL_STATES.has(snapshot.state)) return null;
-  if (nextHierarchyLevel(snapshot.currentLevel) !== null) return null; // só quando já está no topo (DIRETORIA)
+  // O escalonamento POR PRAZO atualiza só a ação SLA (current_escalation_level); o nível do CASO
+  // só muda por ação humana. Quando o planejador já constatou que a ação SLA está na DIRETORIA e o
+  // prazo da Diretoria venceu (deadlineEscalatedToTop), o caso é levado ao topo junto com o registro.
+  const atTop = nextHierarchyLevel(snapshot.currentLevel) === null;
+  if (!atTop && !input.deadlineEscalatedToTop) return null; // sem a constatação do prazo, só quando já está no topo (DIRETORIA)
+  const topLevel: SlaEscalationLevel = "DIRETORIA";
   const caseId = snapshot.id;
   return {
     ok: true,
@@ -460,8 +465,8 @@ export function applyScheduledTopLevel(input: { now: string; snapshot: AlertCase
         origin: "SYSTEM",
         fromState: snapshot.state,
         toState: snapshot.state,
-        fromLevel: snapshot.currentLevel,
-        toLevel: snapshot.currentLevel,
+        fromLevel: topLevel,
+        toLevel: topLevel,
         text: input.reasons.join(" ") || "Prazo da Diretoria vencido sem ação.",
         justification: null,
         evidence: null,
@@ -473,7 +478,7 @@ export function applyScheduledTopLevel(input: { now: string; snapshot: AlertCase
         idempotencyKey: eventKey(caseId, "TOP_LEVEL_REACHED", TOP_LEVEL_EVENT_DISCRIMINATOR),
       },
     ],
-    caseUpdate: { state: snapshot.state, topLevelReached: true },
+    caseUpdate: { state: snapshot.state, currentLevel: topLevel, topLevelReached: true },
     forward: null,
     closeActiveForwardAs: null,
     escalation: null,

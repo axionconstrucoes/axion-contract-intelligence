@@ -1,5 +1,5 @@
 // Override de ENTREGA do piloto — todos os e-mails de alerta de risco do
-// projeto entregues SOMENTE na caixa institucional (axion@axion.com.br);
+// projeto entregues SOMENTE na caixa institucional (crm@axion.com.br);
 // destinatário lógico/responsável/auditoria continuam da pessoa; nenhum
 // CC/BCC; deduplicação por endereço efetivo; proteção contra loop.
 // Funções REAIS (puras) + FakeEmailProvider com o guard global; nenhum
@@ -52,7 +52,7 @@ const CASE_ID = "cccccccc-0000-4000-8000-000000000001";
 const U_R = "aaaaaaaa-0000-4000-8000-000000000001"; // responsável humano do piloto (N1/N2/N3)
 const U_OUT = "aaaaaaaa-0000-4000-8000-000000000009"; // membro fora da allowlist
 const HUMAN = "responsavel.piloto@axion.com.br"; // e-mail LÓGICO do humano (fictício)
-const BOX = "axion@axion.com.br"; // caixa institucional (override)
+const BOX = "crm@axion.com.br"; // caixa institucional (override) — única admitida desde o PR #111
 const NOW = "2026-09-22T15:00:00.000Z";
 const TZ = "America/Sao_Paulo";
 const settings = { projectId: PROJECT, timezone: TZ, businessDayStartHour: 8, businessDayEndHour: 18, updatedAt: "" };
@@ -70,7 +70,7 @@ const existingRecord = (o = {}) => ({ id: "case-1", sourceType: "SCHEDULE_COMPAR
 const linkedAction = (o = {}) => ({ id: "act-1", status: "PENDING", currentEscalationLevel: "RESPONSAVEL", assumeDueAt: "2026-09-21T16:00:00.000Z", respondDueAt: null, completeDueAt: null, acknowledgedAt: null, completedAt: null, contractualDeadline: null, responsibleUserId: U_R, ...o });
 const plan = (o = {}) => planRiskAlerts({ now: o.now ?? NOW, projectId: PROJECT, projectName: "Piloto", featureEnabled: true, providerConfigured: true, dryRun: false, config: config(), timeZone: TZ, cases: o.cases ?? [riskCase()], existingCases: o.existingCases ?? [], linkedActions: o.linkedActions ?? new Map(), policyFor, recipients: recipients(), existingIdempotencyKeys: new Set(), previousDigestSentAt: null });
 const snapshot = (o = {}) => ({ id: CASE_ID, projectId: PROJECT, sourceType: "SCHEDULE_COMPARISON", sourceId: "cmp-1", riskLevel: "HIGH", state: "OPEN", currentLevel: "RESPONSAVEL", topLevelReachedAt: null, currentResponsibleUserId: U_R, previousResponsibleUserId: null, slaActionId: "act-1", title: "t", reference: "r", activeForward: null, escalatedLevels: [], ...o });
-const PILOT_ENV = { outboundMode: "pilot", pilotRecipient: "reynaldo@axion.com.br", alertReplyMailbox: BOX, now: new Date(NOW), onReplyToRemoved: () => {} };
+const PILOT_ENV = { outboundMode: "pilot", pilotRecipient: "crm@axion.com.br", alertReplyMailbox: BOX, now: new Date(NOW), onReplyToRemoved: () => {} };
 
 /** Simula o que deliver() faz com uma entrada da outbox: override de entrega + guard do provider + envio fake. */
 async function simulateDelivery(entry, eventKey, delivered = new Set()) {
@@ -79,7 +79,7 @@ async function simulateDelivery(entry, eventKey, delivered = new Set()) {
   let guarded = null;
   const provider = new FakeEmailProvider({ onGuardedInput: (i) => (guarded = i) });
   process.env.ACC_OUTBOUND_MODE = "pilot";
-  process.env.ACC_PILOT_RECIPIENT = "reynaldo@axion.com.br";
+  process.env.ACC_PILOT_RECIPIENT = "crm@axion.com.br";
   process.env.GOOGLE_GMAIL_INBOUND_MAILBOX = BOX;
   try {
     const token = pipeline.generateReplyToken();
@@ -100,8 +100,8 @@ console.log("======================================");
 console.log("");
 
 await check("1. Normalização/validação do endereço de override (lowercase; rejeita inválidos, CR/LF, listas)", () => {
-  assert(normalizeDeliveryOverrideEmail("  Axion@Axion.com.br ") === BOX);
-  for (const bad of ["", null, undefined, "axion", "a@b", "axion@axion.com.br,outro@axion.com.br", "axion@axion.com.br\r\nBcc: x@y.z", "<axion@axion.com.br>", "axion @axion.com.br"]) {
+  assert(normalizeDeliveryOverrideEmail("  CRM@Axion.com.br ") === BOX);
+  for (const bad of ["", null, undefined, "crm", "a@b", "crm@axion.com.br,outro@axion.com.br", "crm@axion.com.br\r\nBcc: x@y.z", "<crm@axion.com.br>", "crm @axion.com.br"]) {
     assert(normalizeDeliveryOverrideEmail(bad) === null, `deveria rejeitar ${JSON.stringify(bad)}`);
   }
   const sql = readSource("supabase/migrations/20260921120000_pilot_delivery_override.sql");
@@ -124,7 +124,7 @@ await check("3. Alerta imediato (HIGH): destinatário lógico = humano; entrega 
   assert(immediate.length === 1 && immediate[0].recipient.userId === U_R && immediate[0].recipient.email === HUMAN && immediate[0].recipient.status === "PENDING");
   const { guarded, resolution } = await simulateDelivery(immediate[0], `case-1:IMMEDIATE:-`);
   assert(resolution.deliveryEmail === BOX && guarded && noPersonal(guarded), JSON.stringify(guarded));
-  assert(guarded.replyTo === `axion+alerta-${pipeline.extractReplyTokens([guarded.replyTo])[0]}@axion.com.br`, "Reply-To = caixa institucional");
+  assert(guarded.replyTo === `crm+alerta-${pipeline.extractReplyTokens([guarded.replyTo])[0]}@axion.com.br`, "Reply-To = caixa institucional");
 });
 await check("4. Digest (LOW/MEDIUM, quarta 07:00): um único e-mail, entregue na caixa institucional", async () => {
   const p = plan({ now: "2026-09-23T10:30:00.000Z", cases: [riskCase({ riskLevel: "MEDIUM", fingerprint: "fp-m" }), riskCase({ sourceId: "cmp-2", riskLevel: "LOW", fingerprint: "fp-l" })] });
@@ -168,7 +168,7 @@ await check("8. Nenhum envio para reynaldo@: guard não redireciona a caixa inst
   const r = guard.resolveEffectiveRecipient(BOX, PILOT_ENV);
   assert(r.mode === "PILOT" && r.effectiveRecipientEmail === BOX, "caixa institucional admitida em modo piloto");
   assert(guard.ACC_PILOT_INSTITUTIONAL_MAILBOXES.length === 1 && guard.ACC_PILOT_INSTITUTIONAL_MAILBOXES[0] === BOX);
-  assert(guard.ACC_PILOT_ALLOWED_RECIPIENTS.length === 4, "lista fixa de participantes intacta");
+  assert(guard.ACC_PILOT_ALLOWED_RECIPIENTS.length === 1 && guard.ACC_PILOT_ALLOWED_RECIPIENTS[0] === BOX, "lista fixa = somente a caixa CRM");
   const p = plan({ cases: [riskCase()] });
   // Ninguém além do humano da allowlist é destinatário lógico; ninguém é redirecionado para reynaldo@.
   assert(p.outbox.every((e) => e.recipient.userId === U_R || e.recipient.status === "SUPPRESSED"));
@@ -177,9 +177,9 @@ await check("8. Nenhum envio para reynaldo@: guard não redireciona a caixa inst
 });
 await check("9. Respostas: Reply-To = caixa institucional; mensagens da própria caixa (loop), autorespostas e bounces são ignoradas", () => {
   const ctx = { accMailboxes: [BOX], seenMessageIds: new Set(["<sent-1@acc>"]) };
-  const base = { to: [`axion+alerta-${"x".repeat(24)}@axion.com.br`], messageId: "<r1@x>", inReplyTo: null, references: [] };
+  const base = { to: [`crm+alerta-${"x".repeat(24)}@axion.com.br`], messageId: "<r1@x>", inReplyTo: null, references: [] };
   assert(pipeline.filterInboundMessage({ ...base, from: BOX }, ctx) === "IGNORED_SELF", "mensagem originada da própria caixa");
-  assert(pipeline.filterInboundMessage({ ...base, from: `axion+alerta-${"y".repeat(24)}@axion.com.br` }, ctx) === "IGNORED_SELF", "plus-address da própria caixa");
+  assert(pipeline.filterInboundMessage({ ...base, from: `crm+alerta-${"y".repeat(24)}@axion.com.br` }, ctx) === "IGNORED_SELF", "plus-address da própria caixa");
   assert(pipeline.filterInboundMessage({ ...base, from: HUMAN, autoSubmitted: "auto-replied" }, ctx) === "IGNORED_AUTO_REPLY");
   assert(pipeline.filterInboundMessage({ ...base, from: HUMAN, subject: "Resposta automática: ausente" }, ctx) === "IGNORED_AUTO_REPLY");
   assert(pipeline.filterInboundMessage({ ...base, from: "mailer-daemon@googlemail.com", returnPath: "<>" }, ctx) === "IGNORED_BOUNCE");

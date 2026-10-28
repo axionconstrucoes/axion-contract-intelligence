@@ -110,7 +110,14 @@ export interface RiskAlertStore {
   listPendingRows(projectId: string): Promise<PendingOutboxRow[]>;
   loadCaseRecord(caseId: string): Promise<RiskCaseRecord | null>;
   markSent(id: string, result: { recipientEmail: string; provider: string; providerMessageId: string; emailId: string | null; sentAt: string; messageIdHeader: string; conversationId: string | null }): Promise<void>;
-  markFailed(id: string, sanitizedError: string): Promise<void>;
+  /**
+   * Reivindica a linha da outbox ANTES de enviar (lease): concedido só quando status = PENDING, há tentativas
+   * restantes e NÃO existe lease vigente (claimed_at). Conta a tentativa. Devolve false quando outro ciclo já a
+   * reivindicou/enviou — nesse caso NÃO enviar. nowIso = relógio do ciclo (o lease expira após CLAIM_LEASE_MS).
+   */
+  claimOutbox(id: string, nowIso: string): Promise<boolean>;
+  /** attemptAlreadyClaimed: a tentativa já foi contada por claimOutbox (não contar de novo). */
+  markFailed(id: string, sanitizedError: string, options?: { attemptAlreadyClaimed?: boolean }): Promise<void>;
   markSkipped(id: string, reason: string): Promise<void>;
   markDigestWindow(caseIds: string[], window: string): Promise<void>;
   recordEmail(projectId: string, input: { from: string; to: string; subject: string; sentAt: string; snippet: string }): Promise<string | null>;
